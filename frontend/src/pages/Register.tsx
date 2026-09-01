@@ -17,6 +17,7 @@ interface PatientForm {
   phone: string;
   password: string;
   gender: string;
+  [key: string]: unknown;
 }
 
 interface DoctorForm extends PatientForm {

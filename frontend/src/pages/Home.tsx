@@ -9,8 +9,8 @@ import { Spinner } from "../components/ui/States";
 const STEPS = [
   { icon: Search, title: "ابحث", desc: "اختر التخصص أو الولاية أو اسم الطبيب." },
   { icon: Stethoscope, title: "اختر الطبيب", desc: "اطّلع على الملف المهني والتقييمات." },
-  { icon: CalendarCheck, title: "احجز موعدك", desc: "اختر التاريخ والوقت المناسبَين لك." },
-  { icon: ShieldCheck, title: "تابع موعدك", desc: "استلم إشعار التأكيد وتابع كل شيء من حسابك." },
+  { icon: CalendarCheck, title: "احجز موعدك", desc: "بدون تسجيل دخول — فقط الاسم والولاية والتخصص والوقت." },
+  { icon: ShieldCheck, title: "تأكيد سريع", desc: "سيتواصل معك الطبيب أو العيادة لتأكيد الموعد." },
 ];
 
 export default function Home() {
@@ -72,6 +72,10 @@ export default function Home() {
               بحث
             </button>
           </form>
+
+          <button onClick={() => navigate("/book")} className="mt-4 text-sm font-semibold text-primary-700 hover:underline">
+            أو احجز موعدك مباشرة بدون بحث ←
+          </button>
         </div>
       </section>
 

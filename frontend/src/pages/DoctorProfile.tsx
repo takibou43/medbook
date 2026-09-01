@@ -1,86 +1,17 @@
-import { useMemo, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { MapPin, Briefcase, Languages, Phone, Building2, Clock, CalendarDays } from "lucide-react";
-import { useDoctor, useDoctorAvailability } from "../hooks/useDoctors";
-import { useCreateAppointment } from "../hooks/useAppointments";
-import { Spinner, ErrorState, EmptyState } from "../components/ui/States";
+import { Link, useParams } from "react-router-dom";
+import { MapPin, Briefcase, Languages, Phone, Building2, CalendarDays } from "lucide-react";
+import { useDoctor } from "../hooks/useDoctors";
+import { Spinner, ErrorState } from "../components/ui/States";
 import { RatingStars } from "../components/ui/RatingStars";
 import { VerificationBadge } from "../components/ui/Badge";
 import { Card } from "../components/ui/Card";
-import { Button } from "../components/ui/Button";
-import { Textarea } from "../components/ui/Input";
-import { useAuth } from "../context/AuthContext";
-import { useToast } from "../components/ui/Toast";
-import { apiErrorMessage } from "../lib/api";
-
-const DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-
-function nextNDays(n: number): Date[] {
-  const days: Date[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  for (let i = 0; i < n; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    days.push(d);
-  }
-  return days;
-}
-
-function toDateStr(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
 
 export default function DoctorProfile() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const { showToast } = useToast();
   const { data: doctor, isLoading, isError } = useDoctor(id);
-  const createAppointment = useCreateAppointment();
-
-  const days = useMemo(() => nextNDays(14), []);
-  const [selectedDate, setSelectedDate] = useState<Date>(days[0]);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [notes, setNotes] = useState("");
-
-  const { data: availability, isLoading: loadingSlots } = useDoctorAvailability(id, toDateStr(selectedDate));
 
   if (isLoading) return <Spinner />;
   if (isError || !doctor) return <ErrorState message="تعذّر تحميل ملف الطبيب." />;
-
-  async function handleBook() {
-    if (!user) {
-      showToast("الرجاء تسجيل الدخول كمريض أولًا لإتمام الحجز.", "info");
-      navigate("/login");
-      return;
-    }
-    if (user.role !== "PATIENT") {
-      showToast("الحجز متاح لحسابات المرضى فقط.", "error");
-      return;
-    }
-    if (!selectedSlot) {
-      showToast("الرجاء اختيار وقت الموعد.", "error");
-      return;
-    }
-    if (!doctor) {
-        return;
-    }
-    try {
-      await createAppointment.mutateAsync({
-        doctorId: doctor.id,
-        date: toDateStr(selectedDate),
-        startTime: selectedSlot,
-        notes: notes || undefined,
-      });
-      showToast("تم إرسال طلب الحجز بنجاح! بانتظار تأكيد الطبيب.", "success");
-      setSelectedSlot(null);
-      setNotes("");
-      navigate("/patient/appointments");
-    } catch (err) {
-      showToast(apiErrorMessage(err, "تعذّر إتمام الحجز."), "error");
-    }
-  }
 
   return (
     <div className="container-app py-10">
@@ -168,72 +99,15 @@ export default function DoctorProfile() {
           </Card>
         </div>
 
-        {/* Booking */}
+        {/* Booking CTA — الحجز الفعلي يتم عبر صفحة الحجز الموحّدة بدون تسجيل دخول */}
         <div id="booking">
-          <Card className="sticky top-20">
-            <h2 className="mb-4 flex items-center gap-2 font-bold text-slate-900">
-              <CalendarDays className="h-5 w-5 text-primary-600" />
-              احجز موعدًا
-            </h2>
-
-            <div className="mb-4 flex gap-2 overflow-x-auto pb-2">
-              {days.map((d) => {
-                const active = toDateStr(d) === toDateStr(selectedDate);
-                return (
-                  <button
-                    key={toDateStr(d)}
-                    onClick={() => {
-                      setSelectedDate(d);
-                      setSelectedSlot(null);
-                    }}
-                    className={`flex shrink-0 flex-col items-center rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                      active ? "bg-primary-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    <span>{DAY_NAMES[d.getDay()]}</span>
-                    <span className="text-sm">{d.getDate()}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="mb-4">
-              <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-                <Clock className="h-4 w-4" /> الأوقات المتاحة
-              </p>
-              {loadingSlots ? (
-                <Spinner label="جارٍ تحميل الأوقات..." />
-              ) : availability && availability.slots.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {availability.slots.map((slot) => (
-                    <button
-                      key={slot}
-                      onClick={() => setSelectedSlot(slot)}
-                      className={`rounded-lg border px-2 py-2 text-sm font-medium transition ${
-                        selectedSlot === slot
-                          ? "border-primary-600 bg-primary-600 text-white"
-                          : "border-slate-200 text-slate-700 hover:border-primary-300"
-                      }`}
-                    >
-                      {slot}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState title="لا توجد أوقات متاحة" description="جرّب اختيار يوم آخر." />
-              )}
-            </div>
-
-            <Textarea
-              label="معلومات إضافية (اختياري)"
-              placeholder="صف سبب الزيارة باختصار..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-
-            <Button className="mt-4 w-full" onClick={handleBook} loading={createAppointment.isPending} disabled={!selectedSlot}>
-              تأكيد الحجز
-            </Button>
+          <Card className="sticky top-20 text-center">
+            <CalendarDays className="mx-auto mb-3 h-8 w-8 text-primary-600" />
+            <h2 className="mb-1 font-bold text-slate-900">احجز موعدًا</h2>
+            <p className="mb-4 text-sm text-slate-500">لا حاجة لإنشاء حساب — فقط اختر الموعد المناسب لك.</p>
+            <Link to={`/book?specialtyId=${doctor.specialtyId}&wilayaId=${doctor.wilaya.id}`} className="btn-primary w-full">
+              احجز الآن
+            </Link>
           </Card>
         </div>
       </div>

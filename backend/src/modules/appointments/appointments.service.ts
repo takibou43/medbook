@@ -84,7 +84,7 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
       doctor.userId,
       "APPOINTMENT_CREATED",
       "طلب حجز موعد جديد",
-      `لديك طلب حجز جديد من ${appointment.patient.firstName} ${appointment.patient.lastName} بتاريخ ${input.date} الساعة ${input.startTime}.`
+      `لديك طلب حجز جديد من ${appointment.patient!.firstName} ${appointment.patient!.lastName} بتاريخ ${input.date} الساعة ${input.startTime}.`
     );
 
     return appointment;
@@ -160,7 +160,7 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
   if (!appointment) throw ApiError.notFound("الموعد غير موجود.");
 
   // Ownership check
-  if (role === "PATIENT" && appointment.patient.userId !== userId) throw ApiError.forbidden();
+  if (role === "PATIENT" && appointment.patient?.userId !== userId) throw ApiError.forbidden();
   if (role === "DOCTOR" && appointment.doctor.userId !== userId) throw ApiError.forbidden();
 
   if (!canTransition(role, appointment.status, newStatus)) {
@@ -173,27 +173,29 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
     include: { doctor: true, patient: true },
   });
 
-  const notifyMap: Partial<Record<AppointmentStatus, { userId: string; title: string; message: string; type: any }>> = {
+  // المرضى بدون حساب (حجز ضيف) لا يملكون userId لإرسال إشعار داخل التطبيق إليهم —
+  // نتجاهل إشعار المريض في هذه الحالة (TODO: إشعار SMS لاحقًا عبر guestPhone).
+  const notifyMap: Partial<Record<AppointmentStatus, { userId: string | undefined; title: string; message: string; type: any }>> = {
     CONFIRMED: {
-      userId: updated.patient.userId,
+      userId: updated.patient?.userId,
       title: "تم تأكيد موعدك",
       type: "APPOINTMENT_CONFIRMED",
       message: `تم تأكيد موعدك مع د. ${updated.doctor.firstName} ${updated.doctor.lastName} بتاريخ ${updated.date.toISOString().slice(0, 10)} الساعة ${updated.startTime}.`,
     },
     CANCELLED: {
-      userId: role === "PATIENT" ? updated.doctor.userId : updated.patient.userId,
+      userId: role === "PATIENT" ? updated.doctor.userId : updated.patient?.userId,
       title: "تم إلغاء الموعد",
       type: "APPOINTMENT_CANCELLED",
       message: `تم إلغاء الموعد بتاريخ ${updated.date.toISOString().slice(0, 10)} الساعة ${updated.startTime}.`,
     },
     COMPLETED: {
-      userId: updated.patient.userId,
+      userId: updated.patient?.userId,
       title: "اكتمل موعدك",
       type: "APPOINTMENT_COMPLETED",
       message: `تم إنهاء موعدك مع د. ${updated.doctor.firstName} ${updated.doctor.lastName}. يمكنك الآن تقييم الطبيب.`,
     },
     NO_SHOW: {
-      userId: updated.patient.userId,
+      userId: updated.patient?.userId,
       title: "لم تحضر إلى موعدك",
       type: "APPOINTMENT_NO_SHOW",
       message: `تم تسجيل عدم حضورك للموعد بتاريخ ${updated.date.toISOString().slice(0, 10)}.`,
@@ -201,7 +203,7 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
   };
 
   const notif = notifyMap[newStatus];
-  if (notif) await createNotification(notif.userId, notif.type, notif.title, notif.message);
+  if (notif && notif.userId) await createNotification(notif.userId, notif.type, notif.title, notif.message);
 
   return updated;
 }

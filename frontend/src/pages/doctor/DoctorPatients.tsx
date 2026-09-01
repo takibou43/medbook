@@ -27,10 +27,11 @@ export default function DoctorPatients() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {patients.map((p: any) => (
-                <tr key={p.patientId}>
+              {patients.map((p: any, i: number) => (
+                <tr key={p.patientId ?? `guest-${i}`}>
                   <td className="px-4 py-3 font-semibold text-slate-800">
                     {p.firstName} {p.lastName}
+                    {p.isGuest && <span className="mr-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">بدون حساب</span>}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{p.email}</td>
                   <td className="px-4 py-3 text-slate-600">{p.phone ?? "—"}</td>

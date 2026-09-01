@@ -59,9 +59,10 @@ export default function DoctorAppointments() {
             <div key={a.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-bold text-slate-800">
-                  {a.patient?.firstName} {a.patient?.lastName}
+                  {a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : `${a.guestFirstName ?? ""} ${a.guestLastName ?? ""}`}
+                  {!a.patient && <span className="mr-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">بدون حساب</span>}
                 </p>
-                <p className="text-sm text-slate-500">{a.patient?.user?.phone ?? a.patient?.user?.email}</p>
+                <p className="text-sm text-slate-500">{a.patient?.user?.phone ?? a.patient?.user?.email ?? a.guestPhone ?? "—"}</p>
                 <p className="text-sm text-slate-500">
                   {new Date(a.date).toLocaleDateString("ar-DZ")} — {a.startTime}
                 </p>

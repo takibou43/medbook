@@ -12,7 +12,12 @@ function required(name: string, fallback?: string): string {
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? 4000),
+  // CLIENT_URL يدعم أكثر من نطاق مفصولة بفاصلة (موقع المرضى + موقع الأطباء المنفصل)
   clientUrl: process.env.CLIENT_URL ?? "http://localhost:5173",
+  clientUrls: (process.env.CLIENT_URL ?? "http://localhost:5173")
+    .split(",")
+    .map((u) => u.trim())
+    .filter(Boolean),
 
   databaseUrl: required("DATABASE_URL"),
 

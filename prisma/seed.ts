@@ -4,7 +4,7 @@
  * تشغيل: npm run db:seed  (من مجلد backend)
  */
 import { PrismaClient, Role, Gender, VerificationStatus, AppointmentStatus, ConsultationType } from "../backend/node_modules/@prisma/client"; // مسار صريح: seed.ts خارج backend/
-import bcrypt from "bcryptjs";
+import bcrypt from "../backend/node_modules/bcryptjs"; // مسار صريح لنفس السبب أعلاه
 
 const prisma = new PrismaClient();
 

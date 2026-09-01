@@ -17,6 +17,7 @@ export const guestBookingSchema = z.object({
     .or(z.literal("")),
   wilayaId: z.string().uuid("ولاية غير صالحة"),
   specialtyId: z.string().uuid("تخصص غير صالح"),
+  doctorId: z.string().uuid("طبيب غير صالح").optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "صيغة التاريخ يجب أن تكون YYYY-MM-DD"),
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "صيغة الوقت يجب أن تكون HH:mm"),
   notes: z.string().max(1000).optional(),

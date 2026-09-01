@@ -5,13 +5,6 @@ import { generateAvailableSlots, isWithinWorkingHours, isPast } from "../../lib/
 import { createNotification } from "../notifications/notifications.service";
 import { GuestBookingInput, GuestSlotsQuery } from "./booking.schema";
 
-/**
- * حجز "ضيف" بدون تسجيل دخول: المريض لا يختار طبيبًا بعينه،
- * بل يحدد الولاية + التخصص + التاريخ/الوقت، والنظام يعيّن أول طبيب
- * موثّق (VERIFIED) متاح في تلك الفترة تلقائيًا. هذا يبقي على نفس
- * حماية منع التعارض (Double Booking) المستخدمة في نظام الحجز بالحساب.
- */
-
 const SLOT_MINUTES = 20;
 
 function addMinutes(hhmm: string, minutes: number): string {
@@ -47,7 +40,6 @@ async function bookedRangesForDoctorOnDate(doctorId: string, date: Date) {
   });
 }
 
-/** يرجع قائمة موحّدة (بدون تكرار) بالأوقات المتاحة عبر كل الأطباء الموثّقين المطابقين للولاية والتخصص في تاريخ معيّن. */
 export async function getAggregatedSlots(query: GuestSlotsQuery) {
   const date = new Date(query.date + "T00:00:00");
   if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");
@@ -66,11 +58,6 @@ export async function getAggregatedSlots(query: GuestSlotsQuery) {
 
   return Array.from(slotSet).sort();
 }
-
-/**
- * إنشاء حجز ضيف فعلي: يعيد التحقق من التوفر لحظيًا (وليس فقط الاعتماد على ما عُرض للمستخدم سابقًا)،
- * يختار أول طبيب موثّق متاح، وينشئ الموعد بدون ربطه بأي حساب مستخدم.
- */
 export async function createGuestAppointment(input: GuestBookingInput) {
   const date = new Date(input.date + "T00:00:00");
   if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");
@@ -79,12 +66,60 @@ export async function createGuestAppointment(input: GuestBookingInput) {
     throw ApiError.badRequest("لا يمكن الحجز في وقت مضى.");
   }
 
+  const endTime = addMinutes(input.startTime, SLOT_MINUTES);
+
+  if (input.doctorId) {
+    const doctor = await prisma.doctor.findUnique({ where: { id: input.doctorId }, include: { schedules: true } });
+    if (!doctor || doctor.verificationStatus !== VerificationStatus.VERIFIED) {
+      throw ApiError.notFound("الطبيب غير موجود أو غير موثّق.");
+    }
+    if (!isWithinWorkingHours(date, input.startTime, endTime, doctor.schedules)) {
+      throw ApiError.badRequest("هذا الوقت خارج أوقات عمل الطبيب.");
+    }
+
+    const booked = await bookedRangesForDoctorOnDate(doctor.id, date);
+    const availableSlots = generateAvailableSlots(date, doctor.schedules, booked, SLOT_MINUTES);
+    if (!availableSlots.includes(input.startTime)) {
+      throw ApiError.conflict("هذا الوقت لم يعد متاحًا لدى هذا الطبيب. الرجاء اختيار وقت آخر.");
+    }
+
+    try {
+      const appointment = await prisma.appointment.create({
+        data: {
+          patientId: null,
+          guestFirstName: input.firstName,
+          guestLastName: input.lastName,
+          guestPhone: input.phone || null,
+          doctorId: doctor.id,
+          date,
+          startTime: input.startTime,
+          endTime,
+          status: AppointmentStatus.PENDING,
+          notes: input.notes,
+        },
+        include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
+      });
+
+      await createNotification(
+        doctor.userId,
+        "APPOINTMENT_CREATED",
+        "طلب حجز موعد جديد",
+        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} (بدون حساب) بتاريخ ${input.date} الساعة ${input.startTime}.`
+      );
+
+      return appointment;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        throw ApiError.conflict("تم حجز هذه الفترة للتو من طرف مستخدم آخر. الرجاء اختيار وقت آخر.");
+      }
+      throw err;
+    }
+  }
+
   const doctors = await findCandidateDoctors(input.wilayaId, input.specialtyId);
   if (doctors.length === 0) {
     throw ApiError.notFound("لا يوجد طبيب متاح بهذا التخصص في هذه الولاية حاليًا.");
   }
-
-  const endTime = addMinutes(input.startTime, SLOT_MINUTES);
 
   for (const doctor of doctors) {
     if (!isWithinWorkingHours(date, input.startTime, endTime, doctor.schedules)) continue;
@@ -120,7 +155,6 @@ export async function createGuestAppointment(input: GuestBookingInput) {
       return appointment;
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-        // تعارض لحظي مع هذا الطبيب تحديدًا — جرّب الطبيب التالي المطابق قبل الفشل الكامل
         continue;
       }
       throw err;

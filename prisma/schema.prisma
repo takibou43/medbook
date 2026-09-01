@@ -1,0 +1,360 @@
+// ============================================================
+// MedBook — Prisma Schema
+// PostgreSQL
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../backend/node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------- Enums ----------------
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ConsultationType {
+  IN_PERSON
+  FOLLOW_UP
+  ONLINE
+}
+
+// ---------------- Core identity ----------------
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  phone         String?  @unique
+  passwordHash  String
+  role          Role
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  patient         Patient?
+  doctor          Doctor?
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  favorites       Favorite[]
+  aiConversations AiConversation[]
+  refreshTokens   RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ---------------- Geography ----------------
+
+model Wilaya {
+  id     String @id @default(uuid())
+  code   String @unique
+  nameAr String
+  nameFr String?
+
+  cities  City[]
+  doctors Doctor[]
+  clinics Clinic[]
+
+  @@map("wilayas")
+}
+
+model City {
+  id       String @id @default(uuid())
+  nameAr   String
+  wilayaId String
+  wilaya   Wilaya @relation(fields: [wilayaId], references: [id], onDelete: Cascade)
+
+  doctors Doctor[]
+  clinics Clinic[]
+
+  @@index([wilayaId])
+  @@map("cities")
+}
+
+// ---------------- Medical taxonomy ----------------
+
+model Specialty {
+  id          String  @id @default(uuid())
+  nameAr      String  @unique
+  nameFr      String?
+  icon        String?
+  description String?
+
+  doctors Doctor[]
+
+  @@map("specialties")
+}
+
+model MedicalService {
+  id          String @id @default(uuid())
+  nameAr      String
+  durationMin Int    @default(30)
+  price       Int?
+
+  appointmentServices AppointmentService[]
+
+  @@map("medical_services")
+}
+
+model Clinic {
+  id       String  @id @default(uuid())
+  nameAr   String
+  address  String
+  phone    String?
+  wilayaId String
+  wilaya   Wilaya  @relation(fields: [wilayaId], references: [id])
+  cityId   String
+  city     City    @relation(fields: [cityId], references: [id])
+
+  doctors Doctor[]
+
+  @@index([wilayaId, cityId])
+  @@map("clinics")
+}
+
+// ---------------- Patients & Doctors ----------------
+
+model Patient {
+  id        String    @id @default(uuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName String
+  lastName  String
+  birthDate DateTime?
+  gender    Gender?
+  cityId    String?
+
+  appointments Appointment[]
+  reviews      Review[]
+
+  @@map("patients")
+}
+
+model Doctor {
+  id                 String              @id @default(uuid())
+  userId             String              @unique
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName          String
+  lastName           String
+  specialtyId        String
+  specialty          Specialty           @relation(fields: [specialtyId], references: [id])
+  clinicId           String?
+  clinic             Clinic?             @relation(fields: [clinicId], references: [id])
+  wilayaId           String
+  wilaya             Wilaya              @relation(fields: [wilayaId], references: [id])
+  cityId             String
+  city                City               @relation(fields: [cityId], references: [id])
+  bio                String?
+  yearsExperience    Int                 @default(0)
+  languages          String[]            @default([])
+  gender             Gender?
+  phone              String?
+  address            String?
+  consultationFee    Int?
+  photoUrl           String?
+  verificationStatus VerificationStatus  @default(PENDING)
+  avgRating          Float               @default(0)
+  reviewsCount       Int                 @default(0)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  schedules    DoctorSchedule[]
+  appointments Appointment[]
+  reviews      Review[]
+  documents    DoctorDocument[]
+  favorites    Favorite[]
+
+  @@index([specialtyId, wilayaId, cityId])
+  @@map("doctors")
+}
+
+model DoctorDocument {
+  id        String   @id @default(uuid())
+  doctorId  String
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  title     String
+  fileUrl   String
+  createdAt DateTime @default(now())
+
+  @@map("doctor_documents")
+}
+
+// weekly recurring slots OR one-off exceptions (day off / extra day)
+model DoctorSchedule {
+  id            String    @id @default(uuid())
+  doctorId      String
+  doctor        Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  dayOfWeek     Int? // 0=Sunday .. 6=Saturday, null when isException=true
+  startTime     String // "08:00"
+  endTime       String // "12:00"
+  isException   Boolean   @default(false)
+  exceptionDate DateTime? // specific calendar date
+  isOff         Boolean   @default(false) // true => doctor unavailable that slot/date
+
+  @@index([doctorId])
+  @@map("doctor_schedules")
+}
+
+// ---------------- Appointments ----------------
+
+model Appointment {
+  id          String            @id @default(uuid())
+  patientId   String
+  patient     Patient           @relation(fields: [patientId], references: [id])
+  doctorId    String
+  doctor      Doctor            @relation(fields: [doctorId], references: [id])
+  date        DateTime // calendar date (time truncated to 00:00 UTC)
+  startTime   String // "09:00"
+  endTime     String // "09:30"
+  type        ConsultationType  @default(IN_PERSON)
+  status      AppointmentStatus @default(PENDING)
+  notes       String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  services AppointmentService[]
+  review   Review?
+
+  @@unique([doctorId, date, startTime])
+  @@index([patientId])
+  @@index([doctorId, date])
+  @@map("appointments")
+}
+
+model AppointmentService {
+  id            String         @id @default(uuid())
+  appointmentId String
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  serviceId     String
+  service       MedicalService @relation(fields: [serviceId], references: [id])
+
+  @@map("appointment_services")
+}
+
+// ---------------- Reviews ----------------
+
+model Review {
+  id            String      @id @default(uuid())
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  doctorId      String
+  doctor        Doctor      @relation(fields: [doctorId], references: [id])
+  patientId     String
+  patient       Patient     @relation(fields: [patientId], references: [id])
+  rating        Int
+  comment       String?
+  createdAt     DateTime    @default(now())
+
+  @@index([doctorId])
+  @@map("reviews")
+}
+
+// ---------------- Notifications ----------------
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // APPOINTMENT_CONFIRMED | APPOINTMENT_CANCELLED | APPOINTMENT_REMINDER | APPOINTMENT_CHANGED | ...
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ---------------- Favorites ----------------
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doctorId  String
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, doctorId])
+  @@map("favorites")
+}
+
+// ---------------- MedBook AI ----------------
+
+model AiConversation {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  messages AiMessage[]
+
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String         @id @default(uuid())
+  conversationId String
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // "user" | "assistant"
+  content        String
+  suggestedSpecialtyId String?
+  createdAt      DateTime       @default(now())
+
+  @@map("ai_messages")
+}
+
+// ---------------- Audit ----------------
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String?
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("audit_logs")
+}

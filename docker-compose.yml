@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: medbook_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: medbook
+      POSTGRES_PASSWORD: medbook
+      POSTGRES_DB: medbook
+    ports:
+      - "5432:5432"
+    volumes:
+      - medbook_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medbook -d medbook"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medbook_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgresql://medbook:medbook@postgres:5432/medbook?schema=public"
+      PORT: 4000
+      NODE_ENV: production
+      CLIENT_URL: "http://localhost:5173"
+      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_change_me}
+      JWT_ACCESS_EXPIRES: "15m"
+      JWT_REFRESH_EXPIRES: "7d"
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app/backend
+      - ./prisma:/app/prisma
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: medbook_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: "http://localhost:4000/api"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app/frontend
+
+volumes:
+  medbook_pgdata:

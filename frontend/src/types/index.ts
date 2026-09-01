@@ -80,7 +80,11 @@ export interface Review {
 export interface Appointment {
   id: string;
   doctorId: string;
-  patientId: string;
+  patientId?: string | null;
+  // حجز ضيف بدون حساب: تُملأ هذه الحقول بدل patient عندما patientId فارغ
+  guestFirstName?: string | null;
+  guestLastName?: string | null;
+  guestPhone?: string | null;
   date: string;
   startTime: string;
   endTime: string;
@@ -88,7 +92,7 @@ export interface Appointment {
   status: AppointmentStatus;
   notes?: string | null;
   doctor?: Doctor;
-  patient?: { firstName: string; lastName: string; user?: { email: string; phone?: string } };
+  patient?: { firstName: string; lastName: string; user?: { email: string; phone?: string } } | null;
   review?: Review | null;
 }
 

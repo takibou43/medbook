@@ -238,8 +238,12 @@ model DoctorSchedule {
 
 model Appointment {
   id          String            @id @default(uuid())
-  patientId   String
-  patient     Patient           @relation(fields: [patientId], references: [id])
+  patientId   String?
+  patient     Patient?          @relation(fields: [patientId], references: [id])
+  // حجز الضيف (بدون حساب/تسجيل دخول): يُملأ عند patientId = null
+  guestFirstName String?
+  guestLastName  String?
+  guestPhone     String?
   doctorId    String
   doctor      Doctor            @relation(fields: [doctorId], references: [id])
   date        DateTime // calendar date (time truncated to 00:00 UTC)

@@ -74,22 +74,26 @@ export async function getDashboardStats(userId: string) {
   const startOfDay = new Date(today.setHours(0, 0, 0, 0));
   const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
-  const [todayCount, upcomingCount, completedCount, cancelledCount, patientsCount] = await Promise.all([
+  const [todayCount, upcomingCount, completedCount, cancelledCount, allForPatientsCount] = await Promise.all([
     prisma.appointment.count({ where: { doctorId: doctor.id, date: { gte: startOfDay, lte: endOfDay } } }),
     prisma.appointment.count({
       where: { doctorId: doctor.id, date: { gt: endOfDay }, status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] } },
     }),
     prisma.appointment.count({ where: { doctorId: doctor.id, status: AppointmentStatus.COMPLETED } }),
     prisma.appointment.count({ where: { doctorId: doctor.id, status: AppointmentStatus.CANCELLED } }),
-    prisma.appointment.findMany({ where: { doctorId: doctor.id }, distinct: ["patientId"], select: { patientId: true } }),
+    // لا يمكن الاعتماد على distinct:["patientId"] وحده لأن الحجوزات كضيف تحمل patientId فارغًا (null)
+    // وستُحسب كلها كـ "مريض واحد" فقط؛ لذا نجلب المعرّفات ونحسب التفرّد يدويًا (مريض حقيقي أو رقم هاتف ضيف).
+    prisma.appointment.findMany({ where: { doctorId: doctor.id }, select: { patientId: true, guestPhone: true, id: true } }),
   ]);
+
+  const uniquePatientKeys = new Set(allForPatientsCount.map((a) => a.patientId ?? `guest:${a.guestPhone ?? a.id}`));
 
   return {
     todayAppointments: todayCount,
     upcomingAppointments: upcomingCount,
     completedAppointments: completedCount,
     cancelledAppointments: cancelledCount,
-    totalPatients: patientsCount.length,
+    totalPatients: uniquePatientKeys.size,
     avgRating: doctor.avgRating,
     reviewsCount: doctor.reviewsCount,
     verificationStatus: doctor.verificationStatus,
@@ -106,18 +110,22 @@ export async function getOwnPatients(userId: string) {
 
   const map = new Map<string, any>();
   for (const a of appointments) {
-    if (!map.has(a.patientId)) {
-      map.set(a.patientId, {
+    // الحجوزات كضيف (بدون حساب) لا تملك patientId — نستخدم رقم الهاتف كمفتاح تفرّد بديل،
+    // وإن لم يتوفر فكل حجز يُعامل كسجل مستقل.
+    const key = a.patientId ?? `guest:${a.guestPhone ?? a.id}`;
+    if (!map.has(key)) {
+      map.set(key, {
         patientId: a.patientId,
-        firstName: a.patient.firstName,
-        lastName: a.patient.lastName,
-        email: a.patient.user.email,
-        phone: a.patient.user.phone,
+        isGuest: !a.patientId,
+        firstName: a.patient ? a.patient.firstName : a.guestFirstName,
+        lastName: a.patient ? a.patient.lastName : a.guestLastName,
+        email: a.patient ? a.patient.user.email : null,
+        phone: a.patient ? a.patient.user.phone : a.guestPhone,
         lastVisit: a.date,
         totalAppointments: 1,
       });
     } else {
-      map.get(a.patientId).totalAppointments += 1;
+      map.get(key).totalAppointments += 1;
     }
   }
   return Array.from(map.values());

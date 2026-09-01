@@ -12,7 +12,10 @@ const REFRESH_COOKIE = "medbook_refresh";
 const cookieOptions = {
   httpOnly: true,
   secure: env.isProd,
-  sameSite: "lax" as const,
+  // "none" مطلوب فعليًا في الإنتاج لأن الواجهة والخادم على نطاقين مختلفين (Vercel/Render)،
+  // ويجب اقترانه بـ secure:true (متوفر هنا عبر env.isProd). في التطوير المحلي نبقي "lax"
+  // لأن sameSite:"none" يتطلب https ويُرفض من المتصفح بدون secure.
+  sameSite: (env.isProd ? "none" : "lax") as "none" | "lax",
   path: "/api/auth",
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };

@@ -3,7 +3,7 @@
  * يملأ قاعدة البيانات ببيانات جزائرية واقعية للتجربة المحلية.
  * تشغيل: npm run db:seed  (من مجلد backend)
  */
-import { PrismaClient, Role, Gender, VerificationStatus, AppointmentStatus, ConsultationType } from "@prisma/client";
+import { PrismaClient, Role, Gender, VerificationStatus, AppointmentStatus, ConsultationType } from "../backend/node_modules/@prisma/client"; // مسار صريح: seed.ts خارج backend/
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();

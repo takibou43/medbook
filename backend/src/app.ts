@@ -18,6 +18,7 @@ import reviewsRoutes from "./modules/reviews/reviews.routes";
 import notificationsRoutes from "./modules/notifications/notifications.routes";
 import favoritesRoutes from "./modules/favorites/favorites.routes";
 import adminRoutes from "./modules/admin/admin.routes";
+import bookingRoutes from "./modules/booking/booking.routes";
 
 export function createApp() {
   const app = express();
@@ -25,7 +26,12 @@ export function createApp() {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.clientUrl,
+      // يدعم أكثر من نطاق (موقع المرضى + موقع الأطباء المنفصل)؛ يسمح أيضًا بالطلبات
+      // بدون origin (مثل صحة الخادم /health أو أدوات لا تُرسل Origin).
+      origin(origin, callback) {
+        if (!origin || env.clientUrls.includes(origin)) return callback(null, true);
+        callback(new Error("غير مسموح به بواسطة CORS"));
+      },
       credentials: true,
     })
   );
@@ -47,6 +53,7 @@ export function createApp() {
   app.use("/api/notifications", notificationsRoutes);
   app.use("/api/favorites", favoritesRoutes);
   app.use("/api/admin", adminRoutes);
+  app.use("/api/booking", bookingRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

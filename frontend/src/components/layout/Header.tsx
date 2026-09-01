@@ -1,6 +1,6 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Stethoscope, Menu, X, Bell, LogOut, LayoutDashboard } from "lucide-react";
+import { Stethoscope, Menu, X, Bell, LogOut, LayoutDashboard, CalendarDays } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import clsx from "clsx";
 
@@ -10,12 +10,6 @@ const NAV_LINKS = [
   { to: "/specialties", label: "التخصصات" },
   { to: "/how-it-works", label: "كيف يعمل؟" },
 ];
-
-function dashboardPathFor(role?: string) {
-  if (role === "DOCTOR") return "/doctor";
-  if (role === "ADMIN") return "/admin";
-  return "/patient";
-}
 
 export function Header() {
   const { user, logout } = useAuth();
@@ -49,12 +43,9 @@ export function Header() {
         <div className="hidden items-center gap-3 md:flex">
           {user ? (
             <>
-              <button
-                onClick={() => navigate(dashboardPathFor(user.role))}
-                className="btn-outline"
-              >
+              <button onClick={() => navigate("/admin")} className="btn-outline">
                 <LayoutDashboard className="h-4 w-4" />
-                لوحتي
+                لوحة الإدارة
               </button>
               <button onClick={() => logout()} className="btn-ghost">
                 <LogOut className="h-4 w-4" />
@@ -63,11 +54,12 @@ export function Header() {
             </>
           ) : (
             <>
-              <Link to="/login" className="btn-ghost">
-                تسجيل الدخول
+              <Link to="/register" className="btn-ghost">
+                انضم كطبيب
               </Link>
-              <Link to="/register" className="btn-primary">
-                إنشاء حساب
+              <Link to="/book" className="btn-primary">
+                <CalendarDays className="h-4 w-4" />
+                احجز موعدًا
               </Link>
             </>
           )}
@@ -89,20 +81,32 @@ export function Header() {
             <hr />
             {user ? (
               <>
-                <button className="btn-outline w-full" onClick={() => { setOpen(false); navigate(dashboardPathFor(user.role)); }}>
-                  لوحتي
+                <button
+                  className="btn-outline w-full"
+                  onClick={() => {
+                    setOpen(false);
+                    navigate("/admin");
+                  }}
+                >
+                  لوحة الإدارة
                 </button>
-                <button className="btn-ghost w-full" onClick={() => { setOpen(false); logout(); }}>
+                <button
+                  className="btn-ghost w-full"
+                  onClick={() => {
+                    setOpen(false);
+                    logout();
+                  }}
+                >
                   تسجيل الخروج
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" onClick={() => setOpen(false)} className="btn-outline w-full">
-                  تسجيل الدخول
+                <Link to="/book" onClick={() => setOpen(false)} className="btn-primary w-full">
+                  احجز موعدًا
                 </Link>
-                <Link to="/register" onClick={() => setOpen(false)} className="btn-primary w-full">
-                  إنشاء حساب
+                <Link to="/register" onClick={() => setOpen(false)} className="btn-outline w-full">
+                  انضم كطبيب
                 </Link>
               </>
             )}

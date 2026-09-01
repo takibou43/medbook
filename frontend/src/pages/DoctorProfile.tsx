@@ -63,6 +63,9 @@ export default function DoctorProfile() {
       showToast("الرجاء اختيار وقت الموعد.", "error");
       return;
     }
+    if (!doctor) {
+        return;
+    }
     try {
       await createAppointment.mutateAsync({
         doctorId: doctor.id,

@@ -18,9 +18,22 @@ export const guestBookingSchema = z.object({
   wilayaId: z.string().uuid("ولاية غير صالحة"),
   specialtyId: z.string().uuid("تخصص غير صالح"),
   doctorId: z.string().uuid("طبيب غير صالح").optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "صيغة التاريخ يجب أن تكون YYYY-MM-DD"),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, "صيغة الوقت يجب أن تكون HH:mm"),
+  // النظام الجديد: المريض لا يختار الوقت — إن لم يُرسل التاريخ/الوقت يعيّن النظام أول دور متاح
+  // حسب مدة جلسة الطبيب وجدول عمله. تبقى اختيارية لدعم أي عميل قديم.
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "صيغة التاريخ يجب أن تكون YYYY-MM-DD")
+    .optional(),
+  startTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, "صيغة الوقت يجب أن تكون HH:mm")
+    .optional(),
   notes: z.string().max(1000).optional(),
+});
+
+// معاينة أول دور متاح لدى طبيب محدد قبل تأكيد الحجز.
+export const nextSlotQuerySchema = z.object({
+  doctorId: z.string().uuid("طبيب غير صالح"),
 });
 
 export const lookupQuerySchema = z.object({
@@ -41,6 +54,7 @@ export const bookingIdParamsSchema = z.object({
   id: z.string().uuid("معرّف حجز غير صالح"),
 });
 
+export type NextSlotQuery = z.infer<typeof nextSlotQuerySchema>;
 export type GuestSlotsQuery = z.infer<typeof guestSlotsQuerySchema>;
 export type GuestBookingInput = z.infer<typeof guestBookingSchema>;
 export type LookupQuery = z.infer<typeof lookupQuerySchema>;

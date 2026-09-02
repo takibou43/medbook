@@ -40,6 +40,67 @@ async function bookedRangesForDoctorOnDate(doctorId: string, date: Date) {
   });
 }
 
+/**
+ * أول دور متاح لدى طبيب معيّن — قلب نظام "الحجز بالترتيب".
+ * المريض لا يختار الوقت: نبدأ من اليوم ونتقدّم يومًا بيوم حتى نجد أول فترة شاغرة
+ * ضمن أوقات عمل الطبيب، بطول مدة الجلسة التي حددها هو (مثلاً 5 أو 10 أو 20 دقيقة).
+ */
+export async function findNextAvailableSlot(doctorId: string, daysAhead = 60) {
+  const doctor = await prisma.doctor.findUnique({
+    where: { id: doctorId },
+    include: { schedules: true, specialty: true, wilaya: true, city: true, clinic: true },
+  });
+  if (!doctor || doctor.verificationStatus !== VerificationStatus.VERIFIED) {
+    throw ApiError.notFound("الطبيب غير موجود أو غير موثّق.");
+  }
+
+  const slotMinutes = doctor.slotDurationMin > 0 ? doctor.slotDurationMin : SLOT_MINUTES;
+
+  for (let i = 0; i < daysAhead; i++) {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + i);
+
+    const booked = await bookedRangesForDoctorOnDate(doctor.id, date);
+    const slots = generateAvailableSlots(date, doctor.schedules, booked, slotMinutes);
+    // نتخطى ما مضى من وقت اليوم — لا يُعطى للمريض دور في ساعة فاتت.
+    const next = slots.find((s) => !isPast(date, s));
+    if (next) {
+      return {
+        doctor,
+        date,
+        dateStr: date.toISOString().slice(0, 10),
+        startTime: next,
+        endTime: addMinutes(next, slotMinutes),
+        slotMinutes,
+      };
+    }
+  }
+
+  throw ApiError.conflict("لا توجد مواعيد متاحة لدى هذا الطبيب خلال الفترة القادمة.");
+}
+
+/** معاينة أول دور متاح (تُعرض للمريض قبل تأكيد الحجز). */
+export async function previewNextSlot(doctorId: string) {
+  const r = await findNextAvailableSlot(doctorId);
+  return {
+    date: r.dateStr,
+    startTime: r.startTime,
+    endTime: r.endTime,
+    slotMinutes: r.slotMinutes,
+    doctor: {
+      id: r.doctor.id,
+      firstName: r.doctor.firstName,
+      lastName: r.doctor.lastName,
+      phone: r.doctor.phone,
+      address: r.doctor.address,
+      specialty: r.doctor.specialty,
+      city: r.doctor.city,
+      clinic: r.doctor.clinic,
+    },
+  };
+}
+
 export async function getAggregatedSlots(query: GuestSlotsQuery) {
   const date = new Date(query.date + "T00:00:00");
   if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");
@@ -58,7 +119,57 @@ export async function getAggregatedSlots(query: GuestSlotsQuery) {
 
   return Array.from(slotSet).sort();
 }
+/**
+ * حجز بالترتيب: النظام يعيّن للمريض أول دور شاغر لدى الطبيب (بطول مدة جلسته)،
+ * فيأخذ كل مريض الدور الذي يليه تلقائيًا. نعيد المحاولة عند التسابق (مريضان في نفس اللحظة).
+ */
+async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId: string, attempt = 0): Promise<any> {
+  const slot = await findNextAvailableSlot(doctorId);
+
+  try {
+    const appointment = await prisma.appointment.create({
+      data: {
+        patientId: null,
+        guestFirstName: input.firstName,
+        guestLastName: input.lastName,
+        guestPhone: input.phone || null,
+        doctorId: slot.doctor.id,
+        date: slot.date,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        // كل الحجوزات مقبولة تلقائيًا — الطبيب لا يوافق، بل يسجّل: حضر / لم يحضر.
+        status: AppointmentStatus.CONFIRMED,
+        notes: input.notes,
+      },
+      include: { doctor: { include: { specialty: true, wilaya: true, city: true, clinic: true } } },
+    });
+
+    await createNotification(
+      slot.doctor.userId,
+      "APPOINTMENT_CREATED",
+      "حجز جديد",
+      `لديك حجز جديد من ${input.firstName} ${input.lastName} بتاريخ ${slot.dateStr} الساعة ${slot.startTime}.`
+    );
+
+    return appointment;
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002" && attempt < 3) {
+      return createAutoAssignedAppointment(input, doctorId, attempt + 1);
+    }
+    throw err;
+  }
+}
+
 export async function createGuestAppointment(input: GuestBookingInput) {
+  // الوضع الافتراضي الجديد: لم يُرسل وقت — النظام يعيّن أول دور متاح لدى الطبيب المختار.
+  if (input.doctorId && (!input.date || !input.startTime)) {
+    return createAutoAssignedAppointment(input, input.doctorId);
+  }
+
+  if (!input.date || !input.startTime) {
+    throw ApiError.badRequest("الرجاء اختيار الطبيب أولًا.");
+  }
+
   const date = new Date(input.date + "T00:00:00");
   if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");
 
@@ -94,7 +205,7 @@ export async function createGuestAppointment(input: GuestBookingInput) {
           date,
           startTime: input.startTime,
           endTime,
-          status: AppointmentStatus.PENDING,
+          status: AppointmentStatus.CONFIRMED,
           notes: input.notes,
         },
         include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
@@ -139,7 +250,7 @@ export async function createGuestAppointment(input: GuestBookingInput) {
           date,
           startTime: input.startTime,
           endTime,
-          status: AppointmentStatus.PENDING,
+          status: AppointmentStatus.CONFIRMED,
           notes: input.notes,
         },
         include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },

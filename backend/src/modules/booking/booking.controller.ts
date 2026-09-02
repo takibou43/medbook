@@ -11,6 +11,12 @@ export const getSlots = asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: { slots } });
 });
 
+// معاينة الدور الذي سيمنحه النظام للمريض قبل أن يؤكد الحجز.
+export const getNextSlot = asyncHandler(async (req: Request, res: Response) => {
+  const data = await service.previewNextSlot(req.query.doctorId as string);
+  res.json({ success: true, data });
+});
+
 export const createGuestBooking = asyncHandler(async (req: Request, res: Response) => {
   const appointment = await service.createGuestAppointment(req.body);
   res.status(201).json({ success: true, data: appointment });

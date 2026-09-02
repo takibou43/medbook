@@ -33,16 +33,14 @@ export const loginSchema = z.object({
   password: z.string().min(1, "كلمة المرور مطلوبة"),
 });
 
-// تغيير بيانات الحساب: كلمة المرور الحالية مطلوبة دائمًا، ويجب إرسال تغيير واحد على الأقل.
-export const updateAccountSchema = z
-  .object({
-    currentPassword: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
-    email: z.string().email("بريد إلكتروني غير صالح").optional(),
-    newPassword: z.string().min(8, "كلمة المرور الجديدة يجب أن تكون 8 خانات على الأقل").optional(),
-  })
-  .refine((v) => Boolean(v.email || v.newPassword), {
-    message: "الرجاء إدخال بريد جديد أو كلمة مرور جديدة",
-  });
+// تغيير بيانات الحساب: كلمة المرور الحالية مطلوبة دائمًا.
+// ملاحظة: لا نستعمل .refine() هنا لأن middleware الـ validate يقبل ZodObject فقط
+// (‏.refine تُرجع ZodEffects)؛ شرط "تغيير واحد على الأقل" مطبَّق في الخدمة (updateAccount).
+export const updateAccountSchema = z.object({
+  currentPassword: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
+  email: z.string().email("بريد إلكتروني غير صالح").optional(),
+  newPassword: z.string().min(8, "كلمة المرور الجديدة يجب أن تكون 8 خانات على الأقل").optional(),
+});
 
 export type RegisterPatientInput = z.infer<typeof registerPatientSchema>;
 export type RegisterDoctorInput = z.infer<typeof registerDoctorSchema>;

@@ -63,6 +63,54 @@ export async function deleteUser(userId: string) {
   await prisma.user.delete({ where: { id: userId } });
 }
 
+/**
+ * حذف البيانات التجريبية التي أنشأها سكربت seed فقط.
+ * النطاق محصور عمدًا في بُنية بريد الحسابات التجريبية (dr.N@medbook.dz / patient.N@medbook.dz)
+ * حتى لا تمسّ العملية أي مستخدم حقيقي مهما تكرّر استدعاؤها.
+ * لا تُحذف: حساب الإدارة، الولايات، البلديات، التخصصات.
+ */
+export async function purgeDemoData() {
+  const demoUsers = await prisma.user.findMany({
+    where: {
+      email: { endsWith: "@medbook.dz" },
+      OR: [{ email: { startsWith: "dr." } }, { email: { startsWith: "patient." } }],
+    },
+    select: { id: true },
+  });
+  const userIds = demoUsers.map((u) => u.id);
+  if (userIds.length === 0) return { users: 0, doctors: 0, patients: 0, appointments: 0, reviews: 0, clinics: 0 };
+
+  const doctors = await prisma.doctor.findMany({ where: { userId: { in: userIds } }, select: { id: true } });
+  const patients = await prisma.patient.findMany({ where: { userId: { in: userIds } }, select: { id: true } });
+  const doctorIds = doctors.map((d) => d.id);
+  const patientIds = patients.map((p) => p.id);
+
+  // الترتيب مهم: علاقات Appointment نحو Doctor/Patient ليست Cascade، لذا نحذف الأبناء أولًا.
+  const reviews = await prisma.review.deleteMany({
+    where: { OR: [{ doctorId: { in: doctorIds } }, { patientId: { in: patientIds } }] },
+  });
+  const appointments = await prisma.appointment.deleteMany({
+    where: { OR: [{ doctorId: { in: doctorIds } }, { patientId: { in: patientIds } }] },
+  });
+  await prisma.doctorSchedule.deleteMany({ where: { doctorId: { in: doctorIds } } });
+  await prisma.notification.deleteMany({ where: { userId: { in: userIds } } });
+  await prisma.doctor.deleteMany({ where: { id: { in: doctorIds } } });
+  await prisma.patient.deleteMany({ where: { id: { in: patientIds } } });
+  const users = await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+
+  // العيادات: تُحذف فقط إن لم يبقَ أي طبيب مرتبط بها.
+  const clinics = await prisma.clinic.deleteMany({ where: { doctors: { none: {} } } });
+
+  return {
+    users: users.count,
+    doctors: doctorIds.length,
+    patients: patientIds.length,
+    appointments: appointments.count,
+    reviews: reviews.count,
+    clinics: clinics.count,
+  };
+}
+
 export async function createAdminUser(email: string, password: string, phone?: string) {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw ApiError.conflict("البريد الإلكتروني مستخدم مسبقًا.");

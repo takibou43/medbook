@@ -17,6 +17,17 @@ router.get(
   })
 );
 
+// ---- Maintenance ----
+// حذف البيانات التجريبية فقط (حسابات seed) — لا تمسّ المستخدمين الحقيقيين ولا البيانات المرجعية.
+router.post(
+  "/maintenance/purge-demo-data",
+  asyncHandler(async (req, res) => {
+    const result = await service.purgeDemoData();
+    await service.logAction(req.user!.id, "PURGE_DEMO_DATA", "System", "-", result);
+    res.json({ success: true, message: "تم حذف البيانات التجريبية.", data: result });
+  })
+);
+
 // ---- Users ----
 router.get(
   "/users",

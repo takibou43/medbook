@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../lib/api";
-import { Input, Textarea } from "../../components/ui/Input";
+import { Input, Select, Textarea } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
+import { useSpecialties } from "../../hooks/useCatalog";
 
 interface FormValues {
+  specialtyId: string;
   bio: string;
   yearsExperience: number;
   consultationFee: number;
@@ -20,6 +22,7 @@ export default function DoctorProfileSettings() {
     queryKey: ["me-doctor-profile"],
     queryFn: async () => (await api.get("/auth/me")).data.data,
   });
+  const { data: specialties } = useSpecialties();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
   const { register, handleSubmit, reset } = useForm<FormValues>();
@@ -27,6 +30,7 @@ export default function DoctorProfileSettings() {
   useEffect(() => {
     if (me?.doctor) {
       reset({
+        specialtyId: me.doctor.specialtyId ?? "",
         bio: me.doctor.bio ?? "",
         yearsExperience: me.doctor.yearsExperience,
         consultationFee: me.doctor.consultationFee ?? 0,
@@ -55,11 +59,14 @@ export default function DoctorProfileSettings() {
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-extrabold text-slate-900">ملفي المهني</h1>
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
-        <div>
-          <label className="label">التخصص</label>
-          <div className="input flex items-center bg-slate-50 text-slate-600">{me?.doctor?.specialty?.nameAr ?? "—"}</div>
-          <p className="mt-1 text-xs text-slate-400">لتغيير التخصص، الرجاء التواصل مع الإدارة.</p>
-        </div>
+        <Select label="التخصص" {...register("specialtyId", { required: "مطلوب" })}>
+          <option value="">اختر التخصص</option>
+          {specialties?.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.nameAr}
+            </option>
+          ))}
+        </Select>
         <Textarea label="نبذة تعريفية" {...register("bio")} />
         <div className="grid grid-cols-2 gap-3">
           <Input label="سنوات الخبرة" type="number" {...register("yearsExperience")} />

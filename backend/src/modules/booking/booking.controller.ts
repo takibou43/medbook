@@ -15,3 +15,13 @@ export const createGuestBooking = asyncHandler(async (req: Request, res: Respons
   const appointment = await service.createGuestAppointment(req.body);
   res.status(201).json({ success: true, data: appointment });
 });
+
+export const lookupBookings = asyncHandler(async (req: Request, res: Response) => {
+  const appointments = await service.lookupAppointmentsByPhone(req.query.phone as string);
+  res.json({ success: true, data: appointments });
+});
+
+export const cancelBooking = asyncHandler(async (req: Request, res: Response) => {
+  const appointment = await service.cancelGuestAppointment(req.params.id, req.body.phone);
+  res.json({ success: true, data: appointment });
+});

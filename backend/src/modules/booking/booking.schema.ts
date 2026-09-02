@@ -23,5 +23,25 @@ export const guestBookingSchema = z.object({
   notes: z.string().max(1000).optional(),
 });
 
+export const lookupQuerySchema = z.object({
+  phone: z
+    .string()
+    .trim()
+    .regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)"),
+});
+
+export const cancelBookingSchema = z.object({
+  phone: z
+    .string()
+    .trim()
+    .regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)"),
+});
+
+export const bookingIdParamsSchema = z.object({
+  id: z.string().uuid("معرّف حجز غير صالح"),
+});
+
 export type GuestSlotsQuery = z.infer<typeof guestSlotsQuerySchema>;
 export type GuestBookingInput = z.infer<typeof guestBookingSchema>;
+export type LookupQuery = z.infer<typeof lookupQuerySchema>;
+export type CancelBookingInput = z.infer<typeof cancelBookingSchema>;

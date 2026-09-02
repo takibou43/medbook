@@ -163,3 +163,54 @@ export async function createGuestAppointment(input: GuestBookingInput) {
 
   throw ApiError.conflict("هذا الوقت لم يعد متاحًا لدى أي طبيب مطابق. الرجاء اختيار وقت آخر.");
 }
+
+export async function lookupAppointmentsByPhone(phone: string) {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  return prisma.appointment.findMany({
+    where: {
+      guestPhone: phone,
+      patientId: null,
+      date: { gte: startOfToday },
+      status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] },
+    },
+    include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
+    orderBy: [{ date: "asc" }, { startTime: "asc" }],
+  });
+}
+
+export async function cancelGuestAppointment(id: string, phone: string) {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id },
+    include: { doctor: true },
+  });
+
+  if (!appointment || appointment.patientId !== null) {
+    throw ApiError.notFound("الموعد غير موجود.");
+  }
+  if (appointment.guestPhone !== phone) {
+    throw ApiError.forbidden("رقم الهاتف لا يطابق صاحب هذا الحجز.");
+  }
+  if (appointment.status === AppointmentStatus.CANCELLED) {
+    throw ApiError.conflict("تم إلغاء هذا الموعد مسبقًا.");
+  }
+  if (appointment.status === AppointmentStatus.COMPLETED) {
+    throw ApiError.conflict("لا يمكن إلغاء موعد مكتمل.");
+  }
+
+  const updated = await prisma.appointment.update({
+    where: { id },
+    data: { status: AppointmentStatus.CANCELLED },
+    include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
+  });
+
+  await createNotification(
+    appointment.doctor.userId,
+    "APPOINTMENT_CANCELLED",
+    "تم إلغاء موعد",
+    `قام ${appointment.guestFirstName} ${appointment.guestLastName} (بدون حساب) بإلغاء موعده بتاريخ ${appointment.date.toISOString().slice(0, 10)} الساعة ${appointment.startTime}.`
+  );
+
+  return updated;
+}

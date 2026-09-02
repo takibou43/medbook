@@ -58,7 +58,7 @@ export function DashboardLayout({ title, items }: { title: string; items: Dashbo
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-5 md:hidden">
-          <span className="text-lg font-extrabold text-primary-700">MedBook — الأطباء</span>
+          <span className="text-lg font-extrabold text-primary-700">MedBook</span>
           <button
             onClick={async () => {
               await logout();

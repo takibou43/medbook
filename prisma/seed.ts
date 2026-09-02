@@ -10,7 +10,15 @@ import { PrismaClient, Role, Gender, VerificationStatus, AppointmentStatus, Cons
 // نفس السبب: bcryptjs مثبتة داخل backend/node_modules فقط.
 import bcrypt from "../backend/node_modules/bcryptjs";
 
+import fs from "fs";
+import path from "path";
+
 const prisma = new PrismaClient();
+
+// كل بلديات الجزائر (1541 بلدية) مفهرسة برمز الولاية — ملف بيانات مرجعية بجانب هذا السكربت.
+const ALL_COMMUNES: Record<string, string[]> = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "algeria_communes.json"), "utf-8")
+);
 
 const WILAYAS: { code: string; nameAr: string; nameFr: string; cities: string[] }[] = [
   { code: "01", nameAr: "أدرار", nameFr: "Adrar", cities: ["أدرار"] },
@@ -106,7 +114,9 @@ async function main() {
       create: { code: w.code, nameAr: w.nameAr, nameFr: w.nameFr },
     });
     const cityIds: string[] = [];
-    for (const cityName of w.cities) {
+    // نستعمل القائمة الرسمية الكاملة لبلديات الولاية إن توفرت، وإلا نكتفي بالبلديات المذكورة أعلاه.
+    const cityNames = ALL_COMMUNES[w.code]?.length ? ALL_COMMUNES[w.code] : w.cities;
+    for (const cityName of cityNames) {
       const existing = await prisma.city.findFirst({ where: { nameAr: cityName, wilayaId: wilaya.id } });
       const city = existing ?? (await prisma.city.create({ data: { nameAr: cityName, wilayaId: wilaya.id } }));
       cityIds.push(city.id);

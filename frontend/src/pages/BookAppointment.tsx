@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { CalendarDays, Clock, CheckCircle2, Star, Stethoscope, MessageCircle, CalendarPlus, MapPin, Search } from "lucide-react";
+import { CalendarDays, Clock, CheckCircle2, Star, Stethoscope, CalendarPlus, MapPin, Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useSpecialties, useWilayas } from "../hooks/useCatalog";
@@ -20,23 +20,11 @@ interface BookingForm {
   specialtyId: string;
 }
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function maxDateStr() {
-  const d = new Date();
-  d.setDate(d.getDate() + 60);
-  return d.toISOString().slice(0, 10);
-}
-
-// 0551234567 -> 213551234567 (صيغة wa.me الدولية)
-function toWhatsAppNumber(phone?: string | null) {
-  if (!phone) return null;
-  const digits = phone.replace(/\D/g, "");
-  if (/^0[5-7]\d{8}$/.test(digits)) return "213" + digits.slice(1);
-  if (/^213[5-7]\d{8}$/.test(digits)) return digits;
-  return null;
+interface NextSlot {
+  date: string;
+  startTime: string;
+  endTime: string;
+  slotMinutes: number;
 }
 
 // ملف تقويم قياسي (.ics) يعمل مع تقويم الهاتف وGoogle Calendar — تذكير مجاني بالكامل.
@@ -58,10 +46,16 @@ function buildIcs(c: { date: string; startTime: string; doctorName: string; plac
     `SUMMARY:موعد طبي مع د. ${c.doctorName}`,
     `LOCATION:${c.place}`,
     "DESCRIPTION:حجز عبر MedBook",
+    // تذكير تلقائي على هاتف المريض قبل الموعد بـ 10 دقائق (وتذكير مبكر قبل ساعتين).
+    "BEGIN:VALARM",
+    "TRIGGER:-PT10M",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:موعدك الطبي بعد 10 دقائق",
+    "END:VALARM",
     "BEGIN:VALARM",
     "TRIGGER:-PT2H",
     "ACTION:DISPLAY",
-    "DESCRIPTION:تذكير بموعدك الطبي",
+    "DESCRIPTION:تذكير بموعدك الطبي اليوم",
     "END:VALARM",
     "END:VEVENT",
     "END:VCALENDAR",
@@ -74,8 +68,6 @@ export default function BookAppointment() {
   const { data: wilayas } = useWilayas();
 
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  const [date, setDate] = useState(todayStr());
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<{
     date: string;
     startTime: string;
@@ -100,12 +92,7 @@ export default function BookAppointment() {
 
   useEffect(() => {
     setSelectedDoctor(null);
-    setSelectedSlot(null);
   }, [wilayaId, specialtyId]);
-
-  useEffect(() => {
-    setSelectedSlot(null);
-  }, [selectedDoctor, date]);
 
   const doctorsEnabled = Boolean(wilayaId && specialtyId);
   const { data: doctors, isFetching: loadingDoctors } = useQuery({
@@ -115,33 +102,26 @@ export default function BookAppointment() {
     enabled: doctorsEnabled,
   });
 
-  const slotsEnabled = Boolean(selectedDoctor && date);
-  const { data: slots, isFetching: loadingSlots } = useQuery({
-    queryKey: ["book-slots", selectedDoctor?.id, date],
+  // الدور الذي سيمنحه النظام تلقائيًا — المريض لا يختار الوقت، فقط يرى ما سيُحجز له.
+  const { data: nextSlot, isFetching: loadingSlot } = useQuery({
+    queryKey: ["next-slot", selectedDoctor?.id],
     queryFn: async () =>
-      (await api.get<{ data: { slots: string[] } }>(`/doctors/${selectedDoctor!.id}/availability`, { params: { date } })).data.data.slots,
-    enabled: slotsEnabled,
+      (await api.get<{ data: NextSlot }>("/booking/next-slot", { params: { doctorId: selectedDoctor!.id } })).data.data,
+    enabled: Boolean(selectedDoctor),
+    retry: false,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   const bookMutation = useMutation({
+    // لا نرسل التاريخ ولا الوقت — الخادم هو من يعيّن الدور التالي لحظة الحجز.
     mutationFn: async (values: BookingForm) =>
-      (
-        await api.post("/booking", {
-          ...values,
-          doctorId: selectedDoctor!.id,
-          date,
-          startTime: selectedSlot,
-        })
-      ).data.data,
+      (await api.post("/booking", { ...values, doctorId: selectedDoctor!.id })).data.data,
   });
 
   async function onSubmit(values: BookingForm) {
     if (!selectedDoctor) {
       showToast("الرجاء اختيار طبيب.", "error");
-      return;
-    }
-    if (!selectedSlot) {
-      showToast("الرجاء اختيار وقت الموعد.", "error");
       return;
     }
     try {
@@ -164,15 +144,11 @@ export default function BookAppointment() {
   }
 
   if (confirmed) {
-    const dateLabel = new Date(confirmed.date).toLocaleDateString("ar-DZ");
-    const waNumber = toWhatsAppNumber(confirmed.doctorPhone);
-    const waText = encodeURIComponent(
-      `السلام عليكم، أنا ${confirmed.patientName}. حجزت موعدًا عبر MedBook مع د. ${confirmed.doctorName} يوم ${dateLabel} على الساعة ${confirmed.startTime}.` +
-        (confirmed.patientPhone ? ` رقم هاتفي: ${confirmed.patientPhone}.` : "") +
-        " أرجو تأكيد الموعد، شكرًا."
-    );
-    // بدون رقم للطبيب نفتح واتساب برسالة جاهزة ليختار المريض المُرسَل إليه (أو يحفظها لنفسه).
-    const waHref = waNumber ? `https://wa.me/${waNumber}?text=${waText}` : `https://wa.me/?text=${waText}`;
+    const dateLabel = new Date(confirmed.date).toLocaleDateString("ar-DZ", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
 
     function downloadIcs() {
       const blob = new Blob([buildIcs(confirmed!)], { type: "text/calendar;charset=utf-8" });
@@ -188,7 +164,8 @@ export default function BookAppointment() {
       <div className="container-app flex min-h-[70vh] items-center justify-center py-10">
         <Card className="w-full max-w-md text-center">
           <CheckCircle2 className="mx-auto mb-4 h-14 w-14 text-emerald-500" />
-          <h1 className="text-xl font-extrabold text-slate-900">تم إرسال طلب حجزك بنجاح!</h1>
+          <h1 className="text-xl font-extrabold text-slate-900">تم تأكيد حجزك!</h1>
+          <p className="mt-1 text-sm text-slate-500">دورك محجوز باسمك لدى الطبيب</p>
           <p className="mt-2 font-semibold text-slate-700">د. {confirmed.doctorName}</p>
           <p className="text-slate-600">
             {dateLabel} — الساعة {confirmed.startTime}
@@ -200,16 +177,6 @@ export default function BookAppointment() {
           )}
 
           <div className="mt-6 space-y-2">
-            <a
-              href={waHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-2.5 font-semibold text-white transition hover:brightness-95"
-            >
-              <MessageCircle className="h-4 w-4" />
-              {waNumber ? "أرسل تأكيدًا للطبيب عبر واتساب" : "شارك تفاصيل الحجز عبر واتساب"}
-            </a>
-
             <button
               type="button"
               onClick={downloadIcs}
@@ -238,7 +205,6 @@ export default function BookAppointment() {
             onClick={() => {
               setConfirmed(null);
               setSelectedDoctor(null);
-              setSelectedSlot(null);
             }}
           >
             حجز موعد آخر
@@ -253,7 +219,9 @@ export default function BookAppointment() {
       <div className="mx-auto max-w-xl">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-extrabold text-slate-900">احجز موعدك الآن</h1>
-          <p className="mt-1 text-slate-500">لا حاجة لإنشاء حساب — فقط املأ البيانات وحدد الموعد المناسب.</p>
+          <p className="mt-1 text-slate-500">
+            لا حاجة لإنشاء حساب — املأ بياناتك واختر الطبيب، والموقع يمنحك أول دور متاح تلقائيًا.
+          </p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
@@ -337,48 +305,34 @@ export default function BookAppointment() {
           )}
 
           {selectedDoctor && (
-            <>
-              <Input
-                label="تاريخ الموعد"
-                type="date"
-                min={todayStr()}
-                max={maxDateStr()}
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-
-              <div>
-                <p className="label mb-2 flex items-center gap-1.5">
-                  <Clock className="h-4 w-4" /> الأوقات المتاحة
-                </p>
-                {loadingSlots ? (
-                  <Spinner label="جارٍ تحميل الأوقات..." />
-                ) : slots && slots.length > 0 ? (
-                  <div className="grid grid-cols-4 gap-2">
-                    {slots.map((slot) => (
-                      <button
-                        type="button"
-                        key={slot}
-                        onClick={() => setSelectedSlot(slot)}
-                        className={`rounded-lg border px-2 py-2 text-sm font-medium transition ${
-                          selectedSlot === slot
-                            ? "border-primary-600 bg-primary-600 text-white"
-                            : "border-slate-200 text-slate-700 hover:border-primary-300"
-                        }`}
-                      >
-                        {slot}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState title="لا توجد أوقات متاحة" description="جرّب تاريخًا آخر." />
-                )}
-              </div>
-            </>
+            <div>
+              <p className="label mb-2 flex items-center gap-1.5">
+                <Clock className="h-4 w-4" /> دورك الذي سيحدده الموقع
+              </p>
+              {loadingSlot && !nextSlot ? (
+                <Spinner label="جارٍ تحديد أول دور متاح..." />
+              ) : nextSlot ? (
+                <div className="rounded-xl border border-primary-200 bg-primary-50 p-4 text-center">
+                  <p className="text-sm text-slate-600">أول دور متاح لدى هذا الطبيب</p>
+                  <p className="mt-1 text-lg font-extrabold text-primary-800">
+                    {new Date(nextSlot.date).toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })}
+                  </p>
+                  <p className="text-2xl font-extrabold text-primary-700">{nextSlot.startTime}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    مدة الجلسة {nextSlot.slotMinutes} دقيقة — الأدوار تُمنح بالترتيب حسب أسبقية الحجز.
+                  </p>
+                </div>
+              ) : (
+                <EmptyState
+                  title="لا توجد أدوار متاحة"
+                  description="لم يحدد هذا الطبيب أوقات عمله بعد، أو أدواره مكتملة. جرّب طبيبًا آخر."
+                />
+              )}
+            </div>
           )}
 
-          <Button type="submit" className="w-full" loading={bookMutation.isPending} disabled={!selectedDoctor || !selectedSlot}>
-            <CalendarDays className="ml-1.5 h-4 w-4" /> تأكيد الحجز
+          <Button type="submit" className="w-full" loading={bookMutation.isPending} disabled={!selectedDoctor || !nextSlot}>
+            <CalendarDays className="ml-1.5 h-4 w-4" /> تأكيد الحجز وأخذ الدور
           </Button>
         </form>
       </div>

@@ -1,4 +1,4 @@
-import { Stethoscope } from "lucide-react";
+import { Logo } from "../ui/Logo";
 
 export function Footer() {
   return (
@@ -6,7 +6,7 @@ export function Footer() {
       <div className="container-app grid gap-8 py-10 md:grid-cols-2">
         <div>
           <div className="mb-2 flex items-center gap-2 text-primary-700">
-            <Stethoscope className="h-5 w-5" />
+            <Logo className="h-7 w-7" />
             <span className="text-lg font-extrabold">MedBook</span>
           </div>
           <p className="text-sm text-slate-500">منصة رقمية جزائرية لحجز المواعيد الطبية بسهولة وأمان.</p>

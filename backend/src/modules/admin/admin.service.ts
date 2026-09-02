@@ -139,6 +139,19 @@ export const wilayasAdmin = {
   update: (id: string, data: Partial<{ code: string; nameAr: string; nameFr: string }>) => prisma.wilaya.update({ where: { id }, data }),
   remove: (id: string) => prisma.wilaya.delete({ where: { id } }),
   addCity: (wilayaId: string, nameAr: string) => prisma.city.create({ data: { wilayaId, nameAr } }),
+  // إضافة دفعة بلديات لولاية واحدة (لتعبئة البيانات المرجعية دفعة واحدة بدل طلب لكل بلدية).
+  // نتجاهل البلديات الموجودة مسبقًا حتى تكون العملية قابلة للإعادة دون إنشاء تكرارات.
+  addCitiesBulk: async (wilayaId: string, names: string[]) => {
+    const wilaya = await prisma.wilaya.findUnique({ where: { id: wilayaId } });
+    if (!wilaya) throw ApiError.notFound("الولاية غير موجودة.");
+    const existing = await prisma.city.findMany({ where: { wilayaId }, select: { nameAr: true } });
+    const existingNames = new Set(existing.map((c) => c.nameAr));
+    const toCreate = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean))).filter((n) => !existingNames.has(n));
+    if (toCreate.length > 0) {
+      await prisma.city.createMany({ data: toCreate.map((nameAr) => ({ wilayaId, nameAr })) });
+    }
+    return { added: toCreate.length, skipped: names.length - toCreate.length, total: existingNames.size + toCreate.length };
+  },
   removeCity: (id: string) => prisma.city.delete({ where: { id } }),
 };
 

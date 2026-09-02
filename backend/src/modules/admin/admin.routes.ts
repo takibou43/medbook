@@ -165,6 +165,15 @@ router.post(
     res.status(201).json({ success: true, data: created });
   })
 );
+// إضافة دفعة بلديات لولاية واحدة — تُستخدم لتعبئة البيانات المرجعية (بلديات الجزائر) دفعة واحدة.
+router.post(
+  "/wilayas/:id/cities/bulk",
+  validate({ body: z.object({ names: z.array(z.string().min(2)).min(1).max(200) }) }),
+  asyncHandler(async (req, res) => {
+    const result = await service.wilayasAdmin.addCitiesBulk(req.params.id, req.body.names);
+    res.status(201).json({ success: true, data: result });
+  })
+);
 router.delete(
   "/cities/:id",
   asyncHandler(async (req, res) => {

@@ -1,15 +1,32 @@
 import { Routes, Route } from "react-router-dom";
-import { LayoutDashboard, CalendarClock, Clock, Users as UsersIcon, Settings } from "lucide-react";
+import {
+  LayoutDashboard,
+  CalendarClock,
+  Clock,
+  Users as UsersIcon,
+  Settings,
+  Stethoscope,
+  Building2,
+  ShieldCheck,
+  Star,
+} from "lucide-react";
 
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import DoctorDashboard from "./pages/doctor/DoctorDashboard";
 import DoctorAppointments from "./pages/doctor/DoctorAppointments";
 import DoctorSchedule from "./pages/doctor/DoctorSchedule";
 import DoctorPatients from "./pages/doctor/DoctorPatients";
 import DoctorProfileSettings from "./pages/doctor/DoctorProfileSettings";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminDoctors from "./pages/admin/AdminDoctors";
+import AdminSpecialties from "./pages/admin/AdminSpecialties";
+import AdminWilayas from "./pages/admin/AdminWilayas";
+import AdminReviews from "./pages/admin/AdminReviews";
 
 const doctorNav = [
   { to: "/", label: "الرئيسية", icon: LayoutDashboard, end: true },
@@ -19,10 +36,20 @@ const doctorNav = [
   { to: "/profile", label: "ملفي المهني", icon: Settings },
 ];
 
+const adminNav = [
+  { to: "/admin", label: "الرئيسية", icon: LayoutDashboard, end: true },
+  { to: "/admin/users", label: "المستخدمون", icon: UsersIcon },
+  { to: "/admin/doctors", label: "الأطباء", icon: Stethoscope },
+  { to: "/admin/specialties", label: "التخصصات", icon: ShieldCheck },
+  { to: "/admin/wilayas", label: "الولايات", icon: Building2 },
+  { to: "/admin/reviews", label: "التقييمات", icon: Star },
+];
+
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
 
       <Route element={<ProtectedRoute allow={["DOCTOR"]} />}>
         <Route element={<DashboardLayout title="لوحة الطبيب" items={doctorNav} />}>
@@ -31,6 +58,17 @@ export default function App() {
           <Route path="/schedule" element={<DoctorSchedule />} />
           <Route path="/patients" element={<DoctorPatients />} />
           <Route path="/profile" element={<DoctorProfileSettings />} />
+        </Route>
+      </Route>
+
+      <Route element={<ProtectedRoute allow={["ADMIN"]} />}>
+        <Route element={<DashboardLayout title="لوحة الإدارة" items={adminNav} />}>
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/doctors" element={<AdminDoctors />} />
+          <Route path="/admin/specialties" element={<AdminSpecialties />} />
+          <Route path="/admin/wilayas" element={<AdminWilayas />} />
+          <Route path="/admin/reviews" element={<AdminReviews />} />
         </Route>
       </Route>
 

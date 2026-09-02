@@ -191,6 +191,8 @@ model Doctor {
   address            String?
   consultationFee    Int?
   photoUrl           String?
+  // مدة الجلسة بالدقائق — يحددها الطبيب، وعليها يبني النظام ترتيب المواعيد تلقائيًا.
+  slotDurationMin    Int                 @default(20)
   verificationStatus VerificationStatus  @default(PENDING)
   avgRating          Float               @default(0)
   reviewsCount       Int                 @default(0)

@@ -55,6 +55,11 @@ export default function DoctorProfileSettings() {
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-extrabold text-slate-900">ملفي المهني</h1>
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
+        <div>
+          <label className="label">التخصص</label>
+          <div className="input flex items-center bg-slate-50 text-slate-600">{me?.doctor?.specialty?.nameAr ?? "—"}</div>
+          <p className="mt-1 text-xs text-slate-400">لتغيير التخصص، الرجاء التواصل مع الإدارة.</p>
+        </div>
         <Textarea label="نبذة تعريفية" {...register("bio")} />
         <div className="grid grid-cols-2 gap-3">
           <Input label="سنوات الخبرة" type="number" {...register("yearsExperience")} />

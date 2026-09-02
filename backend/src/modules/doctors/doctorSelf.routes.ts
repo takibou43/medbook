@@ -33,6 +33,8 @@ const profileSchema = z.object({
   photoUrl: z.string().url().optional(),
   clinicId: z.string().uuid().optional(),
   specialtyId: z.string().uuid().optional(),
+  wilayaId: z.string().uuid().optional(),
+  cityId: z.string().uuid().optional(),
 });
 
 router.patch(

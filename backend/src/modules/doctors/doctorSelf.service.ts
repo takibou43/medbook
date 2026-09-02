@@ -22,6 +22,7 @@ export async function updateOwnProfile(
     specialtyId: string;
     wilayaId: string;
     cityId: string;
+    slotDurationMin: number;
   }>
 ) {
   const doctor = await getDoctorByUserId(userId);

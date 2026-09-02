@@ -35,6 +35,8 @@ const profileSchema = z.object({
   specialtyId: z.string().uuid().optional(),
   wilayaId: z.string().uuid().optional(),
   cityId: z.string().uuid().optional(),
+  // مدة الجلسة بالدقائق — يبني عليها النظام ترتيب أدوار المرضى.
+  slotDurationMin: z.coerce.number().int().min(5).max(120).optional(),
 });
 
 router.patch(

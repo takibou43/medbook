@@ -28,7 +28,9 @@ export default function DoctorProfileSettings() {
   const { register, handleSubmit, reset } = useForm<FormValues>();
 
   useEffect(() => {
-    if (me?.doctor) {
+    // ننتظر تحميل قائمة التخصصات أيضًا: إن نُفِّذ reset() قبل رسم خيارات <select>،
+    // لن يستطيع المتصفح تحديد القيمة الحالية لأن الخيار المطابق لن يكون موجودًا بعد.
+    if (me?.doctor && specialties) {
       reset({
         specialtyId: me.doctor.specialtyId ?? "",
         bio: me.doctor.bio ?? "",
@@ -38,7 +40,7 @@ export default function DoctorProfileSettings() {
         address: me.doctor.address ?? "",
       });
     }
-  }, [me, reset]);
+  }, [me, specialties, reset]);
 
   async function onSubmit(values: FormValues) {
     setSaving(true);

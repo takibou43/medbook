@@ -3,22 +3,74 @@
  * يملأ قاعدة البيانات ببيانات جزائرية واقعية للتجربة المحلية.
  * تشغيل: npm run db:seed  (من مجلد backend)
  */
-import { PrismaClient, Role, Gender, VerificationStatus, AppointmentStatus, ConsultationType } from "../backend/node_modules/@prisma/client"; // مسار صريح: seed.ts خارج backend/
-import bcrypt from "../backend/node_modules/bcryptjs"; // مسار صريح لنفس السبب أعلاه
+// ملاحظة: يُستورد من المسار الصريح داخل backend/node_modules لأن seed.ts يقع خارج backend/
+// (عميل Prisma المُولَّد يُكتب هناك حسب generator.output في schema.prisma)، وimport باسم الحزمة
+// المجرد "@prisma/client" قد يُحلّ خطأً إلى نسخة أخرى في جذر المشروع لا تحتوي العميل المُولَّد فعليًا.
+import { PrismaClient, Role, Gender, VerificationStatus, AppointmentStatus, ConsultationType } from "../backend/node_modules/@prisma/client";
+// نفس السبب: bcryptjs مثبتة داخل backend/node_modules فقط.
+import bcrypt from "../backend/node_modules/bcryptjs";
 
 const prisma = new PrismaClient();
 
 const WILAYAS: { code: string; nameAr: string; nameFr: string; cities: string[] }[] = [
-  { code: "16", nameAr: "الجزائر", nameFr: "Alger", cities: ["الجزائر الوسطى", "باب الزوار", "بئر مراد رايس", "الحراش"] },
-  { code: "31", nameAr: "وهران", nameFr: "Oran", cities: ["وهران", "السانيا", "بئر الجير", "عين الترك"] },
-  { code: "25", nameAr: "قسنطينة", nameFr: "Constantine", cities: ["قسنطينة", "الخروب", "عين السمارة"] },
-  { code: "09", nameAr: "البليدة", nameFr: "Blida", cities: ["البليدة", "بوفاريك", "موزاية"] },
-  { code: "19", nameAr: "سطيف", nameFr: "Sétif", cities: ["سطيف", "العلمة", "عين ولمان"] },
-  { code: "06", nameAr: "بجاية", nameFr: "Béjaïa", cities: ["بجاية", "أقبو", "سيدي عيش"] },
-  { code: "23", nameAr: "عنابة", nameFr: "Annaba", cities: ["عنابة", "الحجار", "برحال"] },
-  { code: "05", nameAr: "باتنة", nameFr: "Batna", cities: ["باتنة", "بريكة", "عين التوتة"] },
-  { code: "13", nameAr: "تلمسان", nameFr: "Tlemcen", cities: ["تلمسان", "مغنية", "ندرومة"] },
+  { code: "01", nameAr: "أدرار", nameFr: "Adrar", cities: ["أدرار"] },
+  { code: "02", nameAr: "الشلف", nameFr: "Chlef", cities: ["الشلف"] },
+  { code: "03", nameAr: "الأغواط", nameFr: "Laghouat", cities: ["الأغواط"] },
   { code: "04", nameAr: "أم البواقي", nameFr: "Oum El Bouaghi", cities: ["أم البواقي", "عين مليلة"] },
+  { code: "05", nameAr: "باتنة", nameFr: "Batna", cities: ["باتنة", "بريكة", "عين التوتة"] },
+  { code: "06", nameAr: "بجاية", nameFr: "Béjaïa", cities: ["بجاية", "أقبو", "سيدي عيش"] },
+  { code: "07", nameAr: "بسكرة", nameFr: "Biskra", cities: ["بسكرة"] },
+  { code: "08", nameAr: "بشار", nameFr: "Béchar", cities: ["بشار"] },
+  { code: "09", nameAr: "البليدة", nameFr: "Blida", cities: ["البليدة", "بوفاريك", "موزاية"] },
+  { code: "10", nameAr: "البويرة", nameFr: "Bouira", cities: ["البويرة"] },
+  { code: "11", nameAr: "تمنراست", nameFr: "Tamanrasset", cities: ["تمنراست"] },
+  { code: "12", nameAr: "تبسة", nameFr: "Tébessa", cities: ["تبسة"] },
+  { code: "13", nameAr: "تلمسان", nameFr: "Tlemcen", cities: ["تلمسان", "مغنية", "ندرومة"] },
+  { code: "14", nameAr: "تيارت", nameFr: "Tiaret", cities: ["تيارت"] },
+  { code: "15", nameAr: "تيزي وزو", nameFr: "Tizi Ouzou", cities: ["تيزي وزو"] },
+  { code: "16", nameAr: "الجزائر", nameFr: "Alger", cities: ["الجزائر الوسطى", "باب الزوار", "بئر مراد رايس", "الحراش"] },
+  { code: "17", nameAr: "الجلفة", nameFr: "Djelfa", cities: ["الجلفة"] },
+  { code: "18", nameAr: "جيجل", nameFr: "Jijel", cities: ["جيجل"] },
+  { code: "19", nameAr: "سطيف", nameFr: "Sétif", cities: ["سطيف", "العلمة", "عين ولمان"] },
+  { code: "20", nameAr: "سعيدة", nameFr: "Saïda", cities: ["سعيدة"] },
+  { code: "21", nameAr: "سكيكدة", nameFr: "Skikda", cities: ["سكيكدة"] },
+  { code: "22", nameAr: "سيدي بلعباس", nameFr: "Sidi Bel Abbès", cities: ["سيدي بلعباس"] },
+  { code: "23", nameAr: "عنابة", nameFr: "Annaba", cities: ["عنابة", "الحجار", "برحال"] },
+  { code: "24", nameAr: "قالمة", nameFr: "Guelma", cities: ["قالمة"] },
+  { code: "25", nameAr: "قسنطينة", nameFr: "Constantine", cities: ["قسنطينة", "الخروب", "عين السمارة"] },
+  { code: "26", nameAr: "المدية", nameFr: "Médéa", cities: ["المدية"] },
+  { code: "27", nameAr: "مستغانم", nameFr: "Mostaganem", cities: ["مستغانم"] },
+  { code: "28", nameAr: "المسيلة", nameFr: "M'Sila", cities: ["المسيلة"] },
+  { code: "29", nameAr: "معسكر", nameFr: "Mascara", cities: ["معسكر"] },
+  { code: "30", nameAr: "ورقلة", nameFr: "Ouargla", cities: ["ورقلة"] },
+  { code: "31", nameAr: "وهران", nameFr: "Oran", cities: ["وهران", "السانيا", "بئر الجير", "عين الترك"] },
+  { code: "32", nameAr: "البيض", nameFr: "El Bayadh", cities: ["البيض"] },
+  { code: "33", nameAr: "إليزي", nameFr: "Illizi", cities: ["إليزي"] },
+  { code: "34", nameAr: "برج بوعريريج", nameFr: "Bordj Bou Arréridj", cities: ["برج بوعريريج"] },
+  { code: "35", nameAr: "بومرداس", nameFr: "Boumerdès", cities: ["بومرداس"] },
+  { code: "36", nameAr: "الطارف", nameFr: "El Tarf", cities: ["الطارف"] },
+  { code: "37", nameAr: "تندوف", nameFr: "Tindouf", cities: ["تندوف"] },
+  { code: "38", nameAr: "تسمسيلت", nameFr: "Tissemsilt", cities: ["تسمسيلت"] },
+  { code: "39", nameAr: "الوادي", nameFr: "El Oued", cities: ["الوادي"] },
+  { code: "40", nameAr: "خنشلة", nameFr: "Khenchela", cities: ["خنشلة"] },
+  { code: "41", nameAr: "سوق أهراس", nameFr: "Souk Ahras", cities: ["سوق أهراس"] },
+  { code: "42", nameAr: "تيبازة", nameFr: "Tipaza", cities: ["تيبازة"] },
+  { code: "43", nameAr: "ميلة", nameFr: "Mila", cities: ["ميلة"] },
+  { code: "44", nameAr: "عين الدفلى", nameFr: "Aïn Defla", cities: ["عين الدفلى"] },
+  { code: "45", nameAr: "النعامة", nameFr: "Naâma", cities: ["النعامة"] },
+  { code: "46", nameAr: "عين تموشنت", nameFr: "Aïn Témouchent", cities: ["عين تموشنت"] },
+  { code: "47", nameAr: "غرداية", nameFr: "Ghardaïa", cities: ["غرداية"] },
+  { code: "48", nameAr: "غليزان", nameFr: "Relizane", cities: ["غليزان"] },
+  { code: "49", nameAr: "تيميمون", nameFr: "Timimoun", cities: ["تيميمون"] },
+  { code: "50", nameAr: "برج باجي مختار", nameFr: "Bordj Badji Mokhtar", cities: ["برج باجي مختار"] },
+  { code: "51", nameAr: "أولاد جلال", nameFr: "Ouled Djellal", cities: ["أولاد جلال"] },
+  { code: "52", nameAr: "بني عباس", nameFr: "Béni Abbès", cities: ["بني عباس"] },
+  { code: "53", nameAr: "عين صالح", nameFr: "In Salah", cities: ["عين صالح"] },
+  { code: "54", nameAr: "عين قزام", nameFr: "In Guezzam", cities: ["عين قزام"] },
+  { code: "55", nameAr: "تقرت", nameFr: "Touggourt", cities: ["تقرت"] },
+  { code: "56", nameAr: "جانت", nameFr: "Djanet", cities: ["جانت"] },
+  { code: "57", nameAr: "المغير", nameFr: "El M'Ghair", cities: ["المغير"] },
+  { code: "58", nameAr: "المنيعة", nameFr: "El Meniaa", cities: ["المنيعة"] },
 ];
 
 const SPECIALTIES: { nameAr: string; nameFr: string; icon: string; description: string }[] = [

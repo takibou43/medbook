@@ -1,7 +1,8 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LucideIcon, Stethoscope, LogOut } from "lucide-react";
+import { LucideIcon, LogOut } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../../context/AuthContext";
+import { Logo } from "../ui/Logo";
 
 export interface DashboardNavItem {
   to: string;
@@ -18,9 +19,7 @@ export function DashboardLayout({ title, items }: { title: string; items: Dashbo
     <div className="flex min-h-screen bg-slate-50">
       <aside className="hidden w-64 shrink-0 border-l border-slate-200 bg-white md:flex md:flex-col">
         <div className="flex h-16 items-center gap-2 border-b border-slate-200 px-5 text-primary-700">
-          <div className="rounded-xl bg-primary-600 p-1.5 text-white">
-            <Stethoscope className="h-5 w-5" />
-          </div>
+          <Logo className="h-8 w-8" />
           <span className="text-lg font-extrabold">MedBook</span>
         </div>
         <p className="px-5 pt-4 text-xs font-semibold uppercase text-slate-400">{title}</p>
@@ -58,7 +57,10 @@ export function DashboardLayout({ title, items }: { title: string; items: Dashbo
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-5 md:hidden">
-          <span className="text-lg font-extrabold text-primary-700">MedBook</span>
+          <div className="flex items-center gap-2 text-primary-700">
+            <Logo className="h-7 w-7" />
+            <span className="text-lg font-extrabold">MedBook</span>
+          </div>
           <button
             onClick={async () => {
               await logout();

@@ -20,7 +20,7 @@ interface FormValues {
   address: string;
 }
 
-const SLOT_OPTIONS = [5, 10, 15, 20, 30, 45, 60];
+const SLOT_OPTIONS = [5, 7, 10, 15, 20, 30, 45, 60];
 
 export default function DoctorProfileSettings() {
   const { data: me, isLoading, refetch } = useQuery({
@@ -44,7 +44,7 @@ export default function DoctorProfileSettings() {
         specialtyId: me.doctor.specialtyId ?? "",
         wilayaId: me.doctor.wilayaId ?? "",
         cityId: me.doctor.cityId ?? "",
-        slotDurationMin: me.doctor.slotDurationMin ?? 20,
+        slotDurationMin: me.doctor.slotDurationMin ?? 7,
         bio: me.doctor.bio ?? "",
         yearsExperience: me.doctor.yearsExperience,
         consultationFee: me.doctor.consultationFee ?? 0,

@@ -59,7 +59,20 @@ export async function setUserActive(userId: string, isActive: boolean) {
   return user;
 }
 
-export async function deleteUser(userId: string) {
+export async function deleteUser(userId: string, actingAdminId?: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw ApiError.notFound("المستخدم غير موجود.");
+
+  // حمايتان ضروريتان: لا يحذف المدير حسابه بنفسه، ولا يُحذف آخر حساب إدارة
+  // وإلا فقدت المنصة كل وصول إداري نهائيًا ولا يمكن استرجاعه من الواجهة.
+  if (actingAdminId && userId === actingAdminId) {
+    throw ApiError.badRequest("لا يمكنك حذف حسابك الخاص.");
+  }
+  if (user.role === Role.ADMIN) {
+    const admins = await prisma.user.count({ where: { role: Role.ADMIN } });
+    if (admins <= 1) throw ApiError.badRequest("لا يمكن حذف آخر حساب إدارة في المنصة.");
+  }
+
   await prisma.user.delete({ where: { id: userId } });
 }
 

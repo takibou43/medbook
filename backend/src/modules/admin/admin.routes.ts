@@ -77,7 +77,7 @@ router.patch(
 router.delete(
   "/users/:id",
   asyncHandler(async (req, res) => {
-    await service.deleteUser(req.params.id);
+    await service.deleteUser(req.params.id, req.user!.id);
     await service.logAction(req.user!.id, "DELETE_USER", "User", req.params.id);
     res.json({ success: true, message: "تم حذف المستخدم." });
   })

@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import clsx from "clsx";
-import { Bell, BellRing, RefreshCw } from "lucide-react";
+import { Bell, BellRing, RefreshCw, MessageCircle } from "lucide-react";
 import { useMyAppointments, useUpdateAppointmentStatus } from "../../hooks/useAppointments";
 import { useNewAppointmentAlert, requestNotificationPermission } from "../../hooks/useNewAppointmentAlert";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
@@ -12,12 +12,20 @@ import { AppointmentStatus } from "../../types";
 
 const FILTERS: { label: string; value?: AppointmentStatus }[] = [
   { label: "الكل", value: undefined },
-  { label: "بانتظار التأكيد", value: "PENDING" },
-  { label: "مؤكدة", value: "CONFIRMED" },
-  { label: "مكتملة", value: "COMPLETED" },
+  { label: "قادمة", value: "CONFIRMED" },
+  { label: "حضروا", value: "COMPLETED" },
+  { label: "لم يحضروا", value: "NO_SHOW" },
   { label: "ملغاة", value: "CANCELLED" },
-  { label: "لم يحضر", value: "NO_SHOW" },
 ];
+
+// 0551234567 -> 213551234567 (صيغة wa.me الدولية)
+function toWhatsAppNumber(phone?: string | null) {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (/^0[5-7]\d{8}$/.test(digits)) return "213" + digits.slice(1);
+  if (/^213[5-7]\d{8}$/.test(digits)) return digits;
+  return null;
+}
 
 export default function DoctorAppointments() {
   const [filter, setFilter] = useState<AppointmentStatus | undefined>(undefined);
@@ -45,6 +53,18 @@ export default function DoctorAppointments() {
     } else if (res === "unsupported") {
       showToast("متصفحك لا يدعم الإشعارات.", "error");
     }
+  }
+
+  // رسالة تذكير جاهزة للمريض عبر واتساب (يفتحها الطبيب بنقرة واحدة قبل الموعد).
+  function reminderHref(a: any) {
+    const phone = a.patient?.user?.phone ?? a.guestPhone;
+    const wa = toWhatsAppNumber(phone);
+    if (!wa) return null;
+    const name = a.patient?.firstName ?? a.guestFirstName ?? "";
+    const text = encodeURIComponent(
+      `السلام عليكم ${name}، تذكير بموعدك الطبي على الساعة ${a.startTime}. نرجو الحضور في الوقت المحدد.`
+    );
+    return `https://wa.me/${wa}?text=${text}`;
   }
 
   async function changeStatus(id: string, status: AppointmentStatus) {
@@ -122,22 +142,22 @@ export default function DoctorAppointments() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <AppointmentStatusBadge status={a.status} />
-                {a.status === "PENDING" && (
+                {(a.status === "CONFIRMED" || a.status === "PENDING") && (
                   <>
-                    <Button onClick={() => changeStatus(a.id, "CONFIRMED")}>قبول</Button>
-                    <Button variant="danger" onClick={() => changeStatus(a.id, "CANCELLED")}>
-                      رفض
-                    </Button>
-                  </>
-                )}
-                {a.status === "CONFIRMED" && (
-                  <>
-                    <Button onClick={() => changeStatus(a.id, "COMPLETED")}>إنهاء</Button>
+                    {reminderHref(a) && (
+                      <a
+                        href={reminderHref(a)!}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="تذكير المريض عبر واتساب"
+                        className="flex items-center gap-1.5 rounded-xl bg-[#25D366] px-3 py-2 text-sm font-semibold text-white transition hover:brightness-95"
+                      >
+                        <MessageCircle className="h-4 w-4" /> تذكير
+                      </a>
+                    )}
+                    <Button onClick={() => changeStatus(a.id, "COMPLETED")}>حضر</Button>
                     <Button variant="outline" onClick={() => changeStatus(a.id, "NO_SHOW")}>
                       لم يحضر
-                    </Button>
-                    <Button variant="danger" onClick={() => changeStatus(a.id, "CANCELLED")}>
-                      إلغاء
                     </Button>
                   </>
                 )}

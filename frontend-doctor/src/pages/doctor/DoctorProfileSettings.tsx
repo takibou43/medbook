@@ -12,12 +12,15 @@ interface FormValues {
   specialtyId: string;
   wilayaId: string;
   cityId: string;
+  slotDurationMin: number;
   bio: string;
   yearsExperience: number;
   consultationFee: number;
   phone: string;
   address: string;
 }
+
+const SLOT_OPTIONS = [5, 10, 15, 20, 30, 45, 60];
 
 export default function DoctorProfileSettings() {
   const { data: me, isLoading, refetch } = useQuery({
@@ -41,6 +44,7 @@ export default function DoctorProfileSettings() {
         specialtyId: me.doctor.specialtyId ?? "",
         wilayaId: me.doctor.wilayaId ?? "",
         cityId: me.doctor.cityId ?? "",
+        slotDurationMin: me.doctor.slotDurationMin ?? 20,
         bio: me.doctor.bio ?? "",
         yearsExperience: me.doctor.yearsExperience,
         consultationFee: me.doctor.consultationFee ?? 0,
@@ -60,7 +64,12 @@ export default function DoctorProfileSettings() {
   async function onSubmit(values: FormValues) {
     setSaving(true);
     try {
-      await api.patch("/doctor/profile", { ...values, yearsExperience: Number(values.yearsExperience), consultationFee: Number(values.consultationFee) });
+      await api.patch("/doctor/profile", {
+        ...values,
+        yearsExperience: Number(values.yearsExperience),
+        consultationFee: Number(values.consultationFee),
+        slotDurationMin: Number(values.slotDurationMin),
+      });
       showToast("تم تحديث ملفك المهني.", "success");
       refetch();
     } catch (err) {
@@ -102,6 +111,19 @@ export default function DoctorProfileSettings() {
             ))}
           </Select>
         </div>
+        <div>
+          <Select label="مدة الجلسة الواحدة" {...register("slotDurationMin", { required: "مطلوب" })}>
+            {SLOT_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                {m} دقيقة
+              </option>
+            ))}
+          </Select>
+          <p className="mt-1 text-xs text-slate-400">
+            على أساسها يوزّع الموقع أدوار المرضى تلقائيًا: كل مريض يأخذ الدور الذي يلي سابقه بهذه المدة.
+          </p>
+        </div>
+
         <Textarea label="نبذة تعريفية" {...register("bio")} />
         <div className="grid grid-cols-2 gap-3">
           <Input label="سنوات الخبرة" type="number" {...register("yearsExperience")} />

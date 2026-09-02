@@ -8,9 +8,9 @@ export function ProtectedRoute({ allow }: { allow: Role[] }) {
 
   if (loading) return <Spinner label="جارٍ التحقق من الجلسة..." />;
   if (!user) return <Navigate to="/login" replace />;
-  // موقع الأطباء لوحة تحكم فقط (لا صفحة عامة "/")، لذا أي دور غير مسموح به يُعاد توجيهه لتسجيل الدخول
-  // بدل الجذر "/" تفاديًا لأي احتمال حلقة توجيه.
-  if (!allow.includes(user.role)) return <Navigate to="/login" replace />;
+  if (!allow.includes(user.role)) {
+    return <Navigate to={user.role === "ADMIN" ? "/admin" : "/"} replace />;
+  }
 
   return <Outlet />;
 }

@@ -30,11 +30,13 @@ async function bookedRangesForDoctorOnDate(doctorId: string, date: Date) {
   const endOfDay = new Date(date);
   endOfDay.setHours(23, 59, 59, 999);
 
+  // نستبعد كل فترة يوجد بها سجل موعد مهما كانت حالته (حتى الملغاة أو "لم يحضر")،
+  // لأن قاعدة البيانات تفرض تفرّد (طبيب + تاريخ + وقت البداية) بغضّ النظر عن الحالة،
+  // فلو اعتبرناها شاغرة لفشل الإدراج بخطأ تعارض بدل أن يأخذ المريض الدور التالي.
   return prisma.appointment.findMany({
     where: {
       doctorId,
       date: { gte: startOfDay, lte: endOfDay },
-      status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] },
     },
     select: { startTime: true, endTime: true },
   });

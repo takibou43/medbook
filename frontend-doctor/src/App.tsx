@@ -9,6 +9,7 @@ import {
   Building2,
   ShieldCheck,
   Star,
+  KeyRound,
 } from "lucide-react";
 
 import { DashboardLayout } from "./components/layout/DashboardLayout";
@@ -27,6 +28,7 @@ import AdminDoctors from "./pages/admin/AdminDoctors";
 import AdminSpecialties from "./pages/admin/AdminSpecialties";
 import AdminWilayas from "./pages/admin/AdminWilayas";
 import AdminReviews from "./pages/admin/AdminReviews";
+import AccountSettings from "./pages/AccountSettings";
 
 const doctorNav = [
   { to: "/", label: "الرئيسية", icon: LayoutDashboard, end: true },
@@ -34,6 +36,7 @@ const doctorNav = [
   { to: "/schedule", label: "أوقات العمل", icon: Clock },
   { to: "/patients", label: "مرضاي", icon: UsersIcon },
   { to: "/profile", label: "ملفي المهني", icon: Settings },
+  { to: "/account", label: "إعدادات الحساب", icon: KeyRound },
 ];
 
 const adminNav = [
@@ -43,6 +46,7 @@ const adminNav = [
   { to: "/admin/specialties", label: "التخصصات", icon: ShieldCheck },
   { to: "/admin/wilayas", label: "الولايات", icon: Building2 },
   { to: "/admin/reviews", label: "التقييمات", icon: Star },
+  { to: "/admin/account", label: "إعدادات الحساب", icon: KeyRound },
 ];
 
 export default function App() {
@@ -58,6 +62,7 @@ export default function App() {
           <Route path="/schedule" element={<DoctorSchedule />} />
           <Route path="/patients" element={<DoctorPatients />} />
           <Route path="/profile" element={<DoctorProfileSettings />} />
+          <Route path="/account" element={<AccountSettings />} />
         </Route>
       </Route>
 
@@ -69,6 +74,7 @@ export default function App() {
           <Route path="/admin/specialties" element={<AdminSpecialties />} />
           <Route path="/admin/wilayas" element={<AdminWilayas />} />
           <Route path="/admin/reviews" element={<AdminReviews />} />
+          <Route path="/admin/account" element={<AccountSettings />} />
         </Route>
       </Route>
 

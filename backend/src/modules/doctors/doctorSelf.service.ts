@@ -19,6 +19,7 @@ export async function updateOwnProfile(
     address: string;
     photoUrl: string;
     clinicId: string;
+    specialtyId: string;
   }>
 ) {
   const doctor = await getDoctorByUserId(userId);

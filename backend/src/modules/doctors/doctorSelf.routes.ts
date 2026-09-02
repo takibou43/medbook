@@ -32,6 +32,7 @@ const profileSchema = z.object({
   address: z.string().optional(),
   photoUrl: z.string().url().optional(),
   clinicId: z.string().uuid().optional(),
+  specialtyId: z.string().uuid().optional(),
 });
 
 router.patch(

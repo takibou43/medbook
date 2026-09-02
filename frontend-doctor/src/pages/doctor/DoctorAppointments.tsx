@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import clsx from "clsx";
+import { Bell, BellRing, RefreshCw } from "lucide-react";
 import { useMyAppointments, useUpdateAppointmentStatus } from "../../hooks/useAppointments";
+import { useNewAppointmentAlert, requestNotificationPermission } from "../../hooks/useNewAppointmentAlert";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
 import { Spinner, EmptyState } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
@@ -19,9 +21,31 @@ const FILTERS: { label: string; value?: AppointmentStatus }[] = [
 
 export default function DoctorAppointments() {
   const [filter, setFilter] = useState<AppointmentStatus | undefined>(undefined);
-  const { data: appointments, isLoading } = useMyAppointments(filter);
+  const { data: appointments, isLoading, isFetching, dataUpdatedAt } = useMyAppointments(filter);
   const updateStatus = useUpdateAppointmentStatus();
   const { showToast } = useToast();
+  const [notifOn, setNotifOn] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
+
+  // تنبيه فوري عند وصول حجز جديد أثناء فتح الصفحة (صوت + إشعار + رسالة).
+  const handleNew = useCallback(
+    (count: number) => {
+      showToast(count === 1 ? "وصلك حجز جديد!" : `وصلتك ${count} حجوزات جديدة!`, "success");
+    },
+    [showToast]
+  );
+  useNewAppointmentAlert(appointments, handleNew);
+
+  async function enableNotifications() {
+    const res = await requestNotificationPermission();
+    if (res === "granted") {
+      setNotifOn(true);
+      showToast("تم تفعيل إشعارات الحجوزات الجديدة.", "success");
+    } else if (res === "denied") {
+      showToast("الإشعارات محظورة في إعدادات المتصفح.", "error");
+    } else if (res === "unsupported") {
+      showToast("متصفحك لا يدعم الإشعارات.", "error");
+    }
+  }
 
   async function changeStatus(id: string, status: AppointmentStatus) {
     try {
@@ -34,7 +58,35 @@ export default function DoctorAppointments() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-extrabold text-slate-900">إدارة المواعيد</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-extrabold text-slate-900">إدارة المواعيد</h1>
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-xs text-slate-500">
+            <RefreshCw className={clsx("h-3.5 w-3.5", isFetching && "animate-spin")} />
+            {isFetching
+              ? "جارٍ التحديث..."
+              : dataUpdatedAt
+                ? `آخر تحديث ${new Date(dataUpdatedAt).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" })}`
+                : "تحديث تلقائي"}
+          </span>
+          <button
+            type="button"
+            onClick={enableNotifications}
+            disabled={notifOn}
+            className={clsx(
+              "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition",
+              notifOn ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            )}
+          >
+            {notifOn ? <BellRing className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+            {notifOn ? "الإشعارات مفعّلة" : "تفعيل إشعارات الحجوزات"}
+          </button>
+        </div>
+      </div>
+
+      <p className="text-sm text-slate-500">
+        تتحدّث هذه الصفحة تلقائيًا كل 15 ثانية — سيظهر أي حجز جديد فورًا دون إعادة تحميل الصفحة.
+      </p>
 
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((f) => (

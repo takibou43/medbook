@@ -9,6 +9,10 @@ export default function DoctorDashboard() {
   const { data: stats, isLoading } = useQuery({
     queryKey: ["doctor-dashboard"],
     queryFn: async () => (await api.get("/doctor/dashboard")).data.data,
+    // تحديث تلقائي للأرقام دون إعادة تحميل الصفحة (يتوقف عندما يكون التبويب في الخلفية).
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
   });
 
   if (isLoading) return <Spinner />;

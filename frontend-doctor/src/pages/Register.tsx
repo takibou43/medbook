@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Stethoscope } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../context/AuthContext";
 import { useSpecialties, useWilayas } from "../hooks/useCatalog";
 import { Input, Select } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { useToast } from "../components/ui/Toast";
+import { Logo } from "../components/ui/Logo";
 import { apiErrorMessage } from "../lib/api";
 
 interface DoctorForm {
@@ -53,9 +53,7 @@ export default function Register() {
     <div className="container-app flex min-h-screen items-center justify-center py-10">
       <div className="w-full max-w-lg">
         <div className="mb-6 flex flex-col items-center">
-          <div className="mb-2 rounded-2xl bg-primary-600 p-2.5 text-white">
-            <Stethoscope className="h-6 w-6" />
-          </div>
+          <Logo className="mb-2 h-14 w-14" />
           <h1 className="text-xl font-extrabold text-slate-900">انضم كطبيب في MedBook</h1>
           <p className="mt-1 text-center text-sm text-slate-500">
             مرضاك يحجزون معك مباشرة بدون حاجة لإنشاء حساب — أنت فقط من يحتاج تسجيل الدخول لإدارة مواعيدك.

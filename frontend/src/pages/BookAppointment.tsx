@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { CalendarDays, Clock, CheckCircle2, Star, Stethoscope } from "lucide-react";
+import { CalendarDays, Clock, CheckCircle2, Star, Stethoscope, MessageCircle, CalendarPlus, MapPin, Search } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useSpecialties, useWilayas } from "../hooks/useCatalog";
 import { Card } from "../components/ui/Card";
@@ -29,6 +30,44 @@ function maxDateStr() {
   return d.toISOString().slice(0, 10);
 }
 
+// 0551234567 -> 213551234567 (صيغة wa.me الدولية)
+function toWhatsAppNumber(phone?: string | null) {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (/^0[5-7]\d{8}$/.test(digits)) return "213" + digits.slice(1);
+  if (/^213[5-7]\d{8}$/.test(digits)) return digits;
+  return null;
+}
+
+// ملف تقويم قياسي (.ics) يعمل مع تقويم الهاتف وGoogle Calendar — تذكير مجاني بالكامل.
+function buildIcs(c: { date: string; startTime: string; doctorName: string; place: string }) {
+  const [h, m] = c.startTime.split(":").map(Number);
+  const start = new Date(c.date);
+  start.setHours(h, m, 0, 0);
+  const end = new Date(start.getTime() + 30 * 60 * 1000);
+  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//MedBook//AR//",
+    "BEGIN:VEVENT",
+    `UID:${Date.now()}@medbook.dz`,
+    `DTSTAMP:${fmt(new Date())}`,
+    `DTSTART:${fmt(start)}`,
+    `DTEND:${fmt(end)}`,
+    `SUMMARY:موعد طبي مع د. ${c.doctorName}`,
+    `LOCATION:${c.place}`,
+    "DESCRIPTION:حجز عبر MedBook",
+    "BEGIN:VALARM",
+    "TRIGGER:-PT2H",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:تذكير بموعدك الطبي",
+    "END:VALARM",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+}
+
 export default function BookAppointment() {
   const { showToast } = useToast();
   const { data: specialties } = useSpecialties();
@@ -37,7 +76,15 @@ export default function BookAppointment() {
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [date, setDate] = useState(todayStr());
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState<{ date: string; startTime: string; doctorName: string } | null>(null);
+  const [confirmed, setConfirmed] = useState<{
+    date: string;
+    startTime: string;
+    doctorName: string;
+    doctorPhone?: string | null;
+    place: string;
+    patientName: string;
+    patientPhone?: string;
+  } | null>(null);
 
   const {
     register,
@@ -103,6 +150,12 @@ export default function BookAppointment() {
         date: appointment.date,
         startTime: appointment.startTime,
         doctorName: `${selectedDoctor.firstName} ${selectedDoctor.lastName}`,
+        doctorPhone: selectedDoctor.phone ?? selectedDoctor.clinic?.phone ?? null,
+        place: [selectedDoctor.clinic?.nameAr, selectedDoctor.address ?? selectedDoctor.clinic?.address, selectedDoctor.city?.nameAr]
+          .filter(Boolean)
+          .join("، "),
+        patientName: `${values.firstName} ${values.lastName}`,
+        patientPhone: values.phone,
       });
       showToast("تم إرسال طلب الحجز بنجاح!", "success");
     } catch (err) {
@@ -111,17 +164,77 @@ export default function BookAppointment() {
   }
 
   if (confirmed) {
+    const dateLabel = new Date(confirmed.date).toLocaleDateString("ar-DZ");
+    const waNumber = toWhatsAppNumber(confirmed.doctorPhone);
+    const waText = encodeURIComponent(
+      `السلام عليكم، أنا ${confirmed.patientName}. حجزت موعدًا عبر MedBook مع د. ${confirmed.doctorName} يوم ${dateLabel} على الساعة ${confirmed.startTime}.` +
+        (confirmed.patientPhone ? ` رقم هاتفي: ${confirmed.patientPhone}.` : "") +
+        " أرجو تأكيد الموعد، شكرًا."
+    );
+    // بدون رقم للطبيب نفتح واتساب برسالة جاهزة ليختار المريض المُرسَل إليه (أو يحفظها لنفسه).
+    const waHref = waNumber ? `https://wa.me/${waNumber}?text=${waText}` : `https://wa.me/?text=${waText}`;
+
+    function downloadIcs() {
+      const blob = new Blob([buildIcs(confirmed!)], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "medbook-appointment.ics";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     return (
       <div className="container-app flex min-h-[70vh] items-center justify-center py-10">
-        <Card className="max-w-md text-center">
+        <Card className="w-full max-w-md text-center">
           <CheckCircle2 className="mx-auto mb-4 h-14 w-14 text-emerald-500" />
           <h1 className="text-xl font-extrabold text-slate-900">تم إرسال طلب حجزك بنجاح!</h1>
-          <p className="mt-2 text-slate-600">
-            د. {confirmed.doctorName} — {new Date(confirmed.date).toLocaleDateString("ar-DZ")} الساعة {confirmed.startTime}
+          <p className="mt-2 font-semibold text-slate-700">د. {confirmed.doctorName}</p>
+          <p className="text-slate-600">
+            {dateLabel} — الساعة {confirmed.startTime}
           </p>
-          <p className="mt-1 text-sm text-slate-500">سيتصل بك الطبيب أو العيادة لتأكيد الموعد.</p>
+          {confirmed.place && (
+            <p className="mt-1 flex items-center justify-center gap-1 text-sm text-slate-500">
+              <MapPin className="h-4 w-4" /> {confirmed.place}
+            </p>
+          )}
+
+          <div className="mt-6 space-y-2">
+            <a
+              href={waHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-2.5 font-semibold text-white transition hover:brightness-95"
+            >
+              <MessageCircle className="h-4 w-4" />
+              {waNumber ? "أرسل تأكيدًا للطبيب عبر واتساب" : "شارك تفاصيل الحجز عبر واتساب"}
+            </a>
+
+            <button
+              type="button"
+              onClick={downloadIcs}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-semibold text-slate-700 transition hover:border-primary-300"
+            >
+              <CalendarPlus className="h-4 w-4" /> أضف الموعد إلى تقويمك (تذكير تلقائي)
+            </button>
+
+            {confirmed.patientPhone && (
+              <Link
+                to="/track"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 font-semibold text-slate-700 transition hover:border-primary-300"
+              >
+                <Search className="h-4 w-4" /> تتبّع حجزي أو إلغاؤه لاحقًا
+              </Link>
+            )}
+          </div>
+
+          <p className="mt-4 text-xs text-slate-400">
+            احتفظ برقم هاتفك المُدخل — تستطيع به عرض حجزك أو إلغاؤه في أي وقت من صفحة «تتبّع حجزي».
+          </p>
+
           <Button
-            className="mt-6"
+            variant="ghost"
+            className="mt-4"
             onClick={() => {
               setConfirmed(null);
               setSelectedDoctor(null);

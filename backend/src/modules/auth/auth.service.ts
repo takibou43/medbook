@@ -102,6 +102,46 @@ export async function login(email: string, password: string) {
   return { user, ...tokens };
 }
 
+/**
+ * تحديث بيانات حساب المستخدم الحالي (البريد و/أو كلمة المرور).
+ * نشترط كلمة المرور الحالية دائمًا حتى لا يستطيع أحد استغلال جلسة مسروقة لتغيير بيانات الدخول،
+ * ونُبطل كل جلسات التحديث (refresh tokens) بعد تغيير كلمة المرور لإخراج أي جلسة أخرى.
+ */
+export async function updateAccount(
+  userId: string,
+  input: { currentPassword: string; email?: string; newPassword?: string }
+) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw ApiError.notFound("الحساب غير موجود.");
+
+  const valid = await comparePassword(input.currentPassword, user.passwordHash);
+  if (!valid) throw ApiError.unauthorized("كلمة المرور الحالية غير صحيحة.");
+
+  const data: { email?: string; passwordHash?: string } = {};
+
+  if (input.email && input.email !== user.email) {
+    const taken = await prisma.user.findUnique({ where: { email: input.email } });
+    if (taken) throw ApiError.conflict("البريد الإلكتروني مستخدم مسبقًا.");
+    data.email = input.email;
+  }
+
+  if (input.newPassword) {
+    data.passwordHash = await hashPassword(input.newPassword);
+  }
+
+  if (!data.email && !data.passwordHash) {
+    throw ApiError.badRequest("لا يوجد أي تغيير لحفظه.");
+  }
+
+  const updated = await prisma.user.update({ where: { id: userId }, data });
+
+  if (data.passwordHash) {
+    await prisma.refreshToken.updateMany({ where: { userId, revoked: false }, data: { revoked: true } });
+  }
+
+  return updated;
+}
+
 export async function refresh(refreshToken: string) {
   let decoded;
   try {

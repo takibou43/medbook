@@ -1,7 +1,7 @@
 import { Router } from "express";
 import * as controller from "./auth.controller";
 import { validate } from "../../middleware/validate";
-import { registerPatientSchema, registerDoctorSchema, loginSchema } from "./auth.schema";
+import { registerPatientSchema, registerDoctorSchema, loginSchema, updateAccountSchema } from "./auth.schema";
 import { authenticate } from "../../middleware/auth";
 import { authLimiter } from "../../middleware/rateLimiter";
 
@@ -13,5 +13,7 @@ router.post("/login", authLimiter, validate({ body: loginSchema }), controller.l
 router.post("/refresh", controller.refresh);
 router.post("/logout", controller.logout);
 router.get("/me", authenticate, controller.me);
+// تغيير البريد و/أو كلمة المرور للحساب الحالي — محمي بكلمة المرور الحالية + حدّ محاولات صارم.
+router.patch("/account", authenticate, authLimiter, validate({ body: updateAccountSchema }), controller.updateAccount);
 
 export default router;

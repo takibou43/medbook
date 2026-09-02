@@ -6,10 +6,12 @@ import { Input, Select, Textarea } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
-import { useSpecialties } from "../../hooks/useCatalog";
+import { useSpecialties, useWilayas } from "../../hooks/useCatalog";
 
 interface FormValues {
   specialtyId: string;
+  wilayaId: string;
+  cityId: string;
   bio: string;
   yearsExperience: number;
   consultationFee: number;
@@ -23,24 +25,37 @@ export default function DoctorProfileSettings() {
     queryFn: async () => (await api.get("/auth/me")).data.data,
   });
   const { data: specialties } = useSpecialties();
+  const { data: wilayas } = useWilayas();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const { register, handleSubmit, reset } = useForm<FormValues>();
+  const [selectedWilaya, setSelectedWilaya] = useState("");
+  const { register, handleSubmit, reset, watch } = useForm<FormValues>();
+
+  const watchedWilaya = watch("wilayaId");
 
   useEffect(() => {
-    // ننتظر تحميل قائمة التخصصات أيضًا: إن نُفِّذ reset() قبل رسم خيارات <select>،
+    // ننتظر تحميل قائمتي التخصصات والولايات أيضًا: إن نُفِّذ reset() قبل رسم خيارات <select>،
     // لن يستطيع المتصفح تحديد القيمة الحالية لأن الخيار المطابق لن يكون موجودًا بعد.
-    if (me?.doctor && specialties) {
+    if (me?.doctor && specialties && wilayas) {
       reset({
         specialtyId: me.doctor.specialtyId ?? "",
+        wilayaId: me.doctor.wilayaId ?? "",
+        cityId: me.doctor.cityId ?? "",
         bio: me.doctor.bio ?? "",
         yearsExperience: me.doctor.yearsExperience,
         consultationFee: me.doctor.consultationFee ?? 0,
         phone: me.doctor.phone ?? "",
         address: me.doctor.address ?? "",
       });
+      setSelectedWilaya(me.doctor.wilayaId ?? "");
     }
-  }, [me, specialties, reset]);
+  }, [me, specialties, wilayas, reset]);
+
+  useEffect(() => {
+    if (watchedWilaya) setSelectedWilaya(watchedWilaya);
+  }, [watchedWilaya]);
+
+  const cities = wilayas?.find((w) => w.id === selectedWilaya)?.cities ?? [];
 
   async function onSubmit(values: FormValues) {
     setSaving(true);
@@ -69,6 +84,24 @@ export default function DoctorProfileSettings() {
             </option>
           ))}
         </Select>
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="الولاية" {...register("wilayaId", { required: "مطلوب" })}>
+            <option value="">اختر</option>
+            {wilayas?.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.nameAr}
+              </option>
+            ))}
+          </Select>
+          <Select label="المدينة" {...register("cityId", { required: "مطلوب" })}>
+            <option value="">اختر</option>
+            {cities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nameAr}
+              </option>
+            ))}
+          </Select>
+        </div>
         <Textarea label="نبذة تعريفية" {...register("bio")} />
         <div className="grid grid-cols-2 gap-3">
           <Input label="سنوات الخبرة" type="number" {...register("yearsExperience")} />

@@ -10,6 +10,7 @@ import {
   Stethoscope,
   MapPin,
   Search,
+  X,
   LocateFixed,
   Baby,
   HeartPulse,
@@ -143,6 +144,7 @@ function formatSlotLabel(dateStr: string, startTime: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+
   if (diffDays === 0) return `اليوم ${startTime}`;
   if (diffDays === 1) return `غدًا ${startTime}`;
   return `${target.toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })} — ${startTime}`;
@@ -159,6 +161,9 @@ export default function BookAppointment() {
   const [locating, setLocating] = useState(false);
   const [nameQuery, setNameQuery] = useState("");
   const [debouncedNameQuery, setDebouncedNameQuery] = useState("");
+  // البحث بالاسم أصبح خلف أيقونة صغيرة أعلى الصفحة بدل حقل ثابت داخل الاستمارة —
+  // أخف بصريًا ولا يزاحم بقية الحقول لمن لا يحتاجه.
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const {
     register,
@@ -289,6 +294,7 @@ export default function BookAppointment() {
         .items,
     enabled: debouncedNameQuery.length >= 2,
   });
+
   // اختيار طبيب عبر رابط يحمل رمز QR خاص به (?doctor=ID) — يُقرأ مرة واحدة عند فتح
   // الصفحة عبر مسح رمز QR المعروض في عيادة الطبيب، فيُختار الطبيب تلقائيًا للمريض.
   const qrDoctorId = searchParams.get("doctor");
@@ -359,14 +365,31 @@ export default function BookAppointment() {
     setSelectedDoctor(null);
   }
 
+  function closeSearch() {
+    setSearchOpen(false);
+    setNameQuery("");
+  }
+
   return (
     <div className="container-app py-10">
       <div className="mx-auto max-w-xl">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-extrabold text-slate-900">احجز موعدك الآن</h1>
-          <p className="mt-1 text-slate-500">
-            لا حاجة لإنشاء حساب — املأ بياناتك واختر الطبيب، والموقع يمنحك أول دور متاح تلقائيًا.
-          </p>
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div className="w-9 shrink-0" />
+          <div className="flex-1 text-center">
+            <h1 className="text-2xl font-extrabold text-slate-900">احجز موعدك الآن</h1>
+            <p className="mt-1 text-slate-500">
+              لا حاجة لإنشاء حساب — املأ بياناتك واختر الطبيب، والموقع يمنحك أول دور متاح تلقائيًا.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            title="ابحث عن طبيب بالاسم مباشرة"
+            aria-label="ابحث عن طبيب بالاسم مباشرة"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:border-primary-300 hover:text-primary-600"
+          >
+            <Search className="h-4 w-4" />
+          </button>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
@@ -389,44 +412,6 @@ export default function BookAppointment() {
             error={errors.phone?.message}
             {...register("phone", { pattern: { value: /^0[5-7][0-9]{8}$/, message: "رقم هاتف جزائري غير صالح" } })}
           />
-
-          <div>
-            <p className="label mb-2 flex items-center gap-1.5">
-              <Search className="h-4 w-4" /> أو ابحث عن طبيب بالاسم مباشرة
-            </p>
-            <Input placeholder="اكتب اسم الطبيب..." value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} />
-            {searchingByName && <Spinner label="جارٍ البحث..." />}
-            {debouncedNameQuery.length >= 2 && !searchingByName && (
-              <div className="mt-2 space-y-2">
-                {nameSearchResults && nameSearchResults.length > 0 ? (
-                  nameSearchResults.map((d) => (
-                    <button
-                      type="button"
-                      key={d.id}
-                      onClick={() => chooseDoctorDirectly(d)}
-                      className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-right transition hover:border-primary-300"
-                    >
-                      <div>
-                        <p className="font-semibold text-slate-800">
-                          د. {d.firstName} {d.lastName}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {d.specialty.nameAr} · {d.wilaya.nameAr}
-                          {d.city ? ` — ${d.city.nameAr}` : ""}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1 text-sm text-amber-500">
-                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                        {d.avgRating > 0 ? d.avgRating.toFixed(1) : "جديد"}
-                      </div>
-                    </button>
-                  ))
-                ) : (
-                  <EmptyState title="لا نتائج" description="جرّب اسمًا آخر." />
-                )}
-              </div>
-            )}
-          </div>
 
           <div>
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -604,6 +589,64 @@ export default function BookAppointment() {
             <Button className="mt-5 w-full" onClick={closeConfirmation}>
               حسنًا
             </Button>
+          </div>
+        </div>
+      )}
+
+      {searchOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 p-4 pt-16"
+          onClick={closeSearch}
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-1.5 font-bold text-slate-800">
+                <Search className="h-4 w-4" /> ابحث عن طبيب بالاسم مباشرة
+              </p>
+              <button type="button" onClick={closeSearch} className="text-slate-400 hover:text-slate-600" aria-label="إغلاق">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <Input
+              placeholder="اكتب اسم الطبيب..."
+              value={nameQuery}
+              onChange={(e) => setNameQuery(e.target.value)}
+              autoFocus
+            />
+            {searchingByName && <Spinner label="جارٍ البحث..." />}
+            {debouncedNameQuery.length >= 2 && !searchingByName && (
+              <div className="mt-3 max-h-80 space-y-2 overflow-y-auto">
+                {nameSearchResults && nameSearchResults.length > 0 ? (
+                  nameSearchResults.map((d) => (
+                    <button
+                      type="button"
+                      key={d.id}
+                      onClick={() => {
+                        chooseDoctorDirectly(d);
+                        setSearchOpen(false);
+                      }}
+                      className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-right transition hover:border-primary-300"
+                    >
+                      <div>
+                        <p className="font-semibold text-slate-800">
+                          د. {d.firstName} {d.lastName}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {d.specialty.nameAr} · {d.wilaya.nameAr}
+                          {d.city ? ` — ${d.city.nameAr}` : ""}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1 text-sm text-amber-500">
+                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                        {d.avgRating > 0 ? d.avgRating.toFixed(1) : "جديد"}
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <EmptyState title="لا نتائج" description="جرّب اسمًا آخر." />
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

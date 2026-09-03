@@ -28,7 +28,7 @@ function toWhatsAppNumber(phone?: string | null) {
 }
 
 export default function DoctorAppointments() {
-  const [filter, setFilter] = useState<AppointmentStatus | undefined>(undefined);
+  const [filter, setFilter] = useState<AppointmentStatus | undefined>("CONFIRMED");
   const { data: appointments, isLoading, isFetching, dataUpdatedAt } = useMyAppointments(filter);
   const updateStatus = useUpdateAppointmentStatus();
   const { showToast } = useToast();

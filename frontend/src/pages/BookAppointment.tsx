@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery, useQueries, useMutation } from "@tanstack/react-query";
 import {
@@ -23,13 +23,12 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
-import { useSpecialties, useWilayas } from "../hooks/useCatalog";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
-import { Input, Select } from "../components/ui/Input";
+import { Input } from "../components/ui/Input";
 import { Spinner, EmptyState } from "../components/ui/States";
 import { useToast } from "../components/ui/Toast";
-import { Doctor } from "../types";
+import { Doctor, Specialty, Wilaya } from "../types";
 
 // مطابقة مفتاح الأيقونة المخزّن لكل تخصص (Specialty.icon) برمز بصري —
 // لا يوجد أيقونة "سن" جاهزة في مكتبة lucide-react فاستُعيض عنها بـ Smile.
@@ -111,10 +110,9 @@ function formatSlotLabel(dateStr: string, startTime: string): string {
   if (diffDays === 1) return `غدًا ${startTime}`;
   return `${target.toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })} — ${startTime}`;
 }
+
 export default function BookAppointment() {
   const { showToast } = useToast();
-  const { data: specialties } = useSpecialties();
-  const { data: wilayas } = useWilayas();
 
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [confirmed, setConfirmed] = useState<{
@@ -136,26 +134,66 @@ export default function BookAppointment() {
   } = useForm<BookingForm>({
     defaultValues: { wilayaId: "", specialtyId: "" },
   });
-
-  const wilayaId = watch("wilayaId");
+  const wilayaIdRaw = watch("wilayaId");
   const specialtyId = watch("specialtyId");
+
+  // نجلب كل الأطباء الموثّقين مرة واحدة (بلا فلترة)، ثم نشتق منهم محليًا الولايات
+  // والتخصصات المتوفرة فعليًا. هكذا لا تظهر ولاية أو تخصص للمريض إلا إذا اشترك فيه
+  // طبيب حقيقي — تُضاف/تُزال تلقائيًا دون أي تعديل يدوي في الكود مستقبلًا.
+  // ملاحظة: الجلب محدود بـ 50 طبيبًا (حد الخادم)؛ يكفي للمرحلة الحالية وسيُعاد النظر
+  // فيه (تصفح مقسّم على صفحات) عند نمو عدد الأطباء المشتركين.
+  const { data: allDoctors, isFetching: loadingDoctors } = useQuery({
+    queryKey: ["book-doctors-all"],
+    queryFn: async () => (await api.get<{ data: { items: Doctor[] } }>("/doctors", { params: { pageSize: 50 } })).data.data.items,
+  });
+
+  const availableWilayas = useMemo(() => {
+    const map = new Map<string, Wilaya>();
+    for (const d of allDoctors ?? []) {
+      if (!map.has(d.wilaya.id)) map.set(d.wilaya.id, d.wilaya);
+    }
+    return Array.from(map.values());
+  }, [allDoctors]);
+
+  // إن كانت هناك ولاية واحدة فقط متاحة، تُختار تلقائيًا دون إزعاج المريض باختيار لا معنى له.
+  const effectiveWilayaId = wilayaIdRaw || (availableWilayas.length === 1 ? availableWilayas[0].id : "");
+
+  useEffect(() => {
+    if (!wilayaIdRaw && availableWilayas.length === 1) {
+      setValue("wilayaId", availableWilayas[0].id, { shouldValidate: true });
+    }
+  }, [availableWilayas, wilayaIdRaw, setValue]);
+
+  // تبديل الولاية يلغي التخصص والطبيب المختارين سابقًا (قد لا يكونان متاحين في الولاية الجديدة).
+  useEffect(() => {
+    setValue("specialtyId", "");
+    setSelectedDoctor(null);
+  }, [effectiveWilayaId, setValue]);
 
   useEffect(() => {
     setSelectedDoctor(null);
-  }, [wilayaId, specialtyId]);
+  }, [specialtyId]);
 
-  const doctorsEnabled = Boolean(wilayaId && specialtyId);
-  const { data: doctors, isFetching: loadingDoctors } = useQuery({
-    queryKey: ["book-doctors", wilayaId, specialtyId],
-    queryFn: async () =>
-      (await api.get<{ data: { items: Doctor[] } }>("/doctors", { params: { wilayaId, specialtyId, pageSize: 50 } })).data.data.items,
-    enabled: doctorsEnabled,
-  });
+  const wilayaDoctors = useMemo(
+    () => (allDoctors ?? []).filter((d) => d.wilaya.id === effectiveWilayaId),
+    [allDoctors, effectiveWilayaId]
+  );
+
+  const availableSpecialties = useMemo(() => {
+    const map = new Map<string, Specialty>();
+    for (const d of wilayaDoctors) {
+      if (!map.has(d.specialtyId)) map.set(d.specialtyId, d.specialty);
+    }
+    return Array.from(map.values());
+  }, [wilayaDoctors]);
+
+  const doctorsEnabled = Boolean(effectiveWilayaId && specialtyId);
+  const doctors = useMemo(() => wilayaDoctors.filter((d) => d.specialtyId === specialtyId), [wilayaDoctors, specialtyId]);
 
   // معاينة أقرب دور لكل طبيب مباشرة في القائمة (قبل اختياره)، حتى يقارن المريض
   // بين الأطباء المتاحين ويختار الأسرع دون أن يفتح كل طبيب على حدة. نكتفي بأول
   // 20 طبيبًا في القائمة تفاديًا لإثقال الخادم المجاني بعدد كبير من الطلبات المتوازية.
-  const previewDoctors = (doctors ?? []).slice(0, 20);
+  const previewDoctors = doctors.slice(0, 20);
   const nextSlotPreviews = useQueries({
     queries: previewDoctors.map((d) => ({
       queryKey: ["next-slot-preview", d.id],
@@ -278,6 +316,7 @@ export default function BookAppointment() {
       </div>
     );
   }
+
   return (
     <div className="container-app py-10">
       <div className="mx-auto max-w-xl">
@@ -309,49 +348,80 @@ export default function BookAppointment() {
             {...register("phone", { pattern: { value: /^0[5-7][0-9]{8}$/, message: "رقم هاتف جزائري غير صالح" } })}
           />
 
-          <Select label="الولاية" error={errors.wilayaId?.message} {...register("wilayaId", { required: "مطلوب" })}>
-            <option value="">اختر الولاية</option>
-            {wilayas?.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.nameAr}
-              </option>
-            ))}
-          </Select>
-
           <div>
-            <p className="label mb-2">التخصص</p>
-            {/* حقل مخفي يحمل قيمة التخصص الفعلية للتحقق عبر react-hook-form؛ الاختيار يتم بصريًا بالأسفل. */}
-            <input type="hidden" {...register("specialtyId", { required: "الرجاء اختيار التخصص" })} />
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-              {specialties?.map((s) => {
-                const Icon = specialtyIcon(s.icon);
-                const active = specialtyId === s.id;
-                return (
-                  <button
-                    type="button"
-                    key={s.id}
-                    onClick={() => setValue("specialtyId", s.id, { shouldValidate: true })}
-                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition ${
-                      active ? "border-primary-600 bg-primary-50 text-primary-700" : "border-slate-200 text-slate-600 hover:border-primary-300"
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span className="text-xs font-semibold leading-tight">{s.nameAr}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {errors.specialtyId && <p className="mt-1.5 text-xs text-red-500">{errors.specialtyId.message}</p>}
+            <p className="label mb-2 flex items-center gap-1.5">
+              <MapPin className="h-4 w-4" /> الولاية
+            </p>
+            <input type="hidden" {...register("wilayaId", { required: "الرجاء اختيار الولاية" })} />
+            {loadingDoctors ? (
+              <Spinner label="جارٍ تحميل الولايات المتاحة..." />
+            ) : availableWilayas.length === 0 ? (
+              <EmptyState title="لا يوجد أطباء مسجلون حاليًا" description="سيُفتح الحجز فور اشتراك أطباء جدد." />
+            ) : availableWilayas.length === 1 ? (
+              <p className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700">
+                <MapPin className="h-4 w-4" /> الحجز متاح حاليًا في ولاية {availableWilayas[0].nameAr} فقط
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {availableWilayas.map((w) => {
+                  const active = effectiveWilayaId === w.id;
+                  return (
+                    <button
+                      type="button"
+                      key={w.id}
+                      onClick={() => setValue("wilayaId", w.id, { shouldValidate: true })}
+                      className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition ${
+                        active ? "border-primary-600 bg-primary-50 text-primary-700" : "border-slate-200 text-slate-600 hover:border-primary-300"
+                      }`}
+                    >
+                      <MapPin className="h-5 w-5" />
+                      <span className="text-xs font-semibold leading-tight">{w.nameAr}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {errors.wilayaId && <p className="mt-1.5 text-xs text-red-500">{errors.wilayaId.message}</p>}
           </div>
+
+          {effectiveWilayaId && (
+            <div>
+              <p className="label mb-2">التخصص</p>
+              {/* حقل مخفي يحمل قيمة التخصص الفعلية للتحقق عبر react-hook-form؛ الاختيار يتم بصريًا بالأسفل. */}
+              <input type="hidden" {...register("specialtyId", { required: "الرجاء اختيار التخصص" })} />
+              {availableSpecialties.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                  {availableSpecialties.map((s) => {
+                    const Icon = specialtyIcon(s.icon);
+                    const active = specialtyId === s.id;
+                    return (
+                      <button
+                        type="button"
+                        key={s.id}
+                        onClick={() => setValue("specialtyId", s.id, { shouldValidate: true })}
+                        className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition ${
+                          active ? "border-primary-600 bg-primary-50 text-primary-700" : "border-slate-200 text-slate-600 hover:border-primary-300"
+                        }`}
+                      >
+                        <Icon className="h-5 w-5" />
+                        <span className="text-xs font-semibold leading-tight">{s.nameAr}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState title="لا يوجد أطباء في هذه الولاية حاليًا" description="جرّب ولاية أخرى." />
+              )}
+              {errors.specialtyId && <p className="mt-1.5 text-xs text-red-500">{errors.specialtyId.message}</p>}
+            </div>
+          )}
 
           {doctorsEnabled && (
             <div>
               <p className="label mb-2 flex items-center gap-1.5">
                 <Stethoscope className="h-4 w-4" /> اختر الطبيب
               </p>
-              {loadingDoctors ? (
-                <Spinner label="جارٍ البحث عن أطباء..." />
-              ) : doctors && doctors.length > 0 ? (
+              {doctors.length > 0 ? (
                 <div className="space-y-2">
                   {doctors.map((d, i) => {
                     const preview = nextSlotPreviews[i];
@@ -388,7 +458,7 @@ export default function BookAppointment() {
                   })}
                 </div>
               ) : (
-                <EmptyState title="لا يوجد أطباء متاحون" description="جرّب ولاية أو تخصصًا مختلفًا." />
+                <EmptyState title="لا يوجد أطباء متاحون" description="جرّب تخصصًا مختلفًا." />
               )}
             </div>
           )}

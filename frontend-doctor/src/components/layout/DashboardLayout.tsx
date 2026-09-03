@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { LucideIcon, LogOut } from "lucide-react";
+import { LucideIcon, LogOut, Menu, X } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../../context/AuthContext";
 import { Logo } from "../ui/Logo";
@@ -14,6 +15,15 @@ export interface DashboardNavItem {
 export function DashboardLayout({ title, items }: { title: string; items: DashboardNavItem[] }) {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  // روابط التنقّل (مثل "المواعيد") كانت موجودة فقط داخل الشريط الجانبي المخفي على الهاتف
+  // (hidden md:flex)، فلم يكن هناك أي وسيلة للوصول إليها على الشاشات الصغيرة. أضفنا قائمة
+  // منسدلة تُفتح بزر همبرغر في الترويسة على الهاتف وتحتوي نفس الروابط.
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login");
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -42,13 +52,7 @@ export function DashboardLayout({ title, items }: { title: string; items: Dashbo
           ))}
         </nav>
         <div className="border-t border-slate-200 p-3">
-          <button
-            onClick={async () => {
-              await logout();
-              navigate("/login");
-            }}
-            className="btn-ghost w-full justify-start"
-          >
+          <button onClick={handleLogout} className="btn-ghost w-full justify-start">
             <LogOut className="h-4 w-4" />
             تسجيل الخروج
           </button>
@@ -62,16 +66,40 @@ export function DashboardLayout({ title, items }: { title: string; items: Dashbo
             <span className="text-lg font-extrabold">MedBook</span>
           </div>
           <button
-            onClick={async () => {
-              await logout();
-              navigate("/login");
-            }}
+            onClick={() => setMobileMenuOpen((v) => !v)}
             className="btn-ghost"
+            aria-label={mobileMenuOpen ? "إغلاق القائمة" : "فتح القائمة"}
           >
-            <LogOut className="h-4 w-4" />
-            خروج
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </header>
+
+        {mobileMenuOpen && (
+          <nav className="space-y-1 border-b border-slate-200 bg-white p-3 md:hidden">
+            {items.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                onClick={() => setMobileMenuOpen(false)}
+                className={({ isActive }) =>
+                  clsx(
+                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                    isActive ? "bg-primary-50 text-primary-700" : "text-slate-600 hover:bg-slate-100"
+                  )
+                }
+              >
+                <item.icon className="h-4.5 w-4.5" />
+                {item.label}
+              </NavLink>
+            ))}
+            <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">
+              <LogOut className="h-4 w-4" />
+              تسجيل الخروج
+            </button>
+          </nav>
+        )}
+
         <main className="flex-1 p-4 md:p-8">
           <Outlet />
         </main>

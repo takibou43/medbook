@@ -1,7 +1,26 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { CalendarDays, Clock, CheckCircle2, Star, Stethoscope, CalendarPlus, MapPin, Search } from "lucide-react";
+import { useQuery, useQueries, useMutation } from "@tanstack/react-query";
+import {
+  CalendarDays,
+  Clock,
+  CheckCircle2,
+  Star,
+  Stethoscope,
+  CalendarPlus,
+  MapPin,
+  Search,
+  Baby,
+  HeartPulse,
+  Eye,
+  Smile,
+  Sparkles,
+  Flower2,
+  Scissors,
+  Brain,
+  Ear,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useSpecialties, useWilayas } from "../hooks/useCatalog";
@@ -11,6 +30,25 @@ import { Input, Select } from "../components/ui/Input";
 import { Spinner, EmptyState } from "../components/ui/States";
 import { useToast } from "../components/ui/Toast";
 import { Doctor } from "../types";
+
+// مطابقة مفتاح الأيقونة المخزّن لكل تخصص (Specialty.icon) برمز بصري —
+// لا يوجد أيقونة "سن" جاهزة في مكتبة lucide-react فاستُعيض عنها بـ Smile.
+const SPECIALTY_ICONS: Record<string, LucideIcon> = {
+  stethoscope: Stethoscope,
+  baby: Baby,
+  "heart-pulse": HeartPulse,
+  eye: Eye,
+  tooth: Smile,
+  sparkles: Sparkles,
+  flower: Flower2,
+  scissors: Scissors,
+  brain: Brain,
+  ear: Ear,
+};
+
+function specialtyIcon(icon?: string | null): LucideIcon {
+  return (icon && SPECIALTY_ICONS[icon]) || Stethoscope;
+}
 
 interface BookingForm {
   firstName: string;
@@ -62,6 +100,17 @@ function buildIcs(c: { date: string; startTime: string; doctorName: string; plac
   ].join("\r\n");
 }
 
+// تسمية مختصرة وودّية لأقرب دور معروض في قائمة الأطباء ("اليوم"، "غدًا"، أو التاريخ).
+function formatSlotLabel(dateStr: string, startTime: string): string {
+  const target = new Date(dateStr + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
+
+  if (diffDays === 0) return `اليوم ${startTime}`;
+  if (diffDays === 1) return `غدًا ${startTime}`;
+  return `${target.toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })} — ${startTime}`;
+}
 export default function BookAppointment() {
   const { showToast } = useToast();
   const { data: specialties } = useSpecialties();
@@ -82,6 +131,7 @@ export default function BookAppointment() {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<BookingForm>({
     defaultValues: { wilayaId: "", specialtyId: "" },
@@ -102,6 +152,20 @@ export default function BookAppointment() {
     enabled: doctorsEnabled,
   });
 
+  // معاينة أقرب دور لكل طبيب مباشرة في القائمة (قبل اختياره)، حتى يقارن المريض
+  // بين الأطباء المتاحين ويختار الأسرع دون أن يفتح كل طبيب على حدة. نكتفي بأول
+  // 20 طبيبًا في القائمة تفاديًا لإثقال الخادم المجاني بعدد كبير من الطلبات المتوازية.
+  const previewDoctors = (doctors ?? []).slice(0, 20);
+  const nextSlotPreviews = useQueries({
+    queries: previewDoctors.map((d) => ({
+      queryKey: ["next-slot-preview", d.id],
+      queryFn: async () => (await api.get<{ data: NextSlot }>("/booking/next-slot", { params: { doctorId: d.id } })).data.data,
+      enabled: doctorsEnabled,
+      retry: false,
+      staleTime: 20000,
+    })),
+  });
+
   // الدور الذي سيمنحه النظام تلقائيًا — المريض لا يختار الوقت، فقط يرى ما سيُحجز له.
   const { data: nextSlot, isFetching: loadingSlot } = useQuery({
     queryKey: ["next-slot", selectedDoctor?.id],
@@ -109,6 +173,7 @@ export default function BookAppointment() {
       (await api.get<{ data: NextSlot }>("/booking/next-slot", { params: { doctorId: selectedDoctor!.id } })).data.data,
     enabled: Boolean(selectedDoctor),
     retry: false,
+    // نُحدّث الدور المعروض كل نصف دقيقة تحسبًا لحجز مريض آخر قبله.
     refetchInterval: 30000,
     refetchIntervalInBackground: false,
   });
@@ -213,7 +278,6 @@ export default function BookAppointment() {
       </div>
     );
   }
-
   return (
     <div className="container-app py-10">
       <div className="mx-auto max-w-xl">
@@ -245,23 +309,39 @@ export default function BookAppointment() {
             {...register("phone", { pattern: { value: /^0[5-7][0-9]{8}$/, message: "رقم هاتف جزائري غير صالح" } })}
           />
 
-          <div className="grid grid-cols-2 gap-3">
-            <Select label="الولاية" error={errors.wilayaId?.message} {...register("wilayaId", { required: "مطلوب" })}>
-              <option value="">اختر الولاية</option>
-              {wilayas?.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.nameAr}
-                </option>
-              ))}
-            </Select>
-            <Select label="التخصص" error={errors.specialtyId?.message} {...register("specialtyId", { required: "مطلوب" })}>
-              <option value="">اختر التخصص</option>
-              {specialties?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nameAr}
-                </option>
-              ))}
-            </Select>
+          <Select label="الولاية" error={errors.wilayaId?.message} {...register("wilayaId", { required: "مطلوب" })}>
+            <option value="">اختر الولاية</option>
+            {wilayas?.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.nameAr}
+              </option>
+            ))}
+          </Select>
+
+          <div>
+            <p className="label mb-2">التخصص</p>
+            {/* حقل مخفي يحمل قيمة التخصص الفعلية للتحقق عبر react-hook-form؛ الاختيار يتم بصريًا بالأسفل. */}
+            <input type="hidden" {...register("specialtyId", { required: "الرجاء اختيار التخصص" })} />
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+              {specialties?.map((s) => {
+                const Icon = specialtyIcon(s.icon);
+                const active = specialtyId === s.id;
+                return (
+                  <button
+                    type="button"
+                    key={s.id}
+                    onClick={() => setValue("specialtyId", s.id, { shouldValidate: true })}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition ${
+                      active ? "border-primary-600 bg-primary-50 text-primary-700" : "border-slate-200 text-slate-600 hover:border-primary-300"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span className="text-xs font-semibold leading-tight">{s.nameAr}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {errors.specialtyId && <p className="mt-1.5 text-xs text-red-500">{errors.specialtyId.message}</p>}
           </div>
 
           {doctorsEnabled && (
@@ -273,30 +353,39 @@ export default function BookAppointment() {
                 <Spinner label="جارٍ البحث عن أطباء..." />
               ) : doctors && doctors.length > 0 ? (
                 <div className="space-y-2">
-                  {doctors.map((d) => (
-                    <button
-                      type="button"
-                      key={d.id}
-                      onClick={() => setSelectedDoctor(d)}
-                      className={`flex w-full items-center justify-between rounded-xl border p-3 text-right transition ${
-                        selectedDoctor?.id === d.id ? "border-primary-600 bg-primary-50" : "border-slate-200 hover:border-primary-300"
-                      }`}
-                    >
-                      <div>
-                        <p className="font-semibold text-slate-800">
-                          د. {d.firstName} {d.lastName}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {d.city?.nameAr}
-                          {d.clinic ? ` — ${d.clinic.nameAr}` : ""} · خبرة {d.yearsExperience} سنوات
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1 text-sm text-amber-500">
-                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                        {d.avgRating > 0 ? d.avgRating.toFixed(1) : "جديد"}
-                      </div>
-                    </button>
-                  ))}
+                  {doctors.map((d, i) => {
+                    const preview = nextSlotPreviews[i];
+                    return (
+                      <button
+                        type="button"
+                        key={d.id}
+                        onClick={() => setSelectedDoctor(d)}
+                        className={`flex w-full items-center justify-between rounded-xl border p-3 text-right transition ${
+                          selectedDoctor?.id === d.id ? "border-primary-600 bg-primary-50" : "border-slate-200 hover:border-primary-300"
+                        }`}
+                      >
+                        <div>
+                          <p className="font-semibold text-slate-800">
+                            د. {d.firstName} {d.lastName}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {d.city?.nameAr}
+                            {d.clinic ? ` — ${d.clinic.nameAr}` : ""} · خبرة {d.yearsExperience} سنوات
+                          </p>
+                          {preview?.data && (
+                            <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              أقرب دور: {formatSlotLabel(preview.data.date, preview.data.startTime)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1 text-sm text-amber-500">
+                          <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                          {d.avgRating > 0 ? d.avgRating.toFixed(1) : "جديد"}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <EmptyState title="لا يوجد أطباء متاحون" description="جرّب ولاية أو تخصصًا مختلفًا." />

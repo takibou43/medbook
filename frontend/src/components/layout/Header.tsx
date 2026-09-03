@@ -9,9 +9,8 @@ export function Header() {
           <Logo className="h-8 w-8" />
           <span className="text-lg font-extrabold">MedBook</span>
         </Link>
-        <Link to="/track" className="text-sm font-semibold text-primary-700 hover:underline">
-          تتبّع حجزي
-        </Link>
+        {/* رابط "تتبّع حجزي" مخفي مؤقتًا من الترويسة بطلب صريح — الصفحة والمسار /track
+            ما زالا يعملان، فقط لا يوجد رابط ظاهر إليهما حاليًا. */}
       </div>
     </header>
   );

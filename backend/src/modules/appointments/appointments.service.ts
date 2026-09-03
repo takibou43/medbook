@@ -1,4 +1,4 @@
-import { AppointmentStatus, Prisma, Role } from "@prisma/client";
+import { AppointmentStatus, Prisma, Role, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight, closingTimeForDate } from "../../lib/slots";
@@ -33,6 +33,9 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
   if (!doctor) throw ApiError.notFound("الطبيب غير موجود.");
   if (doctor.verificationStatus !== "VERIFIED") {
     throw ApiError.badRequest("لا يمكن حجز موعد مع طبيب لم يتم التحقق منه بعد.");
+  }
+  if (doctor.subscriptionStatus !== SubscriptionStatus.ACTIVE) {
+    throw ApiError.badRequest("لا يمكن حجز موعد مع هذا الطبيب حاليًا.");
   }
 
   const date = new Date(input.date + "T00:00:00Z");

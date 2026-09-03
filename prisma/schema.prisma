@@ -40,6 +40,17 @@ enum VerificationStatus {
   REJECTED
 }
 
+// حالة اشتراك الطبيب المدفوع في المنصة. UNPAID هي الحالة الافتراضية لكل طبيب جديد
+// يسجّل من الآن فصاعدًا — لا يظهر للمرضى ولا يمكن حجز موعد معه حتى تصبح ACTIVE.
+// الأطباء المسجَّلون قبل إضافة هذه الميزة يُثبَّتون على ACTIVE تلقائيًا (انظر ملف الترحيل)
+// حتى لا يختفوا فجأة من الموقع. لا يوجد حاليًا أي واجهة دفع فعلية مرتبطة بهذا الحقل —
+// إعداد تقني تمهيدي فقط، بانتظار حساب "تاجر إلكتروني" لدى بريد الجزائر (BaridiMob).
+enum SubscriptionStatus {
+  UNPAID
+  ACTIVE
+  EXPIRED
+}
+
 enum ConsultationType {
   IN_PERSON
   FOLLOW_UP
@@ -168,7 +179,6 @@ model Patient {
 
   @@map("patients")
 }
-
 model Doctor {
   id                 String              @id @default(uuid())
   userId             String              @unique
@@ -194,6 +204,9 @@ model Doctor {
   // مدة الجلسة بالدقائق — يحددها الطبيب، وعليها يبني النظام ترتيب المواعيد تلقائيًا.
   slotDurationMin    Int                 @default(7)
   verificationStatus VerificationStatus  @default(PENDING)
+  // اشتراك الطبيب المدفوع في المنصة — انظر تعليق enum SubscriptionStatus أعلاه.
+  subscriptionStatus SubscriptionStatus  @default(UNPAID)
+  subscriptionExpiresAt DateTime?
   avgRating          Float               @default(0)
   reviewsCount       Int                 @default(0)
   createdAt          DateTime            @default(now())
@@ -293,7 +306,6 @@ model Review {
   @@index([doctorId])
   @@map("reviews")
 }
-
 // ---------------- Notifications ----------------
 
 model Notification {

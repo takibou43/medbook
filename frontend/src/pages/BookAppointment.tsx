@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery, useQueries, useMutation } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import {
   CalendarDays,
   Clock,
@@ -8,6 +9,8 @@ import {
   Star,
   Stethoscope,
   MapPin,
+  Search,
+  LocateFixed,
   Baby,
   HeartPulse,
   Eye,
@@ -45,6 +48,80 @@ function specialtyIcon(icon?: string | null): LucideIcon {
   return (icon && SPECIALTY_ICONS[icon]) || Stethoscope;
 }
 
+// إحداثيات تقريبية لمركز كل ولاية (مدينة الولاية) — تُستخدم فقط لتحديد أقرب ولاية
+// من الولايات التي يوجد بها أطباء فعليًا بواسطة GPS الهاتف (لا تحتاج دقة الحدود
+// الإدارية، فالمقارنة تكون غالبًا بين عدد قليل من الولايات المتوفرة حاليًا).
+// المصدر: مدن الولايات الرسمية (إحداثيات مدينة الولاية نفسها).
+const WILAYA_CENTROIDS: Record<string, { lat: number; lng: number }> = {
+  "01": { lat: 27.8742, lng: -0.2939 }, // أدرار
+  "02": { lat: 36.1647, lng: 1.3317 }, // الشلف
+  "03": { lat: 33.8, lng: 2.865 }, // الأغواط
+  "04": { lat: 35.8706, lng: 7.115 }, // أم البواقي
+  "05": { lat: 35.55, lng: 6.1667 }, // باتنة
+  "06": { lat: 36.7511, lng: 5.0642 }, // بجاية
+  "07": { lat: 34.85, lng: 5.7333 }, // بسكرة
+  "08": { lat: 31.6164, lng: -2.2183 }, // بشار
+  "09": { lat: 36.4722, lng: 2.8333 }, // البليدة
+  "10": { lat: 36.3783, lng: 3.8925 }, // البويرة
+  "11": { lat: 22.785, lng: 5.5228 }, // تمنراست
+  "12": { lat: 35.4, lng: 8.1167 }, // تبسة
+  "13": { lat: 34.8828, lng: -1.3167 }, // تلمسان
+  "14": { lat: 35.3667, lng: 1.3167 }, // تيارت
+  "15": { lat: 36.7169, lng: 4.0497 }, // تيزي وزو
+  "16": { lat: 36.7764, lng: 3.0586 }, // الجزائر
+  "17": { lat: 34.6667, lng: 3.25 }, // الجلفة
+  "18": { lat: 36.8206, lng: 5.7667 }, // جيجل
+  "19": { lat: 36.19, lng: 5.41 }, // سطيف
+  "20": { lat: 34.8303, lng: 0.1517 }, // سعيدة
+  "21": { lat: 36.8667, lng: 6.9 }, // سكيكدة
+  "22": { lat: 35.2, lng: -0.6333 }, // سيدي بلعباس
+  "23": { lat: 36.9, lng: 7.7667 }, // عنابة
+  "24": { lat: 36.4619, lng: 7.4258 }, // قالمة
+  "25": { lat: 36.365, lng: 6.6147 }, // قسنطينة
+  "26": { lat: 36.2675, lng: 2.75 }, // المدية
+  "27": { lat: 35.9333, lng: 0.0903 }, // مستغانم
+  "28": { lat: 35.7058, lng: 4.5419 }, // المسيلة
+  "29": { lat: 35.4, lng: 0.1333 }, // معسكر
+  "30": { lat: 31.95, lng: 5.3167 }, // ورقلة
+  "31": { lat: 35.6969, lng: -0.6331 }, // وهران
+  "32": { lat: 33.6831, lng: 1.0192 }, // البيض
+  "33": { lat: 26.508, lng: 8.4829 }, // إليزي
+  "34": { lat: 36.0667, lng: 4.7667 }, // برج بوعريريج
+  "35": { lat: 36.7594, lng: 3.4728 }, // بومرداس
+  "36": { lat: 36.7669, lng: 8.3136 }, // الطارف
+  "37": { lat: 27.6753, lng: -8.1286 }, // تندوف
+  "38": { lat: 35.6072, lng: 1.8106 }, // تسمسيلت
+  "39": { lat: 33.3683, lng: 6.8675 }, // الوادي
+  "40": { lat: 35.4167, lng: 7.1333 }, // خنشلة
+  "41": { lat: 36.2864, lng: 7.9511 }, // سوق أهراس
+  "42": { lat: 36.5942, lng: 2.443 }, // تيبازة
+  "43": { lat: 36.4481, lng: 6.2622 }, // ميلة
+  "44": { lat: 36.2583, lng: 1.9583 }, // عين الدفلى
+  "45": { lat: 33.2678, lng: -0.3111 }, // النعامة
+  "46": { lat: 35.3044, lng: -1.14 }, // عين تموشنت
+  "47": { lat: 32.4833, lng: 3.6667 }, // غرداية
+  "48": { lat: 35.7372, lng: 0.5558 }, // غليزان
+  "49": { lat: 29.25, lng: 0.2333 }, // تيميمون
+  "50": { lat: 21.3289, lng: 0.9542 }, // برج باجي مختار
+  "51": { lat: 34.4167, lng: 5.0667 }, // أولاد جلال
+  "52": { lat: 30.1317, lng: -2.1692 }, // بني عباس
+  "53": { lat: 27.195, lng: 2.4825 }, // عين صالح
+  "54": { lat: 19.5686, lng: 5.7722 }, // عين قزام
+  "55": { lat: 33.1, lng: 6.0667 }, // تقرت
+  "56": { lat: 24.555, lng: 9.4853 }, // جانت
+  "57": { lat: 33.9506, lng: 5.9242 }, // المغير
+  "58": { lat: 30.6, lng: 2.9 }, // المنيعة
+};
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 interface BookingForm {
   firstName: string;
   lastName: string;
@@ -66,7 +143,6 @@ function formatSlotLabel(dateStr: string, startTime: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diffDays = Math.round((target.getTime() - today.getTime()) / 86400000);
-
   if (diffDays === 0) return `اليوم ${startTime}`;
   if (diffDays === 1) return `غدًا ${startTime}`;
   return `${target.toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })} — ${startTime}`;
@@ -74,11 +150,15 @@ function formatSlotLabel(dateStr: string, startTime: string): string {
 
 export default function BookAppointment() {
   const { showToast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   // تفاصيل الحجز المؤكَّد الأخير — تُعرض في نافذة تأكيد مبسّطة (الطبيب والموعد فقط)
   // تنبثق فوق الصفحة دون إخفائها، بدل استبدال الصفحة بالكامل.
   const [confirmed, setConfirmed] = useState<{ date: string; startTime: string; doctorName: string } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [nameQuery, setNameQuery] = useState("");
+  const [debouncedNameQuery, setDebouncedNameQuery] = useState("");
 
   const {
     register,
@@ -120,16 +200,6 @@ export default function BookAppointment() {
     }
   }, [availableWilayas, wilayaIdRaw, setValue]);
 
-  // تبديل الولاية يلغي التخصص والطبيب المختارين سابقًا (قد لا يكونان متاحين في الولاية الجديدة).
-  useEffect(() => {
-    setValue("specialtyId", "");
-    setSelectedDoctor(null);
-  }, [effectiveWilayaId, setValue]);
-
-  useEffect(() => {
-    setSelectedDoctor(null);
-  }, [specialtyId]);
-
   const wilayaDoctors = useMemo(
     () => (allDoctors ?? []).filter((d) => d.wilaya.id === effectiveWilayaId),
     [allDoctors, effectiveWilayaId]
@@ -145,6 +215,94 @@ export default function BookAppointment() {
 
   const doctorsEnabled = Boolean(effectiveWilayaId && specialtyId);
   const doctors = useMemo(() => wilayaDoctors.filter((d) => d.specialtyId === specialtyId), [wilayaDoctors, specialtyId]);
+
+  // اختيار ولاية/تخصص/طبيب صراحةً من المستخدم — كل خطوة تُلغي ما يليها فقط (وليس أي
+  // تغيير برمجي آخر)، لتفادي تعارضها مع الاختيار المباشر عبر البحث بالاسم أو رمز QR.
+  function chooseWilaya(id: string) {
+    setValue("wilayaId", id, { shouldValidate: true });
+    setValue("specialtyId", "");
+    setSelectedDoctor(null);
+  }
+
+  function chooseSpecialty(id: string) {
+    setValue("specialtyId", id, { shouldValidate: true });
+    setSelectedDoctor(null);
+  }
+
+  // اختيار طبيب مباشرة (من البحث بالاسم أو من رابط رمز QR) — يضبط الولاية والتخصص
+  // معًا ليتوافقا مع الطبيب المختار دون المرور بخطوات الاختيار اليدوية.
+  function chooseDoctorDirectly(d: Doctor) {
+    setValue("wilayaId", d.wilaya.id, { shouldValidate: true });
+    setValue("specialtyId", d.specialtyId, { shouldValidate: true });
+    setSelectedDoctor(d);
+    setNameQuery("");
+  }
+
+  // تحديد أقرب ولاية (من الولايات المتوفرة فعليًا) عبر GPS الهاتف — زر اختياري،
+  // لا يُطلب إذن الموقع إلا عند الضغط عليه صراحةً.
+  function useMyLocation() {
+    if (!navigator.geolocation) {
+      showToast("متصفحك لا يدعم تحديد الموقع.", "error");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        const { latitude, longitude } = pos.coords;
+        let nearest: Wilaya | null = null;
+        let nearestDist = Infinity;
+        for (const w of availableWilayas) {
+          const c = WILAYA_CENTROIDS[w.code];
+          if (!c) continue;
+          const dist = haversineKm(latitude, longitude, c.lat, c.lng);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearest = w;
+          }
+        }
+        if (nearest) {
+          chooseWilaya(nearest.id);
+          showToast(`تم اختيار ولاية ${nearest.nameAr} كأقرب ولاية لموقعك.`, "success");
+        } else {
+          showToast("تعذّر تحديد أقرب ولاية.", "error");
+        }
+      },
+      () => {
+        setLocating(false);
+        showToast("تعذّر الوصول إلى موقعك. تأكد من السماح بإذن الموقع من المتصفح.", "error");
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    );
+  }
+
+  // بحث شامل عن طبيب بالاسم عبر كل الأطباء (بلا حاجة لاختيار ولاية أو تخصص أولًا).
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedNameQuery(nameQuery.trim()), 350);
+    return () => clearTimeout(t);
+  }, [nameQuery]);
+
+  const { data: nameSearchResults, isFetching: searchingByName } = useQuery({
+    queryKey: ["doctor-name-search", debouncedNameQuery],
+    queryFn: async () =>
+      (await api.get<{ data: { items: Doctor[] } }>("/doctors", { params: { q: debouncedNameQuery, pageSize: 10 } })).data.data
+        .items,
+    enabled: debouncedNameQuery.length >= 2,
+  });
+  // اختيار طبيب عبر رابط يحمل رمز QR خاص به (?doctor=ID) — يُقرأ مرة واحدة عند فتح
+  // الصفحة عبر مسح رمز QR المعروض في عيادة الطبيب، فيُختار الطبيب تلقائيًا للمريض.
+  const qrDoctorId = searchParams.get("doctor");
+  const { data: qrDoctor } = useQuery({
+    queryKey: ["qr-doctor", qrDoctorId],
+    queryFn: async () => (await api.get<{ data: Doctor }>(`/doctors/${qrDoctorId}`)).data.data,
+    enabled: Boolean(qrDoctorId),
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (qrDoctor) chooseDoctorDirectly(qrDoctor);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qrDoctor]);
 
   // معاينة أقرب دور لكل طبيب مباشرة في القائمة (قبل اختياره)، حتى يقارن المريض
   // بين الأطباء المتاحين ويختار الأسرع دون أن يفتح كل طبيب على حدة. نكتفي بأول
@@ -234,8 +392,58 @@ export default function BookAppointment() {
 
           <div>
             <p className="label mb-2 flex items-center gap-1.5">
-              <MapPin className="h-4 w-4" /> الولاية
+              <Search className="h-4 w-4" /> أو ابحث عن طبيب بالاسم مباشرة
             </p>
+            <Input placeholder="اكتب اسم الطبيب..." value={nameQuery} onChange={(e) => setNameQuery(e.target.value)} />
+            {searchingByName && <Spinner label="جارٍ البحث..." />}
+            {debouncedNameQuery.length >= 2 && !searchingByName && (
+              <div className="mt-2 space-y-2">
+                {nameSearchResults && nameSearchResults.length > 0 ? (
+                  nameSearchResults.map((d) => (
+                    <button
+                      type="button"
+                      key={d.id}
+                      onClick={() => chooseDoctorDirectly(d)}
+                      className="flex w-full items-center justify-between rounded-xl border border-slate-200 p-3 text-right transition hover:border-primary-300"
+                    >
+                      <div>
+                        <p className="font-semibold text-slate-800">
+                          د. {d.firstName} {d.lastName}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {d.specialty.nameAr} · {d.wilaya.nameAr}
+                          {d.city ? ` — ${d.city.nameAr}` : ""}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1 text-sm text-amber-500">
+                        <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                        {d.avgRating > 0 ? d.avgRating.toFixed(1) : "جديد"}
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <EmptyState title="لا نتائج" description="جرّب اسمًا آخر." />
+                )}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="label flex items-center gap-1.5">
+                <MapPin className="h-4 w-4" /> الولاية
+              </p>
+              {availableWilayas.length > 1 && (
+                <button
+                  type="button"
+                  onClick={useMyLocation}
+                  disabled={locating}
+                  className="flex items-center gap-1 text-xs font-semibold text-primary-600 hover:text-primary-700 disabled:opacity-60"
+                >
+                  <LocateFixed className="h-3.5 w-3.5" /> {locating ? "جارٍ تحديد موقعك..." : "استخدم موقعي"}
+                </button>
+              )}
+            </div>
             <input type="hidden" {...register("wilayaId", { required: "الرجاء اختيار الولاية" })} />
             {loadingDoctors ? (
               <Spinner label="جارٍ تحميل الولايات المتاحة..." />
@@ -253,7 +461,7 @@ export default function BookAppointment() {
                     <button
                       type="button"
                       key={w.id}
-                      onClick={() => setValue("wilayaId", w.id, { shouldValidate: true })}
+                      onClick={() => chooseWilaya(w.id)}
                       className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition ${
                         active ? "border-primary-600 bg-primary-50 text-primary-700" : "border-slate-200 text-slate-600 hover:border-primary-300"
                       }`}
@@ -282,7 +490,7 @@ export default function BookAppointment() {
                       <button
                         type="button"
                         key={s.id}
-                        onClick={() => setValue("specialtyId", s.id, { shouldValidate: true })}
+                        onClick={() => chooseSpecialty(s.id)}
                         className={`flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition ${
                           active ? "border-primary-600 bg-primary-50 text-primary-700" : "border-slate-200 text-slate-600 hover:border-primary-300"
                         }`}

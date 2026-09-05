@@ -169,7 +169,7 @@ export async function listForDoctor(doctorUserId: string, status?: AppointmentSt
       })()
     : undefined;
 
-  return prisma.appointment.findMany({
+  const appointments = await prisma.appointment.findMany({
     where: { doctorId: doctor.id, ...(status ? { status } : {}), ...(dateFilter ? { date: dateFilter } : {}) },
     include: { patient: { include: { user: { select: { email: true, phone: true } } } } },
     // الترتيب حسب التاريخ فقط غير كافٍ — عدة مواعيد بنفس اليوم كانت تظهر بترتيب عشوائي
@@ -177,6 +177,37 @@ export async function listForDoctor(doctorUserId: string, status?: AppointmentSt
     // الساعة 14:00 قبل موعد الساعة 09:00 مثلاً. نضيف startTime كمعيار ترتيب ثانٍ.
     orderBy: [{ date: "asc" }, { startTime: "asc" }],
   });
+
+  // نحسب عدد مرات "لم يحضر" السابقة لكل مريض/ضيف ظاهر في هذه القائمة (على مستوى المنصة
+  // كاملة، وليس فقط عند هذا الطبيب) لتنبيه الطبيب بصريًا عند تكرار غياب مريض معيّن.
+  // نحسبها دفعة واحدة (batch) بدل استعلام منفصل لكل موعد تفاديًا لبطء الأداء.
+  const patientIds = Array.from(new Set(appointments.map((a) => a.patientId).filter((id): id is string => !!id)));
+  const guestPhones = Array.from(new Set(appointments.map((a) => a.guestPhone).filter((p): p is string => !!p)));
+
+  const [patientNoShows, guestNoShows] = await Promise.all([
+    patientIds.length > 0
+      ? prisma.appointment.groupBy({
+          by: ["patientId"],
+          where: { patientId: { in: patientIds }, status: AppointmentStatus.NO_SHOW },
+          _count: { _all: true },
+        })
+      : Promise.resolve([] as { patientId: string | null; _count: { _all: number } }[]),
+    guestPhones.length > 0
+      ? prisma.appointment.groupBy({
+          by: ["guestPhone"],
+          where: { guestPhone: { in: guestPhones }, patientId: null, status: AppointmentStatus.NO_SHOW },
+          _count: { _all: true },
+        })
+      : Promise.resolve([] as { guestPhone: string | null; _count: { _all: number } }[]),
+  ]);
+
+  const patientNoShowMap = new Map(patientNoShows.map((r) => [r.patientId as string, r._count._all]));
+  const guestNoShowMap = new Map(guestNoShows.map((r) => [r.guestPhone as string, r._count._all]));
+
+  return appointments.map((a) => ({
+    ...a,
+    patientNoShowCount: a.patientId ? patientNoShowMap.get(a.patientId) ?? 0 : a.guestPhone ? guestNoShowMap.get(a.guestPhone) ?? 0 : 0,
+  }));
 }
 export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus, AppointmentStatus[]>>> = {
   PATIENT: {

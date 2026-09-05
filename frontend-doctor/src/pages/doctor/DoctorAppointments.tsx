@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import clsx from "clsx";
-import { Bell, BellRing, RefreshCw, MessageCircle } from "lucide-react";
+import { Bell, BellRing, RefreshCw, MessageCircle, AlertTriangle } from "lucide-react";
 import { useMyAppointments, useUpdateAppointmentStatus } from "../../hooks/useAppointments";
 import { useNewAppointmentAlert, requestNotificationPermission } from "../../hooks/useNewAppointmentAlert";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
@@ -17,6 +17,9 @@ const FILTERS: { label: string; value?: AppointmentStatus }[] = [
   { label: "لم يحضروا", value: "NO_SHOW" },
   { label: "ملغاة", value: "CANCELLED" },
 ];
+
+// عدد مرات "لم يحضر" السابقة التي عندها نُظهر تحذيرًا بصريًا للطبيب بجانب اسم المريض.
+const NO_SHOW_WARNING_THRESHOLD = 2;
 
 // 0551234567 -> 213551234567 (صيغة wa.me الدولية)
 function toWhatsAppNumber(phone?: string | null) {
@@ -107,8 +110,8 @@ export default function DoctorAppointments() {
             {isFetching
               ? "جارٍ التحديث..."
               : dataUpdatedAt
-                ? `آخر تحديث ${new Date(dataUpdatedAt).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" })}`
-                : "تحديث تلقائي"}
+              ? `آخر تحديث ${new Date(dataUpdatedAt).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" })}`
+              : "تحديث تلقائي"}
           </span>
           <button
             type="button"
@@ -154,6 +157,14 @@ export default function DoctorAppointments() {
                 <p className="font-bold text-slate-800">
                   {a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : `${a.guestFirstName ?? ""} ${a.guestLastName ?? ""}`}
                   {!a.patient && <span className="mr-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">بدون حساب</span>}
+                  {a.patientNoShowCount >= NO_SHOW_WARNING_THRESHOLD && (
+                    <span
+                      title={`تكرر غيابه ${a.patientNoShowCount} مرات سابقًا`}
+                      className="mr-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700"
+                    >
+                      <AlertTriangle className="h-3 w-3" /> تكرر غيابه ({a.patientNoShowCount})
+                    </span>
+                  )}
                 </p>
                 <p className="text-sm text-slate-500">{a.patient?.user?.phone ?? a.patient?.user?.email ?? a.guestPhone ?? "—"}</p>
                 <p className="text-sm text-slate-500">

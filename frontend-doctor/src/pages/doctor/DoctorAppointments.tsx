@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
-import { Bell, BellRing, RefreshCw, MessageCircle, AlertTriangle } from "lucide-react";
+import { Bell, BellRing, RefreshCw, MessageCircle, AlertTriangle, X } from "lucide-react";
 import { useMyAppointments, useUpdateAppointmentStatus } from "../../hooks/useAppointments";
 import { useNewAppointmentAlert, requestNotificationPermission } from "../../hooks/useNewAppointmentAlert";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
@@ -41,9 +42,25 @@ function hasTimePassed(dateStr: string, startTime: string): boolean {
   return slotUtcMs < Date.now();
 }
 
+// نقرأ التصفية الابتدائية من رابط الصفحة (تأتي من بطاقات لوحة التحكم، مثال:
+// /appointments?status=COMPLETED أو /appointments?date=2026-09-05). "status=ALL" يعني بلا تصفية حالة.
+// عند عدم وجود أي معامل في الرابط (تنقّل عادي من القائمة الجانبية) نُبقي على السلوك
+// الافتراضي القديم: عرض المواعيد "القادمة" مباشرة.
+function readInitialFilters(searchParams: URLSearchParams): { status: AppointmentStatus | undefined; date: string | undefined } {
+  const statusParam = searchParams.get("status");
+  const dateParam = searchParams.get("date") ?? undefined;
+  if (statusParam === "ALL") return { status: undefined, date: dateParam };
+  if (statusParam) return { status: statusParam as AppointmentStatus, date: dateParam };
+  if (dateParam) return { status: undefined, date: dateParam };
+  return { status: "CONFIRMED", date: undefined };
+}
+
 export default function DoctorAppointments() {
-  const [filter, setFilter] = useState<AppointmentStatus | undefined>("CONFIRMED");
-  const { data: appointments, isLoading, isFetching, dataUpdatedAt } = useMyAppointments(filter);
+  const [searchParams] = useSearchParams();
+  const initial = readInitialFilters(searchParams);
+  const [filter, setFilter] = useState<AppointmentStatus | undefined>(initial.status);
+  const [dateFilter, setDateFilter] = useState<string | undefined>(initial.date);
+  const { data: appointments, isLoading, isFetching, dataUpdatedAt } = useMyAppointments(filter, dateFilter);
   const updateStatus = useUpdateAppointmentStatus();
   const { showToast } = useToast();
   const [notifOn, setNotifOn] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
@@ -132,11 +149,14 @@ export default function DoctorAppointments() {
         تتحدّث هذه الصفحة تلقائيًا كل 15 ثانية — سيظهر أي حجز جديد فورًا دون إعادة تحميل الصفحة.
       </p>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => (
           <button
             key={f.label}
-            onClick={() => setFilter(f.value)}
+            onClick={() => {
+              setFilter(f.value);
+              setDateFilter(undefined);
+            }}
             className={clsx(
               "rounded-full px-4 py-1.5 text-sm font-semibold transition",
               filter === f.value ? "bg-primary-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -145,6 +165,14 @@ export default function DoctorAppointments() {
             {f.label}
           </button>
         ))}
+        {dateFilter && (
+          <span className="flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700">
+            مواعيد يوم {new Date(dateFilter).toLocaleDateString("ar-DZ")}
+            <button type="button" onClick={() => setDateFilter(undefined)} title="إلغاء تصفية التاريخ">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        )}
       </div>
 
       {isLoading ? (

@@ -1,7 +1,5 @@
 import { env } from "../config/env";
 
-// يحوّل رقم هاتف جزائري محلي (05/06/07XXXXXXXX) إلى صيغة دولية بدون '+' (213XXXXXXXXX)
-// وهي الصيغة التي يتطلبها BudgetSMS في معامل "to".
 function toInternationalPhone(phone: string): string | null {
   const digits = phone.replace(/\D/g, "");
   if (/^0[5-7]\d{8}$/.test(digits)) return "213" + digits.slice(1);
@@ -9,23 +7,24 @@ function toInternationalPhone(phone: string): string | null {
   return null;
 }
 
-/**
- * يرسل رسالة SMS عبر BudgetSMS. إن لم تُضبط بيانات الحساب بعد في متغيرات البيئة
- * (BUDGETSMS_USERNAME / BUDGETSMS_USERID / BUDGETSMS_HANDLE) فلن تُرسل أي رسالة فعليًا —
- * ستُسجَّل فقط في السجلات (وضع تجريبي)، حتى لا يتعطل أي شيء قبل ضبط مزوّد حقيقي.
- * ترجع true فقط عند تأكيد الإرسال من BudgetSMS.
- */
-export async function sendSms(phone: string, message: string): Promise<boolean> {
+export interface SendSmsResult {
+  success: boolean;
+  error?: string;
+}
+
+export async function sendSms(phone: string, message: string): Promise<SendSmsResult> {
   const to = toInternationalPhone(phone);
   if (!to) {
-    console.error(`[SMS] رقم هاتف غير صالح لإرسال التذكير: ${phone}`);
-    return false;
+    const error = `رقم هاتف غير صالح: ${phone}`;
+    console.error(`[SMS] ${error}`);
+    return { success: false, error };
   }
 
   const { budgetsmsUsername, budgetsmsUserId, budgetsmsHandle, senderId } = env.sms;
   if (!budgetsmsUsername || !budgetsmsUserId || !budgetsmsHandle) {
+    const error = "مزوّد SMS غير مُعدّ بعد (متغيرات BudgetSMS فارغة في البيئة).";
     console.log(`[SMS معطّل — لم يُضبط مزوّد بعد] كان سيُرسل إلى ${to}: ${message}`);
-    return false;
+    return { success: false, error };
   }
 
   const params = new URLSearchParams({
@@ -42,11 +41,12 @@ export async function sendSms(phone: string, message: string): Promise<boolean> 
     const text = (await res.text()).trim();
     if (!/^OK/i.test(text)) {
       console.error(`[SMS] فشل الإرسال إلى ${to}: ${text}`);
-      return false;
+      return { success: false, error: text };
     }
-    return true;
+    return { success: true };
   } catch (err) {
+    const error = err instanceof Error ? err.message : "خطأ غير معروف أثناء الاتصال بمزوّد الرسائل.";
     console.error("[SMS] خطأ أثناء الاتصال بمزوّد الرسائل:", err);
-    return false;
+    return { success: false, error };
   }
 }

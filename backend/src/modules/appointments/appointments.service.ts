@@ -1,4 +1,4 @@
-import { AppointmentStatus, Prisma, Role, SubscriptionStatus } from "@prisma/client";
+import { AppointmentStatus, Prisma, Role, SubscriptionStatus, SmsStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight, closingTimeForDate } from "../../lib/slots";
@@ -223,14 +223,33 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
     include: { doctor: true, patient: { include: { user: { select: { phone: true } } } } },
   });
 
-  // عند تسجيل "لم يحضر" نرسل للمريض SMS قصيرة تُعلمه بأنه فاته موعده مع اسم الطبيب،
-  // بدل التذكير المسبق لكل موعد (كان مكلفًا جدًا). النص أقل من 70 حرفًا عمدًا ليُحسب
-  // كرسالة واحدة فقط (الرسائل العربية UCS-2 محدودة بـ 70 حرفًا للرسالة الواحدة).
+  // عند تسجيل "لم يحضر" نرسل SMS للمريض، مبنية بالكامل من بيانات الموعد الفعلية في قاعدة
+  // البيانات (لا أسماء أو نصوص ثابتة). سجل SmsLog واحد فقط لكل موعد (قيد فريد appointmentId)
+  // يمنع إعادة الإرسال العشوائي المتكرر سواء نجحت المحاولة الأولى أم فشلت — عند الفشل
+  // نحفظ السبب في failureReason ولا نعاود المحاولة تلقائيًا.
   if (newStatus === AppointmentStatus.NO_SHOW) {
-    const phone = updated.patient?.user?.phone ?? updated.guestPhone;
-    if (phone) {
-      const message = `فاتك موعدك عند د. ${updated.doctor.lastName} - MedBook`;
-      await sendSms(phone, message);
+    const existingLog = await prisma.smsLog.findUnique({ where: { appointmentId: updated.id } });
+    if (!existingLog) {
+      const phone = updated.patient?.user?.phone ?? updated.guestPhone;
+      if (!phone) {
+        await prisma.smsLog.create({
+          data: { appointmentId: updated.id, phone: "", status: SmsStatus.FAILED, failureReason: "لا يوجد رقم هاتف مسجل لهذا المريض." },
+        });
+      } else {
+        const patientName = updated.patient?.firstName ?? updated.guestFirstName ?? "";
+        const doctorName = `${updated.doctor.firstName} ${updated.doctor.lastName}`;
+        const appointmentDate = updated.date.toISOString().slice(0, 10);
+        const message = `مرحباً ${patientName}، نعلمك بأن موعدك لدى الدكتور ${doctorName} بتاريخ ${appointmentDate} على الساعة ${updated.startTime} قد فات.`;
+        const result = await sendSms(phone, message);
+        await prisma.smsLog.create({
+          data: {
+            appointmentId: updated.id,
+            phone,
+            status: result.success ? SmsStatus.SENT : SmsStatus.FAILED,
+            failureReason: result.success ? null : result.error,
+          },
+        });
+      }
     }
   }
 

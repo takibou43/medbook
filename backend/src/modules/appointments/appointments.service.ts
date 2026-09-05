@@ -1,8 +1,9 @@
 import { AppointmentStatus, Prisma, Role, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
-import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight, closingTimeForDate } from "../../lib/slots";
+import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight, closingTimeForDate, ALGERIA_OFFSET_MINUTES } from "../../lib/slots";
 import { createNotification } from "../notifications/notifications.service";
+import { sendSms } from "../../lib/sms";
 import { CreateAppointmentInput } from "./appointments.schema";
 
 const SLOT_MINUTES = 20;
@@ -153,6 +154,47 @@ export async function autoExpireStaleAppointments(doctorId: string) {
   });
 }
 
+const REMINDER_WINDOW_MS = 2 * 60 * 60 * 1000; // نرسل التذكير خلال الساعتين السابقتين لموعد المريض
+
+/**
+ * يبحث عن المواعيد "المؤكدة" (CONFIRMED) التي يبدأ موعدها خلال الساعتين القادمتين ولم
+ * يُرسل لها تذكير SMS بعد (reminderSentAt = null)، ثم يرسل تذكيرًا لكل واحد منها عبر
+ * sendSms ويُسجّل وقت المحاولة (سواء نجح الإرسال أم فشل) لتفادي إعادة المحاولة والتكرار
+ * على نفس الموعد. تُستدعى دوريًا من مؤقّت داخل index.ts، إذ لا توجد مهام مجدولة (cron)
+ * دائمة على الخطة المجانية لـ Render.
+ */
+export async function sendDueReminders() {
+  const now = Date.now();
+  const rangeStart = new Date(now - 24 * 60 * 60000);
+  const rangeEnd = new Date(now + 24 * 60 * 60000);
+
+  const candidates = await prisma.appointment.findMany({
+    where: {
+      status: AppointmentStatus.CONFIRMED,
+      reminderSentAt: null,
+      date: { gte: rangeStart, lte: rangeEnd },
+    },
+    include: { patient: { include: { user: { select: { phone: true } } } } },
+  });
+
+  for (const a of candidates) {
+    const [h, m] = a.startTime.split(":").map(Number);
+    const apptUtcMs =
+      Date.UTC(a.date.getUTCFullYear(), a.date.getUTCMonth(), a.date.getUTCDate(), h, m, 0, 0) - ALGERIA_OFFSET_MINUTES * 60000;
+
+    if (apptUtcMs <= now || apptUtcMs > now + REMINDER_WINDOW_MS) continue;
+
+    const phone = a.patient?.user?.phone ?? a.guestPhone;
+    if (phone) {
+      const name = a.patient?.firstName ?? a.guestFirstName ?? "";
+      const message = `السلام عليكم ${name}، تذكير بموعدك الطبي على الساعة ${a.startTime}. نرجو الحضور في الوقت المحدد. - MedBook`;
+      await sendSms(phone, message);
+    }
+    // نُسجّل وقت المحاولة دائمًا (نجحت أم فشلت) لتفادي إعادة المحاولة المتكررة على نفس الموعد.
+    await prisma.appointment.update({ where: { id: a.id }, data: { reminderSentAt: new Date() } }).catch(() => {});
+  }
+}
+
 export async function listForDoctor(doctorUserId: string, status?: AppointmentStatus, dateStr?: string) {
   const doctor = await prisma.doctor.findUnique({ where: { userId: doctorUserId } });
   if (!doctor) throw ApiError.notFound("لم يتم العثور على ملف طبيب مرتبط بهذا الحساب.");
@@ -177,7 +219,6 @@ export async function listForDoctor(doctorUserId: string, status?: AppointmentSt
     orderBy: [{ date: "asc" }, { startTime: "asc" }],
   });
 }
-
 export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus, AppointmentStatus[]>>> = {
   PATIENT: {
     PENDING: ["CANCELLED"],

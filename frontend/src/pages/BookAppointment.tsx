@@ -177,10 +177,16 @@ function buildCalendarLinks(params: {
   durationMinutes: number;
 }) {
   const { doctorName, patientName, clinicPhone, address, dateStr, startTime, durationMinutes } = params;
-  const [y, mo, da] = dateStr.split("-").map(Number);
+  // نحلّل dateStr بمرونة: قد يصل كسلسلة "YYYY-MM-DD" فقط (كما في معاينة الدور) أو كطابع
+  // زمني ISO كامل بالحرف T (كما في استجابة إنشاء الموعد الفعلي). تقسيم النص يدويًا بـ"-"
+  // يفشل مع الطابع الكامل (كان هذا سبب انهيار الصفحة فورًا بعد نجاح الحجز)، لذا نمرّ دائمًا
+  // عبر new Date() ونقرأ مكوّناته بتوقيت UTC مباشرة، بصرف النظر عن الصيغة الواردة.
+  const baseDate = new Date(dateStr);
   const [h, mi] = startTime.split(":").map(Number);
   const ALGERIA_OFFSET_MS = 60 * 60000;
-  const startUtc = new Date(Date.UTC(y, mo - 1, da, h, mi) - ALGERIA_OFFSET_MS);
+  const startUtc = new Date(
+    Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), baseDate.getUTCDate(), h, mi) - ALGERIA_OFFSET_MS
+  );
   const endUtc = new Date(startUtc.getTime() + Math.max(durationMinutes, 5) * 60000);
   const fmt = (dt: Date) => dt.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 

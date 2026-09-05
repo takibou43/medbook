@@ -267,6 +267,9 @@ model Appointment {
   type        ConsultationType  @default(IN_PERSON)
   status      AppointmentStatus @default(PENDING)
   notes       String?
+  // آخر وقت أُرسل فيه تذكير SMS تلقائي للمريض قبل موعده — null يعني لم يُرسل بعد.
+  // نستعملها لتفادي إرسال أكثر من تذكير واحد لنفس الموعد.
+  reminderSentAt DateTime?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 

@@ -2,6 +2,7 @@ export type Role = "PATIENT" | "DOCTOR" | "ADMIN";
 export type Gender = "MALE" | "FEMALE";
 export type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
+export type SubscriptionStatus = "UNPAID" | "ACTIVE" | "EXPIRED";
 
 export interface Specialty {
   id: string;
@@ -51,6 +52,7 @@ export interface Doctor {
   consultationFee?: number | null;
   photoUrl?: string | null;
   verificationStatus: VerificationStatus;
+  subscriptionStatus?: SubscriptionStatus;
   avgRating: number;
   reviewsCount: number;
   schedules?: DoctorSchedule[];

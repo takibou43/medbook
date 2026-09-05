@@ -57,17 +57,24 @@ enum ConsultationType {
   ONLINE
 }
 
+// نتيجة محاولة إرسال SMS لتنبيه "لم يحضر" — سجل واحد فقط لكل موعد (انظر SmsLog أدناه)
+// لمنع إعادة المحاولة العشوائية سواء نجحت المحاولة الأولى أم فشلت.
+enum SmsStatus {
+  SENT
+  FAILED
+}
+
 // ---------------- Core identity ----------------
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  phone         String?  @unique
-  passwordHash  String
-  role          Role
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  phone        String?  @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   patient         Patient?
   doctor          Doctor?
@@ -96,8 +103,8 @@ model RefreshToken {
 // ---------------- Geography ----------------
 
 model Wilaya {
-  id     String @id @default(uuid())
-  code   String @unique
+  id     String  @id @default(uuid())
+  code   String  @unique
   nameAr String
   nameFr String?
 
@@ -147,14 +154,14 @@ model MedicalService {
 }
 
 model Clinic {
-  id       String  @id @default(uuid())
+  id       String @id @default(uuid())
   nameAr   String
   address  String
   phone    String?
   wilayaId String
-  wilaya   Wilaya  @relation(fields: [wilayaId], references: [id])
+  wilaya   Wilaya @relation(fields: [wilayaId], references: [id])
   cityId   String
-  city     City    @relation(fields: [cityId], references: [id])
+  city     City   @relation(fields: [cityId], references: [id])
 
   doctors Doctor[]
 
@@ -180,37 +187,37 @@ model Patient {
   @@map("patients")
 }
 model Doctor {
-  id                 String              @id @default(uuid())
-  userId             String              @unique
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  firstName          String
-  lastName           String
-  specialtyId        String
-  specialty          Specialty           @relation(fields: [specialtyId], references: [id])
-  clinicId           String?
-  clinic             Clinic?             @relation(fields: [clinicId], references: [id])
-  wilayaId           String
-  wilaya             Wilaya              @relation(fields: [wilayaId], references: [id])
-  cityId             String
-  city                City               @relation(fields: [cityId], references: [id])
-  bio                String?
-  yearsExperience    Int                 @default(0)
-  languages          String[]            @default([])
-  gender             Gender?
-  phone              String?
-  address            String?
-  consultationFee    Int?
-  photoUrl           String?
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName   String
+  lastName    String
+  specialtyId String
+  specialty   Specialty @relation(fields: [specialtyId], references: [id])
+  clinicId    String?
+  clinic      Clinic?   @relation(fields: [clinicId], references: [id])
+  wilayaId    String
+  wilaya      Wilaya    @relation(fields: [wilayaId], references: [id])
+  cityId      String
+  city        City      @relation(fields: [cityId], references: [id])
+  bio         String?
+  yearsExperience Int    @default(0)
+  languages       String[] @default([])
+  gender          Gender?
+  phone           String?
+  address         String?
+  consultationFee Int?
+  photoUrl        String?
   // مدة الجلسة بالدقائق — يحددها الطبيب، وعليها يبني النظام ترتيب المواعيد تلقائيًا.
-  slotDurationMin    Int                 @default(7)
-  verificationStatus VerificationStatus  @default(PENDING)
+  slotDurationMin Int                @default(7)
+  verificationStatus VerificationStatus @default(PENDING)
   // اشتراك الطبيب المدفوع في المنصة — انظر تعليق enum SubscriptionStatus أعلاه.
-  subscriptionStatus SubscriptionStatus  @default(UNPAID)
+  subscriptionStatus SubscriptionStatus @default(UNPAID)
   subscriptionExpiresAt DateTime?
-  avgRating          Float               @default(0)
-  reviewsCount       Int                 @default(0)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  avgRating   Float    @default(0)
+  reviewsCount Int     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   schedules    DoctorSchedule[]
   appointments Appointment[]
@@ -252,29 +259,31 @@ model DoctorSchedule {
 // ---------------- Appointments ----------------
 
 model Appointment {
-  id          String            @id @default(uuid())
-  patientId   String?
-  patient     Patient?          @relation(fields: [patientId], references: [id])
+  id        String   @id @default(uuid())
+  patientId String?
+  patient   Patient? @relation(fields: [patientId], references: [id])
   // حجز الضيف (بدون حساب/تسجيل دخول): يُملأ عند patientId = null
   guestFirstName String?
   guestLastName  String?
   guestPhone     String?
-  doctorId    String
-  doctor      Doctor            @relation(fields: [doctorId], references: [id])
-  date        DateTime // calendar date (time truncated to 00:00 UTC)
-  startTime   String // "09:00"
-  endTime     String // "09:30"
-  type        ConsultationType  @default(IN_PERSON)
-  status      AppointmentStatus @default(PENDING)
-  notes       String?
+  doctorId  String
+  doctor    Doctor   @relation(fields: [doctorId], references: [id])
+  date      DateTime // calendar date (time truncated to 00:00 UTC)
+  startTime String // "09:00"
+  endTime   String // "09:30"
+  type      ConsultationType  @default(IN_PERSON)
+  status    AppointmentStatus @default(PENDING)
+  notes     String?
   // آخر وقت أُرسل فيه تذكير SMS تلقائي للمريض قبل موعده — null يعني لم يُرسل بعد.
   // نستعملها لتفادي إرسال أكثر من تذكير واحد لنفس الموعد.
   reminderSentAt DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   services AppointmentService[]
   review   Review?
+  // سجل محاولة إرسال SMS "لم يحضر" الخاص بهذا الموعد (إن وُجد) — انظر SmsLog.
+  smsLog   SmsLog?
 
   @@unique([doctorId, date, startTime])
   @@index([patientId])
@@ -290,6 +299,21 @@ model AppointmentService {
   service       MedicalService @relation(fields: [serviceId], references: [id])
 
   @@map("appointment_services")
+}
+
+// سجل محاولات إرسال SMS (حاليًا فقط تنبيه "لم يحضر"). سجل واحد فقط لكل موعد بفضل القيد
+// الفريد على appointmentId — يمنع هذا إعادة الإرسال العشوائي المتكرر سواء نجحت المحاولة
+// الأولى أم فشلت. عند الفشل نحتفظ بسبب الفشل في failureReason لغرض التتبع والتشخيص.
+model SmsLog {
+  id            String      @id @default(uuid())
+  appointmentId String      @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  phone         String
+  status        SmsStatus
+  failureReason String?
+  sentAt        DateTime    @default(now())
+
+  @@map("sms_logs")
 }
 
 // ---------------- Reviews ----------------
@@ -353,13 +377,13 @@ model AiConversation {
 }
 
 model AiMessage {
-  id             String         @id @default(uuid())
-  conversationId String
-  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role           String // "user" | "assistant"
-  content        String
+  id                   String         @id @default(uuid())
+  conversationId       String
+  conversation         AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role                 String // "user" | "assistant"
+  content              String
   suggestedSpecialtyId String?
-  createdAt      DateTime       @default(now())
+  createdAt            DateTime       @default(now())
 
   @@map("ai_messages")
 }

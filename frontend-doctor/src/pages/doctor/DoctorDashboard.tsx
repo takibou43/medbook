@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, CalendarCheck, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Printer } from "lucide-react";
+import { CalendarClock, CalendarCheck, CalendarDays, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Printer, AlertTriangle, Wallet } from "lucide-react";
 import { api } from "../../lib/api";
 import { StatCard } from "../../components/StatCard";
 import { Spinner } from "../../components/ui/States";
@@ -96,6 +96,9 @@ export default function DoctorDashboard() {
         <StatCard label="المواعيد المكتملة" value={stats?.completedAppointments ?? 0} icon={CheckCircle2} tone="green" />
         <StatCard label="المواعيد الملغاة" value={stats?.cancelledAppointments ?? 0} icon={XCircle} tone="red" />
         <StatCard label="متوسط التقييم" value={`${(stats?.avgRating ?? 0).toFixed(1)} (${stats?.reviewsCount ?? 0})`} icon={Star} tone="amber" />
+        <StatCard label="مواعيد هذا الشهر" value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} />
+        <StatCard label="نسبة الغياب" value={`${stats?.noShowRate ?? 0}%`} icon={AlertTriangle} tone={((stats?.noShowRate ?? 0) > 20) ? "red" : "amber"} />
+        <StatCard label="الدخل التقديري" value={`${(stats?.estimatedRevenue ?? 0).toLocaleString("ar-DZ")} دج`} icon={Wallet} tone="green" />
       </div>
 
       {qrImageUrl && (

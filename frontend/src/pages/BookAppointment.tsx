@@ -155,20 +155,43 @@ function formatSlotLabel(dateStr: string, startTime: string): string {
   if (diffDays === 1) return `غدًا ${startTime}`;
   return `${target.toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })} — ${startTime}`;
 }
-// روابط "أضِف إلى التقويم" — تُنشأ بالكامل في المتصفح من بيانات الموعد (بلا خادم إضافي):
-// - رابط ICS قابل للتنزيل يفتح تطبيق التقويم الافتراضي في الهاتف (يعمل بلا اتصال إنترنت).
-// - رابط Google Calendar جاهز كبديل سريع لمن يستخدم تقويم جوجل.
-// كلاهما بتوقيت الجزائر UTC+1 (بلا توقيت صيفي).
-function buildCalendarLinks(doctorName: string, address: string | null, dateStr: string, startTime: string) {
+
+// فرق الدقائق بين وقتي بداية ونهاية الموعد الفعليَّين (بصيغة HH:mm) كما سجّلهما الخادم —
+// نستخدمها كمدة دقيقة للحدث في التقويم بدل افتراض مدة ثابتة.
+function diffMinutes(start: string, end: string): number {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  return eh * 60 + em - (sh * 60 + sm);
+}
+// روابط "أضِف إلى التقويم" — تُنشأ بالكامل في المتصفح من بيانات الموعد الفعلية (بلا خادم
+// إضافي وبلا أي مكتبة جديدة): رابط ICS قابل للتنزيل يفتح تطبيق التقويم الافتراضي في الهاتف
+// (يعمل على Android وiOS معًا بلا اتصال إنترنت لحظة الإضافة)، ورابط Google Calendar كبديل
+// سريع. كلاهما بتوقيت الجزائر UTC+1 (بلا توقيت صيفي)، ويحملان تذكيرين: قبل ساعة وقبل 10 دقائق.
+function buildCalendarLinks(params: {
+  doctorName: string;
+  patientName: string;
+  clinicPhone: string | null;
+  address: string | null;
+  dateStr: string;
+  startTime: string;
+  durationMinutes: number;
+}) {
+  const { doctorName, patientName, clinicPhone, address, dateStr, startTime, durationMinutes } = params;
   const [y, mo, da] = dateStr.split("-").map(Number);
   const [h, mi] = startTime.split(":").map(Number);
   const ALGERIA_OFFSET_MS = 60 * 60000;
   const startUtc = new Date(Date.UTC(y, mo - 1, da, h, mi) - ALGERIA_OFFSET_MS);
-  const endUtc = new Date(startUtc.getTime() + 20 * 60000);
+  const endUtc = new Date(startUtc.getTime() + Math.max(durationMinutes, 5) * 60000);
   const fmt = (dt: Date) => dt.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 
-  const title = `موعد مع د. ${doctorName}`;
-  const description = `موعد طبي محجوز عبر MedBook مع د. ${doctorName}.` + (address ? ` العنوان: ${address}` : "");
+  const title = `موعد طبي مع الدكتور ${doctorName}`;
+  const descriptionParts = [
+    "موعد طبي محجوز عبر MedBook",
+    `الطبيب: د. ${doctorName}`,
+    `المريض: ${patientName}`,
+    clinicPhone ? `هاتف العيادة: ${clinicPhone}` : null,
+  ].filter((p): p is string => Boolean(p));
+  const description = descriptionParts.join(" | ");
 
   const ics = [
     "BEGIN:VCALENDAR",
@@ -185,7 +208,12 @@ function buildCalendarLinks(doctorName: string, address: string | null, dateStr:
     "BEGIN:VALARM",
     "TRIGGER:-PT1H",
     "ACTION:DISPLAY",
-    "DESCRIPTION:تذكير بموعدك الطبي",
+    "DESCRIPTION:تذكير بموعدك الطبي بعد ساعة",
+    "END:VALARM",
+    "BEGIN:VALARM",
+    "TRIGGER:-PT10M",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:تذكير بموعدك الطبي بعد 10 دقائق",
     "END:VALARM",
     "END:VEVENT",
     "END:VCALENDAR",
@@ -209,12 +237,18 @@ export default function BookAppointment() {
   const [searchParams] = useSearchParams();
 
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  // تفاصيل الحجز المؤكَّد الأخير — تُعرض في نافذة تأكيد مبسّطة (الطبيب والموعد والعنوان)
-  // تنبثق فوق الصفحة دون إخفائها، بدل استبدال الصفحة بالكامل. نحتفظ بالعنوان هنا (وليس
-  // فقط عبر selectedDoctor) لأن selectedDoctor يُصفَّر عند إغلاق نافذة التأكيد.
-  const [confirmed, setConfirmed] = useState<{ date: string; startTime: string; doctorName: string; address: string | null } | null>(
-    null
-  );
+  // تفاصيل الحجز المؤكَّد الأخير — تُعرض في نافذة تأكيد (الطبيب والموعد والعنوان) وتُستخدم
+  // لبناء رابط "أضِف إلى التقويم". نحتفظ بها هنا (وليس فقط عبر selectedDoctor) لأن
+  // selectedDoctor يُصفَّر عند إغلاق نافذة التأكيد بينما تبقى هذه البيانات ثابتة.
+  const [confirmed, setConfirmed] = useState<{
+    date: string;
+    startTime: string;
+    doctorName: string;
+    address: string | null;
+    patientName: string;
+    clinicPhone: string | null;
+    durationMinutes: number;
+  } | null>(null);
   const [locating, setLocating] = useState(false);
   const [nameQuery, setNameQuery] = useState("");
   const [debouncedNameQuery, setDebouncedNameQuery] = useState("");
@@ -406,11 +440,17 @@ export default function BookAppointment() {
     }
     try {
       const appointment = await bookMutation.mutateAsync(values);
+      // مدة الحدث في التقويم = المدة الفعلية للموعد كما سجّلها الخادم (وليس رقمًا ثابتًا)،
+      // مع رجوع احتياطي لمدة الدور المعروضة قبل التأكيد إن تعذّر حساب الفرق لأي سبب.
+      const durationMinutes = diffMinutes(appointment.startTime, appointment.endTime) || nextSlot?.slotMinutes || 20;
       setConfirmed({
         date: appointment.date,
         startTime: appointment.startTime,
         doctorName: `${selectedDoctor.firstName} ${selectedDoctor.lastName}`,
         address: doctorAddress(selectedDoctor),
+        patientName: `${values.firstName} ${values.lastName}`,
+        clinicPhone: selectedDoctor.clinic?.phone || selectedDoctor.phone || null,
+        durationMinutes,
       });
       showToast("تم إرسال طلب الحجز بنجاح!", "success");
     } catch (err) {
@@ -648,44 +688,71 @@ export default function BookAppointment() {
         >
           <div className="w-full max-w-xs rounded-2xl bg-white p-6 text-center shadow-xl" onClick={(e) => e.stopPropagation()}>
             <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-emerald-500" />
-            <h2 className="text-lg font-extrabold text-slate-900">تم تأكيد حجزك!</h2>
-            <p className="mt-2 font-semibold text-slate-700">د. {confirmed.doctorName}</p>
-            <p className="text-slate-600">
-              {new Date(confirmed.date).toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })} — الساعة{" "}
-              {confirmed.startTime}
-            </p>
+            <h2 className="text-lg font-extrabold text-slate-900">تم حجز موعدك بنجاح ✅</h2>
+            <div className="mt-3 space-y-1">
+              <p className="font-semibold text-slate-700">الدكتور: {confirmed.doctorName}</p>
+              <p className="text-slate-600">
+                التاريخ: {new Date(confirmed.date).toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+              <p className="text-slate-600">الساعة: {confirmed.startTime}</p>
+            </div>
             {confirmed.address && (
               <p className="mt-2 flex items-center justify-center gap-1.5 text-sm text-slate-500">
                 <MapPin className="h-3.5 w-3.5 shrink-0" /> {confirmed.address}
               </p>
             )}
-            {(() => {
-              const { icsUrl, googleUrl } = buildCalendarLinks(confirmed.doctorName, confirmed.address, confirmed.date, confirmed.startTime);
-              return (
-                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4">
-                  <p className="text-xs font-semibold text-slate-500">أضف الموعد إلى تقويم هاتفك حتى لا تنساه</p>
-                  <div className="flex gap-2">
-                    <a
-                      href={icsUrl}
-                      download="medbook-appointment.ics"
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-primary-300"
-                    >
-                      <CalendarDays className="h-3.5 w-3.5" /> تقويم الهاتف
-                    </a>
-                    <a
-                      href={googleUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-primary-300"
-                    >
-                      <CalendarDays className="h-3.5 w-3.5" /> Google Calendar
-                    </a>
-                  </div>
-                </div>
-              );
-            })()}
-            <Button className="mt-5 w-full" onClick={closeConfirmation}>
-              حسنًا
+
+            <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4">
+              <p className="text-xs font-semibold text-slate-500">أضف الموعد إلى تقويم هاتفك حتى لا تنساه</p>
+              <button
+                type="button"
+                onClick={() => {
+                  const { icsUrl } = buildCalendarLinks({
+                    doctorName: confirmed.doctorName,
+                    patientName: confirmed.patientName,
+                    clinicPhone: confirmed.clinicPhone,
+                    address: confirmed.address,
+                    dateStr: confirmed.date,
+                    startTime: confirmed.startTime,
+                    durationMinutes: confirmed.durationMinutes,
+                  });
+                  const link = document.createElement("a");
+                  link.href = icsUrl;
+                  link.download = "medbook-appointment.ics";
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  showToast("تمت إضافة الموعد إلى تقويم هاتفك بنجاح ✅", "success");
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700"
+              >
+                <CalendarDays className="h-4 w-4" /> إضافة إلى التقويم
+              </button>
+              {(() => {
+                const { googleUrl } = buildCalendarLinks({
+                  doctorName: confirmed.doctorName,
+                  patientName: confirmed.patientName,
+                  clinicPhone: confirmed.clinicPhone,
+                  address: confirmed.address,
+                  dateStr: confirmed.date,
+                  startTime: confirmed.startTime,
+                  durationMinutes: confirmed.durationMinutes,
+                });
+                return (
+                  <a
+                    href={googleUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-semibold text-primary-600 hover:text-primary-700"
+                  >
+                    أو أضِفه إلى Google Calendar
+                  </a>
+                );
+              })()}
+            </div>
+
+            <Button variant="outline" className="mt-4 w-full" onClick={closeConfirmation}>
+              لاحقًا
             </Button>
           </div>
         </div>

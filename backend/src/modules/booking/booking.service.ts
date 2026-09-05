@@ -14,6 +14,23 @@ import { GuestBookingInput, GuestSlotsQuery } from "./booking.schema";
 
 const SLOT_MINUTES = 20;
 
+// عدد مرات "لم يحضر" التي إذا بلغها رقم هاتف ضيف معيّن (على مستوى المنصة كاملة)
+// نمنعه من إجراء حجز ضيف جديد — حماية لوقت الأطباء من الحجوزات المتكررة بدون حضور.
+// لا يؤثر هذا على الحجز بحساب مسجَّل (المريض المسجَّل يمكن التواصل معه ومحاسبته إداريًا).
+const GUEST_NO_SHOW_LIMIT = 3;
+
+async function checkGuestReliability(phone?: string | null) {
+  if (!phone) return;
+  const noShowCount = await prisma.appointment.count({
+    where: { guestPhone: phone, patientId: null, status: AppointmentStatus.NO_SHOW },
+  });
+  if (noShowCount >= GUEST_NO_SHOW_LIMIT) {
+    throw ApiError.forbidden(
+      `تم تقييد الحجز كضيف بهذا الرقم بسبب تكرار عدم الحضور (${noShowCount} مرات سابقة). يرجى إنشاء حساب أو التواصل مع العيادة مباشرة لحجز موعد.`
+    );
+  }
+}
+
 function addMinutes(hhmm: string, minutes: number): string {
   const [h, m] = hhmm.split(":").map(Number);
   const total = h * 60 + m + minutes;
@@ -186,6 +203,9 @@ async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId:
  * يختار أول طبيب موثّق متاح، وينشئ الموعد بدون ربطه بأي حساب مستخدم.
  */
 export async function createGuestAppointment(input: GuestBookingInput) {
+  // حماية من الحجوزات المتكررة بدون حضور: نتحقق أولًا قبل أي محاولة حجز.
+  await checkGuestReliability(input.phone);
+
   // الوضع الافتراضي الجديد: لم يُرسل وقت — النظام يعيّن أول دور متاح لدى الطبيب المختار.
   if (input.doctorId && (!input.date || !input.startTime)) {
     return createAutoAssignedAppointment(input, input.doctorId);

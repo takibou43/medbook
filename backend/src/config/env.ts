@@ -35,5 +35,14 @@ export const env = {
     model: process.env.AI_MODEL ?? "",
   },
 
+  // إعدادات مزوّد SMS (BudgetSMS) للتذكير التلقائي بالمواعيد — انظر backend/src/lib/sms.ts.
+  // تُترك فارغة افتراضيًا؛ في هذه الحالة sendSms تسجّل الرسالة في السجلات فقط دون إرسال فعلي.
+  sms: {
+    budgetsmsUsername: process.env.BUDGETSMS_USERNAME ?? "",
+    budgetsmsUserId: process.env.BUDGETSMS_USERID ?? "",
+    budgetsmsHandle: process.env.BUDGETSMS_HANDLE ?? "",
+    senderId: process.env.SMS_SENDER_ID ?? "MedBook",
+  },
+
   isProd: (process.env.NODE_ENV ?? "development") === "production",
 };

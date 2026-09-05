@@ -1,7 +1,8 @@
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { prisma } from "./lib/prisma";
-import { SubscriptionStatus } from "@prisma/client";
+import { Role, SubscriptionStatus } from "@prisma/client";
+import { hashPassword } from "./utils/password";
 
 const app = createApp();
 
@@ -26,7 +27,29 @@ async function grandfatherExistingDoctors() {
   }
 }
 
-grandfatherExistingDoctors().finally(() => {
+// إنشاء حساب إدارة أوّلي عند أول إقلاع فقط — لا يوجد حاليًا أي حساب ADMIN في القاعدة الحية
+// (لم يُشغَّل سكربت seed.ts عليها مطلقًا). البريد وكلمة المرور تُقرآن من متغيرات بيئة يضبطها
+// المستخدم بنفسه في إعدادات Render (ADMIN_BOOTSTRAP_EMAIL / ADMIN_BOOTSTRAP_PASSWORD) — لا
+// نستعمل كلمة مرور ثابتة مكتوبة في الكود لأن هذا المستودع عام على GitHub. آمنة للتكرار:
+// إن كان الحساب موجودًا مسبقًا بنفس البريد، أو لم تُضبط المتغيرات، لا تُنفَّذ أي عملية.
+async function bootstrapAdminUser() {
+  try {
+    const email = process.env.ADMIN_BOOTSTRAP_EMAIL;
+    const password = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+    if (!email || !password) return;
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return;
+
+    const passwordHash = await hashPassword(password);
+    await prisma.user.create({ data: { email, passwordHash, role: Role.ADMIN } });
+    console.log(`✅ تم إنشاء حساب إدارة أولي: ${email}`);
+  } catch (err) {
+    console.error("فشل إنشاء حساب الإدارة الأولي:", err);
+  }
+}
+
+Promise.all([grandfatherExistingDoctors(), bootstrapAdminUser()]).finally(() => {
   app.listen(env.port, () => {
     console.log(`🩺 MedBook API listening on http://localhost:${env.port} (${env.nodeEnv})`);
   });

@@ -27,12 +27,33 @@ function toWhatsAppNumber(phone?: string | null) {
   return null;
 }
 
+// هل تجاوز الوقت الحالي بداية هذا الموعد؟ (بتوقيت الجزائر UTC+1، نفس منطق isPast في الخادم)
+// نستخدمها لدفع المواعيد التي فات وقتها إلى أسفل القائمة، حتى لا يبقى موعد الساعة 8 معروضًا
+// في الأعلى بعد أن تصبح الساعة 8:10 بينما الموعد التالي (لم يفت وقته بعد) أسفله.
+const ALGERIA_OFFSET_MS = 60 * 60000;
+function hasTimePassed(dateStr: string, startTime: string): boolean {
+  const date = new Date(dateStr);
+  const [h, m] = startTime.split(":").map(Number);
+  const slotUtcMs = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), h, m, 0, 0) - ALGERIA_OFFSET_MS;
+  return slotUtcMs < Date.now();
+}
+
 export default function DoctorAppointments() {
   const [filter, setFilter] = useState<AppointmentStatus | undefined>("CONFIRMED");
   const { data: appointments, isLoading, isFetching, dataUpdatedAt } = useMyAppointments(filter);
   const updateStatus = useUpdateAppointmentStatus();
   const { showToast } = useToast();
   const [notifOn, setNotifOn] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
+
+  // ترتيب العرض: المواعيد التي لم يفت وقتها بعد أولًا (بترتيبها الزمني كما وصل من الخادم)،
+  // ثم المواعيد التي فات وقتها بعدها — هذا يمنع بقاء موعد قديم متجاوَز في أعلى القائمة.
+  const sortedAppointments = appointments
+    ? [...appointments].sort((a: any, b: any) => {
+        const aPassed = hasTimePassed(a.date, a.startTime) ? 1 : 0;
+        const bPassed = hasTimePassed(b.date, b.startTime) ? 1 : 0;
+        return aPassed - bPassed;
+      })
+    : appointments;
 
   // تنبيه فوري عند وصول حجز جديد أثناء فتح الصفحة (صوت + إشعار + رسالة).
   const handleNew = useCallback(
@@ -125,9 +146,9 @@ export default function DoctorAppointments() {
 
       {isLoading ? (
         <Spinner />
-      ) : appointments && appointments.length > 0 ? (
+      ) : sortedAppointments && sortedAppointments.length > 0 ? (
         <div className="space-y-3">
-          {appointments.map((a) => (
+          {sortedAppointments.map((a: any) => (
             <div key={a.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-bold text-slate-800">

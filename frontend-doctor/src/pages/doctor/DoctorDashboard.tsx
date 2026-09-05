@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, CalendarCheck, Users, CheckCircle2, XCircle, Star, QrCode, Copy } from "lucide-react";
+import { CalendarClock, CalendarCheck, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Printer } from "lucide-react";
 import { api } from "../../lib/api";
 import { StatCard } from "../../components/StatCard";
 import { Spinner } from "../../components/ui/States";
@@ -29,7 +29,7 @@ export default function DoctorDashboard() {
   const doctorId = user?.doctor?.id;
   const bookingUrl = doctorId ? `${PATIENT_SITE_URL}/?doctor=${doctorId}` : null;
   const qrImageUrl = bookingUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(bookingUrl)}`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=8&data=${encodeURIComponent(bookingUrl)}`
     : null;
 
   async function copyBookingLink() {
@@ -40,6 +40,40 @@ export default function DoctorDashboard() {
     } catch {
       showToast("تعذّر نسخ الرابط.", "error");
     }
+  }
+
+  function printQrCode() {
+    if (!qrImageUrl) return;
+    const doctorName = user?.doctor ? "د. " + user.doctor.firstName + " " + user.doctor.lastName : "";
+    const printWindow = window.open("", "_blank", "width=480,height=640");
+    if (!printWindow) {
+      showToast("يرجى السماح بالنوافذ المنبثقة للطباعة.", "error");
+      return;
+    }
+    const html =
+      "<!DOCTYPE html><html dir='rtl' lang='ar'><head><meta charset='utf-8' />" +
+      "<title>رمز QR للحجز</title><style>" +
+      "*{box-sizing:border-box;}" +
+      "body{font-family:Tahoma,Arial,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:32px;text-align:center;}" +
+      "h1{font-size:20px;margin:0 0 4px;}" +
+      "p.sub{color:#555;margin:0 0 24px;font-size:14px;}" +
+      "img{width:320px;height:320px;border:1px solid #e2e8f0;border-radius:16px;padding:12px;}" +
+      "p.instructions{margin-top:24px;font-size:14px;color:#333;max-width:320px;line-height:1.6;}" +
+      ".brand{margin-top:32px;font-size:12px;color:#999;}" +
+      "@media print{body{padding:0;}}" +
+      "</style></head><body>" +
+      "<h1>MedBook" + (doctorName ? " — " + doctorName : "") + "</h1>" +
+      "<p class='sub'>امسح الرمز لحجز موعد</p>" +
+      "<img src='" + qrImageUrl + "' alt='QR' />" +
+      "<p class='instructions'>افتح كاميرا هاتفك ووجّهها نحو الرمز، ثم اضغط على الرابط الذي يظهر لحجز موعدك مباشرة.</p>" +
+      "<p class='brand'>MedBook</p>" +
+      "</body></html>";
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+    };
   }
 
   return (
@@ -75,13 +109,22 @@ export default function DoctorDashboard() {
               اطبع هذا الرمز وضعه في عيادتك — يفتح المريض كاميرا هاتفه، يمسح الرمز، فيُختار اسمك تلقائيًا في صفحة الحجز ويكتب
               بياناته مباشرة دون بحث.
             </p>
-            <button
-              type="button"
-              onClick={copyBookingLink}
-              className="mx-auto flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-primary-300 sm:mx-0"
-            >
-              <Copy className="h-3.5 w-3.5" /> نسخ رابط الحجز
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+              <button
+                type="button"
+                onClick={copyBookingLink}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-primary-300"
+              >
+                <Copy className="h-3.5 w-3.5" /> نسخ رابط الحجز
+              </button>
+              <button
+                type="button"
+                onClick={printQrCode}
+                className="flex items-center gap-1.5 rounded-xl border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 transition hover:border-primary-300"
+              >
+                <Printer className="h-3.5 w-3.5" /> طباعة الرمز
+              </button>
+            </div>
           </div>
         </div>
       )}

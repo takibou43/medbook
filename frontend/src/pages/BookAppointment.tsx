@@ -49,6 +49,12 @@ function specialtyIcon(icon?: string | null): LucideIcon {
   return (icon && SPECIALTY_ICONS[icon]) || Stethoscope;
 }
 
+// عنوان عيادة الطبيب الظاهر للمريض عند الحجز — عنوان العيادة أدق من العنوان الشخصي
+// للطبيب إن وُجدت عيادة مسجَّلة، وإلا نستعمل عنوان الطبيب نفسه إن أدخله.
+function doctorAddress(d: Doctor): string | null {
+  return d.clinic?.address || d.address || null;
+}
+
 // إحداثيات تقريبية لمركز كل ولاية (مدينة الولاية) — تُستخدم فقط لتحديد أقرب ولاية
 // من الولايات التي يوجد بها أطباء فعليًا بواسطة GPS الهاتف (لا تحتاج دقة الحدود
 // الإدارية، فالمقارنة تكون غالبًا بين عدد قليل من الولايات المتوفرة حاليًا).
@@ -149,15 +155,66 @@ function formatSlotLabel(dateStr: string, startTime: string): string {
   if (diffDays === 1) return `غدًا ${startTime}`;
   return `${target.toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })} — ${startTime}`;
 }
+// روابط "أضِف إلى التقويم" — تُنشأ بالكامل في المتصفح من بيانات الموعد (بلا خادم إضافي):
+// - رابط ICS قابل للتنزيل يفتح تطبيق التقويم الافتراضي في الهاتف (يعمل بلا اتصال إنترنت).
+// - رابط Google Calendar جاهز كبديل سريع لمن يستخدم تقويم جوجل.
+// كلاهما بتوقيت الجزائر UTC+1 (بلا توقيت صيفي).
+function buildCalendarLinks(doctorName: string, address: string | null, dateStr: string, startTime: string) {
+  const [y, mo, da] = dateStr.split("-").map(Number);
+  const [h, mi] = startTime.split(":").map(Number);
+  const ALGERIA_OFFSET_MS = 60 * 60000;
+  const startUtc = new Date(Date.UTC(y, mo - 1, da, h, mi) - ALGERIA_OFFSET_MS);
+  const endUtc = new Date(startUtc.getTime() + 20 * 60000);
+  const fmt = (dt: Date) => dt.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+
+  const title = `موعد مع د. ${doctorName}`;
+  const description = `موعد طبي محجوز عبر MedBook مع د. ${doctorName}.` + (address ? ` العنوان: ${address}` : "");
+
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//MedBook//Booking//AR",
+    "BEGIN:VEVENT",
+    `UID:${Date.now()}@medbook.dz`,
+    `DTSTAMP:${fmt(new Date())}`,
+    `DTSTART:${fmt(startUtc)}`,
+    `DTEND:${fmt(endUtc)}`,
+    `SUMMARY:${title}`,
+    `DESCRIPTION:${description}`,
+    address ? `LOCATION:${address}` : "",
+    "BEGIN:VALARM",
+    "TRIGGER:-PT1H",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:تذكير بموعدك الطبي",
+    "END:VALARM",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ]
+    .filter(Boolean)
+    .join("\r\n");
+
+  const icsUrl = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
+  const googleUrl =
+    "https://calendar.google.com/calendar/render?action=TEMPLATE" +
+    `&text=${encodeURIComponent(title)}` +
+    `&dates=${fmt(startUtc)}/${fmt(endUtc)}` +
+    `&details=${encodeURIComponent(description)}` +
+    (address ? `&location=${encodeURIComponent(address)}` : "");
+
+  return { icsUrl, googleUrl };
+}
 
 export default function BookAppointment() {
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
 
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  // تفاصيل الحجز المؤكَّد الأخير — تُعرض في نافذة تأكيد مبسّطة (الطبيب والموعد فقط)
-  // تنبثق فوق الصفحة دون إخفائها، بدل استبدال الصفحة بالكامل.
-  const [confirmed, setConfirmed] = useState<{ date: string; startTime: string; doctorName: string } | null>(null);
+  // تفاصيل الحجز المؤكَّد الأخير — تُعرض في نافذة تأكيد مبسّطة (الطبيب والموعد والعنوان)
+  // تنبثق فوق الصفحة دون إخفائها، بدل استبدال الصفحة بالكامل. نحتفظ بالعنوان هنا (وليس
+  // فقط عبر selectedDoctor) لأن selectedDoctor يُصفَّر عند إغلاق نافذة التأكيد.
+  const [confirmed, setConfirmed] = useState<{ date: string; startTime: string; doctorName: string; address: string | null } | null>(
+    null
+  );
   const [locating, setLocating] = useState(false);
   const [nameQuery, setNameQuery] = useState("");
   const [debouncedNameQuery, setDebouncedNameQuery] = useState("");
@@ -353,6 +410,7 @@ export default function BookAppointment() {
         date: appointment.date,
         startTime: appointment.startTime,
         doctorName: `${selectedDoctor.firstName} ${selectedDoctor.lastName}`,
+        address: doctorAddress(selectedDoctor),
       });
       showToast("تم إرسال طلب الحجز بنجاح!", "success");
     } catch (err) {
@@ -502,6 +560,7 @@ export default function BookAppointment() {
                 <div className="space-y-2">
                   {doctors.map((d, i) => {
                     const preview = nextSlotPreviews[i];
+                    const address = doctorAddress(d);
                     return (
                       <button
                         type="button"
@@ -519,6 +578,11 @@ export default function BookAppointment() {
                             {d.city?.nameAr}
                             {d.clinic ? ` — ${d.clinic.nameAr}` : ""} · خبرة {d.yearsExperience} سنوات
                           </p>
+                          {address && (
+                            <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
+                              <MapPin className="h-3 w-3 shrink-0" /> {address}
+                            </p>
+                          )}
                           {preview?.data && (
                             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-600">
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -539,7 +603,6 @@ export default function BookAppointment() {
               )}
             </div>
           )}
-
           {selectedDoctor && (
             <div>
               <p className="label mb-2 flex items-center gap-1.5">
@@ -557,6 +620,11 @@ export default function BookAppointment() {
                   <p className="mt-1 text-xs text-slate-500">
                     مدة الجلسة {nextSlot.slotMinutes} دقيقة — الأدوار تُمنح بالترتيب حسب أسبقية الحجز.
                   </p>
+                  {doctorAddress(selectedDoctor) && (
+                    <p className="mt-3 flex items-center justify-center gap-1.5 border-t border-primary-100 pt-3 text-sm font-semibold text-slate-700">
+                      <MapPin className="h-4 w-4 shrink-0 text-primary-600" /> {doctorAddress(selectedDoctor)}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <EmptyState
@@ -586,6 +654,36 @@ export default function BookAppointment() {
               {new Date(confirmed.date).toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })} — الساعة{" "}
               {confirmed.startTime}
             </p>
+            {confirmed.address && (
+              <p className="mt-2 flex items-center justify-center gap-1.5 text-sm text-slate-500">
+                <MapPin className="h-3.5 w-3.5 shrink-0" /> {confirmed.address}
+              </p>
+            )}
+            {(() => {
+              const { icsUrl, googleUrl } = buildCalendarLinks(confirmed.doctorName, confirmed.address, confirmed.date, confirmed.startTime);
+              return (
+                <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-4">
+                  <p className="text-xs font-semibold text-slate-500">أضف الموعد إلى تقويم هاتفك حتى لا تنساه</p>
+                  <div className="flex gap-2">
+                    <a
+                      href={icsUrl}
+                      download="medbook-appointment.ics"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-primary-300"
+                    >
+                      <CalendarDays className="h-3.5 w-3.5" /> تقويم الهاتف
+                    </a>
+                    <a
+                      href={googleUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-primary-300"
+                    >
+                      <CalendarDays className="h-3.5 w-3.5" /> Google Calendar
+                    </a>
+                  </div>
+                </div>
+              );
+            })()}
             <Button className="mt-5 w-full" onClick={closeConfirmation}>
               حسنًا
             </Button>

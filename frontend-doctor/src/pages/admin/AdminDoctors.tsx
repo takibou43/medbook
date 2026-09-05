@@ -4,10 +4,10 @@ import { api, apiErrorMessage } from "../../lib/api";
 import { Spinner, EmptyState } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
-import { VerificationBadge } from "../../components/ui/Badge";
+import { VerificationBadge, SubscriptionBadge } from "../../components/ui/Badge";
 import { useToast } from "../../components/ui/Toast";
 import { Pagination } from "../../components/ui/Pagination";
-import { VerificationStatus } from "../../types";
+import { VerificationStatus, SubscriptionStatus } from "../../types";
 
 export default function AdminDoctors() {
   const [q, setQ] = useState("");
@@ -26,6 +26,18 @@ export default function AdminDoctors() {
     try {
       await api.patch(`/admin/doctors/${id}/verify`, { status: s });
       showToast("تم تحديث حالة التحقق.", "success");
+      qc.invalidateQueries({ queryKey: ["admin-doctors"] });
+    } catch (err) {
+      showToast(apiErrorMessage(err), "error");
+    }
+  }
+
+  // لا توجد بوابة دفع فعلية بعد (بانتظار حساب تاجر إلكتروني BaridiMob) — الإدارة تُفعّل
+  // اشتراك الطبيب يدويًا من هنا بعد التحقق من الدفع خارج المنصة (تحويل بنكي، إلخ).
+  async function setSubscription(id: string, s: SubscriptionStatus) {
+    try {
+      await api.patch(`/admin/doctors/${id}`, { subscriptionStatus: s });
+      showToast("تم تحديث حالة الاشتراك.", "success");
       qc.invalidateQueries({ queryKey: ["admin-doctors"] });
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
@@ -63,12 +75,22 @@ export default function AdminDoctors() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <VerificationBadge status={d.verificationStatus} />
+                  <SubscriptionBadge status={d.subscriptionStatus ?? "UNPAID"} />
                   {d.verificationStatus !== "VERIFIED" && (
                     <Button onClick={() => setVerification(d.id, "VERIFIED")}>توثيق</Button>
                   )}
                   {d.verificationStatus !== "REJECTED" && (
                     <Button variant="danger" onClick={() => setVerification(d.id, "REJECTED")}>
                       رفض
+                    </Button>
+                  )}
+                  {d.subscriptionStatus !== "ACTIVE" ? (
+                    <Button variant="outline" onClick={() => setSubscription(d.id, "ACTIVE")}>
+                      تفعيل الاشتراك
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={() => setSubscription(d.id, "UNPAID")}>
+                      إيقاف الاشتراك
                     </Button>
                   )}
                 </div>

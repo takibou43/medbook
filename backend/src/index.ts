@@ -2,7 +2,6 @@ import { createApp } from "./app";
 import { env } from "./config/env";
 import { prisma } from "./lib/prisma";
 import { SubscriptionStatus } from "@prisma/client";
-import { sendDueReminders } from "./modules/appointments/appointments.service";
 
 const app = createApp();
 
@@ -27,20 +26,8 @@ async function grandfatherExistingDoctors() {
   }
 }
 
-// تذكير SMS تلقائي للمرضى قبل موعدهم — انظر sendDueReminders في appointments.service.ts.
-// لا توجد مهام مجدولة (cron) دائمة على الخطة المجانية لـ Render، لذا نستعمل مؤقّتًا داخل
-// نفس عملية الخادم يتحقق كل 5 دقائق. يعمل طالما الخادم مستيقظ فقط.
-const REMINDER_CHECK_INTERVAL_MS = 5 * 60 * 1000;
-
-function startReminderJob() {
-  setInterval(() => {
-    sendDueReminders().catch((err) => console.error("فشل تشغيل مهمة التذكير التلقائي:", err));
-  }, REMINDER_CHECK_INTERVAL_MS);
-}
-
 grandfatherExistingDoctors().finally(() => {
   app.listen(env.port, () => {
     console.log(`🩺 MedBook API listening on http://localhost:${env.port} (${env.nodeEnv})`);
-    startReminderJob();
   });
 });

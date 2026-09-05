@@ -11,6 +11,13 @@ import { useToast } from "../../components/ui/Toast";
 // TODO: تحويله إلى متغيّر بيئة عند اعتماد نطاق مخصص للموقع مستقبلًا.
 const PATIENT_SITE_URL = "https://medbook-alpha.vercel.app";
 
+// تاريخ اليوم بتوقيت الجزائر (UTC+1) بصيغة YYYY-MM-DD — يُستخدم لبناء رابط بطاقة
+// "مواعيد اليوم" في صفحة المواعيد (نفس منطق الإزاحة الزمنية المستخدم في بقية الموقع).
+function algeriaTodayIso(): string {
+  const algeriaNow = new Date(Date.now() + 60 * 60000);
+  return algeriaNow.toISOString().slice(0, 10);
+}
+
 export default function DoctorDashboard() {
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -90,15 +97,21 @@ export default function DoctorDashboard() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard label="مواعيد اليوم" value={stats?.todayAppointments ?? 0} icon={CalendarClock} />
-        <StatCard label="المواعيد القادمة" value={stats?.upcomingAppointments ?? 0} icon={CalendarCheck} />
-        <StatCard label="إجمالي المرضى" value={stats?.totalPatients ?? 0} icon={Users} />
-        <StatCard label="المواعيد المكتملة" value={stats?.completedAppointments ?? 0} icon={CheckCircle2} tone="green" />
-        <StatCard label="المواعيد الملغاة" value={stats?.cancelledAppointments ?? 0} icon={XCircle} tone="red" />
+        <StatCard label="مواعيد اليوم" value={stats?.todayAppointments ?? 0} icon={CalendarClock} to={`/appointments?status=ALL&date=${algeriaTodayIso()}`} />
+        <StatCard label="المواعيد القادمة" value={stats?.upcomingAppointments ?? 0} icon={CalendarCheck} to="/appointments?status=CONFIRMED" />
+        <StatCard label="إجمالي المرضى" value={stats?.totalPatients ?? 0} icon={Users} to="/patients" />
+        <StatCard label="المواعيد المكتملة" value={stats?.completedAppointments ?? 0} icon={CheckCircle2} tone="green" to="/appointments?status=COMPLETED" />
+        <StatCard label="المواعيد الملغاة" value={stats?.cancelledAppointments ?? 0} icon={XCircle} tone="red" to="/appointments?status=CANCELLED" />
         <StatCard label="متوسط التقييم" value={`${(stats?.avgRating ?? 0).toFixed(1)} (${stats?.reviewsCount ?? 0})`} icon={Star} tone="amber" />
-        <StatCard label="مواعيد هذا الشهر" value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} />
-        <StatCard label="نسبة الغياب" value={`${stats?.noShowRate ?? 0}%`} icon={AlertTriangle} tone={((stats?.noShowRate ?? 0) > 20) ? "red" : "amber"} />
-        <StatCard label="الدخل التقديري" value={`${(stats?.estimatedRevenue ?? 0).toLocaleString("ar-DZ")} دج`} icon={Wallet} tone="green" />
+        <StatCard label="مواعيد هذا الشهر" value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} to="/appointments?status=ALL" />
+        <StatCard
+          label="نسبة الغياب"
+          value={`${stats?.noShowRate ?? 0}%`}
+          icon={AlertTriangle}
+          tone={((stats?.noShowRate ?? 0) > 20) ? "red" : "amber"}
+          to="/appointments?status=NO_SHOW"
+        />
+        <StatCard label="الدخل التقديري" value={`${(stats?.estimatedRevenue ?? 0).toLocaleString("ar-DZ")} دج`} icon={Wallet} tone="green" to="/appointments?status=COMPLETED" />
       </div>
 
       {qrImageUrl && (

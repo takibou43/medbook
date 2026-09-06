@@ -1,0 +1,27 @@
+# خادم Render المجاني ينام بعد نحو 15 دقيقة بلا طلبات، فيستغرق أول فتح للموقع بعد ذلك
+# قرابة الدقيقة (وهو ما كان يجعل لوحة الطبيب تبدو معلّقة عند فتحها من الهاتف). هذه المهمة
+# تطرق نقطة /health كل 10 دقائق فيبقى الخادم مستيقظًا — مجانًا، فالمستودع عام وتشغيل
+# GitHub Actions فيه بلا حدود.
+name: Keep backend awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          for attempt in 1 2 3; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 90 https://medbook-xg66.onrender.com/health || echo "000")
+            echo "Attempt $attempt -> HTTP $code"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "الخادم لم يستجب بعد ثلاث محاولات"
+          exit 1

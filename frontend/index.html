@@ -8,6 +8,17 @@
     <meta property="og:title" content="MedBook — مادبوك" />
     <meta property="og:description" content="منصة رقمية جزائرية لحجز المواعيد الطبية بسهولة وأمان، بدون حاجة لإنشاء حساب." />
     <meta property="og:type" content="website" />
+
+    <!-- تثبيت الموقع كتطبيق على الهاتف (PWA): يظهر للمريض زر "تثبيت التطبيق"
+         في كروم على أندرويد، ويمكن إضافته إلى الشاشة الرئيسية في iOS، فيفتح بأيقونة خاصة
+         وبلا شريط متصفح. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#187f77" />
+    <link rel="apple-touch-icon" href="/logo.svg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="MedBook" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -16,5 +27,13 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // تسجيل service worker بعد اكتمال التحميل حتى لا يزاحم أول عرض للصفحة، وفشله لا يؤثر في الموقع.
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("/sw.js").catch(function () {});
+        });
+      }
+    </script>
   </body>
 </html>

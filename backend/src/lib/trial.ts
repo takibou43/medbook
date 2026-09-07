@@ -46,6 +46,13 @@ export async function syncTrialSubscriptions(): Promise<{ activated: number; exp
         data: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionExpiresAt: end },
       });
       activated = granted.count;
+
+      // الأطباء المفعّلون مسبقًا بلا تاريخ انتهاء (من قبل إضافة نظام الاشتراك) يأخذون نفس
+      // تاريخ نهاية التجربة، وإلا بقوا مفعّلين إلى الأبد ولم يشملهم الإيقاف التلقائي.
+      await prisma.doctor.updateMany({
+        where: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionExpiresAt: null },
+        data: { subscriptionExpiresAt: end },
+      });
       if (activated > 0) {
         console.log("✅ مُنحت التجربة المجانية لـ " + activated + " طبيبًا حتى " + end.toISOString().slice(0, 10));
       }

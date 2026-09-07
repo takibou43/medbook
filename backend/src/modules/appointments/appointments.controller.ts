@@ -44,3 +44,8 @@ export const markLate = asyncHandler(async (req: Request, res: Response) => {
   const data = await service.markAsLate(req.user!.id, req.params.id);
   res.json({ success: true, data });
 });
+
+export const callPatient = asyncHandler(async (req: Request, res: Response) => {
+  const data = await service.callSpecificPatient(req.user!.id, req.params.id);
+  res.json({ success: true, data });
+});

@@ -237,6 +237,7 @@ export default function BookAppointment() {
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<BookingForm>({
     defaultValues: { wilayaId: "", specialtyId: "" },
@@ -429,6 +430,17 @@ export default function BookAppointment() {
         durationMinutes,
       });
       showToast("تم إرسال طلب الحجز بنجاح!", "success");
+
+      // نفرّغ اسم المريض ولقبه ورقمه فور نجاح الحجز، حتى لا يضغط أحدهم زر التأكيد مرة ثانية
+      // فيحجز دورًا مكررًا بالخطأ. نحتفظ بالولاية والتخصص لأنهما سياق البحث لا بيانات شخصية،
+      // فيستطيع مريض آخر في نفس العيادة أن يحجز مباشرة بإدخال اسمه فقط.
+      reset({
+        firstName: "",
+        lastName: "",
+        phone: "",
+        wilayaId: values.wilayaId,
+        specialtyId: values.specialtyId,
+      });
     } catch (err) {
       showToast(apiErrorMessage(err, "تعذّر إتمام الحجز."), "error");
     }

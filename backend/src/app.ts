@@ -19,6 +19,7 @@ import notificationsRoutes from "./modules/notifications/notifications.routes";
 import favoritesRoutes from "./modules/favorites/favorites.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 import bookingRoutes from "./modules/booking/booking.routes";
+import pushRoutes from "./modules/push/push.routes";
 
 export function createApp() {
   const app = express();
@@ -54,6 +55,7 @@ export function createApp() {
   app.use("/api/favorites", favoritesRoutes);
   app.use("/api/admin", adminRoutes);
   app.use("/api/booking", bookingRoutes);
+  app.use("/api/push", pushRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

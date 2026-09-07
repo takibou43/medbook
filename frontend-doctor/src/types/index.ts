@@ -1,6 +1,14 @@
 export type Role = "PATIENT" | "DOCTOR" | "ADMIN";
 export type Gender = "MALE" | "FEMALE";
-export type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+// IN_PROGRESS = المريض الجالس الآن أمام الطبيب، LATE = نودي عليه فلم يستجب وينتظر عودة دوره.
+export type AppointmentStatus =
+  | "PENDING"
+  | "CONFIRMED"
+  | "IN_PROGRESS"
+  | "LATE"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW";
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 export type SubscriptionStatus = "UNPAID" | "ACTIVE" | "EXPIRED";
 
@@ -96,6 +104,12 @@ export interface Appointment {
   doctor?: Doctor;
   patient?: { firstName: string; lastName: string; user?: { email: string; phone?: string } } | null;
   review?: Review | null;
+  // حقول طابور العيادة اليومي
+  calledAt?: string | null;
+  deferredCount?: number;
+  skipCredits?: number;
+  // يُرسله الخادم مع قائمة مواعيد الطبيب: عدد مرات غياب هذا المريض سابقًا
+  patientNoShowCount?: number;
 }
 
 export interface Notification {

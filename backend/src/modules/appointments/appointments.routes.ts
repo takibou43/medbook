@@ -26,6 +26,9 @@ router.post("/queue/next", authorize(Role.DOCTOR), controller.callNext);
 // POST /api/appointments/:id/late — لم يستجب للنداء: يُنقل إلى قائمة المتأخرين بدل شطبه
 router.post("/:id/late", authorize(Role.DOCTOR), controller.markLate);
 
+// POST /api/appointments/:id/call — مناداة مريض بعينه فورًا (متأخر عاد قبل انتهاء دوره)
+router.post("/:id/call", authorize(Role.DOCTOR), controller.callPatient);
+
 // PATCH /api/appointments/:id — تغيير الحالة (قبول/رفض/إنهاء/عدم حضور) حسب صلاحية الدور
 router.patch("/:id", validate({ body: updateStatusSchema }), controller.updateStatus);
 

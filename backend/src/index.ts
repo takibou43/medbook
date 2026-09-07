@@ -3,6 +3,7 @@ import { env } from "./config/env";
 import { prisma } from "./lib/prisma";
 import { Role, SubscriptionStatus } from "@prisma/client";
 import { hashPassword } from "./utils/password";
+import { syncTrialSubscriptions } from "./lib/trial";
 
 const app = createApp();
 
@@ -49,7 +50,15 @@ async function bootstrapAdminUser() {
   }
 }
 
-Promise.all([grandfatherExistingDoctors(), bootstrapAdminUser()]).finally(() => {
+// مزامنة فترة التجربة المجانية: عند الإقلاع ثم كل خمس دقائق، حتى يُفتح الاشتراك تلقائيًا للطبيب
+// الذي سجّل لتوّه دون انتظار تدخلك، وحتى تتوقف الاشتراكات وحدها لحظة انتهاء التجربة.
+const TRIAL_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+
+Promise.all([grandfatherExistingDoctors(), bootstrapAdminUser(), syncTrialSubscriptions()]).finally(() => {
+  setInterval(() => {
+    void syncTrialSubscriptions();
+  }, TRIAL_SYNC_INTERVAL_MS);
+
   app.listen(env.port, () => {
     console.log(`🩺 MedBook API listening on http://localhost:${env.port} (${env.nodeEnv})`);
   });

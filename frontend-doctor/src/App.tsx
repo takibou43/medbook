@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 import {
   LayoutDashboard,
   CalendarClock,
+  ListOrdered,
   Clock,
   Users as UsersIcon,
   Settings,
@@ -19,6 +20,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import DoctorDashboard from "./pages/doctor/DoctorDashboard";
 import DoctorAppointments from "./pages/doctor/DoctorAppointments";
+import DoctorQueue from "./pages/doctor/DoctorQueue";
 import DoctorSchedule from "./pages/doctor/DoctorSchedule";
 import DoctorPatients from "./pages/doctor/DoctorPatients";
 import DoctorProfileSettings from "./pages/doctor/DoctorProfileSettings";
@@ -32,6 +34,7 @@ import AccountSettings from "./pages/AccountSettings";
 
 const doctorNav = [
   { to: "/", label: "الرئيسية", icon: LayoutDashboard, end: true },
+  { to: "/queue", label: "طابور اليوم", icon: ListOrdered },
   { to: "/appointments", label: "المواعيد", icon: CalendarClock },
   { to: "/schedule", label: "أوقات العمل", icon: Clock },
   { to: "/patients", label: "مرضاي", icon: UsersIcon },
@@ -58,6 +61,7 @@ export default function App() {
       <Route element={<ProtectedRoute allow={["DOCTOR"]} />}>
         <Route element={<DashboardLayout title="لوحة الطبيب" items={doctorNav} />}>
           <Route path="/" element={<DoctorDashboard />} />
+          <Route path="/queue" element={<DoctorQueue />} />
           <Route path="/appointments" element={<DoctorAppointments />} />
           <Route path="/schedule" element={<DoctorSchedule />} />
           <Route path="/patients" element={<DoctorPatients />} />

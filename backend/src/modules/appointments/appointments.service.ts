@@ -129,7 +129,13 @@ export async function autoExpireStaleAppointments(doctorId: string) {
   if (!doctor) return;
 
   const candidates = await prisma.appointment.findMany({
-    where: { doctorId, status: AppointmentStatus.CONFIRMED, date: { lte: algeriaTodayUTCMidnight() } },
+    where: {
+      doctorId,
+      // المتأخر الذي لم يعد حتى إغلاق العيادة، ومن نودي عليه ولم يُسجّل إنهاء موعده،
+      // ينتهيان إلى "لم يحضر" مثل المؤكّد تمامًا — وإلا بقيا معلّقين في الطابور إلى الأبد.
+      status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS] },
+      date: { lte: algeriaTodayUTCMidnight() },
+    },
     select: { id: true, date: true },
   });
 
@@ -216,11 +222,15 @@ export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus,
   },
   DOCTOR: {
     PENDING: ["CONFIRMED", "CANCELLED"],
-    CONFIRMED: ["COMPLETED", "CANCELLED", "NO_SHOW"],
+    CONFIRMED: ["IN_PROGRESS", "LATE", "COMPLETED", "CANCELLED", "NO_SHOW"],
+    IN_PROGRESS: ["COMPLETED", "LATE", "CANCELLED", "NO_SHOW"],
+    LATE: ["IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
   },
   ADMIN: {
     PENDING: ["CONFIRMED", "CANCELLED"],
-    CONFIRMED: ["COMPLETED", "CANCELLED", "NO_SHOW"],
+    CONFIRMED: ["IN_PROGRESS", "LATE", "COMPLETED", "CANCELLED", "NO_SHOW"],
+    IN_PROGRESS: ["COMPLETED", "LATE", "CANCELLED", "NO_SHOW"],
+    LATE: ["IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
     COMPLETED: [],
     CANCELLED: [],
     NO_SHOW: [],
@@ -321,4 +331,137 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
 
 export async function cancelByPatient(patientUserId: string, appointmentId: string) {
   return updateStatus(patientUserId, "PATIENT", appointmentId, AppointmentStatus.CANCELLED);
+}
+
+// ============================================================
+// طابور العيادة اليومي
+// ============================================================
+
+// عدد المرضى الذين يُنادَون قبل إعادة نداء المريض المتأخر. القاعدة المتفق عليها:
+// من لم يستجب لندائه لا يُشطب، بل يعود دوره تلقائيًا بعد مريضين.
+const QUEUE_DEFER_SKIPS = 2;
+
+const QUEUE_INCLUDE = {
+  patient: { include: { user: { select: { phone: true } } } },
+} as const;
+
+function todayRangeUTC() {
+  const start = algeriaTodayUTCMidnight();
+  const end = new Date(start);
+  end.setUTCHours(23, 59, 59, 999);
+  return { gte: start, lte: end };
+}
+
+async function requireDoctor(doctorUserId: string) {
+  const doctor = await prisma.doctor.findUnique({ where: { userId: doctorUserId } });
+  if (!doctor) throw ApiError.notFound("لم يتم العثور على ملف طبيب مرتبط بهذا الحساب.");
+  return doctor;
+}
+
+/**
+ * حالة طابور اليوم كما يراها الطبيب: المريض الجالس أمامه الآن، ثم المنتظرون بالترتيب،
+ * ثم قائمة المتأخرين مع عدد المناداتات المتبقية قبل عودة دور كل واحد منهم.
+ */
+export async function getQueueForDoctor(doctorUserId: string) {
+  const doctor = await requireDoctor(doctorUserId);
+  await autoExpireStaleAppointments(doctor.id);
+
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      doctorId: doctor.id,
+      date: todayRangeUTC(),
+      status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS] },
+    },
+    include: QUEUE_INCLUDE,
+    orderBy: [{ startTime: "asc" }],
+  });
+
+  return {
+    date: algeriaTodayUTCMidnight().toISOString().slice(0, 10),
+    current: appointments.find((a) => a.status === AppointmentStatus.IN_PROGRESS) ?? null,
+    waiting: appointments.filter((a) => a.status === AppointmentStatus.CONFIRMED),
+    late: appointments.filter((a) => a.status === AppointmentStatus.LATE),
+  };
+}
+
+/**
+ * مناداة المريض التالي.
+ *
+ * الترتيب زمني حسب وقت الموعد، مع استثناء واحد: المتأخر لا يُنادى إلا بعد استهلاك
+ * رصيد التخطي الخاص به (skipCredits) — أي بعد مناداة مريضين. مع كل مناداة ناجحة نُنقص
+ * رصيد كل المتأخرين بواحد، فيعود دور المتأخر تلقائيًا دون أي تدخل من الطبيب.
+ *
+ * نرفض المناداة إن كان هناك مريض بالداخل فعلًا، حتى لا تضيع حالته بصمت: على الطبيب أن
+ * ينهي موعده أو يسجّله متأخرًا أولًا.
+ */
+export async function callNextPatient(doctorUserId: string) {
+  const doctor = await requireDoctor(doctorUserId);
+  const date = todayRangeUTC();
+
+  const inProgress = await prisma.appointment.findFirst({
+    where: { doctorId: doctor.id, date, status: AppointmentStatus.IN_PROGRESS },
+  });
+  if (inProgress) {
+    throw ApiError.badRequest("هناك مريض بالداخل الآن. أنهِ موعده أو سجّله متأخرًا قبل مناداة التالي.");
+  }
+
+  const queue = await prisma.appointment.findMany({
+    where: {
+      doctorId: doctor.id,
+      date,
+      status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] },
+    },
+    orderBy: [{ startTime: "asc" }],
+  });
+
+  const next = queue.find((a) => a.status === AppointmentStatus.CONFIRMED || a.skipCredits <= 0);
+  if (!next) {
+    throw ApiError.badRequest(
+      queue.length > 0
+        ? "كل المتأخرين ما زالوا ينتظرون دورهم. نادِ مريضًا آخر أو أعد المحاولة بعد قليل."
+        : "لا يوجد مريض في الانتظار اليوم."
+    );
+  }
+
+  const [called] = await prisma.$transaction([
+    prisma.appointment.update({
+      where: { id: next.id },
+      data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date() },
+      include: QUEUE_INCLUDE,
+    }),
+    prisma.appointment.updateMany({
+      where: { doctorId: doctor.id, date, status: AppointmentStatus.LATE, skipCredits: { gt: 0 }, NOT: { id: next.id } },
+      data: { skipCredits: { decrement: 1 } },
+    }),
+  ]);
+
+  return called;
+}
+
+/**
+ * تسجيل المريض كـ"متأخر" لعدم استجابته للنداء: لا يُشطب ولا يُحسب غيابًا، بل يُوضع في
+ * قائمة المتأخرين برصيد تخطٍّ قدره مريضان، ويعود دوره بعدهما تلقائيًا. لا حد لعدد مرات
+ * التأجيل — من بقي متأخرًا حتى إغلاق العيادة يتحوّل وحده إلى "لم يحضر".
+ */
+export async function markAsLate(doctorUserId: string, appointmentId: string) {
+  const doctor = await requireDoctor(doctorUserId);
+
+  const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+  if (!appointment) throw ApiError.notFound("الموعد غير موجود.");
+  if (appointment.doctorId !== doctor.id) throw ApiError.forbidden();
+
+  const allowed: AppointmentStatus[] = [AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS, AppointmentStatus.LATE];
+  if (!allowed.includes(appointment.status)) {
+    throw ApiError.badRequest("لا يمكن تسجيل هذا الموعد كمتأخر في حالته الحالية.");
+  }
+
+  return prisma.appointment.update({
+    where: { id: appointmentId },
+    data: {
+      status: AppointmentStatus.LATE,
+      skipCredits: QUEUE_DEFER_SKIPS,
+      deferredCount: { increment: 1 },
+    },
+    include: QUEUE_INCLUDE,
+  });
 }

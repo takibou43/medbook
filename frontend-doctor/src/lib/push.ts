@@ -1,13 +1,16 @@
 import { api } from "./api";
 
 // مفتاح VAPID العام يصل بصيغة base64url، وواجهة PushManager تطلبه بايتات خامًا.
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+// نُرجِع ArrayBuffer وليس Uint8Array لأن تعريفات TypeScript الحديثة ترفض Uint8Array<ArrayBufferLike>
+// في خانة applicationServerKey (تقبل BufferSource فقط)، وهذا ما أوقف بناء الموقع أول مرة.
+function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = window.atob(base64);
-  const output = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
-  return output;
+  const buffer = new ArrayBuffer(raw.length);
+  const view = new Uint8Array(buffer);
+  for (let i = 0; i < raw.length; i += 1) view[i] = raw.charCodeAt(i);
+  return buffer;
 }
 
 export function pushSupported(): boolean {
@@ -52,7 +55,7 @@ export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
     existing ??
     (await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(publicKey),
+      applicationServerKey: urlBase64ToArrayBuffer(publicKey),
     }));
 
   const json = subscription.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };

@@ -53,5 +53,12 @@ export const env = {
     vapidSubject: process.env.VAPID_SUBJECT ?? "mailto:support@medbook.dz",
   },
 
+  // فترة التجربة المجانية للأطباء: كل طبيب يُفتح له الاشتراك تلقائيًا حتى هذا التاريخ ثم
+  // يتوقف وحده. يُضبط من متغير بيئة حتى تمديد التجربة لا يحتاج تعديل كود ولا إعادة نشر.
+  // اتركه فارغًا (TRIAL_ENDS_AT="") لإلغاء التجربة نهائيًا والعودة إلى التفعيل اليدوي.
+  trial: {
+    endsAt: process.env.TRIAL_ENDS_AT ?? "2026-12-31",
+  },
+
   isProd: (process.env.NODE_ENV ?? "development") === "production",
 };

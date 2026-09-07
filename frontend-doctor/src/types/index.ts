@@ -61,6 +61,8 @@ export interface Doctor {
   photoUrl?: string | null;
   verificationStatus: VerificationStatus;
   subscriptionStatus?: SubscriptionStatus;
+  // تاريخ انتهاء الاشتراك (أو التجربة المجانية) — نعرض منه عدّ الأيام المتبقية للطبيب.
+  subscriptionExpiresAt?: string | null;
   avgRating: number;
   reviewsCount: number;
   schedules?: DoctorSchedule[];

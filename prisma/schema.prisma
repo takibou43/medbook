@@ -29,6 +29,10 @@ enum Gender {
 enum AppointmentStatus {
   PENDING
   CONFIRMED
+  // المريض الجالس الآن أمام الطبيب (نودي عليه ودخل).
+  IN_PROGRESS
+  // نودي عليه فلم يستجب: لا يُشطب، بل ينتظر في قائمة "متأخر" ويُعاد نداؤه لاحقًا.
+  LATE
   COMPLETED
   CANCELLED
   NO_SHOW
@@ -83,6 +87,7 @@ model User {
   favorites       Favorite[]
   aiConversations AiConversation[]
   refreshTokens   RefreshToken[]
+  pushSubscriptions PushSubscription[]
 
   @@map("users")
 }
@@ -277,6 +282,14 @@ model Appointment {
   // آخر وقت أُرسل فيه تذكير SMS تلقائي للمريض قبل موعده — null يعني لم يُرسل بعد.
   // نستعملها لتفادي إرسال أكثر من تذكير واحد لنفس الموعد.
   reminderSentAt DateTime?
+  // ---- إدارة طابور العيادة اليومي ----
+  // وقت مناداة المريض من طرف الطبيب (آخر مناداة).
+  calledAt              DateTime?
+  // كم مرة نودي عليه فلم يستجب فأُجّل — للإحصاء ولتمييز المتأخر المتكرر.
+  deferredCount         Int       @default(0)
+  // عدد المرضى الذين يجب أن يُنادَوا قبل إعادة نداء هذا المتأخر (يُضبط على 2 عند التأجيل
+  // ويُنقص بواحد مع كل مناداة، فيعود دوره تلقائيًا بعد مريضين).
+  skipCredits           Int       @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -402,4 +415,23 @@ model AuditLog {
 
   @@index([userId])
   @@map("audit_logs")
+}
+
+// ---------------- Web Push ----------------
+
+// اشتراك متصفح واحد في إشعارات Push (لكل جهاز/متصفح سجل مستقل، فقد يستعمل الطبيب
+// هاتفه وحاسوبه معًا). endpoint فريد لأنه هو معرّف الاشتراك لدى خدمة الدفع في المتصفح.
+// عند رفض الخدمة للاشتراك (410/404) نحذف السجل تلقائيًا لأنه لم يعد صالحًا.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

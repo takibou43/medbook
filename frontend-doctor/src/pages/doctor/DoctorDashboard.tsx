@@ -96,7 +96,7 @@ export default function DoctorDashboard() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="leading-relaxed">
             {daysLeft > 0
-              ? "اشتراكك المجاني ينتهي يوم " + validEnd.toLocaleDateString("ar-DZ", { day: "numeric", month: "long", year: "numeric" }) + " — متبقٍ " + daysLeft + (daysLeft === 1 ? " يوم" : " يومًا") + ". بعده يتوقف ظهورك للمرضى حتى تجديد الاشتراك."
+              ? "اشتراكك المجاني ينتهي يوم " + validEnd.toLocaleDateString("ar-DZ", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) + " — متبقٍ " + daysLeft + (daysLeft === 1 ? " يوم" : " يومًا") + ". بعده يتوقف ظهورك للمرضى حتى تجديد الاشتراك."
               : "انتهت مدة اشتراكك المجاني. تواصل مع إدارة المنصة لتجديد الاشتراك والعودة إلى الظهور للمرضى."}
           </p>
         </div>

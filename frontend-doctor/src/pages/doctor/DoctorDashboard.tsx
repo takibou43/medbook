@@ -83,8 +83,25 @@ export default function DoctorDashboard() {
     };
   }
 
+  // عدّ الأيام المتبقية من الاشتراك (أو التجربة المجانية). نعرض التنبيه طوال المدة لا في
+  // آخر أيامها فقط، حتى يعرف الطبيب منذ اليوم الأول أن المدة محدودة ولا يُفاجأ بتوقف ظهوره.
+  const subscriptionEndsAt = user?.doctor?.subscriptionExpiresAt ? new Date(user.doctor.subscriptionExpiresAt) : null;
+  const validEnd = subscriptionEndsAt && !isNaN(subscriptionEndsAt.getTime()) ? subscriptionEndsAt : null;
+  const daysLeft = validEnd ? Math.max(0, Math.ceil((validEnd.getTime() - Date.now()) / 86400000)) : null;
+
   return (
     <div className="space-y-6">
+      {daysLeft !== null && validEnd && (
+        <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p className="leading-relaxed">
+            {daysLeft > 0
+              ? "اشتراكك المجاني ينتهي يوم " + validEnd.toLocaleDateString("ar-DZ", { day: "numeric", month: "long", year: "numeric" }) + " — متبقٍ " + daysLeft + (daysLeft === 1 ? " يوم" : " يومًا") + ". بعده يتوقف ظهورك للمرضى حتى تجديد الاشتراك."
+              : "انتهت مدة اشتراكك المجاني. تواصل مع إدارة المنصة لتجديد الاشتراك والعودة إلى الظهور للمرضى."}
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold text-slate-900">لوحة تحكم الطبيب</h1>
         {stats && <VerificationBadge status={stats.verificationStatus} />}

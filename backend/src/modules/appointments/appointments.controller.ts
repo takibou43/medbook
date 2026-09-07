@@ -27,3 +27,20 @@ export const cancel = asyncHandler(async (req: Request, res: Response) => {
   const updated = await service.cancelByPatient(req.user!.id, req.params.id);
   res.json({ success: true, data: updated });
 });
+
+// ---- طابور العيادة اليومي (للطبيب فقط) ----
+
+export const queue = asyncHandler(async (req: Request, res: Response) => {
+  const data = await service.getQueueForDoctor(req.user!.id);
+  res.json({ success: true, data });
+});
+
+export const callNext = asyncHandler(async (req: Request, res: Response) => {
+  const data = await service.callNextPatient(req.user!.id);
+  res.json({ success: true, data });
+});
+
+export const markLate = asyncHandler(async (req: Request, res: Response) => {
+  const data = await service.markAsLate(req.user!.id, req.params.id);
+  res.json({ success: true, data });
+});

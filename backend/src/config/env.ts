@@ -44,5 +44,14 @@ export const env = {
     senderId: process.env.SMS_SENDER_ID ?? "MedBook",
   },
 
+  // إعدادات إشعارات المتصفح (Web Push). تُولّد مفاتيح VAPID مرة واحدة وتُضبط في متغيرات
+  // بيئة الخادم. إن تُركت فارغة تُعطّل الإشعارات بهدوء دون أن يتأثر أي جزء آخر من النظام.
+  // المفتاح الخاص سرٌّ ولا يُوضع أبدًا في المستودع — فقط في متغيرات البيئة لدى مزوّد الاستضافة.
+  push: {
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? "",
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? "",
+    vapidSubject: process.env.VAPID_SUBJECT ?? "mailto:support@medbook.dz",
+  },
+
   isProd: (process.env.NODE_ENV ?? "development") === "production",
 };

@@ -33,3 +33,48 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
   }
 });
+
+// ---- إشعارات المتصفح (Web Push) ----
+
+// الخادم يرسل JSON فيه title وbody، ونصّ محايد بلا اسم المريض حتى لا تظهر بيانات
+// مرضى على شاشة قفل قد يراها من بجانب الطبيب. إن وصل الإشعار فارغًا أو تالفًا نعرض نصًا افتراضيًا.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = {};
+  }
+
+  const title = data.title || "MedBook";
+  const options = {
+    body: data.body || "افتح اللوحة لعرض التفاصيل.",
+    icon: "/logo.svg",
+    badge: "/logo.svg",
+    dir: "rtl",
+    lang: "ar",
+    tag: data.tag || "medbook",
+    renotify: true,
+    data: { url: data.url || "/" },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// الضغط على الإشعار: نعيد استعمال نافذة مفتوحة للوحة إن وجدت بدل فتح نافذة جديدة في كل مرة.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) {
+          client.navigate(target).catch(() => undefined);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    })
+  );
+});

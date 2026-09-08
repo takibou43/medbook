@@ -54,10 +54,30 @@ async function bootstrapAdminUser() {
 // الذي سجّل لتوّه دون انتظار تدخلك، وحتى تتوقف الاشتراكات وحدها لحظة انتهاء التجربة.
 const TRIAL_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
+// إبقاء الخادم مستيقظًا: خطة الاستضافة المجانية تُنيم الخدمة بعد نحو 15 دقيقة بلا طلبات،
+// فيصير أول فتح للموقع بعدها بطيئًا (قيسنا 24 ثانية). المهمة المجدولة في GitHub Actions
+// لم تكفِ وحدها لأن GitHub يؤخّر الجداول القصيرة كثيرًا (قست الفواصل الفعلية: ساعتان إلى خمس).
+// لذلك يطرق الخادم نفسه عبر عنوانه العام كل 10 دقائق فيبقى مستيقظًا، وتبقى مهمة GitHub
+// احتياطيًا لإيقاظه إن نام فعلًا (فالنائم لا يستطيع طرق نفسه). RENDER_EXTERNAL_URL تضبطها منصة الاستضافة تلقائيًا.
+const SELF_PING_INTERVAL_MS = 10 * 60 * 1000;
+
+function startSelfPing() {
+  const baseUrl = process.env.RENDER_EXTERNAL_URL;
+  if (!baseUrl) return;
+
+  setInterval(() => {
+    fetch(baseUrl + "/health").catch(() => undefined);
+  }, SELF_PING_INTERVAL_MS);
+
+  console.log("⏰ تفعيل الطرق الذاتي كل 10 دقائق لمنع نوم الخادم.");
+}
+
 Promise.all([grandfatherExistingDoctors(), bootstrapAdminUser(), syncTrialSubscriptions()]).finally(() => {
   setInterval(() => {
     void syncTrialSubscriptions();
   }, TRIAL_SYNC_INTERVAL_MS);
+
+  startSelfPing();
 
   app.listen(env.port, () => {
     console.log(`🩺 MedBook API listening on http://localhost:${env.port} (${env.nodeEnv})`);

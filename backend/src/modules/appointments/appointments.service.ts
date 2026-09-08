@@ -136,19 +136,27 @@ export async function autoExpireStaleAppointments(doctorId: string) {
       status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS] },
       date: { lte: algeriaTodayUTCMidnight() },
     },
-    select: { id: true, date: true },
+    select: { id: true, date: true, status: true },
   });
 
-  const toExpire = candidates
-    .filter((a) => {
-      const closing = closingTimeForDate(a.date, doctor.schedules);
-      // يوم بلا فترات عمل معروفة لذلك التاريخ: لا نتركه معلّقًا للأبد، نعتبره منتهيًا بنهاية اليوم.
-      return closing ? isPast(a.date, closing) : isPast(a.date, "23:59");
-    })
-    .map((a) => a.id);
+  const due = candidates.filter((a) => {
+    const closing = closingTimeForDate(a.date, doctor.schedules);
+    // يوم بلا فترات عمل معروفة لذلك التاريخ: لا نتركه معلّقًا للأبد، نعتبره منتهيًا بنهاية اليوم.
+    return closing ? isPast(a.date, closing) : isPast(a.date, "23:59");
+  });
 
-  if (toExpire.length > 0) {
-    await prisma.appointment.updateMany({ where: { id: { in: toExpire } }, data: { status: AppointmentStatus.NO_SHOW } });
+  // من كان بالداخل عند إغلاق العيادة (IN_PROGRESS) فقد نودي عليه ودخل فعلًا على الطبيب،
+  // فنعتبر موعده مكتملًا لا غيابًا. وسمُه بـ"لم يحضر" ظلمٌ له ويرفع عدّاد غيابه الذي قد
+  // يمنعه من الحجز كضيف لاحقًا (الحد ثلاث مرات) — وكل ذلك لمجرد أن الطبيب نسي زر الإنهاء.
+  const seen = due.filter((a) => a.status === AppointmentStatus.IN_PROGRESS).map((a) => a.id);
+  const missed = due.filter((a) => a.status !== AppointmentStatus.IN_PROGRESS).map((a) => a.id);
+
+  if (seen.length > 0) {
+    await prisma.appointment.updateMany({ where: { id: { in: seen } }, data: { status: AppointmentStatus.COMPLETED } });
+  }
+
+  if (missed.length > 0) {
+    await prisma.appointment.updateMany({ where: { id: { in: missed } }, data: { status: AppointmentStatus.NO_SHOW } });
   }
 
   // حذف نهائي لمواعيد "لم يحضر" التي مضى على تاريخها أكثر من 10 أيام — تبقى ظاهرة

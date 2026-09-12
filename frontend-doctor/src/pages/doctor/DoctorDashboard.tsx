@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, CalendarCheck, CalendarDays, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Printer, AlertTriangle, Wallet } from "lucide-react";
+import { CalendarClock, CalendarCheck, CalendarDays, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Download, Printer, AlertTriangle, Wallet } from "lucide-react";
 import { api } from "../../lib/api";
 import { StatCard } from "../../components/StatCard";
 import { Spinner } from "../../components/ui/States";
@@ -16,6 +17,22 @@ const PATIENT_SITE_URL = "https://medbook-alpha.vercel.app";
 function algeriaTodayIso(): string {
   const algeriaNow = new Date(Date.now() + 60 * 60000);
   return algeriaNow.toISOString().slice(0, 10);
+}
+
+/**
+ * رابط صورة رمز QR. يُرمَّز داخله رابط الحجز العام للطبيب فقط — لا اسم مريض ولا رقم
+ * هاتف ولا أي بيانات طبية ولا رمز دخول. ثابت ما دام معرّف الطبيب العام ثابتًا، فلا
+ * يتغيّر عند تعديل اسم الطبيب أو بياناته. نستعمل خدمة التوليد نفسها المستخدمة أصلًا
+ * في المشروع (بلا مكتبة جديدة).
+ */
+function qrUrlFor(bookingUrl: string, format: "png" | "svg", size: number, margin: number): string {
+  const params = new URLSearchParams({
+    size: `${size}x${size}`,
+    margin: String(margin),
+    format,
+    data: bookingUrl,
+  });
+  return `https://api.qrserver.com/v1/create-qr-code/?${params.toString()}`;
 }
 
 /** نفس تنسيق العملة المستعمل في بقية اللوحة. */
@@ -57,6 +74,8 @@ function RevenueCard({ today, month, fee }: { today: number; month: number; fee:
 export default function DoctorDashboard() {
   const { user } = useAuth();
   const { showToast } = useToast();
+  // الصيغة الجاري تحميلها حاليًا — لمنع النقر المتكرر وإظهار حالة الزر.
+  const [qrDownloading, setQrDownloading] = useState<"png" | "svg" | null>(null);
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ["doctor-dashboard"],
@@ -71,9 +90,7 @@ export default function DoctorDashboard() {
 
   const doctorId = user?.doctor?.id;
   const bookingUrl = doctorId ? `${PATIENT_SITE_URL}/?doctor=${doctorId}` : null;
-  const qrImageUrl = bookingUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=8&data=${encodeURIComponent(bookingUrl)}`
-    : null;
+  const qrImageUrl = bookingUrl ? qrUrlFor(bookingUrl, "png", 320, 8) : null;
 
   async function copyBookingLink() {
     if (!bookingUrl) return;
@@ -82,6 +99,34 @@ export default function DoctorDashboard() {
       showToast("تم نسخ رابط الحجز.", "success");
     } catch {
       showToast("تعذّر نسخ الرابط.", "error");
+    }
+  }
+
+  /**
+   * تحميل الرمز كملف قابل للطباعة. الصورة تُجلب كـ blob لأن السمة download لا تعمل على
+   * رابط من نطاق آخر — والخدمة تُرسل Access-Control-Allow-Origin: * فينجح الجلب.
+   * PNG بدقة 1024 للطباعة، وSVG متجهي لا يفقد الحدّة في أي مقاس.
+   */
+  async function downloadQr(format: "png" | "svg") {
+    if (!bookingUrl || !doctorId || qrDownloading) return;
+    setQrDownloading(format);
+    try {
+      const res = await fetch(qrUrlFor(bookingUrl, format, format === "png" ? 1024 : 512, 16));
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = `madbook-qr-${doctorId}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(href);
+      showToast(`تم تحميل الرمز بصيغة ${format.toUpperCase()}.`, "success");
+    } catch {
+      showToast("تعذّر تحميل الرمز. تحقّق من اتصالك بالإنترنت وأعد المحاولة.", "error");
+    } finally {
+      setQrDownloading(null);
     }
   }
 
@@ -108,8 +153,8 @@ export default function DoctorDashboard() {
       "<h1>MedBook" + (doctorName ? " — " + doctorName : "") + "</h1>" +
       "<p class='sub'>امسح الرمز لحجز موعد</p>" +
       "<img src='" + qrImageUrl + "' alt='QR' />" +
-      "<p class='instructions'>افتح كاميرا هاتفك ووجّهها نحو الرمز، ثم اضغط على الرابط الذي يظهر لحجز موعدك مباشرة.</p>" +
-      "<p class='brand'>MedBook</p>" +
+      "<p class='instructions'>لحجز موعد، امسح الرمز بكاميرا هاتفك.</p>" +
+      "<p class='brand' dir='ltr'>" + bookingUrl + "</p>" +
       "</body></html>";
     printWindow.document.write(html);
     printWindow.document.close();
@@ -179,35 +224,68 @@ export default function DoctorDashboard() {
         />
       </div>
 
-      {qrImageUrl && (
-        <div className="card flex flex-col items-center gap-4 p-6 text-center sm:flex-row sm:items-center sm:text-right">
-          <img src={qrImageUrl} alt="رمز QR للحجز" className="h-40 w-40 shrink-0 rounded-xl border border-slate-200 bg-white p-2" />
-          <div className="flex-1 space-y-2">
-            <p className="flex items-center justify-center gap-1.5 font-bold text-slate-800 sm:justify-start">
-              <QrCode className="h-4 w-4" /> رمز QR الخاص بك
-            </p>
-            <p className="text-sm text-slate-500">
-              اطبع هذا الرمز وضعه في عيادتك — يفتح المريض كاميرا هاتفه، يمسح الرمز، فيُختار اسمك تلقائيًا في صفحة الحجز ويكتب
-              بياناته مباشرة دون بحث.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-              <button
-                type="button"
-                onClick={copyBookingLink}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-primary-300"
-              >
-                <Copy className="h-3.5 w-3.5" /> نسخ رابط الحجز
-              </button>
-              <button
-                type="button"
-                onClick={printQrCode}
-                className="flex items-center gap-1.5 rounded-xl border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 transition hover:border-primary-300"
-              >
-                <Printer className="h-3.5 w-3.5" /> طباعة الرمز
-              </button>
+      {qrImageUrl && bookingUrl && (
+        <section className="card p-4 sm:p-6" aria-label="رمز الحجز QR">
+          <h2 className="flex items-center gap-1.5 font-bold text-slate-800">
+            <QrCode className="h-4 w-4 shrink-0" /> رمز الحجز QR
+          </h2>
+
+          <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-6">
+            <figure className="shrink-0 text-center">
+              <img
+                src={qrImageUrl}
+                alt="رمز QR لصفحة الحجز"
+                className="h-44 w-44 rounded-xl border border-slate-200 bg-white p-3 sm:h-48 sm:w-48"
+              />
+              <figcaption className="mt-1.5 text-[11px] text-slate-500">امسح الرمز لفتح صفحة الحجز</figcaption>
+            </figure>
+
+            <div className="min-w-0 flex-1 space-y-3 text-center sm:text-right">
+              <p className="text-sm leading-relaxed text-slate-600">
+                اطبع هذا الرمز وضعه في بوابة العيادة، ليتمكن المرضى من تصويره وفتح صفحة الحجز مباشرة.
+              </p>
+
+              <p dir="ltr" className="truncate rounded-xl bg-slate-50 px-3 py-2 text-left text-xs text-slate-500" title={bookingUrl}>
+                {bookingUrl}
+              </p>
+
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+                <button
+                  type="button"
+                  onClick={() => downloadQr("png")}
+                  disabled={qrDownloading !== null}
+                  className="flex items-center gap-1.5 rounded-xl bg-primary-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-700 disabled:opacity-60"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {qrDownloading === "png" ? "جارٍ التحميل..." : "تحميل رمز QR (PNG)"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadQr("svg")}
+                  disabled={qrDownloading !== null}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-primary-300 disabled:opacity-60"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {qrDownloading === "svg" ? "جارٍ التحميل..." : "SVG"}
+                </button>
+                <button
+                  type="button"
+                  onClick={copyBookingLink}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-primary-300"
+                >
+                  <Copy className="h-3.5 w-3.5" /> نسخ الرابط
+                </button>
+                <button
+                  type="button"
+                  onClick={printQrCode}
+                  className="flex items-center gap-1.5 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700 transition hover:border-primary-300"
+                >
+                  <Printer className="h-3.5 w-3.5" /> طباعة الرمز
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

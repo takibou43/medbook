@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, CalendarCheck, CalendarDays, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Printer, AlertTriangle, Wallet } from "lucide-react";
 import { api } from "../../lib/api";
 import { StatCard } from "../../components/StatCard";
-import { Card } from "../../components/ui/Card";
 import { Spinner } from "../../components/ui/States";
 import { VerificationBadge } from "../../components/ui/Badge";
 import { useAuth } from "../../context/AuthContext";
@@ -30,25 +29,28 @@ function formatDzd(value: number): string {
  */
 function RevenueCard({ today, month, fee }: { today: number; month: number; fee: number }) {
   return (
-    <Card className="flex items-center gap-4">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-green-100 text-green-700">
-        <Wallet className="h-6 w-6" />
+    <section className="card p-4 sm:p-5" aria-label="الدخل التقديري">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-100 text-green-700">
+          <Wallet className="h-[18px] w-[18px]" />
+        </span>
+        <h2 className="text-base font-bold text-slate-800">الدخل التقديري</h2>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-slate-500">الدخل التقديري</p>
-        <div className="mt-1 grid grid-cols-2 gap-x-3">
-          <div className="min-w-0">
-            <p className="truncate text-lg font-extrabold tabular-nums text-slate-900">{formatDzd(today)}</p>
-            <p className="text-xs text-slate-400">اليوم</p>
-          </div>
-          <div className="min-w-0 border-r border-slate-100 pr-3">
-            <p className="truncate text-lg font-extrabold tabular-nums text-slate-900">{formatDzd(month)}</p>
-            <p className="text-xs text-slate-400">هذا الشهر</p>
-          </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:gap-4">
+        <div className="min-w-0 rounded-xl bg-green-50 p-3">
+          <p className="text-xs font-semibold text-green-800">اليوم</p>
+          <p className="mt-0.5 truncate text-lg font-extrabold tabular-nums text-slate-900 sm:text-2xl">{formatDzd(today)}</p>
         </div>
-        {fee === 0 && <p className="mt-1.5 text-[11px] leading-4 text-amber-600">أضف سعر الاستشارة في إعدادات ملفك لحساب الدخل.</p>}
+        <div className="min-w-0 rounded-xl bg-green-50 p-3">
+          <p className="text-xs font-semibold text-green-800">هذا الشهر</p>
+          <p className="mt-0.5 truncate text-lg font-extrabold tabular-nums text-slate-900 sm:text-2xl">{formatDzd(month)}</p>
+        </div>
       </div>
-    </Card>
+
+      <p className="mt-2.5 text-[11px] leading-4 text-slate-500">يُحسب حسب المواعيد المكتملة وسعر الاستشارة الحالي.</p>
+      {fee === 0 && <p className="mt-1 text-[11px] leading-4 text-amber-700">أضف سعر الاستشارة في إعدادات ملفك لحساب الدخل.</p>}
+    </section>
   );
 }
 
@@ -147,25 +149,33 @@ export default function DoctorDashboard() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <RevenueCard
+        today={stats?.estimatedRevenueToday ?? 0}
+        month={stats?.estimatedRevenueMonth ?? 0}
+        fee={stats?.consultationFee ?? 0}
+      />
+
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
         <StatCard label="مواعيد اليوم" value={stats?.todayAppointments ?? 0} icon={CalendarClock} to={`/appointments?status=ALL&date=${algeriaTodayIso()}`} />
         <StatCard label="المواعيد القادمة" value={stats?.upcomingAppointments ?? 0} icon={CalendarCheck} to="/appointments?status=CONFIRMED" />
-        <StatCard label="إجمالي المرضى" value={stats?.totalPatients ?? 0} icon={Users} to="/patients" />
+        <StatCard label="إجمالي المرضى" value={stats?.totalPatients ?? 0} sub="مرضى مختلفون" icon={Users} to="/patients" />
         <StatCard label="المواعيد المكتملة" value={stats?.completedAppointments ?? 0} icon={CheckCircle2} tone="green" to="/appointments?status=COMPLETED" />
         <StatCard label="المواعيد الملغاة" value={stats?.cancelledAppointments ?? 0} icon={XCircle} tone="red" to="/appointments?status=CANCELLED" />
-        <StatCard label="متوسط التقييم" value={`${(stats?.avgRating ?? 0).toFixed(1)} (${stats?.reviewsCount ?? 0})`} icon={Star} tone="amber" />
+        <StatCard
+          label="متوسط التقييم"
+          value={`${(stats?.avgRating ?? 0).toFixed(1)} / 5`}
+          sub={(stats?.reviewsCount ?? 0) > 0 ? `من أصل ${stats?.reviewsCount} تقييم` : "لا توجد تقييمات بعد"}
+          icon={Star}
+          tone="amber"
+        />
         <StatCard label="مواعيد هذا الشهر" value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} to="/appointments?status=ALL" />
         <StatCard
           label="نسبة الغياب"
           value={`${stats?.noShowRate ?? 0}%`}
+          sub="من المواعيد المنتهية"
           icon={AlertTriangle}
           tone={((stats?.noShowRate ?? 0) > 20) ? "red" : "amber"}
           to="/appointments?status=NO_SHOW"
-        />
-        <RevenueCard
-          today={stats?.estimatedRevenueToday ?? 0}
-          month={stats?.estimatedRevenueMonth ?? 0}
-          fee={stats?.consultationFee ?? 0}
         />
       </div>
 

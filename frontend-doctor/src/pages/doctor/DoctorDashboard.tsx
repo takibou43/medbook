@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarClock, CalendarCheck, CalendarDays, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Printer, AlertTriangle, Wallet } from "lucide-react";
 import { api } from "../../lib/api";
 import { StatCard } from "../../components/StatCard";
+import { Card } from "../../components/ui/Card";
 import { Spinner } from "../../components/ui/States";
 import { VerificationBadge } from "../../components/ui/Badge";
 import { useAuth } from "../../context/AuthContext";
@@ -16,6 +17,39 @@ const PATIENT_SITE_URL = "https://medbook-alpha.vercel.app";
 function algeriaTodayIso(): string {
   const algeriaNow = new Date(Date.now() + 60 * 60000);
   return algeriaNow.toISOString().slice(0, 10);
+}
+
+/** نفس تنسيق العملة المستعمل في بقية اللوحة. */
+function formatDzd(value: number): string {
+  return `${(value ?? 0).toLocaleString("ar-DZ")} دج`;
+}
+
+/**
+ * الدخل التقديري في بطاقة واحدة بقيمتين: اليوم وهذا الشهر. القيمتان تأتيان من الخادم
+ * محسوبتين من المواعيد المكتملة (COMPLETED) وحدها × سعر استشارة الطبيب.
+ */
+function RevenueCard({ today, month, fee }: { today: number; month: number; fee: number }) {
+  return (
+    <Card className="flex items-center gap-4">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-green-100 text-green-700">
+        <Wallet className="h-6 w-6" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-slate-500">الدخل التقديري</p>
+        <div className="mt-1 grid grid-cols-2 gap-x-3">
+          <div className="min-w-0">
+            <p className="truncate text-lg font-extrabold tabular-nums text-slate-900">{formatDzd(today)}</p>
+            <p className="text-xs text-slate-400">اليوم</p>
+          </div>
+          <div className="min-w-0 border-r border-slate-100 pr-3">
+            <p className="truncate text-lg font-extrabold tabular-nums text-slate-900">{formatDzd(month)}</p>
+            <p className="text-xs text-slate-400">هذا الشهر</p>
+          </div>
+        </div>
+        {fee === 0 && <p className="mt-1.5 text-[11px] leading-4 text-amber-600">أضف سعر الاستشارة في إعدادات ملفك لحساب الدخل.</p>}
+      </div>
+    </Card>
+  );
 }
 
 export default function DoctorDashboard() {
@@ -128,7 +162,11 @@ export default function DoctorDashboard() {
           tone={((stats?.noShowRate ?? 0) > 20) ? "red" : "amber"}
           to="/appointments?status=NO_SHOW"
         />
-        <StatCard label="الدخل التقديري" value={`${(stats?.estimatedRevenue ?? 0).toLocaleString("ar-DZ")} دج`} icon={Wallet} tone="green" to="/appointments?status=COMPLETED" />
+        <RevenueCard
+          today={stats?.estimatedRevenueToday ?? 0}
+          month={stats?.estimatedRevenueMonth ?? 0}
+          fee={stats?.consultationFee ?? 0}
+        />
       </div>
 
       {qrImageUrl && (

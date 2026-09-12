@@ -82,8 +82,20 @@ export async function getDashboardStats(userId: string) {
   endOfDay.setUTCHours(23, 59, 59, 999);
   // بداية الشهر الحالي (بتوقيت التخزين UTC نفسه المستعمل لحقل date) — لإحصائية "مواعيد هذا الشهر".
   const monthStart = new Date(Date.UTC(startOfDay.getUTCFullYear(), startOfDay.getUTCMonth(), 1));
+  // آخر لحظة من الشهر الحالي — الدخل الشهري يُحسب على الشهر كاملًا لا حتى اليوم فقط.
+  const monthEnd = new Date(Date.UTC(startOfDay.getUTCFullYear(), startOfDay.getUTCMonth() + 1, 0, 23, 59, 59, 999));
 
-  const [todayCount, upcomingCount, completedCount, cancelledCount, noShowCount, monthlyCount, allForPatientsCount] = await Promise.all([
+  const [
+    todayCount,
+    upcomingCount,
+    completedCount,
+    cancelledCount,
+    noShowCount,
+    monthlyCount,
+    allForPatientsCount,
+    completedTodayCount,
+    completedMonthCount,
+  ] = await Promise.all([
     prisma.appointment.count({ where: { doctorId: doctor.id, date: { gte: startOfDay, lte: endOfDay } } }),
     prisma.appointment.count({
       where: { doctorId: doctor.id, date: { gt: endOfDay }, status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] } },
@@ -95,6 +107,15 @@ export async function getDashboardStats(userId: string) {
     // لا يمكن الاعتماد على distinct:["patientId"] وحده لأن الحجوزات كضيف تحمل patientId فارغًا (null)
     // وستُحسب كلها كـ "مريض واحد" فقط؛ لذا نجلب المعرّفات ونحسب التفرّد يدويًا (مريض حقيقي أو رقم هاتف ضيف).
     prisma.appointment.findMany({ where: { doctorId: doctor.id }, select: { patientId: true, guestPhone: true, id: true } }),
+    // الدخل التقديري يُحسب من المواعيد المكتملة (COMPLETED) وحدها — لا من المؤكّدة ولا
+    // التي بالداخل الآن ولا الملغاة ولا "لم يحضر". النطاق الزمني بنفس اصطلاح حقل date
+    // (تاريخ تقويمي مخزَّن عند 00:00 UTC محسوبًا بتوقيت الجزائر).
+    prisma.appointment.count({
+      where: { doctorId: doctor.id, status: AppointmentStatus.COMPLETED, date: { gte: startOfDay, lte: endOfDay } },
+    }),
+    prisma.appointment.count({
+      where: { doctorId: doctor.id, status: AppointmentStatus.COMPLETED, date: { gte: monthStart, lte: monthEnd } },
+    }),
   ]);
 
   const uniquePatientKeys = new Set(allForPatientsCount.map((a) => a.patientId ?? `guest:${a.guestPhone ?? a.id}`));
@@ -106,7 +127,10 @@ export async function getDashboardStats(userId: string) {
 
   // تقدير الدخل: عدد المواعيد المكتملة × سعر الاستشارة الحالي للطبيب. تقدير تقريبي فقط
   // (لا يعكس تغييرات سعر الاستشارة عبر الزمن ولا نأخذ به دفعات فعلية — لا بوابة دفع بعد).
-  const estimatedRevenue = completedCount * (doctor.consultationFee ?? 0);
+  const consultationFee = doctor.consultationFee ?? 0;
+  const estimatedRevenue = completedCount * consultationFee;
+  const estimatedRevenueToday = completedTodayCount * consultationFee;
+  const estimatedRevenueMonth = completedMonthCount * consultationFee;
 
   return {
     todayAppointments: todayCount,
@@ -117,6 +141,11 @@ export async function getDashboardStats(userId: string) {
     noShowRate,
     monthlyAppointments: monthlyCount,
     estimatedRevenue,
+    estimatedRevenueToday,
+    estimatedRevenueMonth,
+    completedToday: completedTodayCount,
+    completedThisMonth: completedMonthCount,
+    consultationFee,
     totalPatients: uniquePatientKeys.size,
     avgRating: doctor.avgRating,
     reviewsCount: doctor.reviewsCount,

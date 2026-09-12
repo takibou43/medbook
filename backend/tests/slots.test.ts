@@ -10,10 +10,14 @@ const weeklySchedule: ScheduleBlock[] = [
   { dayOfWeek: 4, startTime: "08:00", endTime: "12:00", isException: false, exceptionDate: null, isOff: false },
 ];
 
+// ملاحظة مهمة: كل منطق التوفّر في src/lib/slots.ts يعمل بتوقيت UTC (getUTCDay)، لأن الخادم
+// يستقبل التاريخ كسلسلة "YYYY-MM-DD" ويحوّله إلى منتصف ليل UTC: new Date(date + "T00:00:00Z").
+// لذلك يجب أن تبني الاختبارات تواريخها بنفس الطريقة، وإلا فشلت على أي جهاز خارج UTC
+// (الجزائر UTC+1 مثلًا: منتصف ليل محلي = 23:00 من اليوم السابق بتوقيت UTC → انزياح يوم كامل).
 function nextDateForDay(targetDow: number): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + ((7 + targetDow - d.getDay()) % 7 || 7)); // أقرب يوم قادم من نفس الأسبوع التالي لتفادي فترات الماضي
+  const now = new Date();
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+  d.setUTCDate(d.getUTCDate() + ((7 + targetDow - d.getUTCDay()) % 7 || 7)); // أقرب يوم قادم لتفادي فترات الماضي
   return d;
 }
 

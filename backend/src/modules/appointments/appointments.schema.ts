@@ -9,8 +9,11 @@ export const createAppointmentSchema = z.object({
   serviceIds: z.array(z.string().uuid()).optional(),
 });
 
+// IN_PROGRESS مطلوبة هنا لحالة "حضر متأخرًا": المريض الذي سُجّل غيابه ثم وصل بعد
+// دقائق يُعاد إلى IN_PROGRESS عبر هذا المسار. من يملك حق أي انتقال يبقى محكومًا
+// بـ ALLOWED_TRANSITIONS وليس بهذا المُحقِّق.
 export const updateStatusSchema = z.object({
-  status: z.enum(["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "NO_SHOW"]),
+  status: z.enum(["PENDING", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"]),
 });
 
 export type CreateAppointmentInput = z.infer<typeof createAppointmentSchema>;

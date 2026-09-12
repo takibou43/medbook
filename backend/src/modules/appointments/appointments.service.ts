@@ -233,6 +233,12 @@ export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus,
     CONFIRMED: ["IN_PROGRESS", "LATE", "COMPLETED", "CANCELLED", "NO_SHOW"],
     IN_PROGRESS: ["COMPLETED", "LATE", "CANCELLED", "NO_SHOW"],
     LATE: ["IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
+    // "لم يحضر" ليست نهاية القصة: كثيرًا ما يسجّل الطبيب الغياب بعد فوات الموعد ثم
+    // يصل المريض بعد دقائق. نسمح بإرجاعه إلى IN_PROGRESS فقط (أي "أدخله الآن")؛
+    // إرجاعه إلى CONFIRMED لا يصلح لأن autoExpireStaleAppointments يعيده إلى
+    // NO_SHOW عند أول جلب للقائمة بعد وقت إغلاق العيادة، بينما IN_PROGRESS تصبح
+    // COMPLETED عند الإغلاق — وهو الصحيح لمريض دخل فعلًا على الطبيب.
+    NO_SHOW: ["IN_PROGRESS"],
   },
   ADMIN: {
     PENDING: ["CONFIRMED", "CANCELLED"],

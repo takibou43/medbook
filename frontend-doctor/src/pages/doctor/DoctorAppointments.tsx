@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
-import { AlertTriangle, Bell, BellRing, CalendarDays, Clock3, MessageCircle, Phone, Search, X } from "lucide-react";
+import { AlertTriangle, Bell, BellRing, CalendarDays, Clock3, MessageCircle, Phone, Search, UserCheck, X } from "lucide-react";
 import { useMyAppointments, useUpdateAppointmentStatus } from "../../hooks/useAppointments";
 import { useNewAppointmentAlert, requestNotificationPermission } from "../../hooks/useNewAppointmentAlert";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
@@ -150,9 +150,13 @@ interface CardProps {
   appointment: any;
   onComplete: () => void;
   onNoShow: () => void;
+  /** وصل المريض بعد تسجيل غيابه: يُدخله الآن (IN_PROGRESS) دون أي رسالة. */
+  onArrivedLate: () => void;
+  /** طلب تحديث جارٍ — نُعطّل الإجراءات لمنع النقر المتكرر وطلبات PATCH زائدة. */
+  busy?: boolean;
 }
 
-function AppointmentCard({ appointment: a, onComplete, onNoShow }: CardProps) {
+function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy }: CardProps) {
   const phone = patientPhone(a);
   const wa = toWhatsAppNumber(phone);
   const isOpen = a.status === "CONFIRMED" || a.status === "PENDING";
@@ -215,16 +219,23 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow }: CardProps) {
                 <MessageCircle className="h-4 w-4" /> تذكير
               </a>
             )}
-            <Button onClick={onComplete}>حضر</Button>
-            <Button variant="outline" onClick={onNoShow}>
+            <Button onClick={onComplete} disabled={busy}>
+              حضر
+            </Button>
+            <Button variant="outline" onClick={onNoShow} disabled={busy}>
               لم يحضر
             </Button>
           </>
         )}
         {a.status === "NO_SHOW" && (
-          <Button variant="outline" onClick={onNoShow} title="إعادة فتح رسالة الإشعار">
-            <MessageCircle className="h-4 w-4" /> إشعار SMS
-          </Button>
+          <>
+            <Button onClick={onArrivedLate} disabled={busy} title="وصل بعد فوات موعده — أدخله الآن">
+              <UserCheck className="h-4 w-4" /> حضر متأخرًا
+            </Button>
+            <Button variant="outline" onClick={onNoShow} disabled={busy} title="إعادة فتح رسالة الإشعار">
+              <MessageCircle className="h-4 w-4" /> إشعار SMS
+            </Button>
+          </>
         )}
       </div>
     </article>
@@ -298,6 +309,20 @@ export default function DoctorAppointments() {
       startTime: a.startTime,
       alreadyNoShow: a.status === "NO_SHOW",
     });
+  }
+
+  /**
+   * وصل المريض بعد أن سُجّل غيابه: نُعيد نفس الموعد إلى IN_PROGRESS عبر نفس
+   * PATCH الحالي — بلا موعد جديد، وبلا سجل غياب جديد، وبلا أي رسالة SMS.
+   */
+  async function markArrivedLate(id: string) {
+    if (updateStatus.isPending) return;
+    try {
+      await updateStatus.mutateAsync({ id, status: "IN_PROGRESS" });
+      showToast("تم تسجيل حضوره المتأخر — هو الآن المريض الحالي.", "success");
+    } catch (err) {
+      showToast(apiErrorMessage(err), "error");
+    }
   }
 
   /** مثل changeStatus لكنه يُعيد رمي الخطأ حتى لا تفتح النافذة الرسائل عند فشل الطلب. */
@@ -400,6 +425,8 @@ export default function DoctorAppointments() {
               appointment={a}
               onComplete={() => changeStatus(a.id, "COMPLETED")}
               onNoShow={() => openNoShow(a)}
+              onArrivedLate={() => markArrivedLate(a.id)}
+              busy={updateStatus.isPending}
             />
           ))}
         </div>

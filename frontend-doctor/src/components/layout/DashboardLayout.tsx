@@ -100,7 +100,9 @@ export function DashboardLayout({ title, items }: { title: string; items: Dashbo
           </nav>
         )}
 
-        <main className="flex-1 p-4 md:p-8">
+        {/* min-w-0 + overflow-x-hidden: خط دفاع أخير حتى لا يُخرج أي عنصر عريض (رابط طويل،
+            جدول، رقم غير قابل للقصّ) الصفحة كاملة عن عرض شاشة الهاتف. */}
+        <main className="min-w-0 flex-1 overflow-x-hidden p-4 md:p-8">
           <Outlet />
         </main>
       </div>

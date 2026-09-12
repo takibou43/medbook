@@ -240,12 +240,19 @@ export default function DoctorDashboard() {
               <figcaption className="mt-1.5 text-[11px] text-slate-500">امسح الرمز لفتح صفحة الحجز</figcaption>
             </figure>
 
-            <div className="min-w-0 flex-1 space-y-3 text-center sm:text-right">
+            {/* w-full ضروري: الحاوية على الهاتف flex-col مع items-center، فبدونه يأخذ هذا
+                العمود عرض محتواه (رابط الحجز الطويل) فيتجاوز عرض الشاشة ويُحدث تمريرًا
+                أفقيًا للصفحة كاملة. */}
+            <div className="w-full min-w-0 flex-1 space-y-3 text-center sm:w-auto sm:text-right">
               <p className="text-sm leading-relaxed text-slate-600">
                 اطبع هذا الرمز وضعه في بوابة العيادة، ليتمكن المرضى من تصويره وفتح صفحة الحجز مباشرة.
               </p>
 
-              <p dir="ltr" className="truncate rounded-xl bg-slate-50 px-3 py-2 text-left text-xs text-slate-500" title={bookingUrl}>
+              <p
+                dir="ltr"
+                className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-xl bg-slate-50 px-3 py-2 text-left text-xs text-slate-500"
+                title={bookingUrl}
+              >
                 {bookingUrl}
               </p>
 

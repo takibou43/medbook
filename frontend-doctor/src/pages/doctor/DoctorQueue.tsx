@@ -7,6 +7,7 @@ import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
 import { disablePush, enablePush, isPushSubscribed, pushSupported } from "../../lib/push";
 import { useCallNext, useCallPatient, useFinishAppointment, useMarkLate, useMarkNoShow, useQueue } from "../../hooks/useQueue";
+import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { Appointment } from "../../types";
 
 // المريض قد يكون صاحب حساب أو ضيفًا حجز باسمه فقط — نعرض الاسم المتوفر أيًّا كان مصدره.
@@ -36,6 +37,30 @@ export default function DoctorQueue() {
   // حالة إشعارات هذا الجهاز تحديدًا (وليس الحساب): قد يفعّلها على هاتفه دون حاسوب العيادة.
   const [pushOn, setPushOn] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  // الموعد المعروض في نافذة «لم يحضر» + إشعار SMS من شريحة الطبيب.
+  const [noShowTarget, setNoShowTarget] = useState<NoShowTarget | null>(null);
+
+  function openNoShow(a: Appointment) {
+    setNoShowTarget({
+      id: a.id,
+      patientName: patientName(a),
+      phone: patientPhone(a),
+      date: a.date,
+      startTime: a.startTime,
+      alreadyNoShow: a.status === "NO_SHOW",
+    });
+  }
+
+  async function recordNoShow(id: string) {
+    try {
+      const res = await noShow.mutateAsync(id);
+      showToast("سُجّل كغائب.", "success");
+      return res;
+    } catch (err) {
+      showToast(apiErrorMessage(err, "تعذّر تسجيله كغائب."), "error");
+      throw err;
+    }
+  }
 
   useEffect(() => {
     isPushSubscribed().then(setPushOn).catch(() => setPushOn(false));
@@ -81,6 +106,7 @@ export default function DoctorQueue() {
 
   return (
     <div className="space-y-5">
+      <NoShowSmsDialog target={noShowTarget} onConfirm={recordNoShow} onClose={() => setNoShowTarget(null)} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-slate-900">طابور اليوم</h1>
@@ -222,8 +248,8 @@ export default function DoctorQueue() {
                     <button
                       type="button"
                       disabled={busy}
-                      title="تسجيله كغائب نهائيًا"
-                      onClick={() => run(noShow.mutateAsync(a.id), "سُجّل كغائب.", "تعذّر تسجيله كغائب.")}
+                      title="تسجيله كغائب نهائيًا + إشعاره برسالة"
+                      onClick={() => openNoShow(a)}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-white disabled:opacity-40"
                     >
                       <UserX className="h-4 w-4" />

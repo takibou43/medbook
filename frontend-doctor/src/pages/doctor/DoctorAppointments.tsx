@@ -9,6 +9,7 @@ import { Spinner, EmptyState } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
+import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { AppointmentStatus } from "../../types";
 
 const FILTERS: { label: string; value?: AppointmentStatus }[] = [
@@ -64,6 +65,8 @@ export default function DoctorAppointments() {
   const updateStatus = useUpdateAppointmentStatus();
   const { showToast } = useToast();
   const [notifOn, setNotifOn] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
+  // الموعد المعروض حاليًا في نافذة «لم يحضر» (null = النافذة مغلقة).
+  const [noShowTarget, setNoShowTarget] = useState<NoShowTarget | null>(null);
 
   // ترتيب العرض: المواعيد التي لم يفت وقتها بعد أولًا (بترتيبها الزمني كما وصل من الخادم)،
   // ثم المواعيد التي فات وقتها بعدها — هذا يمنع بقاء موعد قديم متجاوَز في أعلى القائمة.
@@ -117,8 +120,34 @@ export default function DoctorAppointments() {
     }
   }
 
+  // فتح نافذة الغياب. لا نُحدّث الحالة هنا — النافذة هي التي تؤكّد ثم تُحدّث،
+  // ومن كان أصلًا NO_SHOW تُفتح له الرسالة فقط بلا تسجيل غياب جديد.
+  function openNoShow(a: any) {
+    setNoShowTarget({
+      id: a.id,
+      patientName: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ").trim(),
+      phone: a.patient?.user?.phone ?? a.guestPhone ?? null,
+      date: a.date,
+      startTime: a.startTime,
+      alreadyNoShow: a.status === "NO_SHOW",
+    });
+  }
+
+  // نفس منطق changeStatus لكن يُعيد رمي الخطأ حتى تبقى النافذة على خطوة التأكيد عند الفشل.
+  async function recordNoShow(id: string) {
+    try {
+      const res = await updateStatus.mutateAsync({ id, status: "NO_SHOW" });
+      showToast("تم تسجيل المريض كـ «لم يحضر».", "success");
+      return res;
+    } catch (err) {
+      showToast(apiErrorMessage(err), "error");
+      throw err;
+    }
+  }
+
   return (
     <div className="space-y-6">
+      <NoShowSmsDialog target={noShowTarget} onConfirm={recordNoShow} onClose={() => setNoShowTarget(null)} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-extrabold text-slate-900">إدارة المواعيد</h1>
         <div className="flex items-center gap-3">
@@ -216,10 +245,15 @@ export default function DoctorAppointments() {
                       </a>
                     )}
                     <Button onClick={() => changeStatus(a.id, "COMPLETED")}>حضر</Button>
-                    <Button variant="outline" onClick={() => changeStatus(a.id, "NO_SHOW")}>
+                    <Button variant="outline" onClick={() => openNoShow(a)}>
                       لم يحضر
                     </Button>
                   </>
+                )}
+                {a.status === "NO_SHOW" && (
+                  <Button variant="ghost" onClick={() => openNoShow(a)} title="إعادة فتح رسالة الإشعار">
+                    <MessageCircle className="ml-1.5 h-4 w-4" /> إشعار SMS
+                  </Button>
                 )}
               </div>
             </div>

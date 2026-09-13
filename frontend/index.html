@@ -2,38 +2,35 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover: تمتدّ الواجهة تحت الشقّ العلوي وشريط الأسفل في آيفون،
+         ونعوّضها بـ safe-area في index.css حتى لا يُقصّ أي زر. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="احجز موعدك الطبي في الجزائر خلال ثوانٍ — بدون تسجيل، اختر التخصص والولاية والطبيب والوقت المناسب." />
-    <meta property="og:title" content="MedBook — مادبوك" />
-    <meta property="og:description" content="منصة رقمية جزائرية لحجز المواعيد الطبية بسهولة وأمان، بدون حاجة لإنشاء حساب." />
+    <meta property="og:title" content="مادبوك — MadBook" />
+    <meta property="og:description" content="منصة حجز وإدارة المواعيد الطبية." />
     <meta property="og:type" content="website" />
 
-    <!-- تثبيت الموقع كتطبيق على الهاتف (PWA): يظهر للمريض زر "تثبيت التطبيق"
-         في كروم على أندرويد، ويمكن إضافته إلى الشاشة الرئيسية في iOS، فيفتح بأيقونة خاصة
-         وبلا شريط متصفح. -->
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+
+    <!-- تثبيت الموقع كتطبيق (PWA) على أندرويد وآيفون والكمبيوتر. -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#187f77" />
-    <link rel="apple-touch-icon" href="/logo.svg" />
+    <!-- آيفون لا يقبل SVG كأيقونة تطبيق؛ لذلك أيقونة PNG مربّعة غير شفافة. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="MedBook" />
+    <meta name="apple-mobile-web-app-title" content="مادبوك" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <title>MedBook — مادبوك | حجز المواعيد الطبية</title>
+    <title>مادبوك — MadBook | حجز المواعيد الطبية</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      // تسجيل service worker بعد اكتمال التحميل حتى لا يزاحم أول عرض للصفحة، وفشله لا يؤثر في الموقع.
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", function () {
-          navigator.serviceWorker.register("/sw.js").catch(function () {});
-        });
-      }
-    </script>
+    <script src="/register-sw.js" defer></script>
   </body>
 </html>

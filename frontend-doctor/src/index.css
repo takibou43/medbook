@@ -55,3 +55,27 @@ body {
 .badge {
   @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium;
 }
+
+/* ===== تجربة التطبيق المثبَّت (PWA) ===== */
+
+/* منع أي تمرير أفقي ناتج عن عنصر عريض على شاشة هاتف صغيرة.
+   overflow-x: clip وليس hidden عمدًا: hidden يحوّل الصفحة إلى حاوية تمرير فتتعطّل
+   العناصر اللاصقة (sticky)، أما clip فيقصّ الزائد فقط دون أي أثر جانبي. */
+html,
+body {
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* مع viewport-fit=cover تمتدّ الصفحة تحت شريط الأسفل في آيفون؛ نعيد المسافة الآمنة
+   داخل التطبيق المثبَّت فقط، حتى لا يتغيّر شكل اللوحة في المتصفح العادي. */
+@media all and (display-mode: standalone) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* شريط "تثبيت مادبوك" يرتفع فوق منطقة الأمان في آيفون بدل أن يختفي تحتها. */
+.pwa-install-bar {
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}

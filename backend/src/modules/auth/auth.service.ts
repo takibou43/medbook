@@ -90,7 +90,13 @@ export async function registerAssistant(input: RegisterAssistantInput) {
 }
 
 export async function login(email: string, password: string) {
-  const user = await prisma.user.findUnique({ where: { email }, include: { patient: true, doctor: true } });
+  // نُضمّن assistant (بنفس ASSISTANT_SAFE_SELECT المستعمل في getMe/acceptInvite) حتى تصل
+  // بيانات الطبيب الآمنة للمساعد ضمن استجابة تسجيل الدخول نفسها، دون الاعتماد على استدعاء
+  // /auth/me لاحقًا لإظهارها — لا تسريب: نفس الثابت المُدقَّق مسبقًا هو ما يُستعمل هنا أيضًا.
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { patient: true, doctor: true, assistant: ASSISTANT_SAFE_SELECT },
+  });
   if (!user) throw ApiError.unauthorized("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
   if (!user.isActive) throw ApiError.forbidden("هذا الحساب معطّل. تواصل مع الإدارة.");
 

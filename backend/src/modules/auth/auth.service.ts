@@ -177,10 +177,33 @@ export async function getMe(userId: string) {
     where: { id: userId },
     include: {
       patient: true,
+      // الطبيب يرى سجلّه الكامل (كما كان دائمًا) — هذا حسابه هو نفسه.
       doctor: { include: { specialty: true, wilaya: true, city: true } },
-      // للمساعد: يحمل اسم الطبيب/العيادة التي يتبعها لعرضها في الواجهة (شارة "مساعد لدى د. ...")
-      // — بيانات الطبيب هنا للعرض فقط، لا صلاحية إضافية تُمنح من مجرد وجودها في هذا الرد.
-      assistant: { include: { doctor: { include: { specialty: true, wilaya: true, city: true } } } },
+      // المساعد: نحتاج فقط عرض اسم الطبيب/العيادة (شارة "مساعد لدى د. ...") ورابط الحجز
+      // العام لطباعته — لذا `select` صريح لا `include`، وإلا يُرجع Prisma افتراضيًا كل
+      // حقول Doctor القياسية بما فيها consultationFee وsubscriptionStatus وغيرها من بيانات
+      // الطبيب المالية/الإدارية التي لا يجوز أن تصل إلى جلسة المساعد أصلًا (حتى لو لم
+      // تُعرض في الواجهة). أي حقل جديد يُضاف مستقبلًا إلى Doctor يبقى مستبعدًا هنا تلقائيًا
+      // ما لم يُدرَج صراحة أدناه.
+      assistant: {
+        select: {
+          id: true,
+          isActive: true,
+          doctor: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              photoUrl: true,
+              verificationStatus: true,
+              specialty: { select: { nameAr: true } },
+              wilaya: { select: { nameAr: true } },
+              city: { select: { nameAr: true } },
+              clinic: { select: { nameAr: true, address: true } },
+            },
+          },
+        },
+      },
     },
   });
   if (!user) throw ApiError.notFound("المستخدم غير موجود.");

@@ -5,6 +5,7 @@ import { ApiError } from "../../utils/ApiError";
 import { hashPassword } from "../../utils/password";
 import { hashToken } from "../../lib/tokens";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
+import { ASSISTANT_SAFE_SELECT } from "../../lib/assistantView";
 
 const INVITE_TTL_DAYS = 7;
 
@@ -160,7 +161,10 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
           },
         },
       },
-      include: { assistant: { include: { doctor: { include: { specialty: true, wilaya: true, city: true } } } } },
+      // نفس ثابت الحقول الآمنة المستخدم في auth.service.getMe — بدونه (include بدل select)
+      // يعود نفس تسرّب consultationFee/subscriptionStatus لكن هذه المرة في استجابة التسجيل
+      // نفسها (POST /api/auth/register/assistant) بدل GET /api/auth/me.
+      include: { assistant: ASSISTANT_SAFE_SELECT },
     });
 
     await tx.assistantInvite.update({

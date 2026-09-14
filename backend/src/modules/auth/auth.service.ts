@@ -6,6 +6,7 @@ import { ApiError } from "../../utils/ApiError";
 import { RegisterDoctorInput, RegisterPatientInput, RegisterAssistantInput } from "./auth.schema";
 import { hashToken, issueTokens } from "../../lib/tokens";
 import { acceptInvite } from "../assistants/assistants.service";
+import { ASSISTANT_SAFE_SELECT } from "../../lib/assistantView";
 
 export async function registerPatient(input: RegisterPatientInput) {
   const existing = await prisma.user.findFirst({ where: { OR: [{ email: input.email }, { phone: input.phone ?? undefined }] } });
@@ -180,30 +181,9 @@ export async function getMe(userId: string) {
       // الطبيب يرى سجلّه الكامل (كما كان دائمًا) — هذا حسابه هو نفسه.
       doctor: { include: { specialty: true, wilaya: true, city: true } },
       // المساعد: نحتاج فقط عرض اسم الطبيب/العيادة (شارة "مساعد لدى د. ...") ورابط الحجز
-      // العام لطباعته — لذا `select` صريح لا `include`، وإلا يُرجع Prisma افتراضيًا كل
-      // حقول Doctor القياسية بما فيها consultationFee وsubscriptionStatus وغيرها من بيانات
-      // الطبيب المالية/الإدارية التي لا يجوز أن تصل إلى جلسة المساعد أصلًا (حتى لو لم
-      // تُعرض في الواجهة). أي حقل جديد يُضاف مستقبلًا إلى Doctor يبقى مستبعدًا هنا تلقائيًا
-      // ما لم يُدرَج صراحة أدناه.
-      assistant: {
-        select: {
-          id: true,
-          isActive: true,
-          doctor: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              photoUrl: true,
-              verificationStatus: true,
-              specialty: { select: { nameAr: true } },
-              wilaya: { select: { nameAr: true } },
-              city: { select: { nameAr: true } },
-              clinic: { select: { nameAr: true, address: true } },
-            },
-          },
-        },
-      },
+      // العام لطباعته — ثابت مشترك (ASSISTANT_SAFE_SELECT) يُستخدم هنا وفي acceptInvite
+      // حتى لا يتكرر نفس خطأ include/select في مكان ولا يُصحَّح في الآخر.
+      assistant: ASSISTANT_SAFE_SELECT,
     },
   });
   if (!user) throw ApiError.notFound("المستخدم غير موجود.");

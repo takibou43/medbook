@@ -36,6 +36,12 @@ export const registerDoctor = asyncHandler(async (req: Request, res: Response) =
   });
 });
 
+export const registerAssistant = asyncHandler(async (req: Request, res: Response) => {
+  const result = await authService.registerAssistant(req.body);
+  res.cookie(REFRESH_COOKIE, result.refreshToken, cookieOptions);
+  res.status(201).json({ success: true, data: { user: sanitizeUser(result.user), accessToken: result.accessToken } });
+});
+
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const result = await authService.login(email, password);

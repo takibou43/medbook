@@ -12,8 +12,8 @@ export const listMine = asyncHandler(async (req: Request, res: Response) => {
   const status = req.query.status as AppointmentStatus | undefined;
   const role = req.user!.role;
   const data =
-    role === "DOCTOR"
-      ? await service.listForDoctor(req.user!.id, status, req.query.date as string | undefined)
+    role === "DOCTOR" || role === "ASSISTANT"
+      ? await service.listForDoctor(req.user!.id, role, status, req.query.date as string | undefined)
       : await service.listForPatient(req.user!.id, status);
   res.json({ success: true, data });
 });
@@ -31,21 +31,21 @@ export const cancel = asyncHandler(async (req: Request, res: Response) => {
 // ---- طابور العيادة اليومي (للطبيب فقط) ----
 
 export const queue = asyncHandler(async (req: Request, res: Response) => {
-  const data = await service.getQueueForDoctor(req.user!.id);
+  const data = await service.getQueueForDoctor(req.user!.id, req.user!.role);
   res.json({ success: true, data });
 });
 
 export const callNext = asyncHandler(async (req: Request, res: Response) => {
-  const data = await service.callNextPatient(req.user!.id);
+  const data = await service.callNextPatient(req.user!.id, req.user!.role);
   res.json({ success: true, data });
 });
 
 export const markLate = asyncHandler(async (req: Request, res: Response) => {
-  const data = await service.markAsLate(req.user!.id, req.params.id);
+  const data = await service.markAsLate(req.user!.id, req.params.id, req.user!.role);
   res.json({ success: true, data });
 });
 
 export const callPatient = asyncHandler(async (req: Request, res: Response) => {
-  const data = await service.callSpecificPatient(req.user!.id, req.params.id);
+  const data = await service.callSpecificPatient(req.user!.id, req.params.id, req.user!.role);
   res.json({ success: true, data });
 });

@@ -20,6 +20,8 @@ import favoritesRoutes from "./modules/favorites/favorites.routes";
 import adminRoutes from "./modules/admin/admin.routes";
 import bookingRoutes from "./modules/booking/booking.routes";
 import pushRoutes from "./modules/push/push.routes";
+import assistantsRoutes from "./modules/assistants/assistants.routes";
+import assistantsPublicRoutes from "./modules/assistants/assistants.public.routes";
 
 export function createApp() {
   const app = express();
@@ -47,6 +49,12 @@ export function createApp() {
   app.use("/api/specialties", specialtiesRoutes);
   app.use("/api/wilayas", wilayasRoutes);
   app.use("/api/doctors", doctorsRoutes);
+  // إدارة المساعدين (طبيب فقط) — يجب تسجيلها قبل "/api/doctor" (الأعم) وإلا فإن Express
+  // يمرّر أي طلب لـ "/api/doctor/assistants/..." عبر router الأعم أولًا بحكم ترتيب
+  // التسجيل (prefix matching)، وهو ما قد يتسبب لاحقًا في تعارض مسارات مربِك عند إضافة
+  // مسار جديد هناك باسم "assistants". تسجيلها هنا أولًا يجعل المطابقة صريحة لا تعتمد
+  // على "سقوط" الطلب من router إلى آخر.
+  app.use("/api/doctor/assistants", assistantsRoutes);
   app.use("/api/doctor", doctorSelfRoutes);
   app.use("/api/appointments", appointmentsRoutes);
   app.use("/api/patient", patientSelfRoutes);
@@ -56,6 +64,8 @@ export function createApp() {
   app.use("/api/admin", adminRoutes);
   app.use("/api/booking", bookingRoutes);
   app.use("/api/push", pushRoutes);
+  // مسار عام للتحقق من رمز دعوة مساعد قبل التسجيل — بدون مصادقة.
+  app.use("/api/assistants", assistantsPublicRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

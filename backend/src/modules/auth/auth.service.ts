@@ -1,29 +1,11 @@
 import { Role, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { hashPassword, comparePassword } from "../../utils/password";
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../../utils/jwt";
+import { verifyRefreshToken } from "../../utils/jwt";
 import { ApiError } from "../../utils/ApiError";
-import { RegisterDoctorInput, RegisterPatientInput } from "./auth.schema";
-import crypto from "crypto";
-
-function hashToken(token: string) {
-  return crypto.createHash("sha256").update(token).digest("hex");
-}
-
-async function issueTokens(userId: string, role: Role) {
-  const accessToken = signAccessToken({ sub: userId, role });
-  const refreshToken = signRefreshToken({ sub: userId });
-
-  const decoded = verifyRefreshToken(refreshToken);
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
-
-  await prisma.refreshToken.create({
-    data: { userId, tokenHash: hashToken(refreshToken), expiresAt },
-  });
-
-  return { accessToken, refreshToken, decoded };
-}
+import { RegisterDoctorInput, RegisterPatientInput, RegisterAssistantInput } from "./auth.schema";
+import { hashToken, issueTokens } from "../../lib/tokens";
+import { acceptInvite } from "../assistants/assistants.service";
 
 export async function registerPatient(input: RegisterPatientInput) {
   const existing = await prisma.user.findFirst({ where: { OR: [{ email: input.email }, { phone: input.phone ?? undefined }] } });
@@ -84,6 +66,22 @@ export async function registerDoctor(input: RegisterDoctorInput) {
       },
     },
     include: { doctor: true },
+  });
+
+  const tokens = await issueTokens(user.id, user.role);
+  return { user, ...tokens };
+}
+
+/**
+ * تسجيل حساب مساعد بعد قبول دعوة صالحة. كل التحقق من الرمز/البريد/الطبيب يتم داخل
+ * assistants.service.acceptInvite (معاملة واحدة) — هذه الدالة فقط تُصدر التوكنات بعدها
+ * بنفس آلية بقية عمليات التسجيل.
+ */
+export async function registerAssistant(input: RegisterAssistantInput) {
+  const user = await acceptInvite(input.token, {
+    password: input.password,
+    firstName: input.firstName,
+    lastName: input.lastName,
   });
 
   const tokens = await issueTokens(user.id, user.role);
@@ -177,7 +175,13 @@ export async function logout(refreshToken: string | undefined) {
 export async function getMe(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    include: { patient: true, doctor: { include: { specialty: true, wilaya: true, city: true } } },
+    include: {
+      patient: true,
+      doctor: { include: { specialty: true, wilaya: true, city: true } },
+      // للمساعد: يحمل اسم الطبيب/العيادة التي يتبعها لعرضها في الواجهة (شارة "مساعد لدى د. ...")
+      // — بيانات الطبيب هنا للعرض فقط، لا صلاحية إضافية تُمنح من مجرد وجودها في هذا الرد.
+      assistant: { include: { doctor: { include: { specialty: true, wilaya: true, city: true } } } },
+    },
   });
   if (!user) throw ApiError.notFound("المستخدم غير موجود.");
   return user;

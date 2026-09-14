@@ -1,9 +1,12 @@
-import { AppointmentStatus } from "@prisma/client";
+import { AppointmentStatus, Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { algeriaTodayUTCMidnight } from "../../lib/slots";
 import { autoExpireStaleAppointments } from "../appointments/appointments.service";
+import { resolveActingDoctorId } from "../../lib/actingDoctor";
 
+// تُستعمل من الوظائف الخاصة بالطبيب فقط (الملف المهني، أوقات العمل، مرضاي) — هذه المسارات
+// محمية أصلًا بـ authorize(Role.DOCTOR) في doctorSelf.routes.ts، فلا حاجة لدعم المساعد هنا.
 export async function getDoctorByUserId(userId: string) {
   const doctor = await prisma.doctor.findUnique({ where: { userId } });
   if (!doctor) throw ApiError.notFound("لم يتم العثور على ملف طبيب مرتبط بهذا الحساب.");
@@ -74,8 +77,16 @@ export async function removeScheduleBlock(userId: string, blockId: string) {
   await prisma.doctorSchedule.delete({ where: { id: blockId } });
 }
 
-export async function getDashboardStats(userId: string) {
-  const doctor = await getDoctorByUserId(userId);
+/**
+ * متاحة للطبيب وللمساعد معًا. تُحسب كل الأرقام كما هي دائمًا، لكن الحقول المالية/الإدارية
+ * غير المسموحة للمساعد (الشهري، الإجمالي، سعر الاستشارة، حالة الاشتراك، عدد المرضى،
+ * نسبة الغياب) تُحذف بالكامل من الكائن المُرجَع في نهاية الدالة عندما role !== DOCTOR —
+ * أي أنها لا تصل إلى الشبكة أصلًا، وليس فقط مخفية في الواجهة.
+ */
+export async function getDashboardStats(userId: string, role: Role) {
+  const doctorId = await resolveActingDoctorId(userId, role);
+  const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
+  if (!doctor) throw ApiError.notFound("لم يتم العثور على ملف طبيب مرتبط بهذا الحساب.");
   await autoExpireStaleAppointments(doctor.id);
   const startOfDay = algeriaTodayUTCMidnight();
   const endOfDay = new Date(startOfDay);
@@ -132,7 +143,7 @@ export async function getDashboardStats(userId: string) {
   const estimatedRevenueToday = completedTodayCount * consultationFee;
   const estimatedRevenueMonth = completedMonthCount * consultationFee;
 
-  return {
+  const fullStats = {
     todayAppointments: todayCount,
     upcomingAppointments: upcomingCount,
     completedAppointments: completedCount,
@@ -153,6 +164,22 @@ export async function getDashboardStats(userId: string) {
     // لا واجهة تعرض هذا الحقل بعد على موقع الطبيب — إعداد تقني تمهيدي لميزة اشتراك
     // الدفع القادمة (BaridiMob)، انظر تعليق enum SubscriptionStatus في schema.prisma.
     subscriptionStatus: doctor.subscriptionStatus,
+  };
+
+  if (role === Role.DOCTOR) return fullStats;
+
+  // ASSISTANT: عرض تشغيلي "اليوم فقط" — لا شهري، لا إجمالي، لا سعر الاستشارة، لا حالة
+  // الاشتراك، لا عدد المرضى، لا نسبة الغياب الإجمالية. هذه الحقول محذوفة من الكائن هنا
+  // وليست فقط غير معروضة في React — أي استدعاء مباشر لهذا الـ endpoint من المساعد لن
+  // يحصل عليها أبدًا (تحقّق بواسطة اختبارات المرحلة الثالثة).
+  return {
+    todayAppointments: fullStats.todayAppointments,
+    upcomingAppointments: fullStats.upcomingAppointments,
+    completedToday: fullStats.completedToday,
+    estimatedRevenueToday: fullStats.estimatedRevenueToday,
+    avgRating: fullStats.avgRating,
+    reviewsCount: fullStats.reviewsCount,
+    verificationStatus: fullStats.verificationStatus,
   };
 }
 

@@ -7,21 +7,30 @@ import { Role } from "@prisma/client";
 import * as service from "./doctorSelf.service";
 
 const router = Router();
-router.use(authenticate, authorize(Role.DOCTOR));
+router.use(authenticate);
 
+// لوحة التحكم متاحة للطبيب والمساعد معًا — الفلترة حسب الدور تتم داخل الخدمة نفسها
+// (getDashboardStats) التي تحذف الحقول المالية غير المسموحة من جسم الاستجابة كليًا
+// قبل إرسالها، لا فقط إخفاءها في الواجهة.
 router.get(
   "/dashboard",
+  authorize(Role.DOCTOR, Role.ASSISTANT),
   asyncHandler(async (req, res) => {
-    res.json({ success: true, data: await service.getDashboardStats(req.user!.id) });
+    res.json({ success: true, data: await service.getDashboardStats(req.user!.id, req.user!.role) });
   })
 );
 
+// "مرضاي" — طبيب فقط (غير متاحة للمساعد، حسب الصلاحيات المتفق عليها).
 router.get(
   "/patients",
+  authorize(Role.DOCTOR),
   asyncHandler(async (req, res) => {
     res.json({ success: true, data: await service.getOwnPatients(req.user!.id) });
   })
 );
+
+// كل ما يلي (الملف المهني، أوقات العمل والاستثناءات) — طبيب فقط.
+router.use(authorize(Role.DOCTOR));
 
 const profileSchema = z.object({
   bio: z.string().optional(),

@@ -19,6 +19,19 @@ enum Role {
   PATIENT
   DOCTOR
   ADMIN
+  // مساعد الطبيب: حساب دخول مستقل (بريد/كلمة مرور خاصين به) يعمل نيابة عن طبيب واحد
+  // محدد (انظر نموذج Assistant أدناه)، بصلاحيات محدودة دون بيانات الطبيب المالية أو الإدارية.
+  ASSISTANT
+}
+
+// حالة دعوة مساعد أرسلها الطبيب عبر البريد الإلكتروني. الرابط المُرسل للمساعد لا يحمل
+// إلا رمزًا عشوائيًا (يُخزَّن هنا مُجزَّأً لا نصًا صريحًا، بنفس نمط RefreshToken.tokenHash)،
+// ولا يمكن استعماله إلا مرة واحدة (يتحول إلى ACCEPTED فيُرفض أي استعمال لاحق).
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
 }
 
 enum Gender {
@@ -88,6 +101,7 @@ model User {
   aiConversations AiConversation[]
   refreshTokens   RefreshToken[]
   pushSubscriptions PushSubscription[]
+  assistant         Assistant?
 
   @@map("users")
 }
@@ -229,9 +243,52 @@ model Doctor {
   reviews      Review[]
   documents    DoctorDocument[]
   favorites    Favorite[]
+  assistants       Assistant[]
+  assistantInvites AssistantInvite[]
 
   @@index([specialtyId, wilayaId, cityId])
   @@map("doctors")
+}
+
+// ---------------- Assistants (staff accounts) ----------------
+
+// مساعد طبيب — حساب دخول مستقل (User بدور ASSISTANT) مرتبط بطبيب واحد وعيادته.
+// isActive هو مفتاح التعطيل الفوري: الطبيب يعطّله من "إدارة المساعدين" فيُقطع وصوله من
+// الـ Backend مباشرة (انظر resolveActingDoctorId في backend/src/lib/actingDoctor.ts)،
+// وليس فقط إخفاءه في الواجهة.
+model Assistant {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doctorId  String
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  firstName String
+  lastName  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([doctorId])
+  @@map("assistants")
+}
+
+// دعوة مساعد يُرسلها الطبيب لبريد إلكتروني محدد. tokenHash مُجزَّأ (SHA-256) لا نصًا
+// صريحًا — الرابط الفعلي يُبنى في الواجهة من الرمز الخام الذي لا يُخزَّن أبدًا. صلاحية
+// زمنية (expiresAt) وحالة (status) تمنعان إعادة استعمال رابط دعوة سبق قبوله أو انتهى.
+model AssistantInvite {
+  id         String       @id @default(uuid())
+  doctorId   String
+  doctor     Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  email      String
+  tokenHash  String       @unique
+  status     InviteStatus @default(PENDING)
+  expiresAt  DateTime
+  createdAt  DateTime     @default(now())
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+
+  @@index([doctorId])
+  @@map("assistant_invites")
 }
 
 model DoctorDocument {

@@ -5,6 +5,7 @@ import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMi
 import { createNotification } from "../notifications/notifications.service";
 import { sendSms } from "../../lib/sms";
 import { CreateAppointmentInput } from "./appointments.schema";
+import { resolveActingDoctorId } from "../../lib/actingDoctor";
 
 const SLOT_MINUTES = 20;
 
@@ -168,11 +169,12 @@ export async function autoExpireStaleAppointments(doctorId: string) {
   });
 }
 
-export async function listForDoctor(doctorUserId: string, status?: AppointmentStatus, dateStr?: string) {
-  const doctor = await prisma.doctor.findUnique({ where: { userId: doctorUserId } });
-  if (!doctor) throw ApiError.notFound("لم يتم العثور على ملف طبيب مرتبط بهذا الحساب.");
+export async function listForDoctor(doctorUserId: string, role: Role, status?: AppointmentStatus, dateStr?: string) {
+  // يعمل لحساب الطبيب نفسه أو لحساب مساعده — resolveActingDoctorId تتحقق من الدور
+  // والملكية والتفعيل (isActive) قبل إرجاع doctorId، فلا مواعيد طبيب آخر تصل أبدًا هنا.
+  const doctorId = await resolveActingDoctorId(doctorUserId, role);
 
-  await autoExpireStaleAppointments(doctor.id);
+  await autoExpireStaleAppointments(doctorId);
 
   const dateFilter = dateStr
     ? (() => {
@@ -184,7 +186,7 @@ export async function listForDoctor(doctorUserId: string, status?: AppointmentSt
     : undefined;
 
   const appointments = await prisma.appointment.findMany({
-    where: { doctorId: doctor.id, ...(status ? { status } : {}), ...(dateFilter ? { date: dateFilter } : {}) },
+    where: { doctorId, ...(status ? { status } : {}), ...(dateFilter ? { date: dateFilter } : {}) },
     include: { patient: { include: { user: { select: { email: true, phone: true } } } } },
     // الترتيب حسب التاريخ فقط غير كافٍ — عدة مواعيد بنفس اليوم كانت تظهر بترتيب عشوائي
     // (ترتيب الإدخال في قاعدة البيانات) بدل ترتيبها الزمني الفعلي، فيرى الطبيب موعد
@@ -240,6 +242,15 @@ export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus,
     // COMPLETED عند الإغلاق — وهو الصحيح لمريض دخل فعلًا على الطبيب.
     NO_SHOW: ["IN_PROGRESS"],
   },
+  // صلاحية كاملة مطابقة للطبيب على عمليات الطابور اليومي (حسب ما اتُّفق عليه) — المساعد
+  // لا يملك أي صلاحية خارج هذا النطاق أصلًا (لا وصول لأي مسار آخر خارج المواعيد/الطابور).
+  ASSISTANT: {
+    PENDING: ["CONFIRMED", "CANCELLED"],
+    CONFIRMED: ["IN_PROGRESS", "LATE", "COMPLETED", "CANCELLED", "NO_SHOW"],
+    IN_PROGRESS: ["COMPLETED", "LATE", "CANCELLED", "NO_SHOW"],
+    LATE: ["IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
+    NO_SHOW: ["IN_PROGRESS"],
+  },
   ADMIN: {
     PENDING: ["CONFIRMED", "CANCELLED"],
     CONFIRMED: ["IN_PROGRESS", "LATE", "COMPLETED", "CANCELLED", "NO_SHOW"],
@@ -267,6 +278,12 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
   // Ownership check
   if (role === "PATIENT" && appointment.patient?.userId !== userId) throw ApiError.forbidden();
   if (role === "DOCTOR" && appointment.doctor.userId !== userId) throw ApiError.forbidden();
+  // المساعد: يُشتق الطبيب الذي يعمل نيابة عنه من علاقته المُسجَّلة (resolveActingDoctorId) لا
+  // من أي حقل في الطلب — فلا يمكنه أبدًا تغيير حالة موعد عند طبيب آخر غير طبيبه.
+  if (role === "ASSISTANT") {
+    const actingDoctorId = await resolveActingDoctorId(userId, role);
+    if (appointment.doctorId !== actingDoctorId) throw ApiError.forbidden();
+  }
 
   if (!canTransition(role, appointment.status, newStatus)) {
     throw ApiError.badRequest(`لا يمكن تغيير حالة الموعد من ${appointment.status} إلى ${newStatus}.`);
@@ -366,18 +383,20 @@ function todayRangeUTC() {
   return { gte: start, lte: end };
 }
 
-async function requireDoctor(doctorUserId: string) {
-  const doctor = await prisma.doctor.findUnique({ where: { userId: doctorUserId } });
-  if (!doctor) throw ApiError.notFound("لم يتم العثور على ملف طبيب مرتبط بهذا الحساب.");
-  return doctor;
+// doctorUserId هنا هو userId للحساب الحالي (طبيب أو مساعد) — resolveActingDoctorId يحل
+// الطبيب الفعلي في الحالتين (ويرفض مساعدًا معطَّلًا فورًا). نُبقي الاسم `doctor.id` في
+// نقاط الاستدعاء أدناه بلا تغيير لتقليل الفرق (diff) عن الكود الأصلي.
+async function requireDoctor(doctorUserId: string, role: Role) {
+  const doctorId = await resolveActingDoctorId(doctorUserId, role);
+  return { id: doctorId };
 }
 
 /**
  * حالة طابور اليوم كما يراها الطبيب: المريض الجالس أمامه الآن، ثم المنتظرون بالترتيب،
  * ثم قائمة المتأخرين مع عدد المناداتات المتبقية قبل عودة دور كل واحد منهم.
  */
-export async function getQueueForDoctor(doctorUserId: string) {
-  const doctor = await requireDoctor(doctorUserId);
+export async function getQueueForDoctor(doctorUserId: string, role: Role) {
+  const doctor = await requireDoctor(doctorUserId, role);
   await autoExpireStaleAppointments(doctor.id);
 
   const appointments = await prisma.appointment.findMany({
@@ -408,8 +427,8 @@ export async function getQueueForDoctor(doctorUserId: string) {
  * نرفض المناداة إن كان هناك مريض بالداخل فعلًا، حتى لا تضيع حالته بصمت: على الطبيب أن
  * ينهي موعده أو يسجّله متأخرًا أولًا.
  */
-export async function callNextPatient(doctorUserId: string) {
-  const doctor = await requireDoctor(doctorUserId);
+export async function callNextPatient(doctorUserId: string, role: Role) {
+  const doctor = await requireDoctor(doctorUserId, role);
   const date = todayRangeUTC();
 
   const inProgress = await prisma.appointment.findFirst({
@@ -457,8 +476,8 @@ export async function callNextPatient(doctorUserId: string) {
  * قائمة المتأخرين برصيد تخطٍّ قدره مريضان، ويعود دوره بعدهما تلقائيًا. لا حد لعدد مرات
  * التأجيل — من بقي متأخرًا حتى إغلاق العيادة يتحوّل وحده إلى "لم يحضر".
  */
-export async function markAsLate(doctorUserId: string, appointmentId: string) {
-  const doctor = await requireDoctor(doctorUserId);
+export async function markAsLate(doctorUserId: string, appointmentId: string, role: Role) {
+  const doctor = await requireDoctor(doctorUserId, role);
 
   const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
   if (!appointment) throw ApiError.notFound("الموعد غير موجود.");
@@ -485,8 +504,8 @@ export async function markAsLate(doctorUserId: string, appointmentId: string) {
  * تخطّيه، فلا معنى لإجباره على انتظار مريضين وهو واقف أمام الطبيب. نفس شرط السلامة:
  * لا نستبدل مريضًا جالسًا بالداخل بصمت.
  */
-export async function callSpecificPatient(doctorUserId: string, appointmentId: string) {
-  const doctor = await requireDoctor(doctorUserId);
+export async function callSpecificPatient(doctorUserId: string, appointmentId: string, role: Role) {
+  const doctor = await requireDoctor(doctorUserId, role);
   const date = todayRangeUTC();
 
   const inProgress = await prisma.appointment.findFirst({

@@ -17,17 +17,20 @@ router.get("/", controller.listMine);
 // ---- طابور العيادة اليومي — للطبيب وحده ----
 // يجب تعريفها قبل مسار '/:id' حتى لا تُفهم كلمة queue على أنها معرّف موعد.
 
+// طابور اليوم متاح للطبيب وللمساعد معًا (صلاحية كاملة للمساعد على عمليات الطابور —
+// نداء/تأجيل/إنهاء — حسب ما اتُّفق عليه؛ الملكية تُتحقق داخل الخدمة عبر resolveActingDoctorId).
+
 // GET /api/appointments/queue — حالة طابور اليوم: المريض الحالي والمنتظرون والمتأخرون
-router.get("/queue", authorize(Role.DOCTOR), controller.queue);
+router.get("/queue", authorize(Role.DOCTOR, Role.ASSISTANT), controller.queue);
 
 // POST /api/appointments/queue/next — مناداة المريض التالي
-router.post("/queue/next", authorize(Role.DOCTOR), controller.callNext);
+router.post("/queue/next", authorize(Role.DOCTOR, Role.ASSISTANT), controller.callNext);
 
 // POST /api/appointments/:id/late — لم يستجب للنداء: يُنقل إلى قائمة المتأخرين بدل شطبه
-router.post("/:id/late", authorize(Role.DOCTOR), controller.markLate);
+router.post("/:id/late", authorize(Role.DOCTOR, Role.ASSISTANT), controller.markLate);
 
 // POST /api/appointments/:id/call — مناداة مريض بعينه فورًا (متأخر عاد قبل انتهاء دوره)
-router.post("/:id/call", authorize(Role.DOCTOR), controller.callPatient);
+router.post("/:id/call", authorize(Role.DOCTOR, Role.ASSISTANT), controller.callPatient);
 
 // PATCH /api/appointments/:id — تغيير الحالة (قبول/رفض/إنهاء/عدم حضور) حسب صلاحية الدور
 router.patch("/:id", validate({ body: updateStatusSchema }), controller.updateStatus);

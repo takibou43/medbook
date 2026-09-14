@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import clsx from "clsx";
 import { CalendarClock, CalendarCheck, CalendarDays, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Download, Printer, AlertTriangle, Wallet } from "lucide-react";
 import { api } from "../../lib/api";
 import { StatCard } from "../../components/StatCard";
@@ -41,10 +42,13 @@ function formatDzd(value: number): string {
 }
 
 /**
- * الدخل التقديري في بطاقة واحدة بقيمتين: اليوم وهذا الشهر. القيمتان تأتيان من الخادم
- * محسوبتين من المواعيد المكتملة (COMPLETED) وحدها × سعر استشارة الطبيب.
+ * الدخل التقديري: للطبيب بطاقة بقيمتين (اليوم وهذا الشهر)، وللمساعد بطاقة اليوم فقط —
+ * `month`/`fee` ببساطة لا تصلان في استجابة /doctor/dashboard الخاصة بالمساعد أصلًا
+ * (الخادم لا يرسلهما، لا الواجهة فقط تُخفيهما)، فحين تكونان undefined نعرض عمودًا واحدًا.
+ * القيم تأتي من الخادم محسوبة من المواعيد المكتملة (COMPLETED) وحدها × سعر استشارة الطبيب.
  */
-function RevenueCard({ today, month, fee }: { today: number; month: number; fee: number }) {
+function RevenueCard({ today, month, fee }: { today: number; month?: number; fee?: number }) {
+  const showMonth = month !== undefined;
   return (
     <section className="card p-4 sm:p-5" aria-label="الدخل التقديري">
       <div className="flex items-center gap-2.5">
@@ -54,15 +58,17 @@ function RevenueCard({ today, month, fee }: { today: number; month: number; fee:
         <h2 className="text-base font-bold text-slate-800">الدخل التقديري</h2>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:gap-4">
+      <div className={clsx("mt-3 grid gap-2.5 sm:gap-4", showMonth ? "grid-cols-2" : "grid-cols-1")}>
         <div className="min-w-0 rounded-xl bg-green-50 p-3">
           <p className="text-xs font-semibold text-green-800">اليوم</p>
           <p className="mt-0.5 truncate text-lg font-extrabold tabular-nums text-slate-900 sm:text-2xl">{formatDzd(today)}</p>
         </div>
-        <div className="min-w-0 rounded-xl bg-green-50 p-3">
-          <p className="text-xs font-semibold text-green-800">هذا الشهر</p>
-          <p className="mt-0.5 truncate text-lg font-extrabold tabular-nums text-slate-900 sm:text-2xl">{formatDzd(month)}</p>
-        </div>
+        {showMonth && (
+          <div className="min-w-0 rounded-xl bg-green-50 p-3">
+            <p className="text-xs font-semibold text-green-800">هذا الشهر</p>
+            <p className="mt-0.5 truncate text-lg font-extrabold tabular-nums text-slate-900 sm:text-2xl">{formatDzd(month)}</p>
+          </div>
+        )}
       </div>
 
       <p className="mt-2.5 text-[11px] leading-4 text-slate-500">يُحسب حسب المواعيد المكتملة وسعر الاستشارة الحالي.</p>
@@ -88,7 +94,12 @@ export default function DoctorDashboard() {
 
   if (isLoading) return <Spinner />;
 
-  const doctorId = user?.doctor?.id;
+  const isAssistant = user?.role === "ASSISTANT";
+  // الطبيب: بياناته في user.doctor مباشرة. المساعد: نفس البيانات (نسخة مختصرة آمنة، بلا
+  // consultationFee ولا subscriptionStatus) تصل عبر user.assistant.doctor — انظر
+  // ASSISTANT_SAFE_SELECT في الخادم. هذا هو "الطبيب الفعّال" المستخدم لرابط/رمز QR والطباعة.
+  const effectiveDoctor = user?.doctor ?? user?.assistant?.doctor;
+  const doctorId = effectiveDoctor?.id;
   const bookingUrl = doctorId ? `${PATIENT_SITE_URL}/?doctor=${doctorId}` : null;
   const qrImageUrl = bookingUrl ? qrUrlFor(bookingUrl, "png", 320, 8) : null;
 
@@ -132,7 +143,7 @@ export default function DoctorDashboard() {
 
   function printQrCode() {
     if (!qrImageUrl) return;
-    const doctorName = user?.doctor ? "د. " + user.doctor.firstName + " " + user.doctor.lastName : "";
+    const doctorName = effectiveDoctor ? "د. " + effectiveDoctor.firstName + " " + effectiveDoctor.lastName : "";
     const printWindow = window.open("", "_blank", "width=480,height=640");
     if (!printWindow) {
       showToast("يرجى السماح بالنوافذ المنبثقة للطباعة.", "error");
@@ -184,28 +195,49 @@ export default function DoctorDashboard() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-extrabold text-slate-900">لوحة تحكم الطبيب</h1>
+        <h1 className="text-2xl font-extrabold text-slate-900">{isAssistant ? "لوحة التحكم" : "لوحة تحكم الطبيب"}</h1>
         {stats && <VerificationBadge status={stats.verificationStatus} />}
       </div>
 
       {stats?.verificationStatus === "PENDING" && (
         <div className="card border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          ملفك المهني قيد المراجعة من طرف الإدارة. لن تظهر في نتائج بحث المرضى حتى تتم الموافقة.
+          {isAssistant
+            ? "ملف الطبيب قيد المراجعة من طرف الإدارة. لن يظهر في نتائج بحث المرضى حتى تتم الموافقة."
+            : "ملفك المهني قيد المراجعة من طرف الإدارة. لن تظهر في نتائج بحث المرضى حتى تتم الموافقة."}
         </div>
       )}
 
+      {/* month/fee بلا "?? 0": يجب أن تبقيا undefined فعليًا حين لا يُرسلهما الخادم (حالة
+          المساعد) حتى يُخفي RevenueCard عمود "هذا الشهر" تلقائيًا بدل عرض 0 مضلِّل. */}
       <RevenueCard
         today={stats?.estimatedRevenueToday ?? 0}
-        month={stats?.estimatedRevenueMonth ?? 0}
-        fee={stats?.consultationFee ?? 0}
+        month={stats?.estimatedRevenueMonth}
+        fee={stats?.consultationFee}
       />
 
       <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
         <StatCard label="مواعيد اليوم" value={stats?.todayAppointments ?? 0} icon={CalendarClock} to={`/appointments?status=ALL&date=${algeriaTodayIso()}`} />
         <StatCard label="المواعيد القادمة" value={stats?.upcomingAppointments ?? 0} icon={CalendarCheck} to="/appointments?status=CONFIRMED" />
-        <StatCard label="إجمالي المرضى" value={stats?.totalPatients ?? 0} sub="مرضى مختلفون" icon={Users} to="/patients" />
-        <StatCard label="المواعيد المكتملة" value={stats?.completedAppointments ?? 0} icon={CheckCircle2} tone="green" to="/appointments?status=COMPLETED" />
-        <StatCard label="المواعيد الملغاة" value={stats?.cancelledAppointments ?? 0} icon={XCircle} tone="red" to="/appointments?status=CANCELLED" />
+
+        {/* الإحصاءات التالية إما لا تُرسَل للمساعد أصلًا من الخادم (totalPatients،
+            completedAppointments الإجمالي، cancelledAppointments، monthlyAppointments،
+            noShowRate)، أو أنها بديل خاص بالمساعد (completedToday) غير معروض للطبيب أصلًا. */}
+        {isAssistant ? (
+          <StatCard
+            label="أُنجزت اليوم"
+            value={stats?.completedToday ?? 0}
+            icon={CheckCircle2}
+            tone="green"
+            to={`/appointments?status=COMPLETED&date=${algeriaTodayIso()}`}
+          />
+        ) : (
+          <>
+            <StatCard label="إجمالي المرضى" value={stats?.totalPatients ?? 0} sub="مرضى مختلفون" icon={Users} to="/patients" />
+            <StatCard label="المواعيد المكتملة" value={stats?.completedAppointments ?? 0} icon={CheckCircle2} tone="green" to="/appointments?status=COMPLETED" />
+            <StatCard label="المواعيد الملغاة" value={stats?.cancelledAppointments ?? 0} icon={XCircle} tone="red" to="/appointments?status=CANCELLED" />
+          </>
+        )}
+
         <StatCard
           label="متوسط التقييم"
           value={`${(stats?.avgRating ?? 0).toFixed(1)} / 5`}
@@ -213,15 +245,20 @@ export default function DoctorDashboard() {
           icon={Star}
           tone="amber"
         />
-        <StatCard label="مواعيد هذا الشهر" value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} to="/appointments?status=ALL" />
-        <StatCard
-          label="نسبة الغياب"
-          value={`${stats?.noShowRate ?? 0}%`}
-          sub="من المواعيد المنتهية"
-          icon={AlertTriangle}
-          tone={((stats?.noShowRate ?? 0) > 20) ? "red" : "amber"}
-          to="/appointments?status=NO_SHOW"
-        />
+
+        {!isAssistant && (
+          <>
+            <StatCard label="مواعيد هذا الشهر" value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} to="/appointments?status=ALL" />
+            <StatCard
+              label="نسبة الغياب"
+              value={`${stats?.noShowRate ?? 0}%`}
+              sub="من المواعيد المنتهية"
+              icon={AlertTriangle}
+              tone={((stats?.noShowRate ?? 0) > 20) ? "red" : "amber"}
+              to="/appointments?status=NO_SHOW"
+            />
+          </>
+        )}
       </div>
 
       {qrImageUrl && bookingUrl && (

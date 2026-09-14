@@ -12,7 +12,16 @@ export interface DashboardNavItem {
   end?: boolean;
 }
 
-export function DashboardLayout({ title, items }: { title: string; items: DashboardNavItem[] }) {
+export function DashboardLayout({
+  title,
+  subtitle,
+  items,
+}: {
+  title: string;
+  /** شارة اختيارية تحت العنوان (مثل "مساعد لدى د. ..."). لا تُعرض إن لم تُمرَّر. */
+  subtitle?: string;
+  items: DashboardNavItem[];
+}) {
   const { logout } = useAuth();
   const navigate = useNavigate();
   // روابط التنقّل (مثل "المواعيد") كانت موجودة فقط داخل الشريط الجانبي المخفي على الهاتف
@@ -33,6 +42,11 @@ export function DashboardLayout({ title, items }: { title: string; items: Dashbo
           <span className="text-lg font-extrabold">MedBook</span>
         </div>
         <p className="px-5 pt-4 text-xs font-semibold uppercase text-slate-400">{title}</p>
+        {subtitle && (
+          <p className="mx-5 mt-2 truncate rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700" title={subtitle}>
+            {subtitle}
+          </p>
+        )}
         <nav className="flex-1 space-y-1 p-3">
           {items.map((item) => (
             <NavLink

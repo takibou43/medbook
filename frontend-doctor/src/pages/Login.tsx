@@ -28,8 +28,8 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(values.email, values.password);
-      if (user.role !== "DOCTOR" && user.role !== "ADMIN") {
-        showToast("هذا الموقع مخصص لحسابات الأطباء والإدارة فقط.", "error");
+      if (user.role !== "DOCTOR" && user.role !== "ADMIN" && user.role !== "ASSISTANT") {
+        showToast("هذا الموقع مخصص لحسابات الأطباء والمساعدين والإدارة فقط.", "error");
         await logout();
         return;
       }

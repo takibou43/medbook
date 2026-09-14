@@ -10,6 +10,7 @@ interface AuthContextValue {
   sessionError: boolean;
   login: (email: string, password: string) => Promise<User>;
   registerDoctor: (data: Record<string, unknown>) => Promise<User>;
+  registerAssistant: (data: { token: string; password: string; firstName: string; lastName: string }) => Promise<User>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
 }
@@ -68,6 +69,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.data.data.user as User;
   }
 
+  async function registerAssistant(data: { token: string; password: string; firstName: string; lastName: string }) {
+    const res = await api.post("/auth/register/assistant", data);
+    setAccessToken(res.data.data.accessToken);
+    setUser(res.data.data.user);
+    setSessionError(false);
+    return res.data.data.user as User;
+  }
+
   async function logout() {
     try {
       await api.post("/auth/logout");
@@ -79,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, sessionError, login, registerDoctor, logout, refreshMe }}>
+    <AuthContext.Provider value={{ user, loading, sessionError, login, registerDoctor, registerAssistant, logout, refreshMe }}>
       {children}
     </AuthContext.Provider>
   );

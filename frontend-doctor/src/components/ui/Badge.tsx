@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import clsx from "clsx";
-import { AppointmentStatus, VerificationStatus, SubscriptionStatus } from "../../types";
+import { AppointmentStatus, VerificationStatus, SubscriptionStatus, InviteStatus } from "../../types";
 
 const APPT_LABELS: Record<AppointmentStatus, { label: string; className: string }> = {
   PENDING: { label: "بانتظار التأكيد", className: "bg-amber-100 text-amber-700" },
@@ -37,6 +37,26 @@ export function VerificationBadge({ status }: { status: VerificationStatus }) {
 export function SubscriptionBadge({ status }: { status: SubscriptionStatus }) {
   const { label, className } = SUBSCRIPTION_LABELS[status];
   return <span className={clsx("badge", className)}>{label}</span>;
+}
+
+const INVITE_LABELS: Record<InviteStatus, { label: string; className: string }> = {
+  PENDING: { label: "بانتظار القبول", className: "bg-amber-100 text-amber-700" },
+  ACCEPTED: { label: "تم القبول", className: "bg-green-100 text-green-700" },
+  REVOKED: { label: "ملغاة", className: "bg-slate-200 text-slate-600" },
+  EXPIRED: { label: "منتهية الصلاحية", className: "bg-red-100 text-red-700" },
+};
+
+export function InviteStatusBadge({ status }: { status: InviteStatus }) {
+  const { label, className } = INVITE_LABELS[status];
+  return <span className={clsx("badge", className)}>{label}</span>;
+}
+
+export function AssistantActiveBadge({ isActive }: { isActive: boolean }) {
+  return (
+    <span className={clsx("badge", isActive ? "bg-green-100 text-green-700" : "bg-slate-200 text-slate-600")}>
+      {isActive ? "نشط" : "معطّل"}
+    </span>
+  );
 }
 
 export function Badge({ children, className }: { children: ReactNode; className?: string }) {

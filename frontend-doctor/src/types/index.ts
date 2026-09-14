@@ -1,4 +1,5 @@
-export type Role = "PATIENT" | "DOCTOR" | "ADMIN";
+export type Role = "PATIENT" | "DOCTOR" | "ADMIN" | "ASSISTANT";
+export type InviteStatus = "PENDING" | "ACCEPTED" | "REVOKED" | "EXPIRED";
 export type Gender = "MALE" | "FEMALE";
 // IN_PROGRESS = المريض الجالس الآن أمام الطبيب، LATE = نودي عليه فلم يستجب وينتظر عودة دوره.
 export type AppointmentStatus =
@@ -114,6 +115,50 @@ export interface Appointment {
   patientNoShowCount?: number;
 }
 
+/**
+ * نسخة الطبيب المختصرة التي تصل ضمن جلسة المساعد (user.assistant.doctor). مطابقة تمامًا
+ * لحقول ASSISTANT_SAFE_SELECT في الخادم (backend/src/lib/assistantView.ts) — لا تحتوي
+ * consultationFee ولا subscriptionStatus ولا subscriptionExpiresAt عمدًا، فلا تُضِف هذه
+ * الحقول هنا إلا إذا أُضيفت فعلًا إلى select في الخادم أولًا.
+ */
+export interface AssistantDoctorSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  photoUrl?: string | null;
+  verificationStatus: VerificationStatus;
+  specialty: { nameAr: string };
+  wilaya: { nameAr: string };
+  city: { nameAr: string };
+  clinic?: { nameAr: string; address: string } | null;
+}
+
+/** بيانات جلسة المساعد نفسها ضمن user.assistant (وليس سجلّ إدارة المساعدين في لوحة الطبيب). */
+export interface AssistantSession {
+  id: string;
+  isActive: boolean;
+  doctor: AssistantDoctorSummary;
+}
+
+/** سجل مساعد كما يظهر في قائمة "إدارة المساعدين" لدى الطبيب (GET /doctor/assistants). */
+export interface AssistantAccount {
+  id: string;
+  firstName: string;
+  lastName: string;
+  isActive: boolean;
+  createdAt: string;
+  user: { email: string; isActive: boolean; createdAt: string };
+}
+
+/** دعوة مساعد كما تظهر في نفس القائمة. */
+export interface AssistantInviteItem {
+  id: string;
+  email: string;
+  status: InviteStatus;
+  expiresAt: string;
+  createdAt: string;
+}
+
 export interface Notification {
   id: string;
   type: string;
@@ -130,6 +175,7 @@ export interface User {
   role: Role;
   isActive: boolean;
   doctor?: Doctor | null;
+  assistant?: AssistantSession | null;
 }
 
 export interface Paginated<T> {

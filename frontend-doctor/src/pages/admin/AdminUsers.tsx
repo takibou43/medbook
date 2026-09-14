@@ -8,7 +8,7 @@ import { useToast } from "../../components/ui/Toast";
 import { Pagination } from "../../components/ui/Pagination";
 import { Role } from "../../types";
 
-const ROLE_LABELS: Record<Role, string> = { PATIENT: "مريض", DOCTOR: "طبيب", ADMIN: "إدارة" };
+const ROLE_LABELS: Record<Role, string> = { PATIENT: "مريض", DOCTOR: "طبيب", ADMIN: "إدارة", ASSISTANT: "مساعد" };
 
 export default function AdminUsers() {
   const [q, setQ] = useState("");
@@ -53,6 +53,7 @@ export default function AdminUsers() {
           <option value="">كل الأدوار</option>
           <option value="PATIENT">مريض</option>
           <option value="DOCTOR">طبيب</option>
+          <option value="ASSISTANT">مساعد</option>
           <option value="ADMIN">إدارة</option>
         </select>
       </div>

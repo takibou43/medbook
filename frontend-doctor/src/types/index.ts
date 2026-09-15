@@ -69,6 +69,8 @@ export interface Doctor {
   schedules?: DoctorSchedule[];
   reviews?: Review[];
   user?: { email: string; phone?: string | null; isActive?: boolean };
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface DoctorSchedule {

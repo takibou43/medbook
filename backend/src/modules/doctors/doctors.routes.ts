@@ -4,11 +4,16 @@ import * as service from "./doctors.service";
 
 const router = Router();
 
-// GET /api/doctors?specialtyId=&wilayaId=&cityId=&gender=&q=&minRating=&page=&pageSize=
+// GET /api/doctors?specialtyId=&wilayaId=&cityId=&gender=&q=&minRating=&page=&pageSize=&lat=&lng=&maxDistanceKm=
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const { specialtyId, wilayaId, cityId, gender, q, minRating, page, pageSize } = req.query;
+    const { specialtyId, wilayaId, cityId, gender, q, minRating, page, pageSize, lat, lng, maxDistanceKm } = req.query;
+    // lat/lng من Browser Geolocation عند المريض — رقمان اختياريان معًا فقط، نتجاهلهما
+    // إن وردا غير صالحين (NaN) بدل أن نُفشل الطلب كاملًا.
+    const parsedLat = lat !== undefined ? Number(lat) : undefined;
+    const parsedLng = lng !== undefined ? Number(lng) : undefined;
+    const validGeo = typeof parsedLat === "number" && !isNaN(parsedLat) && typeof parsedLng === "number" && !isNaN(parsedLng);
     const result = await service.searchDoctors({
       specialtyId: specialtyId as string,
       wilayaId: wilayaId as string,
@@ -18,6 +23,9 @@ router.get(
       minRating: minRating ? Number(minRating) : undefined,
       page: page ? Number(page) : undefined,
       pageSize: pageSize ? Number(pageSize) : undefined,
+      lat: validGeo ? parsedLat : undefined,
+      lng: validGeo ? parsedLng : undefined,
+      maxDistanceKm: validGeo && maxDistanceKm ? Number(maxDistanceKm) : undefined,
     });
     res.json({ success: true, data: result });
   })

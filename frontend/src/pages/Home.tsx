@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, ShieldCheck, CalendarCheck, Users, Stethoscope } from "lucide-react";
+import { Search, ShieldCheck, CalendarCheck, Users, Stethoscope, MapPin } from "lucide-react";
 import { useSpecialties, useWilayas } from "../hooks/useCatalog";
 import { useDoctors } from "../hooks/useDoctors";
 import { DoctorCard } from "../components/DoctorCard";
 import { Spinner } from "../components/ui/States";
+import { useGeolocation } from "../hooks/useGeolocation";
 
 const STEPS = [
   { icon: Search, title: "ابحث", desc: "اختر التخصص أو الولاية أو اسم الطبيب." },
@@ -22,6 +23,16 @@ export default function Home() {
   const [specialtyId, setSpecialtyId] = useState("");
   const [wilayaId, setWilayaId] = useState("");
   const [q, setQ] = useState("");
+
+  // موقع المريض (اختياري تمامًا) — لا يُطلب إلا بعد ضغط "السماح بالموقع" صراحةً، ولا
+  // يُخزَّن في أي مكان (لا localStorage ولا قاعدة بيانات)، يُستعمل فقط لعرض "أطباء بالقرب
+  // منك" وحساب المسافة/ترتيبها في هذه الجلسة.
+  const geo = useGeolocation();
+  const { data: nearby, isLoading: loadingNearby } = useDoctors(
+    { lat: geo.coords?.lat, lng: geo.coords?.lng, page: 1 },
+    geo.status === "granted" && Boolean(geo.coords)
+  );
+  const nearbyWithDistance = (nearby?.items ?? []).filter((d) => d.distanceKm != null).slice(0, 6);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -78,6 +89,55 @@ export default function Home() {
           </button>
         </div>
       </section>
+
+      {/* طلب إذن الموقع — اختياري، لا يُطلب تلقائيًا، ويختفي فور الاستجابة */}
+      {geo.status === "idle" && (
+        <section className="container-app -mt-6">
+          <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 rounded-2xl border border-primary-200 bg-primary-50 p-4 text-center sm:flex-row sm:text-right">
+            <MapPin className="h-6 w-6 shrink-0 text-primary-600" />
+            <p className="flex-1 text-sm text-slate-700">
+              اسمح لمادبوك باستخدام موقعك لعرض الأطباء والعيادات الأقرب إليك.
+            </p>
+            <div className="flex shrink-0 gap-2">
+              <button onClick={geo.request} className="btn-primary px-4 py-2 text-sm">
+                السماح بالموقع
+              </button>
+              <button onClick={geo.dismiss} className="btn-outline px-4 py-2 text-sm">
+                ليس الآن
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+      {geo.status === "locating" && (
+        <section className="container-app -mt-6">
+          <p className="text-center text-sm text-slate-500">جارٍ تحديد موقعك...</p>
+        </section>
+      )}
+
+      {/* أطباء بالقرب منك — تظهر فقط بعد السماح بالموقع وتوفّر أطباء لديهم إحداثيات مسجّلة */}
+      {geo.status === "granted" && (
+        <section className="container-app py-10">
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-2xl font-extrabold text-slate-900">
+              <MapPin className="h-6 w-6 text-primary-600" /> أطباء بالقرب منك
+            </h2>
+          </div>
+          {loadingNearby ? (
+            <Spinner />
+          ) : nearbyWithDistance.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              لا يوجد حاليًا أطباء مسجَّلون بموقع دقيق قريب منك — تصفّح كل الأطباء أدناه بدل ذلك.
+            </p>
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {nearbyWithDistance.map((d) => (
+                <DoctorCard key={d.id} doctor={d} showNextSlot />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* How it works */}
       <section className="container-app py-14">

@@ -56,6 +56,11 @@ export interface Doctor {
   schedules?: DoctorSchedule[];
   reviews?: Review[];
   user?: { email: string; phone?: string | null; isActive?: boolean };
+  // إحداثيات موقع العيادة (اختيارية) — لحساب المسافة وفتح الملاحة. distanceKm يُحسب في
+  // الخادم فقط عندما يُرسل المريض موقعه (lat/lng) مع طلب البحث.
+  latitude?: number | null;
+  longitude?: number | null;
+  distanceKm?: number | null;
 }
 
 export interface DoctorSchedule {
@@ -113,6 +118,13 @@ export interface User {
   isActive: boolean;
   patient?: { id: string; firstName: string; lastName: string } | null;
   doctor?: Doctor | null;
+}
+
+export interface NextSlot {
+  date: string;
+  startTime: string;
+  endTime: string;
+  slotMinutes: number;
 }
 
 export interface Paginated<T> {

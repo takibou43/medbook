@@ -227,6 +227,11 @@ model Doctor {
   address         String?
   consultationFee Int?
   photoUrl        String?
+  // إحداثيات موقع العيادة/الطبيب — اختيارية تمامًا (nullable)، تُستعمل فقط لحساب المسافة
+  // من موقع المريض (Haversine) وفتح الملاحة نحو العيادة. لا تُملأ تلقائيًا؛ الطبيب يضبطها
+  // بنفسه من إعدادات حسابه (زر "استخدم موقعي الحالي") — لا جيوكودينغ ولا خدمة مدفوعة.
+  latitude        Float?
+  longitude       Float?
   // مدة الجلسة بالدقائق — يحددها الطبيب، وعليها يبني النظام ترتيب المواعيد تلقائيًا.
   slotDurationMin Int                @default(7)
   verificationStatus VerificationStatus @default(PENDING)

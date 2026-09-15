@@ -28,6 +28,8 @@ export async function updateOwnProfile(
     wilayaId: string;
     cityId: string;
     slotDurationMin: number;
+    latitude: number;
+    longitude: number;
   }>
 ) {
   const doctor = await getDoctorByUserId(userId);

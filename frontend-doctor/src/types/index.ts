@@ -111,6 +111,9 @@ export interface Appointment {
   calledAt?: string | null;
   deferredCount?: number;
   skipCredits?: number;
+  arrivedAt?: string | null;
+  endedAt?: string | null;
+  durationMinutes?: number | null;
   // يُرسله الخادم مع قائمة مواعيد الطبيب: عدد مرات غياب هذا المريض سابقًا
   patientNoShowCount?: number;
 }

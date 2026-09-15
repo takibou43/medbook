@@ -11,6 +11,9 @@ export interface QueueState {
   current: Appointment | null;
   waiting: Appointment[];
   late: Appointment[];
+  // المدة الذكية: تقدير مدة الجلسة القادمة اعتمادًا على متوسط آخر جلسات مكتملة صالحة
+  // لهذا الطبيب (وليس المدة المجدولة للموعد).
+  estimatedDurationMinutes: number;
 }
 
 export function useQueue() {
@@ -46,6 +49,10 @@ export function useCallPatient() {
 
 export function useMarkLate() {
   return useQueueMutation<string>(async (id) => (await api.post("/appointments/" + id + "/late")).data.data);
+}
+
+export function useMarkArrived() {
+  return useQueueMutation<string>(async (id) => (await api.post("/appointments/" + id + "/arrived")).data.data);
 }
 
 export function useFinishAppointment() {

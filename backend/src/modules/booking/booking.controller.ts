@@ -31,3 +31,9 @@ export const cancelBooking = asyncHandler(async (req: Request, res: Response) =>
   const appointment = await service.cancelGuestAppointment(req.params.id, req.body.phone);
   res.json({ success: true, data: appointment });
 });
+
+// حالة دور المريض لحظيًا — عامة بلا تسجيل دخول، يفتحها المريض برابط موعده.
+export const getBookingStatus = asyncHandler(async (req: Request, res: Response) => {
+  const data = await service.getAppointmentQueueStatus(req.params.id);
+  res.json({ success: true, data });
+});

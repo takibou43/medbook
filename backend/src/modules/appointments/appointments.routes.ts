@@ -32,6 +32,9 @@ router.post("/:id/late", authorize(Role.DOCTOR, Role.ASSISTANT), controller.mark
 // POST /api/appointments/:id/call — مناداة مريض بعينه فورًا (متأخر عاد قبل انتهاء دوره)
 router.post("/:id/call", authorize(Role.DOCTOR, Role.ASSISTANT), controller.callPatient);
 
+// POST /api/appointments/:id/arrived — تسجيل وصول المريض فعليًا إلى العيادة (اختياري)
+router.post("/:id/arrived", authorize(Role.DOCTOR, Role.ASSISTANT), controller.markArrived);
+
 // PATCH /api/appointments/:id — تغيير الحالة (قبول/رفض/إنهاء/عدم حضور) حسب صلاحية الدور
 router.patch("/:id", validate({ body: updateStatusSchema }), controller.updateStatus);
 

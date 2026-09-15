@@ -289,9 +289,23 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
     throw ApiError.badRequest(`لا يمكن تغيير حالة الموعد من ${appointment.status} إلى ${newStatus}.`);
   }
 
+  let extraData: Prisma.AppointmentUpdateInput = {};
+  if (newStatus === AppointmentStatus.COMPLETED) {
+    const endedAt = new Date();
+    extraData.endedAt = endedAt;
+    if (appointment.calledAt) {
+      extraData.durationMinutes = Math.round((endedAt.getTime() - appointment.calledAt.getTime()) / 60000);
+    }
+  } else if (newStatus === AppointmentStatus.NO_SHOW) {
+    extraData.calledAt = null;
+    extraData.arrivedAt = null;
+  } else if (newStatus === AppointmentStatus.IN_PROGRESS && appointment.status === AppointmentStatus.NO_SHOW) {
+    extraData.calledAt = new Date();
+  }
+
   const updated = await prisma.appointment.update({
     where: { id: appointmentId },
-    data: { status: newStatus },
+    data: { status: newStatus, ...extraData },
     include: { doctor: true, patient: { include: { user: { select: { phone: true } } } } },
   });
 
@@ -383,6 +397,33 @@ function todayRangeUTC() {
   return { gte: start, lte: end };
 }
 
+// المدة الذكية: تقدير مدة الجلسة القادمة اعتمادًا على متوسط آخر جلسات مكتملة صالحة
+// (calledAt إلى endedAt، وليس من الوقت المجدول startTime).
+const SMART_DURATION_FALLBACK_MINUTES = 20;
+const SMART_DURATION_MIN_SAMPLES = 3;
+const SMART_DURATION_SAMPLE_SIZE = 10;
+const SMART_DURATION_MIN_VALID_MINUTES = 2;
+const SMART_DURATION_MAX_VALID_MINUTES = 90;
+
+export async function estimateSessionMinutes(doctorId: string): Promise<number> {
+  const recent = await prisma.appointment.findMany({
+    where: { doctorId, status: AppointmentStatus.COMPLETED, durationMinutes: { not: null } },
+    orderBy: { endedAt: "desc" },
+    take: 30,
+    select: { durationMinutes: true },
+  });
+
+  const valid = recent
+    .map((a) => a.durationMinutes as number)
+    .filter((d) => d >= SMART_DURATION_MIN_VALID_MINUTES && d <= SMART_DURATION_MAX_VALID_MINUTES)
+    .slice(0, SMART_DURATION_SAMPLE_SIZE);
+
+  if (valid.length < SMART_DURATION_MIN_SAMPLES) return SMART_DURATION_FALLBACK_MINUTES;
+
+  const avg = valid.reduce((sum, d) => sum + d, 0) / valid.length;
+  return Math.round(avg);
+}
+
 // doctorUserId هنا هو userId للحساب الحالي (طبيب أو مساعد) — resolveActingDoctorId يحل
 // الطبيب الفعلي في الحالتين (ويرفض مساعدًا معطَّلًا فورًا). نُبقي الاسم `doctor.id` في
 // نقاط الاستدعاء أدناه بلا تغيير لتقليل الفرق (diff) عن الكود الأصلي.
@@ -399,21 +440,25 @@ export async function getQueueForDoctor(doctorUserId: string, role: Role) {
   const doctor = await requireDoctor(doctorUserId, role);
   await autoExpireStaleAppointments(doctor.id);
 
-  const appointments = await prisma.appointment.findMany({
-    where: {
-      doctorId: doctor.id,
-      date: todayRangeUTC(),
-      status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS] },
-    },
-    include: QUEUE_INCLUDE,
-    orderBy: [{ startTime: "asc" }],
-  });
+  const [appointments, estimatedDurationMinutes] = await Promise.all([
+    prisma.appointment.findMany({
+      where: {
+        doctorId: doctor.id,
+        date: todayRangeUTC(),
+        status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS] },
+      },
+      include: QUEUE_INCLUDE,
+      orderBy: [{ startTime: "asc" }],
+    }),
+    estimateSessionMinutes(doctor.id),
+  ]);
 
   return {
     date: algeriaTodayUTCMidnight().toISOString().slice(0, 10),
     current: appointments.find((a) => a.status === AppointmentStatus.IN_PROGRESS) ?? null,
     waiting: appointments.filter((a) => a.status === AppointmentStatus.CONFIRMED),
     late: appointments.filter((a) => a.status === AppointmentStatus.LATE),
+    estimatedDurationMinutes,
   };
 }
 
@@ -537,4 +582,27 @@ export async function callSpecificPatient(doctorUserId: string, appointmentId: s
   ]);
 
   return called;
+}
+
+/**
+ * تسجيل وصول المريض فعليًا إلى العيادة (اختياري، من الاستقبال أو الطبيب) — منفصل عن
+ * المناداة إلى الداخل (calledAt). لا يغيّر حالة الموعد، فقط يُثبّت وقت الوصول.
+ */
+export async function markPatientArrived(doctorUserId: string, appointmentId: string, role: Role) {
+  const doctor = await requireDoctor(doctorUserId, role);
+
+  const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+  if (!appointment) throw ApiError.notFound("الموعد غير موجود.");
+  if (appointment.doctorId !== doctor.id) throw ApiError.forbidden();
+
+  const allowed: AppointmentStatus[] = [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE];
+  if (!allowed.includes(appointment.status)) {
+    throw ApiError.badRequest("لا يمكن تسجيل الوصول في هذه الحالة الحالية.");
+  }
+
+  return prisma.appointment.update({
+    where: { id: appointmentId },
+    data: { arrivedAt: new Date() },
+    include: QUEUE_INCLUDE,
+  });
 }

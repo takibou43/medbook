@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
-import { Bell, BellOff, CheckCircle2, Clock3, PhoneCall, UserX, Users } from "lucide-react";
+import { Bell, BellOff, CheckCircle2, Clock3, PhoneCall, UserCheck, UserX, Users } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Spinner, EmptyState } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
 import { disablePush, enablePush, isPushSubscribed, pushSupported } from "../../lib/push";
-import { useCallNext, useCallPatient, useFinishAppointment, useMarkLate, useMarkNoShow, useQueue } from "../../hooks/useQueue";
+import { useCallNext, useCallPatient, useFinishAppointment, useMarkArrived, useMarkLate, useMarkNoShow, useQueue } from "../../hooks/useQueue";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { Appointment } from "../../types";
 
-// المريض قد يكون صاحب حساب أو ضيفًا حجز باسمه فقط — نعرض الاسم المتوفر أيًّا كان مصدره.
+// المريض قد يكون صاحب حساب أو ضيفًا حجز باسمه فقط — نعرض الاسم المتوفر أيًّا كان مصدره.
 function patientName(a: Appointment): string {
   if (a.patient) return a.patient.firstName + " " + a.patient.lastName;
   const guest = [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ").trim();
@@ -28,11 +28,17 @@ export default function DoctorQueue() {
   const callNext = useCallNext();
   const callPatient = useCallPatient();
   const markLate = useMarkLate();
+  const markArrived = useMarkArrived();
   const finish = useFinishAppointment();
   const noShow = useMarkNoShow();
 
   const busy =
-    callNext.isPending || callPatient.isPending || markLate.isPending || finish.isPending || noShow.isPending;
+    callNext.isPending ||
+    callPatient.isPending ||
+    markLate.isPending ||
+    markArrived.isPending ||
+    finish.isPending ||
+    noShow.isPending;
 
   // حالة إشعارات هذا الجهاز تحديدًا (وليس الحساب): قد يفعّلها على هاتفه دون حاسوب العيادة.
   const [pushOn, setPushOn] = useState(false);
@@ -103,6 +109,7 @@ export default function DoctorQueue() {
   const current = data?.current ?? null;
   const waiting = data?.waiting ?? [];
   const late = data?.late ?? [];
+  const estimatedDurationMinutes = data?.estimatedDurationMinutes ?? null;
 
   return (
     <div className="space-y-5">
@@ -114,6 +121,11 @@ export default function DoctorQueue() {
             {waiting.length} في الانتظار · {late.length} متأخرون
             {isFetching ? " · جارٍ التحديث..." : ""}
           </p>
+          {estimatedDurationMinutes !== null && (
+            <p className="mt-0.5 text-xs text-slate-400">
+              الوقت المتوقع للجلسة القادمة: ~{estimatedDurationMinutes} دقيقة (مدة ذكية اعتمادًا على آخر الجلسات)
+            </p>
+          )}
         </div>
 
         {pushSupported() && (
@@ -202,14 +214,31 @@ export default function DoctorQueue() {
                     <p className="text-xs text-slate-500">{a.startTime}</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  disabled={busy || Boolean(current)}
-                  onClick={() => run(callPatient.mutateAsync(a.id), "تمت مناداته.", "تعذّرت مناداته.")}
-                  className="rounded-lg px-2 py-1 text-xs font-semibold text-primary-600 transition hover:bg-primary-50 disabled:opacity-40"
-                >
-                  نادِه
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  {a.arrivedAt ? (
+                    <span className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-emerald-600">
+                      <UserCheck className="h-4 w-4" /> وصل
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      title="تسجيل وصول المريض إلى العيادة"
+                      onClick={() => run(markArrived.mutateAsync(a.id), "تم تسجيل وصوله.", "تعذّر تسجيل وصوله.")}
+                      className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-40"
+                    >
+                      <UserCheck className="h-4 w-4" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busy || Boolean(current)}
+                    onClick={() => run(callPatient.mutateAsync(a.id), "تمت مناداته.", "تعذّرت مناداته.")}
+                    className="rounded-lg px-2 py-1 text-xs font-semibold text-primary-600 transition hover:bg-primary-50 disabled:opacity-40"
+                  >
+                    نادِه
+                  </button>
+                </div>
               </Card>
             ))}
           </div>

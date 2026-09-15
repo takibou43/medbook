@@ -4,6 +4,7 @@ import { ApiError } from "../../utils/ApiError";
 import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight } from "../../lib/slots";
 import { createNotification } from "../notifications/notifications.service";
 import { GuestBookingInput, GuestSlotsQuery } from "./booking.schema";
+import { estimateSessionMinutes } from "../appointments/appointments.service";
 
 /**
  * حجز "ضيف" بدون تسجيل دخول: المريض لا يختار طبيبًا بعينه،
@@ -382,4 +383,87 @@ export async function cancelGuestAppointment(id: string, phone: string) {
   );
 
   return updated;
+}
+
+/**
+ * حالة دور المريض لحظيًا — نقطة عامة (بلا تسجيل دخول) يفتحها المريض برابط موعده.
+ *
+ * الأمان والخصوصية: معرّف الموعد UUID غير قابل للتخمين، ولا نُرجع أبدًا أي بيانات
+ * عن مرضى آخرين — أرقامًا مجرّدة فقط (كم واحدًا يسبقك). حتى لو تسرّب الرابط،
+ * أقصى ما يكشفه هو موعد صاحبه هو نفسه.
+ */
+export async function getAppointmentQueueStatus(appointmentId: string) {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    include: { doctor: { include: { specialty: true, clinic: true, city: true } } },
+  });
+  if (!appointment) throw ApiError.notFound("الموعد غير موجود.");
+
+  const doctor = appointment.doctor;
+  const slotMinutes = doctor.slotDurationMin > 0 ? doctor.slotDurationMin : SLOT_MINUTES;
+
+  const today = algeriaTodayUTCMidnight();
+  const isToday = appointment.date.getTime() === today.getTime();
+
+  const base = {
+    id: appointment.id,
+    date: appointment.date.toISOString().slice(0, 10),
+    startTime: appointment.startTime,
+    status: appointment.status,
+    patientName: [appointment.guestFirstName, appointment.guestLastName].filter(Boolean).join(" ").trim(),
+    slotMinutes,
+    deferredCount: appointment.deferredCount,
+    skipCredits: appointment.skipCredits,
+    doctor: {
+      firstName: doctor.firstName,
+      lastName: doctor.lastName,
+      specialty: doctor.specialty?.nameAr ?? null,
+      address: doctor.clinic?.address ?? doctor.address ?? null,
+      phone: doctor.clinic?.phone ?? doctor.phone ?? null,
+    },
+  };
+
+  // موعد في يوم آخر: لا معنى لرقم دور اليوم، نكتفي بتفاصيل الموعد.
+  if (!isToday) {
+    return { ...base, isToday: false, position: null, aheadOfYou: null, estimatedWaitMinutes: null, someoneInside: false };
+  }
+
+  const endOfDay = new Date(today);
+  endOfDay.setUTCHours(23, 59, 59, 999);
+
+  const dayQueue = await prisma.appointment.findMany({
+    where: {
+      doctorId: doctor.id,
+      date: { gte: today, lte: endOfDay },
+      status: {
+        in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS],
+      },
+    },
+    select: { id: true, startTime: true, status: true, skipCredits: true },
+    orderBy: [{ startTime: "asc" }],
+  });
+
+  const someoneInside = dayQueue.some((a) => a.status === AppointmentStatus.IN_PROGRESS);
+
+  // من يسبقك فعليًا: المريض الجالس بالداخل الآن، ومن موعده قبل موعدك ولم يدخل بعد.
+  // نستثني المتأخرين الذين لم يعد دورهم بعد (رصيد تخطٍّ > 0) لأنهم لن يدخلوا قبلك.
+  const aheadOfYou = dayQueue.filter((a) => {
+    if (a.id === appointment.id) return false;
+    if (a.status === AppointmentStatus.IN_PROGRESS) return true;
+    if (a.status === AppointmentStatus.LATE && a.skipCredits > 0) return false;
+    return a.startTime < appointment.startTime;
+  }).length;
+
+  // المدة الذكية: متوسط مدة آخر جلسات هذا الطبيب الفعلية (calledAt إلى endedAt)، وليس
+  // الوقت المجدول للموعد — فتقدير الانتظار يعكس سير العيادة الحقيقي.
+  const sessionMinutes = await estimateSessionMinutes(doctor.id);
+
+  return {
+    ...base,
+    isToday: true,
+    aheadOfYou,
+    position: aheadOfYou + 1,
+    estimatedWaitMinutes: aheadOfYou * sessionMinutes,
+    someoneInside,
+  };
 }

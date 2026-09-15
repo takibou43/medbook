@@ -347,6 +347,9 @@ model Appointment {
   // عدد المرضى الذين يجب أن يُنادَوا قبل إعادة نداء هذا المتأخر (يُضبط على 2 عند التأجيل
   // ويُنقص بواحد مع كل مناداة، فيعود دوره تلقائيًا بعد مريضين).
   skipCredits           Int       @default(0)
+  arrivedAt             DateTime?
+  endedAt               DateTime?
+  durationMinutes       Int?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

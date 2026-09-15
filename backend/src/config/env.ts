@@ -21,8 +21,11 @@ export const env = {
 
   databaseUrl: required("DATABASE_URL"),
 
-  jwtSecret: required("JWT_SECRET", "dev_secret_change_me"),
-  jwtRefreshSecret: required("JWT_REFRESH_SECRET", "dev_refresh_secret_change_me"),
+  // لا قيمة افتراضية هنا عمدًا (خلافًا للسابق): وجود سرّ ثابت في كود مستودع عام كان يعني
+  // أن الخادم قد يعمل بصمت بتوقيع JWT معروف للجميع إن نُسي ضبط المتغير في أي بيئة.
+  // الآن يفشل الإقلاع فورًا بدل ذلك، تمامًا كما هو الحال مع DATABASE_URL أعلاه.
+  jwtSecret: required("JWT_SECRET"),
+  jwtRefreshSecret: required("JWT_REFRESH_SECRET"),
   jwtAccessExpires: process.env.JWT_ACCESS_EXPIRES ?? "15m",
   jwtRefreshExpires: process.env.JWT_REFRESH_EXPIRES ?? "7d",
 

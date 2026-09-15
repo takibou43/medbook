@@ -18,7 +18,6 @@ export function Footer() {
         </div>
         <div>
           <h4 className="mb-3 text-sm font-bold text-slate-800">تواصل معنا</h4>
-          <p className="mb-3 text-sm text-slate-500">support@medbook.dz</p>
           <a
             href={`tel:${MEDBOOK_PHONE}`}
             className="btn-primary w-full sm:w-auto"

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
+import { LocateFixed, MapPin } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
 import { Input, Select, Textarea } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
@@ -18,6 +19,8 @@ interface FormValues {
   consultationFee: number;
   phone: string;
   address: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 const SLOT_OPTIONS = [5, 7, 10, 15, 20, 30, 45, 60];
@@ -32,9 +35,35 @@ export default function DoctorProfileSettings() {
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [selectedWilaya, setSelectedWilaya] = useState("");
-  const { register, handleSubmit, reset, watch } = useForm<FormValues>();
+  const [locating, setLocating] = useState(false);
+  const { register, handleSubmit, reset, watch, setValue } = useForm<FormValues>();
 
   const watchedWilaya = watch("wilayaId");
+  const watchedLat = watch("latitude");
+  const watchedLng = watch("longitude");
+
+  // يضبط الطبيب موقع عيادته بنفسه من هاتفه/حاسوبه وهو فيها فعليًا — لا جيوكودينغ ولا
+  // خدمة مدفوعة، فقط Browser Geolocation. يُستعمل بعدها لحساب المسافة للمرضى وفتح الملاحة.
+  function useMyLocation() {
+    if (!navigator.geolocation) {
+      showToast("متصفحك لا يدعم تحديد الموقع.", "error");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        setValue("latitude", pos.coords.latitude, { shouldValidate: true });
+        setValue("longitude", pos.coords.longitude, { shouldValidate: true });
+        showToast("تم تحديد موقع العيادة — لا تنسَ حفظ التغييرات.", "success");
+      },
+      () => {
+        setLocating(false);
+        showToast("تعذّر الوصول إلى موقعك. تأكد من إذن الموقع في المتصفح.", "error");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }
 
   useEffect(() => {
     // ننتظر تحميل قائمتي التخصصات والولايات أيضًا: إن نُفِّذ reset() قبل رسم خيارات <select>،
@@ -50,6 +79,8 @@ export default function DoctorProfileSettings() {
         consultationFee: me.doctor.consultationFee ?? 0,
         phone: me.doctor.phone ?? "",
         address: me.doctor.address ?? "",
+        latitude: me.doctor.latitude ?? undefined,
+        longitude: me.doctor.longitude ?? undefined,
       });
       setSelectedWilaya(me.doctor.wilayaId ?? "");
     }
@@ -131,6 +162,23 @@ export default function DoctorProfileSettings() {
         </div>
         <Input label="رقم الهاتف" {...register("phone")} />
         <Input label="العنوان" {...register("address")} />
+
+        <div>
+          <p className="label flex items-center gap-1.5">
+            <MapPin className="h-4 w-4" /> موقع العيادة (لعرض المسافة للمرضى وفتح الملاحة)
+          </p>
+          <input type="hidden" {...register("latitude")} />
+          <input type="hidden" {...register("longitude")} />
+          <button type="button" onClick={useMyLocation} disabled={locating} className="btn-outline mt-1 disabled:opacity-60">
+            <LocateFixed className="h-4 w-4" /> {locating ? "جارٍ تحديد الموقع..." : "استخدم موقعي الحالي"}
+          </button>
+          <p className="mt-1 text-xs text-slate-400">
+            {watchedLat != null && watchedLng != null
+              ? "تم ضبط موقع العيادة. اضغط الزر مجددًا لتحديثه إن انتقلت لعيادة أخرى."
+              : "لم يُضبط موقع العيادة بعد — بدونه لن تظهر المسافة أو زر الملاحة للمرضى."}
+          </p>
+        </div>
+
         <Button type="submit" loading={saving}>
           حفظ التغييرات
         </Button>

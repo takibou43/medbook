@@ -11,6 +11,7 @@ import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { AppointmentStatus } from "../../types";
+import DoctorQueue from "./DoctorQueue";
 
 const FILTERS: { label: string; value?: AppointmentStatus }[] = [
   { label: "الكل", value: undefined },
@@ -242,7 +243,7 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
   );
 }
 
-export default function DoctorAppointments() {
+function AppointmentsListSection() {
   const [searchParams] = useSearchParams();
   const initial = readInitialFilters(searchParams);
   const [filter, setFilter] = useState<AppointmentStatus | undefined>(initial.status);
@@ -433,6 +434,43 @@ export default function DoctorAppointments() {
       ) : (
         <EmptyState title={query ? "لا نتائج مطابقة للبحث" : "لا توجد مواعيد"} />
       )}
+    </div>
+  );
+}
+
+const APPOINTMENTS_TABS: { key: "queue" | "list"; label: string }[] = [
+  { key: "queue", label: "طابور اليوم" },
+  { key: "list", label: "كل المواعيد" },
+];
+
+/**
+ * صفحة موحّدة بقسمين: "طابور اليوم" (القائمة الحية للنداء/التأجيل/الوصول) و"كل المواعيد"
+ * (تصفّح كامل مع بحث وفلاتر وتذكير واتساب). القسمان مصدرا بيانات مختلفان تمامًا (useQueue
+ * مقابل useMyAppointments)، لذا نُركّب أحدهما فقط في كل لحظة (وليس نخفيه بـCSS) حتى يتوقف
+ * التحديث الدوري (refetchInterval) للقسم غير الظاهر تلقائيًا، بلا أي استقطاب مضاعف للخادم.
+ */
+export default function DoctorAppointments() {
+  const [tab, setTab] = useState<"queue" | "list">("queue");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex w-fit gap-1 rounded-full bg-slate-100 p-1">
+        {APPOINTMENTS_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={clsx(
+              "rounded-full px-4 py-1.5 text-sm font-semibold transition",
+              tab === t.key ? "bg-white text-primary-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "queue" ? <DoctorQueue /> : <AppointmentsListSection />}
     </div>
   );
 }

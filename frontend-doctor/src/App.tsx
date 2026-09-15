@@ -2,7 +2,6 @@ import { Routes, Route } from "react-router-dom";
 import {
   LayoutDashboard,
   CalendarClock,
-  ListOrdered,
   Clock,
   Users as UsersIcon,
   Settings,
@@ -23,7 +22,6 @@ import Register from "./pages/Register";
 import AssistantAcceptInvite from "./pages/AssistantAcceptInvite";
 import DoctorDashboard from "./pages/doctor/DoctorDashboard";
 import DoctorAppointments from "./pages/doctor/DoctorAppointments";
-import DoctorQueue from "./pages/doctor/DoctorQueue";
 import DoctorSchedule from "./pages/doctor/DoctorSchedule";
 import DoctorPatients from "./pages/doctor/DoctorPatients";
 import DoctorProfileSettings from "./pages/doctor/DoctorProfileSettings";
@@ -39,7 +37,6 @@ import AccountSettings from "./pages/AccountSettings";
 // الروابط المشتركة بين الطبيب والمساعد (الصفحات التي يُسمح للمساعد برؤيتها فقط).
 const sharedNav = [
   { to: "/", label: "الرئيسية", icon: LayoutDashboard, end: true },
-  { to: "/queue", label: "طابور اليوم", icon: ListOrdered },
   { to: "/appointments", label: "المواعيد", icon: CalendarClock },
 ];
 
@@ -98,7 +95,6 @@ export default function App() {
       <Route element={<ProtectedRoute allow={["DOCTOR", "ASSISTANT"]} />}>
         <Route element={<DoctorAreaLayout />}>
           <Route path="/" element={<DoctorDashboard />} />
-          <Route path="/queue" element={<DoctorQueue />} />
           <Route path="/appointments" element={<DoctorAppointments />} />
 
           <Route element={<ProtectedRoute allow={["DOCTOR"]} />}>

@@ -6,7 +6,7 @@ import { Spinner, EmptyState } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
 import { disablePush, enablePush, isPushSubscribed, pushSupported } from "../../lib/push";
-import { useCallNext, useCallPatient, useFinishAppointment, useMarkArrived, useMarkLate, useMarkNoShow, useQueue } from "../../hooks/useQueue";
+import { useCallNext, useCallPatient, useFinishAppointment, useMarkArrived, useMarkNoShow, useQueue } from "../../hooks/useQueue";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { Appointment } from "../../types";
 
@@ -27,7 +27,6 @@ export default function DoctorQueue() {
 
   const callNext = useCallNext();
   const callPatient = useCallPatient();
-  const markLate = useMarkLate();
   const markArrived = useMarkArrived();
   const finish = useFinishAppointment();
   const noShow = useMarkNoShow();
@@ -35,7 +34,6 @@ export default function DoctorQueue() {
   const busy =
     callNext.isPending ||
     callPatient.isPending ||
-    markLate.isPending ||
     markArrived.isPending ||
     finish.isPending ||
     noShow.isPending;
@@ -166,17 +164,10 @@ export default function DoctorQueue() {
             </Button>
             <Button
               variant="outline"
-              loading={markLate.isPending}
               disabled={busy}
-              onClick={() =>
-                run(
-                  markLate.mutateAsync(current.id),
-                  "نُقل إلى قائمة المتأخرين، ويعود دوره بعد مريضين.",
-                  "تعذّر تسجيله كمتأخر."
-                )
-              }
+              onClick={() => openNoShow(current)}
             >
-              <Clock3 className="ml-1.5 h-4 w-4" /> لم يستجب
+              <UserX className="ml-1.5 h-4 w-4" /> لم يحضر
             </Button>
           </div>
         </Card>

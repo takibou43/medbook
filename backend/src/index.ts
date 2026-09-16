@@ -4,6 +4,7 @@ import { prisma } from "./lib/prisma";
 import { Role, SubscriptionStatus } from "@prisma/client";
 import { hashPassword } from "./utils/password";
 import { syncTrialSubscriptions } from "./lib/trial";
+import { sweepStaleAppointmentsForAllDoctors } from "./modules/appointments/appointments.service";
 
 const app = createApp();
 
@@ -54,6 +55,12 @@ async function bootstrapAdminUser() {
 // الذي سجّل لتوّه دون انتظار تدخلك، وحتى تتوقف الاشتراكات وحدها لحظة انتهاء التجربة.
 const TRIAL_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
+// اعتماد الغياب عند انتهاء دوام الطبيب: القاعدة نفسها الموجودة في
+// autoExpireStaleAppointments، لكن مشغَّلة دوريًا لكل الأطباء حتى لا تنتظر أن يفتح
+// أحدهم لوحته. ربع ساعة يكفي: دقة الاعتماد تُقاس بوقت إغلاق العيادة لا بالدقيقة.
+// نستعمل setInterval داخل خادم Render الدائم (الواجهات وحدها على Vercel).
+const NO_SHOW_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
+
 // إبقاء الخادم مستيقظًا: خطة الاستضافة المجانية تُنيم الخدمة بعد نحو 15 دقيقة بلا طلبات،
 // فيصير أول فتح للموقع بعدها بطيئًا (قيسنا 24 ثانية). المهمة المجدولة في GitHub Actions
 // لم تكفِ وحدها لأن GitHub يؤخّر الجداول القصيرة كثيرًا (قست الفواصل الفعلية: ساعتان إلى خمس).
@@ -95,10 +102,20 @@ function startSelfPing() {
   );
 }
 
-Promise.all([grandfatherExistingDoctors(), bootstrapAdminUser(), syncTrialSubscriptions()]).finally(() => {
+Promise.all([
+  grandfatherExistingDoctors(),
+  bootstrapAdminUser(),
+  syncTrialSubscriptions(),
+  sweepStaleAppointmentsForAllDoctors(),
+]).finally(() => {
   setInterval(() => {
     void syncTrialSubscriptions();
   }, TRIAL_SYNC_INTERVAL_MS);
+
+  // اعتماد "لم يحضر" لمن انتهى دوام طبيبه وهو غائب — بلا حذف أي سجل من قاعدة البيانات.
+  setInterval(() => {
+    void sweepStaleAppointmentsForAllDoctors();
+  }, NO_SHOW_SWEEP_INTERVAL_MS);
 
   startSelfPing();
 

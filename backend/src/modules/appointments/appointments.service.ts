@@ -115,15 +115,41 @@ export async function listForPatient(patientUserId: string, status?: Appointment
   });
 }
 
-const NO_SHOW_RETENTION_DAYS = 10;
+/**
+ * الحالات غير المحسومة وحدها مرشَّحة لاعتماد الغياب عند انتهاء الدوام. المكتملة
+ * (COMPLETED) والملغاة (CANCELLED) والمعتمدة أصلًا (NO_SHOW) والمعلّقة قبل التأكيد
+ * (PENDING) لا تُمسّ إطلاقًا — ولهذا فإن تكرار العملية لا يغيّر شيئًا (idempotent).
+ */
+export const EXPIRABLE_STATUSES: AppointmentStatus[] = [
+  AppointmentStatus.CONFIRMED,
+  AppointmentStatus.LATE,
+  AppointmentStatus.IN_PROGRESS,
+];
+
+/**
+ * من كان بالداخل عند الإغلاق (IN_PROGRESS) دخل فعلًا على الطبيب فموعده مكتمل، ومن بقي
+ * مؤكَّدًا أو متأخرًا حتى الإغلاق فهو غياب نهائي. دالة نقية قابلة للاختبار مباشرة.
+ */
+export function classifyDueAppointments<T extends { id: string; status: AppointmentStatus }>(due: T[]) {
+  return {
+    seen: due.filter((a) => a.status === AppointmentStatus.IN_PROGRESS).map((a) => a.id),
+    missed: due.filter((a) => a.status !== AppointmentStatus.IN_PROGRESS).map((a) => a.id),
+  };
+}
 
 /**
  * لا نحذف أو نُلغي موعد المريض بمجرد مرور وقته — يبقى بانتظار حضوره طوال اليوم،
  * وفقط عند وصول وقت إغلاق الطبيب لذلك اليوم دون أن يُسجَّل حضوره يتحوّل تلقائيًا
- * إلى "لم يحضر" فيختفي من القائمة الرئيسية (المواعيد القادمة) وينتقل إلى قائمة
- * "لم يحضروا" المنفصلة. بعد 10 أيام من تاريخ الموعد يُحذف نهائيًا من قاعدة البيانات
- * حتى لا تتراكم بيانات لا فائدة منها. نُنفّذ كل هذا بشكل كسول (lazy) عند كل جلب
- * لقائمة مواعيد الطبيب، لعدم توفر مهام مجدولة (cron) دائمة على الخطة المجانية.
+ * إلى "لم يحضر"، فيختفي من طابور اليوم ومن المواعيد النشطة/القادمة وينتقل إلى
+ * قائمة "لم يحضروا" المنفصلة.
+ *
+ * سجل الموعد نفسه لا يُحذف من قاعدة البيانات أبدًا: الغياب يجب أن يبقى محفوظًا لأنه
+ * يُحتسب في إحصائيات الطبيب (noShowAppointments / noShowRate) وفي تقييد الحجز كضيف
+ * بعد تكرار الغياب (GUEST_NO_SHOW_LIMIT). كان هنا سابقًا حذف نهائي لمواعيد "لم يحضر"
+ * الأقدم من 10 أيام وقد أُلغي لهذا السبب.
+ *
+ * التنفيذ كسول (lazy) عند كل جلب لقائمة مواعيد الطبيب أو طابوره أو إحصائياته، لعدم
+ * توفر مهام مجدولة (cron) دائمة على الخطة المجانية.
  */
 export async function autoExpireStaleAppointments(doctorId: string) {
   const doctor = await prisma.doctor.findUnique({ where: { id: doctorId }, select: { schedules: true } });
@@ -134,7 +160,7 @@ export async function autoExpireStaleAppointments(doctorId: string) {
       doctorId,
       // المتأخر الذي لم يعد حتى إغلاق العيادة، ومن نودي عليه ولم يُسجّل إنهاء موعده،
       // ينتهيان إلى "لم يحضر" مثل المؤكّد تمامًا — وإلا بقيا معلّقين في الطابور إلى الأبد.
-      status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS] },
+      status: { in: EXPIRABLE_STATUSES },
       date: { lte: algeriaTodayUTCMidnight() },
     },
     select: { id: true, date: true, status: true },
@@ -149,8 +175,7 @@ export async function autoExpireStaleAppointments(doctorId: string) {
   // من كان بالداخل عند إغلاق العيادة (IN_PROGRESS) فقد نودي عليه ودخل فعلًا على الطبيب،
   // فنعتبر موعده مكتملًا لا غيابًا. وسمُه بـ"لم يحضر" ظلمٌ له ويرفع عدّاد غيابه الذي قد
   // يمنعه من الحجز كضيف لاحقًا (الحد ثلاث مرات) — وكل ذلك لمجرد أن الطبيب نسي زر الإنهاء.
-  const seen = due.filter((a) => a.status === AppointmentStatus.IN_PROGRESS).map((a) => a.id);
-  const missed = due.filter((a) => a.status !== AppointmentStatus.IN_PROGRESS).map((a) => a.id);
+  const { seen, missed } = classifyDueAppointments(due);
 
   if (seen.length > 0) {
     await prisma.appointment.updateMany({ where: { id: { in: seen } }, data: { status: AppointmentStatus.COMPLETED } });
@@ -160,13 +185,33 @@ export async function autoExpireStaleAppointments(doctorId: string) {
     await prisma.appointment.updateMany({ where: { id: { in: missed } }, data: { status: AppointmentStatus.NO_SHOW } });
   }
 
-  // حذف نهائي لمواعيد "لم يحضر" التي مضى على تاريخها أكثر من 10 أيام — تبقى ظاهرة
-  // مؤقتًا في قائمة "لم يحضروا" الخاصة بها ثم تختفي تلقائيًا بعد هذه المهلة.
-  const retentionCutoff = algeriaTodayUTCMidnight();
-  retentionCutoff.setUTCDate(retentionCutoff.getUTCDate() - NO_SHOW_RETENTION_DAYS);
-  await prisma.appointment.deleteMany({
-    where: { doctorId, status: AppointmentStatus.NO_SHOW, date: { lt: retentionCutoff } },
-  });
+  // لا حذف بعد اليوم: مواعيد "لم يحضر" تبقى محفوظة في قاعدة البيانات دائمًا لتُحتسب
+  // ضمن إحصائيات الغياب وسجل المريض، وتظهر فقط في قائمة "لم يحضروا" لا في النشطة.
+}
+
+/**
+ * كنس دوري لكل الأطباء بنفس قاعدة انتهاء الدوام أعلاه، دون انتظار أن يفتح أحد لوحة
+ * الطبيب. ضروري حتى يُعتمد غياب من لم يحضر حتى إغلاق العيادة ولو لم يفتح الطبيب ولا
+ * مساعده التطبيق بقية اليوم. يعمل داخل خادم Express الدائم (Render) عبر setInterval في
+ * src/index.ts — الواجهات وحدها على Vercel، فلا علاقة لدوالها بهذه المهمة.
+ *
+ * آمن للتكرار تمامًا: لا يلمس إلا المواعيد غير المحسومة (CONFIRMED / LATE / IN_PROGRESS)
+ * التي فات وقت إغلاق يومها، ولا يمسّ المكتملة ولا الملغاة ولا المستقبلية، وكل طبيب
+ * يُعالَج بمواعيده وحده. فشل طبيب واحد لا يوقف البقية.
+ */
+export async function sweepStaleAppointmentsForAllDoctors() {
+  try {
+    const doctors = await prisma.doctor.findMany({ select: { id: true } });
+    for (const doctor of doctors) {
+      try {
+        await autoExpireStaleAppointments(doctor.id);
+      } catch (err) {
+        console.error(`تعذّر اعتماد غيابات الطبيب ${doctor.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("تعذّر تشغيل كنس المواعيد المنتهية:", err);
+  }
 }
 
 export async function listForDoctor(doctorUserId: string, role: Role, status?: AppointmentStatus, dateStr?: string) {

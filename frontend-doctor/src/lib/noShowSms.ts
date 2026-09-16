@@ -67,6 +67,25 @@ export function buildNoShowMessage(parts: {
   ].join("\n");
 }
 
+/**
+ * نص نداء المريض أثناء الطابور: «دورك قد حان» — يُرسل لحظة عدم استجابة المريض للنداء،
+ * وليس إشعار غياب. لا يُغيّر حالة الموعد إلى غياب نهائي بحال (الغياب النهائي يُعتمد
+ * وحده عند انتهاء دوام الطبيب في الخادم). النص قابل للتعديل من النافذة قبل إرساله.
+ */
+export function buildQueueCallMessage(parts: { doctorName?: string | null; patientName?: string | null }): string {
+  const doctorName = clean(parts.doctorName);
+  const patientName = clean(parts.patientName);
+
+  return [
+    doctorName ? `مادبوك - د. ${doctorName}` : "مادبوك",
+    "",
+    patientName ? `السلام عليكم ${patientName}،` : "السلام عليكم،",
+    `نحيطكم علمًا بأن دوركم لدى ${doctorName ? `د. ${doctorName}` : "الطبيب"} قد حان. يرجى التوجه إلى العيادة في أقرب وقت.`,
+    "",
+    "شكرًا لتفهمكم.",
+  ].join("\n");
+}
+
 /** iPadOS 13+ يُعرّف نفسه كـ Macintosh، فنكشفه بوجود اللمس. */
 function isIos(): boolean {
   if (typeof navigator === "undefined") return false;

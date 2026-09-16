@@ -6,7 +6,7 @@ import { Spinner, EmptyState } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
 import { disablePush, enablePush, isPushSubscribed, pushSupported } from "../../lib/push";
-import { useCallNext, useCallPatient, useFinishAppointment, useMarkArrived, useMarkLate, useMarkNoShow, useQueue } from "../../hooks/useQueue";
+import { useCallNext, useCallPatient, useFinishAppointment, useMarkArrived, useMarkLate, useQueue } from "../../hooks/useQueue";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { Appointment } from "../../types";
 
@@ -30,15 +30,13 @@ export default function DoctorQueue() {
   const markLate = useMarkLate();
   const markArrived = useMarkArrived();
   const finish = useFinishAppointment();
-  const noShow = useMarkNoShow();
 
   const busy =
     callNext.isPending ||
     callPatient.isPending ||
     markLate.isPending ||
     markArrived.isPending ||
-    finish.isPending ||
-    noShow.isPending;
+    finish.isPending;
 
   // حالة إشعارات هذا الجهاز تحديدًا (وليس الحساب): قد يفعّلها على هاتفه دون حاسوب العيادة.
   const [pushOn, setPushOn] = useState(false);
@@ -57,13 +55,19 @@ export default function DoctorQueue() {
     });
   }
 
-  async function recordNoShow(id: string) {
+  /**
+   * المريض نودي عليه فلم يحضر: لا نسجّله غائبًا نهائيًا هنا إطلاقًا. ننقله إلى قائمة
+   * المتأخرين (يعود دوره تلقائيًا بعد مريضين، بلا حد للتأجيل) ثم تفتح النافذة تطبيق
+   * الرسائل من هاتف المساعد. الغياب النهائي (NO_SHOW) يُعتمد وحده عند انتهاء دوام
+   * الطبيب عبر autoExpireStaleAppointments في الخادم — وهي القاعدة الموجودة أصلًا.
+   */
+  async function deferAndNotify(id: string) {
     try {
-      const res = await noShow.mutateAsync(id);
-      showToast("سُجّل كغائب.", "success");
+      const res = await markLate.mutateAsync(id);
+      showToast("لم يُسجَّل غيابًا نهائيًا — نُقل إلى المتأخرين ويعود دوره بعد مريضين.", "success");
       return res;
     } catch (err) {
-      showToast(apiErrorMessage(err, "تعذّر تسجيله كغائب."), "error");
+      showToast(apiErrorMessage(err, "تعذّر نقله إلى قائمة المتأخرين."), "error");
       throw err;
     }
   }
@@ -113,7 +117,7 @@ export default function DoctorQueue() {
 
   return (
     <div className="space-y-5">
-      <NoShowSmsDialog target={noShowTarget} onConfirm={recordNoShow} onClose={() => setNoShowTarget(null)} />
+      <NoShowSmsDialog target={noShowTarget} mode="call" onConfirm={deferAndNotify} onClose={() => setNoShowTarget(null)} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-slate-900">طابور اليوم</h1>
@@ -177,6 +181,17 @@ export default function DoctorQueue() {
               }
             >
               <Clock3 className="ml-1.5 h-4 w-4" /> متأخر
+            </Button>
+            {/* نودي عليه فلم يحضر: رسالة جاهزة من هاتف المساعد + بقاؤه في المتابعة.
+                لا تسجيل غياب نهائي هنا — ذلك يحدث وحده عند انتهاء دوام الطبيب. */}
+            <Button
+              variant="outline"
+              className="col-span-2 border-red-200 text-red-600 hover:bg-red-50"
+              disabled={busy}
+              title="لم يستجب للنداء — إشعاره برسالة دون تسجيل غياب نهائي"
+              onClick={() => openNoShow(current)}
+            >
+              <UserX className="ml-1.5 h-4 w-4" /> لم يحضر — إشعاره برسالة
             </Button>
           </div>
         </Card>
@@ -277,7 +292,7 @@ export default function DoctorQueue() {
                     <button
                       type="button"
                       disabled={busy}
-                      title="تسجيله كغائب نهائيًا + إشعاره برسالة"
+                      title="لم يستجب — إشعاره برسالة دون تسجيل غياب نهائي"
                       onClick={() => openNoShow(a)}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-white disabled:opacity-40"
                     >

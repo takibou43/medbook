@@ -98,3 +98,8 @@ body {
     background-image: url("/patient-bg.webp");
   }
 }
+
+/* بطاقات زجاجية نصف شفافة فوق صورة الخلفية: تبقى الصورة ظاهرة خلف البطاقات بدل كتلة بيضاء صمّاء. */
+.glass {
+  @apply rounded-2xl border border-white/70 bg-white/60 shadow-card backdrop-blur-md;
+}

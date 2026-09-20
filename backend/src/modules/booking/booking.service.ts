@@ -2,6 +2,7 @@ import { AppointmentStatus, Prisma, VerificationStatus, SubscriptionStatus } fro
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight } from "../../lib/slots";
+import { lockDoctorQueue } from "../../lib/doctorLock";
 import { createNotification } from "../notifications/notifications.service";
 import { GuestBookingInput, GuestSlotsQuery } from "./booking.schema";
 import { estimateSessionMinutes } from "../appointments/appointments.service";
@@ -55,7 +56,10 @@ async function findCandidateDoctors(wilayaId: string, specialtyId: string) {
   });
 }
 
-async function bookedRangesForDoctorOnDate(doctorId: string, date: Date) {
+// db: يمكن تمرير عميل المعاملة (tx) لتتم القراءة والكتابة على نفس الاتصال داخل القفل.
+type Db = Prisma.TransactionClient;
+
+async function bookedRangesForDoctorOnDate(doctorId: string, date: Date, db: Db = prisma) {
   const startOfDay = new Date(date);
   const endOfDay = new Date(date);
   endOfDay.setUTCHours(23, 59, 59, 999);
@@ -63,7 +67,7 @@ async function bookedRangesForDoctorOnDate(doctorId: string, date: Date) {
   // نستبعد كل فترة يوجد بها سجل موعد مهما كانت حالته (حتى الملغاة أو "لم يحضر")،
   // لأن قاعدة البيانات تفرض تفرّد (طبيب + تاريخ + وقت البداية) بغضّ النظر عن الحالة،
   // فلو اعتبرناها شاغرة لفشل الإدراج بخطأ تعارض بدل أن يأخذ المريض الدور التالي.
-  return prisma.appointment.findMany({
+  return db.appointment.findMany({
     where: {
       doctorId,
       date: { gte: startOfDay, lte: endOfDay },
@@ -77,8 +81,8 @@ async function bookedRangesForDoctorOnDate(doctorId: string, date: Date) {
  * المريض لا يختار الوقت: نبدأ من اليوم ونتقدّم يومًا بيوم حتى نجد أول فترة شاغرة
  * ضمن أوقات عمل الطبيب، بطول مدة الجلسة التي حددها هو (مثلاً 5 أو 10 أو 20 دقيقة).
  */
-export async function findNextAvailableSlot(doctorId: string, daysAhead = 60) {
-  const doctor = await prisma.doctor.findUnique({
+export async function findNextAvailableSlot(doctorId: string, daysAhead = 60, db: Db = prisma) {
+  const doctor = await db.doctor.findUnique({
     where: { id: doctorId },
     include: { schedules: true, specialty: true, wilaya: true, city: true, clinic: true },
   });
@@ -96,7 +100,7 @@ export async function findNextAvailableSlot(doctorId: string, daysAhead = 60) {
     const date = algeriaTodayUTCMidnight();
     date.setUTCDate(date.getUTCDate() + i);
 
-    const booked = await bookedRangesForDoctorOnDate(doctor.id, date);
+    const booked = await bookedRangesForDoctorOnDate(doctor.id, date, db);
     const slots = generateAvailableSlots(date, doctor.schedules, booked, slotMinutes);
     // نتخطى ما مضى من وقت اليوم — لا يُعطى للمريض دور في ساعة فاتت.
     const next = slots.find((s) => !isPast(date, s));
@@ -162,37 +166,51 @@ export async function getAggregatedSlots(query: GuestSlotsQuery) {
  * لأن الدور قد يُحجز بين لحظة الحساب ولحظة الإدراج.
  */
 async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId: string, attempt = 0): Promise<any> {
-  const slot = await findNextAvailableSlot(doctorId);
-
   try {
-    const appointment = await prisma.appointment.create({
-      data: {
-        patientId: null,
-        guestFirstName: input.firstName,
-        guestLastName: input.lastName,
-        guestPhone: input.phone || null,
-        doctorId: slot.doctor.id,
-        date: slot.date,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-        // كل الحجوزات مقبولة تلقائيًا — الطبيب لا يوافق، بل يسجّل لاحقًا: حضر / لم يحضر.
-        status: AppointmentStatus.CONFIRMED,
-        notes: input.notes,
+    // قراءة "أول دور شاغر" + إنشاء الموعد معًا داخل معاملة واحدة تحت قفل طابور هذا الطبيب،
+    // فلا يستطيع طلب آخر لنفس الطبيب أخذ الدور نفسه بين القراءة والكتابة (كان هذا هو السباق).
+    const { appointment, slot } = await prisma.$transaction(
+      async (tx) => {
+        await lockDoctorQueue(tx, doctorId);
+        const slot = await findNextAvailableSlot(doctorId, 60, tx);
+        const appointment = await tx.appointment.create({
+          data: {
+            patientId: null,
+            guestFirstName: input.firstName,
+            guestLastName: input.lastName,
+            guestPhone: input.phone || null,
+            doctorId: slot.doctor.id,
+            date: slot.date,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            // كل الحجوزات مقبولة تلقائيًا — الطبيب لا يوافق، بل يسجّل لاحقًا: حضر / لم يحضر.
+            status: AppointmentStatus.CONFIRMED,
+            notes: input.notes,
+          },
+          include: { doctor: { include: { specialty: true, wilaya: true, city: true, clinic: true } } },
+        });
+        return { appointment, slot };
       },
-      include: { doctor: { include: { specialty: true, wilaya: true, city: true, clinic: true } } },
-    });
-
-    await createNotification(
-      slot.doctor.userId,
-      "APPOINTMENT_CREATED",
-      "طلب حجز موعد جديد",
-      `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} (بدون حساب) بتاريخ ${slot.dateStr} الساعة ${slot.startTime}.`
+      // الطلبات المتزامنة لنفس الطبيب تنتظر القفل بالدور؛ نرفع مهلة الاتصال/المعاملة لتحمّل الذروة.
+      { maxWait: 20000, timeout: 30000 }
     );
+
+    // الإشعار بعد اكتمال المعاملة: فشله لا يجوز أن يجعل حجزًا محفوظًا يبدو فاشلًا (فيُعاد ويتكرر).
+    try {
+      await createNotification(
+        slot.doctor.userId,
+        "APPOINTMENT_CREATED",
+        "طلب حجز موعد جديد",
+        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} (بدون حساب) بتاريخ ${slot.dateStr} الساعة ${slot.startTime}.`
+      );
+    } catch (notifyErr) {
+      console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", notifyErr);
+    }
 
     return appointment;
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002" && attempt < 3) {
-      // سبقنا مريض آخر إلى نفس الدور — نُعيد الحساب ونمنحه الدور التالي.
+      // خط دفاع أخير: تعارض مع مسار كتابة آخر لا يستخدم القفل (حجز بوقت محدد) — نعيد الحساب.
       return createAutoAssignedAppointment(input, doctorId, attempt + 1);
     }
     throw err;

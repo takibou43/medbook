@@ -2,7 +2,10 @@ import { AppointmentStatus, Prisma, VerificationStatus, SubscriptionStatus } fro
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight } from "../../lib/slots";
-import { lockDoctorQueue } from "../../lib/doctorLock";
+import { lockDoctorQueue, withDoctorQueueTurn, DoctorQueueBusyError } from "../../lib/doctorLock";
+
+// أقصى انتظار في طابور الحجز لطبيب واحد قبل الرفض بـ503 (أقل من مهلة العميل 45 ثانية).
+const QUEUE_TURN_MAX_WAIT_MS = 30_000;
 import { createNotification } from "../notifications/notifications.service";
 import { GuestBookingInput, GuestSlotsQuery } from "./booking.schema";
 import { estimateSessionMinutes } from "../appointments/appointments.service";
@@ -81,7 +84,8 @@ async function bookedRangesForDoctorOnDate(doctorId: string, date: Date, db: Db 
  * المريض لا يختار الوقت: نبدأ من اليوم ونتقدّم يومًا بيوم حتى نجد أول فترة شاغرة
  * ضمن أوقات عمل الطبيب، بطول مدة الجلسة التي حددها هو (مثلاً 5 أو 10 أو 20 دقيقة).
  */
-export async function findNextAvailableSlot(doctorId: string, daysAhead = 60, db: Db = prisma) {
+/** تحميل الطبيب (مع جدوله وعلاقاته) والتحقق من أنه موثّق ومشترك — لا علاقة له بالتسابق فيمكن أداؤه خارج القفل. */
+async function loadBookableDoctor(doctorId: string, db: Db = prisma) {
   const doctor = await db.doctor.findUnique({
     where: { id: doctorId },
     include: { schedules: true, specialty: true, wilaya: true, city: true, clinic: true },
@@ -93,7 +97,19 @@ export async function findNextAvailableSlot(doctorId: string, daysAhead = 60, db
   ) {
     throw ApiError.notFound("الطبيب غير موجود أو غير موثّق.");
   }
+  return doctor;
+}
 
+export async function findNextAvailableSlot(doctorId: string, daysAhead = 60, db: Db = prisma) {
+  return scanForNextSlot(await loadBookableDoctor(doctorId, db), daysAhead, db);
+}
+
+/** المسح يوميًا عن أول فترة شاغرة: هذا الجزء وحده (قراءة المحجوز + الإدراج) يحتاج القفل. */
+async function scanForNextSlot(
+  doctor: Awaited<ReturnType<typeof loadBookableDoctor>>,
+  daysAhead: number,
+  db: Db
+) {
   const slotMinutes = doctor.slotDurationMin > 0 ? doctor.slotDurationMin : SLOT_MINUTES;
 
   for (let i = 0; i < daysAhead; i++) {
@@ -169,11 +185,15 @@ async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId:
   try {
     // قراءة "أول دور شاغر" + إنشاء الموعد معًا داخل معاملة واحدة تحت قفل طابور هذا الطبيب،
     // فلا يستطيع طلب آخر لنفس الطبيب أخذ الدور نفسه بين القراءة والكتابة (كان هذا هو السباق).
-    const { appointment, slot } = await prisma.$transaction(
+    const { appointment, slot } = await withDoctorQueueTurn(doctorId, QUEUE_TURN_MAX_WAIT_MS, async () => {
+      // تحميل بيانات الطبيب وعلاقاته (نحو 6 استعلامات) *قبل* فتح المعاملة والقفل: لا تتأثر بالتسابق، وتركها
+      // داخل القفل كانت تُطيل الجزء المتسلسل الوحيد في النظام. الخانتان تسمحان بتداخلها مع كتابة الطلب السابق.
+      const doctor = await loadBookableDoctor(doctorId);
+      return prisma.$transaction(
       async (tx) => {
         await lockDoctorQueue(tx, doctorId);
-        const slot = await findNextAvailableSlot(doctorId, 60, tx);
-        const appointment = await tx.appointment.create({
+        const slot = await scanForNextSlot(doctor, 60, tx);
+        const created = await tx.appointment.create({
           data: {
             patientId: null,
             guestFirstName: input.firstName,
@@ -187,13 +207,16 @@ async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId:
             status: AppointmentStatus.CONFIRMED,
             notes: input.notes,
           },
-          include: { doctor: { include: { specialty: true, wilaya: true, city: true, clinic: true } } },
         });
-        return { appointment, slot };
+        // نفس شكل الرد السابق (doctor + specialty/wilaya/city/clinic) لكن من الطبيب المحمَّل مسبقًا
+        // بدل 5 استعلامات إضافية داخل القفل.
+        const { schedules: _schedules, ...doctorWithRelations } = slot.doctor;
+        return { appointment: { ...created, doctor: doctorWithRelations }, slot };
       },
       // الطلبات المتزامنة لنفس الطبيب تنتظر القفل بالدور؛ نرفع مهلة الاتصال/المعاملة لتحمّل الذروة.
       { maxWait: 20000, timeout: 30000 }
-    );
+      );
+    });
 
     // الإشعار بعد اكتمال المعاملة: فشله لا يجوز أن يجعل حجزًا محفوظًا يبدو فاشلًا (فيُعاد ويتكرر).
     try {
@@ -209,6 +232,9 @@ async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId:
 
     return appointment;
   } catch (err) {
+    if (err instanceof DoctorQueueBusyError) {
+      throw ApiError.unavailable("الازدحام على هذا الطبيب مرتفع الآن. لم يُسجَّل أي حجز، الرجاء المحاولة بعد لحظات.");
+    }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002" && attempt < 3) {
       // خط دفاع أخير: تعارض مع مسار كتابة آخر لا يستخدم القفل (حجز بوقت محدد) — نعيد الحساب.
       return createAutoAssignedAppointment(input, doctorId, attempt + 1);

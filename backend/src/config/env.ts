@@ -38,7 +38,10 @@ export const env = {
 
   // عدد وسطاء الـproxy الموثوقين أمام التطبيق (Render). بدون هذا الضبط يرى express-rate-limit عنوان
   // الـproxy نفسه لكل الزوار فيتشاركون سلّة عدّ واحدة (حدّ عالمي بدل حدّ لكل عميل). 0 = تعطيل.
-  trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 1),
+  // القيمة 2 لأن الزائر يمرّ على وسيطين قبل التطبيق: Cloudflare ثم موجّه Render. قياس الإنتاج أثبت أن
+  // القيمة 1 تعطي مفتاحًا هو عنوان حافة Cloudflare (يتبدّل بين طلبات العميل الواحد ويُشارَك بين الزوار)،
+  // لا عنوان الزائر نفسه؛ 2 تجعل req.ip عنوان الزائر الفعلي (أول مُدخَل غير موثوق في X-Forwarded-For).
+  trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 2),
 
   ai: {
     provider: (process.env.AI_PROVIDER ?? "mock") as "mock" | "anthropic" | "openai",

@@ -16,5 +16,8 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     testTimeout: 30000,
     hookTimeout: 30000,
+    // ملفات التكامل تتشارك قاعدة بيانات واحدة وتفحص حالتها العامة (اتصالات idle in transaction)،
+    // فلا يجوز أن تعمل بالتوازي.
+    fileParallelism: false,
   },
 });

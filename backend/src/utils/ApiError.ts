@@ -24,4 +24,8 @@ export class ApiError extends Error {
   static conflict(message: string, details?: unknown) {
     return new ApiError(409, message, details);
   }
+  // 503: الخادم مشغول مؤقتًا — لم يُنفَّذ أي شيء، والعميل يستطيع إعادة المحاولة بأمان.
+  static unavailable(message: string, details?: unknown) {
+    return new ApiError(503, message, details);
+  }
 }

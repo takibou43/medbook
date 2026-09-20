@@ -23,6 +23,13 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     if (err.code === "P2002") {
       return res.status(409).json({ success: false, message: "القيمة مستخدمة مسبقًا (تعارض في البيانات).", meta: err.meta });
     }
+    // نفاد اتصالات المجمّع/انتهاء مهلة المعاملة/تعذّر الوصول لقاعدة البيانات: حمل مؤقت لا خلل في الطلب.
+    // نُرجع 503 + Retry-After بدل 500 حتى يعرف العميل أنه يستطيع إعادة المحاولة.
+    if (["P2024", "P2028", "P1001", "P1002", "P1008", "P1017"].includes(err.code)) {
+      console.error("Database busy/unreachable:", err.code);
+      res.setHeader("Retry-After", "2");
+      return res.status(503).json({ success: false, message: "الخادم مشغول مؤقتًا. الرجاء المحاولة بعد لحظات." });
+    }
     if (err.code === "P2025") {
       return res.status(404).json({ success: false, message: "العنصر غير موجود." });
     }

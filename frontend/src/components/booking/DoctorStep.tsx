@@ -16,6 +16,7 @@ interface Props {
   doctors: Doctor[];
   loading: boolean;
   error: boolean;
+  errorMessage?: string;
   onRetry: () => void;
   onSelect: (doctor: Doctor) => void;
   onBack: () => void;
@@ -36,7 +37,7 @@ function DoctorAvatar({ doctor }: { doctor: Doctor }) {
   );
 }
 
-export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, doctors, loading, error, onRetry, onSelect, onBack }, ref) => {
+export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, doctors, loading, error, errorMessage, onRetry, onSelect, onBack }, ref) => {
   const { showToast } = useToast();
   const [wilayaFilter, setWilayaFilter] = useState<string>("");
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
@@ -96,7 +97,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
       {loading ? (
         <DoctorListSkeleton />
       ) : error ? (
-        <InlineError title="تعذّر تحميل الأطباء." message="تحقق من اتصالك بالإنترنت ثم أعد المحاولة." onRetry={onRetry} />
+        <InlineError title="تعذّر تحميل الأطباء." message={errorMessage ?? "أعد المحاولة بعد قليل."} onRetry={onRetry} />
       ) : doctors.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 glass p-8 text-center">
           <Stethoscope className="mx-auto h-10 w-10 text-slate-300" aria-hidden="true" />

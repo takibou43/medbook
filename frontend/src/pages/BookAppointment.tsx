@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, apiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/Toast";
 import { Spinner } from "../components/ui/States";
 import { Doctor, NextSlot, Paginated } from "../types";
@@ -50,6 +50,7 @@ export default function BookAppointment() {
     data: allDoctors,
     isLoading: loadingDoctors,
     isError: doctorsFailed,
+    error: doctorsError,
     refetch: refetchDoctors,
   } = useQuery({ queryKey: ["book-doctors-all"], queryFn: fetchAllDoctors, staleTime: 60000 });
 
@@ -229,6 +230,7 @@ export default function BookAppointment() {
                 options={specialtyOptions}
                 loading={loadingDoctors}
                 error={doctorsFailed}
+                errorMessage={doctorsFailed ? apiErrorMessage(doctorsError) : undefined}
                 onRetry={() => refetchDoctors()}
                 onSelect={(id) => {
                   // نفس التخصص → نُبقي الطبيب المختار سابقًا؛ تخصص جديد → نبدأ اختيار طبيب من جديد.
@@ -247,6 +249,7 @@ export default function BookAppointment() {
                 doctors={specialtyDoctors}
                 loading={loadingDoctors}
                 error={doctorsFailed}
+                errorMessage={doctorsFailed ? apiErrorMessage(doctorsError) : undefined}
                 onRetry={() => refetchDoctors()}
                 onSelect={(d) => {
                   setSelectedDoctor(d);

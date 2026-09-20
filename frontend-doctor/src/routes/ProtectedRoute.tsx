@@ -4,6 +4,7 @@ import { RefreshCw, WifiOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Role } from "../types";
 import { Spinner } from "../components/ui/States";
+import { API_MESSAGES, ApiErrorKind } from "../lib/api";
 
 // شاشة انتظار التحقق من الجلسة: بعد بضع ثوانٍ نطمئن المستخدم بأن أول فتح قد يكون بطيئًا
 // (خادم الاستضافة ينام عند عدم الاستعمال ويحتاج وقتًا ليستيقظ)، حتى لا يظن أن الموقع معطّل.
@@ -29,14 +30,14 @@ function SessionLoading() {
 
 // عند فشل التحقق لسبب شبكي (انقطاع إنترنت أو انتهاء مهلة الطلب) لا نُخرج الطبيب من حسابه
 // ولا نتركه أمام دائرة تحميل لا تنتهي — نعرض سبب المشكلة وزر إعادة محاولة.
-function SessionError({ onRetry }: { onRetry: () => void }) {
+function SessionError({ onRetry, kind }: { onRetry: () => void; kind: ApiErrorKind | null }) {
+  // الرسالة حسب السبب الفعلي: جهاز بلا شبكة ≠ خادم لا يصل ≠ مهلة ≠ ضغط (429) ≠ عطل خادم (5xx).
+  const message = kind && kind !== "other" ? API_MESSAGES[kind] : API_MESSAGES.network;
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
       <WifiOff className="h-10 w-10 text-slate-400" />
-      <p className="text-lg font-extrabold text-slate-900">تعذّر الاتصال بالخادم</p>
-      <p className="max-w-xs text-sm leading-relaxed text-slate-500">
-        تحقق من اتصالك بالإنترنت ثم أعد المحاولة. جلستك لم تُلغَ.
-      </p>
+      <p className="max-w-xs text-lg font-extrabold leading-relaxed text-slate-900">{message}</p>
+      <p className="max-w-xs text-sm leading-relaxed text-slate-500">جلستك لم تُلغَ.</p>
       <button
         type="button"
         onClick={onRetry}
@@ -49,10 +50,10 @@ function SessionError({ onRetry }: { onRetry: () => void }) {
 }
 
 export function ProtectedRoute({ allow }: { allow: Role[] }) {
-  const { user, loading, sessionError, refreshMe } = useAuth();
+  const { user, loading, sessionError, sessionErrorKind, refreshMe } = useAuth();
 
   if (loading) return <SessionLoading />;
-  if (sessionError) return <SessionError onRetry={() => void refreshMe()} />;
+  if (sessionError) return <SessionError kind={sessionErrorKind} onRetry={() => void refreshMe()} />;
   if (!user) return <Navigate to="/login" replace />;
   if (!allow.includes(user.role)) {
     return <Navigate to={user.role === "ADMIN" ? "/admin" : "/"} replace />;

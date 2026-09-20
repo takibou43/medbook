@@ -11,7 +11,7 @@
 //
 // عند أي تغيير في بنية هذا الملف: ارفع رقم VERSION ليُنظَّف الكاش القديم.
 
-const VERSION = "v2";
+const VERSION = "v3";
 const SHELL_CACHE = "medbook-doctor-shell-" + VERSION;
 const ASSET_CACHE = "medbook-doctor-assets-" + VERSION;
 const KEEP = [SHELL_CACHE, ASSET_CACHE];
@@ -60,6 +60,22 @@ async function offlineFallback() {
   );
 }
 
+// طلب فتح صفحة: إن فشل على مستوى الشبكة (تقلّب لحظي في شبكة الهاتف/DNS/إعادة اتصال) نعيد المحاولة مرة
+// واحدة بعد لحظة قبل الحكم بالانقطاع وعرض صفحة offline. ردود الخادم (حتى 429 و5xx) لا ترمي استثناءً
+// أصلًا فتُعرض كما هي — أي أن أعطال الـAPI لا تصل إلى هذا المسار إطلاقًا.
+async function navigateWithRetry(request) {
+  try {
+    return await fetch(request);
+  } catch (e) {
+    await new Promise(function (resolve) { setTimeout(resolve, 1200); });
+    try {
+      return await fetch(request);
+    } catch (e2) {
+      return offlineFallback();
+    }
+  }
+}
+
 async function cacheFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
   const hit = await cache.match(request);
@@ -102,7 +118,7 @@ self.addEventListener("fetch", (event) => {
   // (ج) التنقّل بين الصفحات (ومنها رابط QR ‎/?doctor=ID‎): الشبكة أولًا دائمًا.
   //     لا نخزّن الـHTML أبدًا، فلا يمكن أن يُعرض إصدار قديم من التطبيق بعد النشر.
   if (request.mode === "navigate") {
-    event.respondWith(fetch(request).catch(() => offlineFallback()));
+    event.respondWith(navigateWithRetry(request));
     return;
   }
 

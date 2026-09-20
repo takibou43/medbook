@@ -16,6 +16,8 @@ interface Props {
   options: SpecialtyOption[];
   loading: boolean;
   error: boolean;
+  // رسالة دقيقة حسب سبب الفشل (انقطاع/مهلة/429/5xx) — تُحسب في الصفحة عبر apiErrorMessage.
+  errorMessage?: string;
   onRetry: () => void;
   onSelect: (specialtyId: string) => void;
   onOpenSearch: () => void;
@@ -23,7 +25,7 @@ interface Props {
 
 // الخطوة 1: "اختر التخصص". التخصصات وأعدادها مشتقّة من الأطباء الموثّقين الفعليين المعروضين للمريض
 // (لا قائمة ثابتة ولا تخصصات وهمية) — فلا يظهر تخصص إلا إذا كان فيه طبيب حقيقي يستطيع المريض حجزه.
-export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, loading, error, onRetry, onSelect, onOpenSearch }, ref) => (
+export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, loading, error, errorMessage, onRetry, onSelect, onOpenSearch }, ref) => (
   <section aria-labelledby="step-specialty-title">
     <StepHeading ref={ref} id="step-specialty-title" hint="اختر التخصص الذي تحتاجه، ثم الطبيب المناسب.">
       اختر التخصص
@@ -32,7 +34,7 @@ export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, l
     {loading ? (
       <SpecialtyGridSkeleton />
     ) : error ? (
-      <InlineError title="تعذّر تحميل التخصصات." message="تحقق من اتصالك بالإنترنت ثم أعد المحاولة." onRetry={onRetry} />
+      <InlineError title="تعذّر تحميل التخصصات." message={errorMessage ?? "أعد المحاولة بعد قليل."} onRetry={onRetry} />
     ) : options.length === 0 ? (
       <EmptyState title="لا يوجد أطباء مسجلون حاليًا" description="سيُفتح الحجز فور اشتراك أطباء جدد." />
     ) : (

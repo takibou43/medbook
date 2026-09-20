@@ -75,10 +75,38 @@ api.interceptors.response.use(
   }
 );
 
+// ===== تصنيف أخطاء الـAPI: رسالة دقيقة حسب السبب الحقيقي =====
+// لا نُخفي خطأ الخادم ولا نعتبر المستخدم "متصلًا" اصطناعيًا: نقرأ navigator.onLine فقط لنميّز
+// جهازًا بلا شبكة فعلًا (offline) عن جهاز متصل لا يصله الخادم (network)، ونعتمد على رمز الحالة
+// (429/5xx) وعلى رمز المهلة لباقي الحالات.
+export type ApiErrorKind = "offline" | "timeout" | "network" | "rateLimited" | "server" | "other";
+
+export const API_MESSAGES = {
+  offline: "لا يوجد اتصال بالإنترنت.",
+  timeout: "استغرق الاتصال بخادم مادبوك وقتًا أطول من المتوقع.",
+  network: "تعذّر الاتصال بخادم مادبوك. حاول مرة أخرى بعد قليل.",
+  rateLimited: "عدد الطلبات كبير حاليًا. انتظر قليلًا ثم أعد المحاولة.",
+  server: "حدث خطأ مؤقت في خادم مادبوك. حاول مرة أخرى.",
+} as const;
+
+export function classifyApiError(error: unknown): { kind: ApiErrorKind; status?: number } {
+  const e = error as any;
+  const status: number | undefined = e?.response?.status;
+  if (status) {
+    if (status === 429) return { kind: "rateLimited", status };
+    if (status >= 500) return { kind: "server", status };
+    return { kind: "other", status };
+  }
+  if (e?.code === "ECONNABORTED" || e?.code === "ETIMEDOUT") return { kind: "timeout" };
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return { kind: "offline" };
+  return { kind: "network" };
+}
+
 export function apiErrorMessage(error: unknown, fallback = "حدث خطأ غير متوقع."): string {
   const anyErr = error as any;
-  if (anyErr?.code === "ECONNABORTED") return "انتهت مهلة الاتصال بالخادم. تحقق من الإنترنت وأعد المحاولة.";
-  if (anyErr?.response?.data?.message) return anyErr.response.data.message;
-  if (anyErr?.message === "Network Error") return "تعذّر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.";
-  return anyErr?.message ?? fallback;
+  const { kind } = classifyApiError(error);
+  if (kind !== "other") return API_MESSAGES[kind];
+  // 4xx: رسالة الخادم العربية مكتوبة للمستخدم (بيانات غير صحيحة، غير مصرَّح...) فتُعرض كما هي.
+  const serverMsg = anyErr?.response?.data?.message;
+  return typeof serverMsg === "string" && serverMsg ? serverMsg : fallback;
 }

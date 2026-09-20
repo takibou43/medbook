@@ -30,7 +30,15 @@ export const env = {
   jwtRefreshExpires: process.env.JWT_REFRESH_EXPIRES ?? "7d",
 
   rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 900000),
-  rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 200),
+  // الحدّ العام لكل عنوان IP خلال النافذة. كان 200 فقط، وهو لا يكفي حتى لطبيب واحد يترك لوحته
+  // مفتوحة (استطلاع الطابور كل 10 ث والمواعيد كل 15 ث والإشعارات ≈ 12 طلبًا/دقيقة ≈ 180 في 15 دقيقة)،
+  // فكان 100 حجز (≈ 200 طلب مع المعاينات) يستنفدانه ويظهر للجميع «تعذّر الاتصال بالخادم» (429).
+  // المسارات الحساسة (تسجيل الدخول، lookup/cancel) لها محدِّداتها الصارمة المنفصلة ولم تتغيّر.
+  rateLimitMax: Number(process.env.RATE_LIMIT_MAX ?? 1500),
+
+  // عدد وسطاء الـproxy الموثوقين أمام التطبيق (Render). بدون هذا الضبط يرى express-rate-limit عنوان
+  // الـproxy نفسه لكل الزوار فيتشاركون سلّة عدّ واحدة (حدّ عالمي بدل حدّ لكل عميل). 0 = تعطيل.
+  trustProxyHops: Number(process.env.TRUST_PROXY_HOPS ?? 1),
 
   ai: {
     provider: (process.env.AI_PROVIDER ?? "mock") as "mock" | "anthropic" | "openai",

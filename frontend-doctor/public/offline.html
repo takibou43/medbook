@@ -36,8 +36,30 @@
   </head>
   <body>
     <img src="/logo.svg" width="56" height="56" alt="مادبوك" />
-    <h1>لا يوجد اتصال بالإنترنت</h1>
-    <p>بعض وظائف مادبوك تحتاج إلى اتصال. تحقق من اتصالك ثم أعد المحاولة — جلستك لم تُلغَ ومواعيدك محفوظة.</p>
+    <h1 id="offline-title">لا يوجد اتصال بالإنترنت</h1>
+    <p id="offline-text">بعض وظائف مادبوك تحتاج إلى اتصال. تحقق من اتصالك ثم أعد المحاولة — جلستك لم تُلغَ ومواعيدك محفوظة.</p>
     <button onclick="location.reload()">إعادة المحاولة</button>
+    <script>
+      // الصفحة تُعرض حين يفشل طلب فتح الموقع نفسه على مستوى الشبكة. هذا لا يعني دائمًا أن الجهاز بلا إنترنت:
+      // إن كان navigator.onLine صحيحًا فالمشكلة في الوصول إلى مادبوك (تقلّب شبكة/DNS/خادم) فنقول ذلك بدقة.
+      (function () {
+        var title = document.getElementById("offline-title");
+        var text = document.getElementById("offline-text");
+        var offlineTitle = title.textContent;
+        var offlineText = text.textContent;
+        function render() {
+          if (navigator.onLine === false) {
+            title.textContent = offlineTitle;
+            text.textContent = offlineText;
+          } else {
+            title.textContent = "تعذّر الوصول إلى مادبوك";
+            text.textContent = "جهازك متصل بالإنترنت، لكن تعذّر الوصول إلى مادبوك الآن. حاول مرة أخرى بعد قليل.";
+          }
+        }
+        render();
+        window.addEventListener("offline", render);
+        window.addEventListener("online", function () { location.reload(); });
+      })();
+    </script>
   </body>
 </html>

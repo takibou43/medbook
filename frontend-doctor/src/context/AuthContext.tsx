@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
-import { api, setAccessToken, getAccessToken } from "../lib/api";
+import { api, setAccessToken, getAccessToken, classifyApiError, ApiErrorKind } from "../lib/api";
 import { User } from "../types";
 
 interface AuthContextValue {
@@ -8,6 +8,8 @@ interface AuthContextValue {
   // صحيح عندما يفشل التحقق من الجلسة لسبب شبكي (لا لانتهاء الجلسة): نعرض عندها شاشة
   // إعادة محاولة بدل إخراج الطبيب من حسابه أو تركه أمام دائرة تحميل لا تنتهي.
   sessionError: boolean;
+  // سبب الفشل غير المرتبط بانتهاء الجلسة (انقطاع فعلي / لا يصل الخادم / مهلة / 429 / 5xx) لعرض رسالة دقيقة.
+  sessionErrorKind: ApiErrorKind | null;
   login: (email: string, password: string) => Promise<User>;
   registerDoctor: (data: Record<string, unknown>) => Promise<User>;
   registerAssistant: (data: { token: string; password: string; firstName: string; lastName: string }) => Promise<User>;
@@ -21,15 +23,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionError, setSessionError] = useState(false);
+  const [sessionErrorKind, setSessionErrorKind] = useState<ApiErrorKind | null>(null);
 
   const refreshMe = useCallback(async () => {
     if (!getAccessToken()) {
       setSessionError(false);
+      setSessionErrorKind(null);
       setLoading(false);
       return;
     }
     setLoading(true);
     setSessionError(false);
+    setSessionErrorKind(null);
     try {
       const res = await api.get("/auth/me");
       setUser(res.data.data);
@@ -43,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // عطل شبكة أو مهلة (خادم نائم مثلًا): نحتفظ بالجلسة ونعرض إمكانية إعادة المحاولة
         // بدل تسجيل خروج غير مبرَّر.
         setSessionError(true);
+        setSessionErrorKind(classifyApiError(err).kind);
       }
     } finally {
       setLoading(false);
@@ -88,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, sessionError, login, registerDoctor, registerAssistant, logout, refreshMe }}>
+    <AuthContext.Provider value={{ user, loading, sessionError, sessionErrorKind, login, registerDoctor, registerAssistant, logout, refreshMe }}>
       {children}
     </AuthContext.Provider>
   );

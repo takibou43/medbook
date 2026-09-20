@@ -26,6 +26,10 @@ import assistantsPublicRoutes from "./modules/assistants/assistants.public.route
 export function createApp() {
   const app = express();
 
+  // خلف proxy الاستضافة: نثق بعدد محدد من القفزات (لا `true`) حتى يُقرأ عنوان العميل الحقيقي
+  // من X-Forwarded-For دون أن يستطيع المهاجم انتحال عنوان بإرسال الترويسة بنفسه.
+  if (env.trustProxyHops > 0) app.set("trust proxy", env.trustProxyHops);
+
   app.use(helmet());
   app.use(
     cors({

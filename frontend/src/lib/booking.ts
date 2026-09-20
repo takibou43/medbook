@@ -1,4 +1,5 @@
 import type { Doctor } from "../types";
+import { API_MESSAGES, classifyApiError } from "./api";
 
 // عنوان عيادة الطبيب الظاهر للمريض عند الحجز — عنوان العيادة أدق من العنوان الشخصي
 // للطبيب إن وُجدت عيادة مسجَّلة، وإلا نستعمل عنوان الطبيب نفسه إن أدخله.
@@ -88,25 +89,20 @@ export function doctorsCountLabel(n: number): string {
 
 export type BookingErrorKind = "network" | "conflict" | "notFound" | "forbidden" | "server" | "other";
 
-// رسائل مفهومة للمريض بدل أخطاء تقنية ("Request failed with status code 500"…).
-// رسائل الخادم العربية (تعارض الوقت، الطبيب غير موجود، تقييد الحجز…) تُعرض كما هي لأنها كُتبت للمريض.
+// رسائل مفهومة للمريض بدل أخطاء تقنية ("Request failed with status code 500"…). رسائل الخادم العربية
+// الخاصة بالحجز (تعارض الوقت 409، الطبيب غير موجود 404، تقييد الحجز 403) تُعرض كما هي لأنها كُتبت للمريض؛
+// أما أعطال الشبكة والمهلة و429 و5xx فتُصنَّف بدقة عبر classifyApiError حتى لا يُلام إنترنت المريض خطأً.
 export function bookingError(err: unknown, fallback = "تعذّر إتمام العملية. حاول مرة أخرى."): { kind: BookingErrorKind; message: string } {
   const e = err as any;
   const status: number | undefined = e?.response?.status;
   const serverMsg: string | undefined = typeof e?.response?.data?.message === "string" ? e.response.data.message : undefined;
 
-  if (e?.code === "ECONNABORTED") {
-    return { kind: "network", message: "انتهت مهلة الاتصال بالخادم. تحقق من الإنترنت وأعد المحاولة." };
-  }
-  if (!e?.response) {
-    return { kind: "network", message: "تعذّر الاتصال بالخادم. تحقق من اتصالك بالإنترنت وأعد المحاولة." };
-  }
-  if (status && status >= 500) {
-    return { kind: "server", message: "حدث خلل مؤقت في الخادم. أعد المحاولة بعد قليل." };
-  }
+  const { kind } = classifyApiError(err);
+  if (kind === "offline" || kind === "network" || kind === "timeout") return { kind: "network", message: API_MESSAGES[kind] };
+  if (kind === "server") return { kind: "server", message: API_MESSAGES.server };
+  if (kind === "rateLimited") return { kind: "other", message: API_MESSAGES.rateLimited };
   if (status === 409) return { kind: "conflict", message: serverMsg ?? "هذا الموعد لم يعد متاحًا. سنعرض لك أقرب موعد متاح." };
   if (status === 404) return { kind: "notFound", message: serverMsg ?? "هذا الطبيب لم يعد متاحًا حاليًا." };
   if (status === 403) return { kind: "forbidden", message: serverMsg ?? fallback };
-  if (status === 429) return { kind: "other", message: "محاولات كثيرة في وقت قصير. انتظر قليلًا ثم أعد المحاولة." };
   return { kind: "other", message: serverMsg ?? fallback };
 }

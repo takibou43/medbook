@@ -1,36 +1,4 @@
-import {
-  Stethoscope,
-  Baby,
-  HeartPulse,
-  Eye,
-  Smile,
-  Sparkles,
-  Flower2,
-  Scissors,
-  Brain,
-  Ear,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import type { Doctor } from "../types";
-
-// مطابقة مفتاح الأيقونة المخزّن لكل تخصص (Specialty.icon) برمز بصري —
-// لا يوجد أيقونة "سن" جاهزة في مكتبة lucide-react فاستُعيض عنها بـ Smile.
-const SPECIALTY_ICONS: Record<string, LucideIcon> = {
-  stethoscope: Stethoscope,
-  baby: Baby,
-  "heart-pulse": HeartPulse,
-  eye: Eye,
-  tooth: Smile,
-  sparkles: Sparkles,
-  flower: Flower2,
-  scissors: Scissors,
-  brain: Brain,
-  ear: Ear,
-};
-
-export function specialtyIcon(icon?: string | null): LucideIcon {
-  return (icon && SPECIALTY_ICONS[icon]) || Stethoscope;
-}
 
 // عنوان عيادة الطبيب الظاهر للمريض عند الحجز — عنوان العيادة أدق من العنوان الشخصي
 // للطبيب إن وُجدت عيادة مسجَّلة، وإلا نستعمل عنوان الطبيب نفسه إن أدخله.

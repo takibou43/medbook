@@ -2,7 +2,8 @@ import { forwardRef } from "react";
 import { Search } from "lucide-react";
 import { EmptyState } from "../ui/States";
 import { Specialty } from "../../types";
-import { doctorsCountLabel, specialtyIcon } from "../../lib/booking";
+import { doctorsCountLabel } from "../../lib/booking";
+import { SpecialtyIcon } from "../../lib/specialtyIcons";
 import { StepHeading, InlineError } from "./StepParts";
 import { SpecialtyGridSkeleton } from "./Skeletons";
 
@@ -37,7 +38,6 @@ export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, l
     ) : (
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {options.map(({ specialty, doctorsCount }) => {
-          const Icon = specialtyIcon(specialty.icon);
           return (
             <li key={specialty.id}>
               <button
@@ -45,8 +45,8 @@ export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, l
                 onClick={() => onSelect(specialty.id)}
                 className="flex min-h-[8rem] w-full flex-col items-center justify-center gap-2 glass p-4 text-center transition hover:border-primary-400 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 active:scale-[0.98]"
               >
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-600">
-                  <Icon className="h-6 w-6" aria-hidden="true" />
+                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+                  <SpecialtyIcon specialty={specialty} />
                 </span>
                 <span className="text-sm font-bold leading-snug text-slate-800">{specialty.nameAr}</span>
                 <span className="text-xs text-slate-500">{doctorsCountLabel(doctorsCount)}</span>

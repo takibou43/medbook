@@ -10,7 +10,7 @@
 //
 // عند أي تغيير في بنية هذا الملف: ارفع رقم VERSION ليُنظَّف الكاش القديم.
 
-const VERSION = "v3";
+const VERSION = "v4";
 const SHELL_CACHE = "medbook-shell-" + VERSION;
 const ASSET_CACHE = "medbook-assets-" + VERSION;
 const KEEP = [SHELL_CACHE, ASSET_CACHE];
@@ -81,8 +81,18 @@ async function cacheFirst(request, cacheName) {
   if (hit) return hit;
   const res = await fetch(request);
   // basic = رد من نفس النطاق وغير معتم؛ لا نخزّن أخطاء ولا ردودًا جزئية (206).
-  if (res && res.ok && res.type === "basic") cache.put(request, res.clone()).catch(() => undefined);
+  if (res && res.ok && res.type === "basic") {
+    cache.put(request, res.clone()).then(() => trimCache(cache, MAX_ASSETS)).catch(() => undefined);
+  }
   return res;
+}
+
+// كل نشر يضيف ملفات جديدة بأسماء جديدة داخل نفس الكاش؛ نُبقي الأحدث فقط حتى لا يتضخّم مع الزمن.
+// (keys() مرتَّبة بحسب وقت الإضافة، فالأقدم أولًا.)
+const MAX_ASSETS = 40;
+async function trimCache(cache, max) {
+  const keys = await cache.keys();
+  for (let i = 0; i < keys.length - max; i++) await cache.delete(keys[i]);
 }
 
 async function staleWhileRevalidate(request, cacheName) {

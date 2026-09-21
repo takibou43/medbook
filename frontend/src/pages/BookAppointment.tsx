@@ -43,6 +43,16 @@ export default function BookAppointment() {
   const [confirmed, setConfirmed] = useState<ConfirmedBooking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // أثناء الحجز (أي اختيار أو خطوة متقدمة أو شاشة التأكيد) لا يجوز أن يُعيد التحديث التلقائي للـPWA تحميل الصفحة:
+  // حالة المعالج محفوظة في الذاكرة فقط. register-sw.js يقرأ هذه العلامة ويؤجّل التحديث لنقطة آمنة.
+  const midBooking = step !== "specialty" || specialtyId !== null || selectedDoctor !== null || confirmed !== null;
+  useEffect(() => {
+    const root = document.documentElement;
+    if (midBooking) root.setAttribute("data-mb-busy", "1");
+    else root.removeAttribute("data-mb-busy");
+    return () => root.removeAttribute("data-mb-busy");
+  }, [midBooking]);
+
   // بيانات المريض (الاسم واللقب + الهاتف) — تُحفظ عند التنقل بين الخطوات وتُفرَّغ بعد نجاح الحجز.
   const form = useForm<PatientForm>({ defaultValues: { fullName: "", phone: "" } });
 

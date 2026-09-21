@@ -113,6 +113,13 @@ export async function listMessages(doctorId: string, opts: { before?: string; li
   const conversation = await prisma.doctorConversation.findUnique({ where: { doctorId }, select: { id: true } });
   if (!conversation) return { items: [], hasMore: false };
 
+  // المؤشّر before يجب أن يخصّ هذه المحادثة نفسها: لا نسمح بتمرير معرّف رسالة من محادثة طبيب آخر
+  // (حتى لا يُستعمل كنقطة ترتيب أو للتحقق من وجود رسائل الغير). نفس الردّ لغير الموجود وللغريب.
+  if (opts.before) {
+    const owned = await prisma.doctorMessage.findFirst({ where: { id: opts.before, conversationId: conversation.id }, select: { id: true } });
+    if (!owned) throw ApiError.notFound("الرسالة غير موجودة.");
+  }
+
   const rows = await prisma.doctorMessage.findMany({
     where: { conversationId: conversation.id },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],

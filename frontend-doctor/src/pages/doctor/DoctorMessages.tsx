@@ -10,14 +10,14 @@ export default function DoctorMessages() {
       <h1 className="text-2xl font-extrabold text-slate-900">الرسائل</h1>
       <div className="card flex h-[70vh] min-h-[420px] flex-col overflow-hidden p-0">
         <div className="border-b border-slate-200 px-4 py-3">
-          <p className="font-bold text-slate-800">الإدارة</p>
-          <p className="text-xs text-slate-500">محادثة خاصة بينك وبين إدارة مادبوك</p>
+          <p className="font-bold text-slate-800">إدارة MadBook</p>
+          <p className="text-xs text-slate-500">محادثة رسمية خاصة بينك وبين إدارة MadBook فقط — لا يراها أي طبيب آخر</p>
         </div>
         <div className="min-h-0 flex-1">
           <ChatPane
             scope={{ kind: "doctor" }}
             me="DOCTOR"
-            peerLabel="الإدارة"
+            peerLabel="إدارة MadBook"
             focusUnread={focusUnread}
             onFocusHandled={() => setParams({}, { replace: true })}
           />

@@ -179,6 +179,23 @@ describe("القراءة وعدّاد غير المقروء", () => {
     expect(r.body.data.hasMore).toBe(true);
   });
 
+  it("مؤشّر before من محادثة طبيب آخر => 404 ولا تُقرأ رسائل (لا تسرّب عبر الترقيم)", async () => {
+    const foreign = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    db.doctorMessage.findFirst.mockResolvedValue(null); // لا تخصّ محادثة الطبيب A
+    const r = await request(app).get(`/api/doctor/messages?before=${foreign}`).set("Authorization", tok("DOCTOR"));
+    expect(r.status).toBe(404);
+    expect(db.doctorMessage.findFirst.mock.calls[0][0].where).toEqual({ id: foreign, conversationId: CONV_A });
+    expect(db.doctorMessage.findMany).not.toHaveBeenCalled();
+  });
+
+  it("مؤشّر before يخصّ محادثة الطبيب نفسه => 200", async () => {
+    const own = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    db.doctorMessage.findFirst.mockResolvedValue({ id: own });
+    const r = await request(app).get(`/api/doctor/messages?before=${own}`).set("Authorization", tok("DOCTOR"));
+    expect(r.status).toBe(200);
+    expect(db.doctorMessage.findMany).toHaveBeenCalled();
+  });
+
   it("limit خارج الحدود => 400 (لا تحميل كل الرسائل دفعة واحدة)", async () => {
     const r = await request(app).get("/api/doctor/messages?limit=5000").set("Authorization", tok("DOCTOR"));
     expect(r.status).toBe(400);

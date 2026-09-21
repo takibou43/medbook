@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../lib/api";
 import { Spinner, EmptyState } from "../../components/ui/States";
@@ -11,7 +12,11 @@ import { VerificationStatus, SubscriptionStatus } from "../../types";
 
 export default function AdminDoctors() {
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<VerificationStatus | "">("");
+  const [searchParams] = useSearchParams();
+  const initialStatus = searchParams.get("status");
+  const [status, setStatus] = useState<VerificationStatus | "">(
+    initialStatus === "PENDING" || initialStatus === "VERIFIED" || initialStatus === "REJECTED" ? initialStatus : ""
+  );
   const [page, setPage] = useState(1);
   const { showToast } = useToast();
   const qc = useQueryClient();
@@ -76,6 +81,7 @@ export default function AdminDoctors() {
                 <div className="flex flex-wrap items-center gap-2">
                   <VerificationBadge status={d.verificationStatus} />
                   <SubscriptionBadge status={d.subscriptionStatus ?? "UNPAID"} />
+                  <Link to={`/admin/messages?doctor=${d.id}`} className="btn-outline !px-3 !py-1.5 text-xs">مراسلة</Link>
                   {d.verificationStatus !== "VERIFIED" && (
                     <Button onClick={() => setVerification(d.id, "VERIFIED")}>توثيق</Button>
                   )}

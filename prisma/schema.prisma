@@ -250,6 +250,8 @@ model Doctor {
   favorites    Favorite[]
   assistants       Assistant[]
   assistantInvites AssistantInvite[]
+  // محادثة الإدارة مع هذا الطبيب (واحدة فقط) — علاقة عكسية بلا أي عمود جديد في جدول doctors.
+  conversation     DoctorConversation?
 
   @@index([specialtyId, wilayaId, cityId])
   @@map("doctors")
@@ -499,4 +501,45 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+// ---------------- Admin <-> Doctor messaging ----------------
+
+// محادثة واحدة فقط لكل طبيب (doctorId فريد) بين الإدارة (كل حسابات ADMIN كفريق واحد) والطبيب.
+// لا توجد محادثات طبيب-طبيب ولا محادثات مع مساعد أو مريض: لا مفتاح خارجي ولا مسار يسمح بذلك.
+// lastMessage* حقول مُكرَّرة عمدًا لعرض قائمة المحادثات بلا استعلام لكل صف (لا N+1).
+model DoctorConversation {
+  id                 String    @id @default(uuid())
+  doctorId           String    @unique
+  doctor             Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  lastMessageAt      DateTime?
+  lastMessagePreview String?
+  lastSenderRole     Role?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  messages DoctorMessage[]
+
+  @@index([lastMessageAt])
+  @@map("doctor_conversations")
+}
+
+// senderId يُشتق دائمًا من الجلسة في الخادم (لا يأتي من الواجهة). senderRole إمّا ADMIN أو DOCTOR فقط.
+// clientId: معرّف يولّده العميل لكل رسالة لمنع التكرار عند إعادة الطلب/انقطاع الشبكة.
+// readAt: وقت قراءة الطرف الآخر للرسالة (null = غير مقروءة).
+model DoctorMessage {
+  id             String             @id @default(uuid())
+  conversationId String
+  conversation   DoctorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  senderRole     Role
+  content        String
+  clientId       String?
+  readAt         DateTime?
+  createdAt      DateTime           @default(now())
+
+  @@unique([conversationId, senderId, clientId])
+  @@index([conversationId, createdAt])
+  @@index([senderRole, readAt])
+  @@map("doctor_messages")
 }

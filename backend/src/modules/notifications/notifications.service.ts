@@ -9,7 +9,8 @@ export type NotificationType =
   | "APPOINTMENT_NO_SHOW"
   | "APPOINTMENT_REMINDER"
   | "DOCTOR_VERIFIED"
-  | "DOCTOR_REJECTED";
+  | "DOCTOR_REJECTED"
+  | "NEW_MESSAGE";
 
 // نص محايد لإشعار المتصفح حسب نوع الحدث. متعمّد أن يخلو من اسم المريض ورقمه:
 // الإشعار يظهر على شاشة القفل وقد يراه من بجانب الطبيب في العيادة، والتفاصيل تبقى داخل اللوحة.
@@ -18,6 +19,7 @@ const PUSH_BODY: Partial<Record<NotificationType, string>> = {
   APPOINTMENT_CANCELLED: "تم إلغاء أحد المواعيد. افتح اللوحة لعرض التفاصيل.",
   APPOINTMENT_CONFIRMED: "تم تأكيد موعد. افتح التطبيق لعرض التفاصيل.",
   APPOINTMENT_REMINDER: "تذكير بموعد قريب. افتح التطبيق لعرض التفاصيل.",
+  NEW_MESSAGE: "لديك رسالة جديدة. افتح قسم الرسائل.",
 };
 
 /**

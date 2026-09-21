@@ -22,6 +22,7 @@ import bookingRoutes from "./modules/booking/booking.routes";
 import pushRoutes from "./modules/push/push.routes";
 import assistantsRoutes from "./modules/assistants/assistants.routes";
 import assistantsPublicRoutes from "./modules/assistants/assistants.public.routes";
+import { adminMessagesRouter, doctorMessagesRouter } from "./modules/messaging/messaging.routes";
 
 export function createApp() {
   const app = express();
@@ -59,6 +60,9 @@ export function createApp() {
   // مسار جديد هناك باسم "assistants". تسجيلها هنا أولًا يجعل المطابقة صريحة لا تعتمد
   // على "سقوط" الطلب من router إلى آخر.
   app.use("/api/doctor/assistants", assistantsRoutes);
+  // مراسلة الإدارة ↔ الطبيب (طبيب فقط، المساعد يُرفض). قبل "/api/doctor" الأعم للسبب نفسه أعلاه.
+  app.use("/api/doctor/messages", doctorMessagesRouter);
+  app.use("/api/admin/messages", adminMessagesRouter);
   app.use("/api/doctor", doctorSelfRoutes);
   app.use("/api/appointments", appointmentsRoutes);
   app.use("/api/patient", patientSelfRoutes);

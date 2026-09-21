@@ -11,6 +11,7 @@ import {
   Star,
   KeyRound,
   UserCog,
+  MessageSquare,
 } from "lucide-react";
 
 import { DashboardLayout } from "./components/layout/DashboardLayout";
@@ -32,7 +33,11 @@ import AdminDoctors from "./pages/admin/AdminDoctors";
 import AdminSpecialties from "./pages/admin/AdminSpecialties";
 import AdminWilayas from "./pages/admin/AdminWilayas";
 import AdminReviews from "./pages/admin/AdminReviews";
+import AdminAppointments from "./pages/admin/AdminAppointments";
+import AdminMessages from "./pages/admin/AdminMessages";
+import DoctorMessages from "./pages/doctor/DoctorMessages";
 import AccountSettings from "./pages/AccountSettings";
+import { useAdminUnread, useDoctorUnread, useUnreadToast } from "./hooks/useMessaging";
 
 // الروابط المشتركة بين الطبيب والمساعد (الصفحات التي يُسمح للمساعد برؤيتها فقط).
 const sharedNav = [
@@ -42,6 +47,7 @@ const sharedNav = [
 
 // روابط إضافية للطبيب وحده — لا تظهر أبدًا في قائمة المساعد.
 const doctorOnlyNav = [
+  { to: "/messages", label: "الرسائل", icon: MessageSquare },
   { to: "/schedule", label: "أوقات العمل", icon: Clock },
   { to: "/patients", label: "مرضاي", icon: UsersIcon },
   { to: "/assistants", label: "المساعدون", icon: UserCog },
@@ -60,18 +66,24 @@ function DoctorAreaLayout() {
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
   const doctorName = user?.assistant?.doctor ? `${user.assistant.doctor.firstName} ${user.assistant.doctor.lastName}` : "";
+  // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
+  const unread = useDoctorUnread(!isAssistant && !!user);
+  useUnreadToast(unread.data?.unread, () => "رسالة جديدة من الإدارة");
+  const items = isAssistant ? sharedNav : doctorNav.map((i) => (i.to === "/messages" ? { ...i, badge: unread.data?.unread } : i));
 
   return (
     <DashboardLayout
       title={isAssistant ? "لوحة المساعد" : "لوحة الطبيب"}
       subtitle={isAssistant && doctorName ? `مساعد لدى د. ${doctorName}` : undefined}
-      items={isAssistant ? sharedNav : doctorNav}
+      items={items}
     />
   );
 }
 
 const adminNav = [
   { to: "/admin", label: "الرئيسية", icon: LayoutDashboard, end: true },
+  { to: "/admin/appointments", label: "المواعيد", icon: CalendarClock },
+  { to: "/admin/messages", label: "الرسائل", icon: MessageSquare },
   { to: "/admin/users", label: "المستخدمون", icon: UsersIcon },
   { to: "/admin/doctors", label: "الأطباء", icon: Stethoscope },
   { to: "/admin/specialties", label: "التخصصات", icon: ShieldCheck },
@@ -79,6 +91,13 @@ const adminNav = [
   { to: "/admin/reviews", label: "التقييمات", icon: Star },
   { to: "/admin/account", label: "إعدادات الحساب", icon: KeyRound },
 ];
+
+function AdminAreaLayout() {
+  const unread = useAdminUnread();
+  useUnreadToast(unread.data?.unread, () => `رسالة جديدة من ${unread.data?.latest ? `د. ${unread.data.latest.doctorName}` : "طبيب"}`);
+  const items = adminNav.map((i) => (i.to === "/admin/messages" ? { ...i, badge: unread.data?.unread } : i));
+  return <DashboardLayout title="لوحة الإدارة" items={items} />;
+}
 
 export default function App() {
   return (
@@ -98,6 +117,7 @@ export default function App() {
           <Route path="/appointments" element={<DoctorAppointments />} />
 
           <Route element={<ProtectedRoute allow={["DOCTOR"]} />}>
+            <Route path="/messages" element={<DoctorMessages />} />
             <Route path="/schedule" element={<DoctorSchedule />} />
             <Route path="/patients" element={<DoctorPatients />} />
             <Route path="/assistants" element={<AssistantManagement />} />
@@ -108,8 +128,10 @@ export default function App() {
       </Route>
 
       <Route element={<ProtectedRoute allow={["ADMIN"]} />}>
-        <Route element={<DashboardLayout title="لوحة الإدارة" items={adminNav} />}>
+        <Route element={<AdminAreaLayout />}>
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/appointments" element={<AdminAppointments />} />
+          <Route path="/admin/messages" element={<AdminMessages />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/doctors" element={<AdminDoctors />} />
           <Route path="/admin/specialties" element={<AdminSpecialties />} />

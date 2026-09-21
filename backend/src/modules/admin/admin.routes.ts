@@ -17,6 +17,37 @@ router.get(
   })
 );
 
+router.get(
+  "/stats/series",
+  validate({ query: z.object({ range: z.enum(["7d", "30d", "this_month", "last_month"]).default("7d") }) }),
+  asyncHandler(async (req, res) => {
+    res.json({ success: true, data: await service.getAppointmentsSeries((req.query as any).range) });
+  })
+);
+
+router.get(
+  "/appointments",
+  validate({
+    query: z.object({
+      filter: z.enum(["all", "today", "completed", "cancelled"]).default("all"),
+      q: z.string().max(100).optional(),
+      page: z.coerce.number().int().min(1).optional(),
+      pageSize: z.coerce.number().int().min(1).max(50).optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    res.json({ success: true, data: await service.listAppointmentsAdmin(req.query as any) });
+  })
+);
+
+router.get("/activity", asyncHandler(async (_req, res) => res.json({ success: true, data: await service.getRecentActivity() })));
+router.get("/system-status", asyncHandler(async (_req, res) => res.json({ success: true, data: await service.getSystemStatus() })));
+router.get(
+  "/search",
+  validate({ query: z.object({ q: z.string().max(100) }) }),
+  asyncHandler(async (req, res) => res.json({ success: true, data: await service.globalSearch((req.query as any).q) }))
+);
+
 // ---- Maintenance ----
 // حذف البيانات التجريبية فقط (حسابات seed) — لا تمسّ المستخدمين الحقيقيين ولا البيانات المرجعية.
 router.post(

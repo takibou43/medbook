@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../lib/api";
 import { Spinner, EmptyState } from "../../components/ui/States";
@@ -12,7 +13,9 @@ const ROLE_LABELS: Record<Role, string> = { PATIENT: "مريض", DOCTOR: "طبي
 
 export default function AdminUsers() {
   const [q, setQ] = useState("");
-  const [role, setRole] = useState<Role | "">("");
+  const [searchParams] = useSearchParams();
+  const initialRole = searchParams.get("role");
+  const [role, setRole] = useState<Role | "">(initialRole && initialRole in ROLE_LABELS ? (initialRole as Role) : "");
   const [page, setPage] = useState(1);
   const { showToast } = useToast();
   const qc = useQueryClient();

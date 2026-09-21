@@ -70,12 +70,12 @@ export function useConversationList(q: string) {
 }
 
 /** يعرض 🔔 عند ارتفاع عدد غير المقروء عمّا كان (لا عند أول تحميل). */
-export function useUnreadToast(unread: number | undefined, text: () => string) {
+export function useUnreadToast(unread: number | undefined, text: () => string, href?: string) {
   const { showToast } = useToast();
   const prev = useRef<number | null>(null);
   useEffect(() => {
     if (unread === undefined) return;
-    if (prev.current !== null && unread > prev.current) showToast(`🔔 ${text()}`, "info");
+    if (prev.current !== null && unread > prev.current) showToast(`🔔 ${text()}`, "info", href);
     prev.current = unread;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unread]);

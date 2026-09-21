@@ -93,18 +93,18 @@ async function notifyRecipients(
 ) {
   // لا نضع نص الرسالة في الإشعار (يظهر على شاشة القفل)، ولا نكرّر إشعارًا غير مقروء لنفس الجهة.
   if (senderRole === Role.ADMIN) {
-    await notifyOnce(doctor.userId, DOCTOR_TITLE, "لديك رسالة جديدة من الإدارة. افتح قسم الرسائل.");
+    await notifyOnce(doctor.userId, DOCTOR_TITLE, "لديك رسالة جديدة من الإدارة. افتح قسم الرسائل.", "/messages?focus=unread");
   } else {
     const admins = await prisma.user.findMany({ where: { role: Role.ADMIN, isActive: true }, select: { id: true } });
     const title = adminTitle(doctor);
-    await Promise.all(admins.map((a) => notifyOnce(a.id, title, "لديك رسالة جديدة. افتح قسم الرسائل.")));
+    await Promise.all(admins.map((a) => notifyOnce(a.id, title, "لديك رسالة جديدة. افتح قسم الرسائل.", "/admin/messages")));
   }
 }
 
-async function notifyOnce(userId: string, title: string, message: string) {
+async function notifyOnce(userId: string, title: string, message: string, url?: string) {
   const dup = await prisma.notification.findFirst({ where: { userId, type: NEW_MESSAGE, title, isRead: false }, select: { id: true } });
   if (dup) return;
-  await createNotification(userId, NEW_MESSAGE, title, message);
+  await createNotification(userId, NEW_MESSAGE, title, message, url);
 }
 
 // ---------------------------------------------------------------- read

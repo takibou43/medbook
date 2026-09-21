@@ -68,8 +68,8 @@ function DoctorAreaLayout() {
   const doctorName = user?.assistant?.doctor ? `${user.assistant.doctor.firstName} ${user.assistant.doctor.lastName}` : "";
   // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
   const unread = useDoctorUnread(!isAssistant && !!user);
-  useUnreadToast(unread.data?.unread, () => "رسالة جديدة من الإدارة");
-  const items = isAssistant ? sharedNav : doctorNav.map((i) => (i.to === "/messages" ? { ...i, badge: unread.data?.unread } : i));
+  useUnreadToast(unread.data?.unread, () => "رسالة جديدة من الإدارة", "/messages?focus=unread");
+  const items = isAssistant ? sharedNav : doctorNav.map((i) => (i.to === "/messages" ? { ...i, to: unread.data?.unread ? "/messages?focus=unread" : i.to, badge: unread.data?.unread } : i));
 
   return (
     <DashboardLayout

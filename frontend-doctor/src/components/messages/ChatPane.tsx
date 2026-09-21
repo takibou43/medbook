@@ -17,7 +17,20 @@ import {
 const MAX = 2000;
 
 /** نافذة محادثة واحدة (مشتركة بين الإدارة والطبيب). `me` = دور من يشاهد الآن. */
-export function ChatPane({ scope, me, peerLabel }: { scope: MessagingScope; me: "ADMIN" | "DOCTOR"; peerLabel: string }) {
+export function ChatPane({
+  scope,
+  me,
+  peerLabel,
+  focusUnread = false,
+  onFocusHandled,
+}: {
+  scope: MessagingScope;
+  me: "ADMIN" | "DOCTOR";
+  peerLabel: string;
+  /** عند الوصول من إشعار: مرِّر إلى أول رسالة واردة غير مقروءة (أو آخر رسالة واردة) وأبرزها. */
+  focusUnread?: boolean;
+  onFocusHandled?: () => void;
+}) {
   const { showToast } = useToast();
   const latest = useLatestMessages(scope);
   const send = useSendMessage(scope);
@@ -30,6 +43,7 @@ export function ChatPane({ scope, me, peerLabel }: { scope: MessagingScope; me: 
   const bottomRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const listRef = useRef<HTMLDivElement>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const scopeKey = scope.kind === "admin" ? scope.doctorId : "me";
   useEffect(() => {
@@ -58,6 +72,29 @@ export function ChatPane({ scope, me, peerLabel }: { scope: MessagingScope; me: 
   useEffect(() => {
     if (stickToBottom.current) bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
+
+  // وصول من إشعار: نحدّد الرسالة مرة واحدة قبل أن يقلبها وضع "مقروءة" (نفس الرسم، الأثر يلي تحديث الاستعلام).
+  useEffect(() => {
+    if (!focusUnread || !latest.data) return;
+    const incoming = messages.filter((m) => m.senderRole !== me);
+    const target = incoming.find((m) => !m.readAt) ?? incoming[incoming.length - 1];
+    if (target) {
+      stickToBottom.current = false;
+      setHighlightId(target.id);
+    }
+    onFocusHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusUnread, latest.data]);
+
+  useEffect(() => {
+    if (!highlightId) return;
+    const raf = requestAnimationFrame(() => document.getElementById(`msg-${highlightId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+    const t = setTimeout(() => setHighlightId(null), 4000);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, [highlightId]);
 
   async function loadOlder() {
     if (!messages.length || loadingOlder) return;
@@ -132,9 +169,11 @@ export function ChatPane({ scope, me, peerLabel }: { scope: MessagingScope; me: 
                 return (
                   <div key={m.id} className={clsx("flex", mine ? "justify-start" : "justify-end")}>
                     <div
+                      id={`msg-${m.id}`}
                       className={clsx(
-                        "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[70%]",
-                        mine ? "bg-primary-600 text-white" : "border border-slate-200 bg-white text-slate-800"
+                        "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm transition sm:max-w-[70%]",
+                        mine ? "bg-primary-600 text-white" : "border border-slate-200 bg-white text-slate-800",
+                        highlightId === m.id && "ring-2 ring-primary-500 ring-offset-2"
                       )}
                     >
                       {/* نص خام: يُعرض كنص (React يهرّب) مع الحفاظ على الأسطر — لا HTML أبدًا */}

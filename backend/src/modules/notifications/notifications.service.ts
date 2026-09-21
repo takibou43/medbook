@@ -28,13 +28,14 @@ const PUSH_BODY: Partial<Record<NotificationType, string>> = {
  * إرسال الـPush متعمدٌ بلا await: هو قناة مساعدة لا يجوز أن تُبطئ الحجز أو تُفشله إن تعطّلت
  * خدمة الدفع لدى المتصفح. وsendPushToUser لا ترمي استثناءً أصلًا، وتعود صفرًا إن كانت الميزة معطّلة.
  */
-export async function createNotification(userId: string, type: NotificationType, title: string, message: string) {
+export async function createNotification(userId: string, type: NotificationType, title: string, message: string, url?: string) {
   const notification = await prisma.notification.create({ data: { userId, type, title, message } });
 
   void sendPushToUser(userId, {
     title,
     body: PUSH_BODY[type] ?? "افتح التطبيق لعرض التفاصيل.",
     tag: type,
+    ...(url ? { url } : {}),
   });
 
   return notification;

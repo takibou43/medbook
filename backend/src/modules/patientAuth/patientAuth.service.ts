@@ -6,6 +6,7 @@ import { ApiError } from "../../utils/ApiError";
 import { hashToken, issueTokens } from "../../lib/tokens";
 import { sendPushToUser, isPushEnabled } from "../../lib/push";
 import { PatientRegisterInput, PushSubscriptionInput } from "./patientAuth.schema";
+import { isPatientBlocked } from "../patientBlocks/patientBlocks.service";
 
 /**
  * حساب المريض — يعيد استعمال البنية الموجودة كما هي (لا نظام ثانٍ):
@@ -58,7 +59,8 @@ export async function registerPatientAccount(input: PatientRegisterInput) {
   });
 
   const tokens = await issueTokens(user.id, user.role);
-  return { user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
+  // حساب جديد لا يمكن أن يكون محظورًا.
+  return { user: { ...user, isBlocked: false }, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
 }
 
 // تجزئة وهمية ثابتة تُقارَن عند عدم وجود الحساب، فيستغرق الرد نفس الوقت تقريبًا في الحالتين
@@ -119,7 +121,9 @@ export async function logoutPatient(refreshToken: string | undefined) {
 export async function getPatientMe(userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: PATIENT_ME_SELECT });
   if (!user || user.role !== Role.PATIENT || !user.patient) throw ApiError.notFound("الحساب غير موجود.");
-  return user;
+  // المريض يرى فقط أنه محظور (لتظهر له رسالة واضحة عند الحجز) — لا السبب ولا من حظره.
+  const isBlocked = await isPatientBlocked(user.patient.id);
+  return { ...user, isBlocked };
 }
 
 async function requirePatientId(userId: string): Promise<string> {

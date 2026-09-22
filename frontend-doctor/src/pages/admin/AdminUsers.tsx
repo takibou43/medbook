@@ -8,6 +8,7 @@ import { Input } from "../../components/ui/Input";
 import { useToast } from "../../components/ui/Toast";
 import { Pagination } from "../../components/ui/Pagination";
 import { Role } from "../../types";
+import { BlockPatientDialog, BlockTarget } from "../../components/BlockPatientDialog";
 
 const ROLE_LABELS: Record<Role, string> = { PATIENT: "مريض", DOCTOR: "طبيب", ADMIN: "إدارة", ASSISTANT: "مساعد" };
 
@@ -19,6 +20,7 @@ export default function AdminUsers() {
   const [page, setPage] = useState(1);
   const { showToast } = useToast();
   const qc = useQueryClient();
+  const [blockTarget, setBlockTarget] = useState<{ t: BlockTarget; mode: "block" | "unblock" } | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-users", q, role, page],
@@ -86,12 +88,26 @@ export default function AdminUsers() {
                       <span className={`badge ${u.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                         {u.isActive ? "مفعّل" : "معطّل"}
                       </span>
+                      {u.patient?.blocks?.length > 0 && <span className="badge mr-1 bg-red-100 text-red-700">محظور من الحجز</span>}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
                         <Button variant="outline" onClick={() => toggleActive(u.id, u.isActive)}>
                           {u.isActive ? "تعطيل" : "تفعيل"}
                         </Button>
+                        {u.role === "PATIENT" && u.patient && (
+                          <Button
+                            variant="outline"
+                            onClick={() =>
+                              setBlockTarget({
+                                t: { patientId: u.patient.id, name: `${u.patient.firstName} ${u.patient.lastName}`.trim(), email: u.email },
+                                mode: u.patient.blocks?.length > 0 ? "unblock" : "block",
+                              })
+                            }
+                          >
+                            {u.patient.blocks?.length > 0 ? "إلغاء الحظر" : "حظر المريض"}
+                          </Button>
+                        )}
                         <Button variant="danger" onClick={() => remove(u.id)}>
                           حذف
                         </Button>
@@ -107,6 +123,8 @@ export default function AdminUsers() {
       ) : (
         <EmptyState title="لا يوجد مستخدمون" />
       )}
+
+      <BlockPatientDialog target={blockTarget?.t ?? null} mode={blockTarget?.mode ?? "block"} onClose={() => setBlockTarget(null)} />
     </div>
   );
 }

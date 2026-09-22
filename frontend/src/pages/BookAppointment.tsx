@@ -60,7 +60,7 @@ export default function BookAppointment() {
 
   // مريض مسجّل الدخول (اختياري): نملأ الاسم والهاتف من حسابه إن كان الحقل فارغًا فقط (يبقى قابلًا للتعديل)،
   // والخادم يربط الحجز بحسابه تلقائيًا من الجلسة. الضيف لا يتغيّر له شيء.
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshMe } = useAuth();
   const navigate = useNavigate();
 
   // الحجز يتطلب حسابًا مسجّل الدخول. نوجّه المريض لإنشاء حساب/تسجيل الدخول ثم نعيده لنفس الطبيب
@@ -69,9 +69,11 @@ export default function BookAppointment() {
     const back = doctorId ? `/?doctor=${encodeURIComponent(doctorId)}` : "/";
     navigate(`/account/login?mode=register&redirect=${encodeURIComponent(back)}`);
   }
+  const BLOCKED_MSG = "حسابك محظور حاليًا ولا يمكنك حجز موعد جديد. يرجى التواصل مع الإدارة.";
   function continueToPatient() {
     if (authLoading) return;
     if (!user) return goToAuth(selectedDoctor?.id);
+    if (user.isBlocked) return showToast(BLOCKED_MSG, "error");
     setStep("patient");
   }
   // إن انتهت الجلسة أثناء الحجز (تسجيل خروج من تبويب آخر مثلًا) لا نترك المريض في خطوات لا تكتمل.
@@ -207,6 +209,12 @@ export default function BookAppointment() {
         return;
       }
       const { kind, message } = bookingError(err, "تعذّر إتمام الحجز.");
+      if (kind === "forbidden") {
+        // حظر من الخادم (أو أي رفض صلاحية): رسالة الخادم كما هي، وتحديث حالة الحساب.
+        setSubmitError(message);
+        refreshMe();
+        return;
+      }
       if (kind === "conflict") {
         // الدور أُخذ أو انتهت الأدوار: نحدّث الدور المعروض ونعيد المريض لخطوة الموعد برسالة واضحة.
         showToast(message, "error");
@@ -262,6 +270,12 @@ export default function BookAppointment() {
               : "اختر التخصص ثم الطبيب، ثم أنشئ حسابك أو سجّل الدخول لتأكيد الحجز."}
           </p>
         </div>
+
+        {user?.isBlocked && (
+          <div className="mb-4" role="alert">
+            <InlineError title="لا يمكنك الحجز حاليًا" message={BLOCKED_MSG} />
+          </div>
+        )}
 
         <BookingSteps current={step} />
 

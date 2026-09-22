@@ -43,7 +43,11 @@ export async function listUsers(params: { role?: Role; q?: string; page?: number
   const [items, total] = await Promise.all([
         prisma.user.findMany({
                 where,
-                include: { patient: true, doctor: { include: { specialty: true } } },
+                include: {
+                  // حالة الحظر السارية فقط (لعرض زر حظر/إلغاء حظر في قائمة المستخدمين).
+                  patient: { include: { blocks: { where: { activePatientId: { not: null } }, select: { id: true, blockedAt: true } } } },
+                  doctor: { include: { specialty: true } },
+                },
                 orderBy: { createdAt: "desc" },
                 skip: (page - 1) * pageSize,
                 take: pageSize,
@@ -51,7 +55,9 @@ export async function listUsers(params: { role?: Role; q?: string; page?: number
         prisma.user.count({ where }),
       ]);
 
-  return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+  // لا نُرسل تجزئة كلمة المرور إلى الواجهة أبدًا (حتى للإدارة).
+  const safeItems = items.map(({ passwordHash: _omit, ...rest }) => rest);
+  return { items: safeItems, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
 }
 
 export async function setUserActive(userId: string, isActive: boolean) {

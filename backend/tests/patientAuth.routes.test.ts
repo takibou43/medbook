@@ -89,6 +89,10 @@ const h = vi.hoisted(() => {
     appointment: {
       findMany: vi.fn(async ({ where }: any) => s.appts.filter((a) => a.patientId === where.patientId)),
     },
+    // لا حظر في هذا الملف (اختبارات الحظر الحقيقية في tests/integration/patientBlocks.integration.test.ts).
+    patientBlock: {
+      findUnique: vi.fn(async () => null),
+    },
   };
   const createGuest = vi.fn(async (_input: any, patientId: string | null) => ({ id: "appt-1", patientId }));
   return { s, db, createGuest };

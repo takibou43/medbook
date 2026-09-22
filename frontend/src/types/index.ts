@@ -136,6 +136,8 @@ export interface User {
   isActive: boolean;
   patient?: { id: string; firstName: string; lastName: string } | null;
   doctor?: Doctor | null;
+  // حظر من إنشاء حجوزات جديدة (يُحدّده الخادم؛ الخادم يرفض الحجز على أي حال).
+  isBlocked?: boolean;
 }
 
 export interface NextSlot {

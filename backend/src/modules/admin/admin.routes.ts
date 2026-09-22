@@ -5,6 +5,7 @@ import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as service from "./admin.service";
+import * as blocks from "../patientBlocks/patientBlocks.service";
 
 const router = Router();
 router.use(authenticate, authorize(Role.ADMIN));
@@ -111,6 +112,42 @@ router.delete(
     await service.deleteUser(req.params.id, req.user!.id);
     await service.logAction(req.user!.id, "DELETE_USER", "User", req.params.id);
     res.json({ success: true, message: "تم حذف المستخدم." });
+  })
+);
+
+// ---- Patient blocks (حظر المرضى من إنشاء حجوزات جديدة) — للإدارة فقط (router.use أعلاه) ----
+router.get(
+  "/patient-blocks",
+  validate({
+    query: z.object({
+      status: z.enum(["active", "all"]).default("active"),
+      q: z.string().max(100).optional(),
+      page: z.coerce.number().int().min(1).optional(),
+      pageSize: z.coerce.number().int().min(1).max(50).optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    res.json({ success: true, data: await blocks.listPatientBlocks(req.query as any) });
+  })
+);
+
+router.post(
+  "/patients/:patientId/block",
+  validate({ params: z.object({ patientId: z.string().uuid() }), body: z.object({ reason: z.string().trim().max(500).optional() }) }),
+  asyncHandler(async (req, res) => {
+    const block = await blocks.blockPatient(req.params.patientId, req.user!.id, req.body.reason);
+    await service.logAction(req.user!.id, "BLOCK_PATIENT", "Patient", req.params.patientId, { reason: block.reason, blockId: block.id });
+    res.status(201).json({ success: true, message: "تم حظر المريض. لن يستطيع إنشاء حجوزات جديدة.", data: block });
+  })
+);
+
+router.post(
+  "/patients/:patientId/unblock",
+  validate({ params: z.object({ patientId: z.string().uuid() }) }),
+  asyncHandler(async (req, res) => {
+    const block = await blocks.unblockPatient(req.params.patientId, req.user!.id);
+    await service.logAction(req.user!.id, "UNBLOCK_PATIENT", "Patient", req.params.patientId, { blockId: block?.id });
+    res.json({ success: true, message: "تم إلغاء حظر المريض.", data: block });
   })
 );
 

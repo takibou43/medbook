@@ -202,8 +202,28 @@ model Patient {
 
   appointments Appointment[]
   reviews      Review[]
+  blocks       PatientBlock[]
 
   @@map("patients")
+}
+
+// سجل حظر المريض من إنشاء حجوزات جديدة (سجل لكل عملية حظر، ويُغلق عند إلغاء الحظر فيبقى التاريخ كاملًا).
+// activePatientId = patientId ما دام الحظر ساريًا، ويصير NULL عند الإلغاء. القيد الفريد عليه يضمن
+// حظرًا ساريًا واحدًا على الأكثر لكل مريض حتى مع طلبين متزامنين (NULL لا يتعارض في PostgreSQL).
+// blockedBy/unblockedBy = معرّف حساب الإدارة (بلا مفتاح أجنبي، كي لا يضيع السجل إن حُذف حساب المدير).
+model PatientBlock {
+  id              String    @id @default(uuid())
+  patientId       String
+  patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  activePatientId String?   @unique
+  reason          String?
+  blockedAt       DateTime  @default(now())
+  blockedBy       String?
+  unblockedAt     DateTime?
+  unblockedBy     String?
+
+  @@index([patientId])
+  @@map("patient_blocks")
 }
 model Doctor {
   id          String    @id @default(uuid())

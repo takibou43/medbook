@@ -3,6 +3,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import * as service from "./booking.service";
 import { ApiError } from "../../utils/ApiError";
 import { findPatientIdForUser } from "../patientAuth/patientAuth.service";
+import { assertPatientCanBook } from "../patientBlocks/patientBlocks.service";
 
 export const getSlots = asyncHandler(async (req: Request, res: Response) => {
   const slots = await service.getAggregatedSlots({
@@ -24,6 +25,8 @@ export const createGuestBooking = asyncHandler(async (req: Request, res: Respons
   // patientId لا يُقبل أبدًا من الجسم (Zod يحذف أي حقل غير معرّف في المخطط).
   const patientId = await findPatientIdForUser(req.user!.id);
   if (!patientId) throw ApiError.forbidden("لا يوجد ملف مريض مرتبط بهذا الحساب.");
+  // الحظر يُفحص على مريض الجلسة نفسه (لا على أي معرّف من الطلب) قبل أي إنشاء.
+  await assertPatientCanBook(patientId);
   const appointment = await service.createGuestAppointment(req.body, patientId);
   res.status(201).json({ success: true, data: appointment });
 });

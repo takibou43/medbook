@@ -12,6 +12,7 @@ import {
   KeyRound,
   UserCog,
   MessageSquare,
+  UserX,
 } from "lucide-react";
 
 import { DashboardLayout } from "./components/layout/DashboardLayout";
@@ -29,6 +30,7 @@ import DoctorProfileSettings from "./pages/doctor/DoctorProfileSettings";
 import AssistantManagement from "./pages/doctor/AssistantManagement";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
+import AdminPatientBlocks from "./pages/admin/AdminPatientBlocks";
 import AdminDoctors from "./pages/admin/AdminDoctors";
 import AdminSpecialties from "./pages/admin/AdminSpecialties";
 import AdminWilayas from "./pages/admin/AdminWilayas";
@@ -85,6 +87,7 @@ const adminNav = [
   { to: "/admin/appointments", label: "المواعيد", icon: CalendarClock },
   { to: "/admin/messages", label: "الرسائل", icon: MessageSquare },
   { to: "/admin/users", label: "المستخدمون", icon: UsersIcon },
+  { to: "/admin/patient-blocks", label: "المرضى المحظورون", icon: UserX },
   { to: "/admin/doctors", label: "الأطباء", icon: Stethoscope },
   { to: "/admin/specialties", label: "التخصصات", icon: ShieldCheck },
   { to: "/admin/wilayas", label: "الولايات", icon: Building2 },
@@ -133,6 +136,7 @@ export default function App() {
           <Route path="/admin/appointments" element={<AdminAppointments />} />
           <Route path="/admin/messages" element={<AdminMessages />} />
           <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/patient-blocks" element={<AdminPatientBlocks />} />
           <Route path="/admin/doctors" element={<AdminDoctors />} />
           <Route path="/admin/specialties" element={<AdminSpecialties />} />
           <Route path="/admin/wilayas" element={<AdminWilayas />} />

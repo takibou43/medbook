@@ -8,6 +8,7 @@ import { lockDoctorCalls } from "../../lib/doctorLock";
 import { CreateAppointmentInput } from "./appointments.schema";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
 import { latePenaltyFor, pickNext, projectQueueOrder } from "../../lib/queueOrder";
+import { assertPatientCanBook } from "../patientBlocks/patientBlocks.service";
 
 const SLOT_MINUTES = 20;
 
@@ -32,6 +33,7 @@ function addMinutes(hhmm: string, minutes: number): string {
 export async function createAppointment(patientUserId: string, input: CreateAppointmentInput) {
   const patient = await prisma.patient.findUnique({ where: { userId: patientUserId } });
   if (!patient) throw ApiError.notFound("لم يتم العثور على ملف مريض مرتبط بهذا الحساب.");
+  await assertPatientCanBook(patient.id);
 
   const doctor = await prisma.doctor.findUnique({ where: { id: input.doctorId }, include: { schedules: true } });
   if (!doctor) throw ApiError.notFound("الطبيب غير موجود.");

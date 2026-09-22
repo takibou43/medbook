@@ -45,15 +45,19 @@ api.interceptors.response.use(
       original._retry = true;
       try {
         if (!refreshingPromise) {
+          // موقع المرضى يستعمل جلسة المريض (كوكي خاص بمسار /api/patient/auth) — منفصلة عن جلسة الأطباء.
           refreshingPromise = api
-            .post("/auth/refresh")
+            .post("/patient/auth/refresh")
             .then((res) => {
               const token = res.data?.data?.accessToken as string;
               setAccessToken(token);
               return token;
             })
             .catch(() => {
+              const hadSession = Boolean(accessToken);
               setAccessToken(null);
+              // تُعلِم AuthContext أن الجلسة انتهت فعلًا فيُظهر «تسجيل الدخول» بدل «حسابي».
+              if (hadSession) window.dispatchEvent(new Event("medbook:session-expired"));
               return null;
             })
             .finally(() => {

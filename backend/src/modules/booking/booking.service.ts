@@ -19,6 +19,11 @@ import { estimateSessionMinutes } from "../appointments/appointments.service";
 
 const SLOT_MINUTES = 20;
 
+// وصف صاحب الحجز في إشعار الطبيب: الضيف "(بدون حساب)" كما كان، والمريض المسجَّل "(حساب مريض)".
+function accountLabel(patientId: string | null): string {
+  return patientId ? "(حساب مريض)" : "(بدون حساب)";
+}
+
 // عدد مرات "لم يحضر" التي إذا بلغها رقم هاتف ضيف معيّن (على مستوى المنصة كاملة)
 // نمنعه من إجراء حجز ضيف جديد — حماية لوقت الأطباء من الحجوزات المتكررة بدون حضور.
 // لا يؤثر هذا على الحجز بحساب مسجَّل (المريض المسجَّل يمكن التواصل معه ومحاسبته إداريًا).
@@ -181,7 +186,12 @@ export async function getAggregatedSlots(query: GuestSlotsQuery) {
  * فيأخذ كل مريض الدور الذي يليه تلقائيًا. نعيد المحاولة عند التسابق (مريضان في نفس اللحظة)
  * لأن الدور قد يُحجز بين لحظة الحساب ولحظة الإدراج.
  */
-async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId: string, attempt = 0): Promise<any> {
+async function createAutoAssignedAppointment(
+  input: GuestBookingInput,
+  doctorId: string,
+  attempt = 0,
+  patientId: string | null = null
+): Promise<any> {
   try {
     // قراءة "أول دور شاغر" + إنشاء الموعد معًا داخل معاملة واحدة تحت قفل طابور هذا الطبيب،
     // فلا يستطيع طلب آخر لنفس الطبيب أخذ الدور نفسه بين القراءة والكتابة (كان هذا هو السباق).
@@ -195,7 +205,7 @@ async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId:
         const slot = await scanForNextSlot(doctor, 60, tx);
         const created = await tx.appointment.create({
           data: {
-            patientId: null,
+            patientId,
             guestFirstName: input.firstName,
             guestLastName: input.lastName,
             guestPhone: input.phone || null,
@@ -224,7 +234,7 @@ async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId:
         slot.doctor.userId,
         "APPOINTMENT_CREATED",
         "طلب حجز موعد جديد",
-        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} (بدون حساب) بتاريخ ${slot.dateStr} الساعة ${slot.startTime}.`
+        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} ${accountLabel(patientId)} بتاريخ ${slot.dateStr} الساعة ${slot.startTime}.`
       );
     } catch (notifyErr) {
       console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", notifyErr);
@@ -237,7 +247,7 @@ async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId:
     }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002" && attempt < 3) {
       // خط دفاع أخير: تعارض مع مسار كتابة آخر لا يستخدم القفل (حجز بوقت محدد) — نعيد الحساب.
-      return createAutoAssignedAppointment(input, doctorId, attempt + 1);
+      return createAutoAssignedAppointment(input, doctorId, attempt + 1, patientId);
     }
     throw err;
   }
@@ -245,15 +255,17 @@ async function createAutoAssignedAppointment(input: GuestBookingInput, doctorId:
 
 /**
  * إنشاء حجز ضيف فعلي: يعيد التحقق من التوفر لحظيًا (وليس فقط الاعتماد على ما عُرض للمستخدم سابقًا)،
- * يختار أول طبيب موثّق متاح، وينشئ الموعد بدون ربطه بأي حساب مستخدم.
+ * يختار أول طبيب موثّق متاح، وينشئ الموعد. patientId = null (الافتراضي) حجز ضيف كما كان تمامًا؛
+ * وإن مُرّر (مريض مسجَّل الدخول، مُستخرَج من الجلسة في الـcontroller) يُربط الموعد بحسابه، مع إبقاء
+ * حقول الاسم/الهاتف كما هي لأن لوحة الطبيب والطابور وSMS «لم يحضر» تعتمد عليها.
  */
-export async function createGuestAppointment(input: GuestBookingInput) {
+export async function createGuestAppointment(input: GuestBookingInput, patientId: string | null = null) {
   // حماية من الحجوزات المتكررة بدون حضور: نتحقق أولًا قبل أي محاولة حجز.
   await checkGuestReliability(input.phone);
 
   // الوضع الافتراضي الجديد: لم يُرسل وقت — النظام يعيّن أول دور متاح لدى الطبيب المختار.
   if (input.doctorId && (!input.date || !input.startTime)) {
-    return createAutoAssignedAppointment(input, input.doctorId);
+    return createAutoAssignedAppointment(input, input.doctorId, 0, patientId);
   }
 
   if (!input.date || !input.startTime) {
@@ -292,7 +304,7 @@ export async function createGuestAppointment(input: GuestBookingInput) {
     try {
       const appointment = await prisma.appointment.create({
         data: {
-          patientId: null,
+          patientId,
           guestFirstName: input.firstName,
           guestLastName: input.lastName,
           guestPhone: input.phone || null,
@@ -310,7 +322,7 @@ export async function createGuestAppointment(input: GuestBookingInput) {
         doctor.userId,
         "APPOINTMENT_CREATED",
         "طلب حجز موعد جديد",
-        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} (بدون حساب) بتاريخ ${input.date} الساعة ${input.startTime}.`
+        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} ${accountLabel(patientId)} بتاريخ ${input.date} الساعة ${input.startTime}.`
       );
 
       return appointment;
@@ -338,7 +350,7 @@ export async function createGuestAppointment(input: GuestBookingInput) {
     try {
       const appointment = await prisma.appointment.create({
         data: {
-          patientId: null,
+          patientId,
           guestFirstName: input.firstName,
           guestLastName: input.lastName,
           guestPhone: input.phone || null,
@@ -356,7 +368,7 @@ export async function createGuestAppointment(input: GuestBookingInput) {
         doctor.userId,
         "APPOINTMENT_CREATED",
         "طلب حجز موعد جديد",
-        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} (بدون حساب) بتاريخ ${input.date} الساعة ${input.startTime}.`
+        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} ${accountLabel(patientId)} بتاريخ ${input.date} الساعة ${input.startTime}.`
       );
 
       return appointment;

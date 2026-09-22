@@ -47,6 +47,16 @@ export function optionalAuthenticate(req: Request, _res: Response, next: NextFun
   next();
 }
 
+/**
+ * للمسارات التي تعمل للضيف وللمستخدم المسجّل معًا (مثل إنشاء حجز): بلا ترويسة Authorization يمرّ
+ * الطلب كضيف، أما إن أُرسل توكن غير صالح/منتهٍ فنرد 401 — حتى تجدّد الواجهة الجلسة وتعيد الطلب
+ * بدل أن يُحفظ حجز مريض مسجَّل كحجز ضيف بصمت لمجرد انتهاء صلاحية التوكن (15 دقيقة).
+ */
+export function authenticateIfPresent(req: Request, res: Response, next: NextFunction) {
+  if (!req.headers.authorization) return next();
+  return authenticate(req, res, next);
+}
+
 /** يقيّد الوصول لأدوار محددة. استخدم بعد authenticate. */
 export function authorize(...roles: Role[]) {
   return (req: Request, _res: Response, next: NextFunction) => {

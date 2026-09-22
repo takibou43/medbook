@@ -205,7 +205,7 @@ export async function getOwnPatients(userId: string) {
         firstName: a.patient ? a.patient.firstName : a.guestFirstName,
         lastName: a.patient ? a.patient.lastName : a.guestLastName,
         email: a.patient ? a.patient.user.email : null,
-        phone: a.patient ? a.patient.user.phone : a.guestPhone,
+        phone: a.patient?.user.phone ?? a.guestPhone,
         lastVisit: a.date,
         totalAppointments: 1,
       });

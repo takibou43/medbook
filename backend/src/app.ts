@@ -23,6 +23,8 @@ import pushRoutes from "./modules/push/push.routes";
 import assistantsRoutes from "./modules/assistants/assistants.routes";
 import assistantsPublicRoutes from "./modules/assistants/assistants.public.routes";
 import { adminMessagesRouter, doctorMessagesRouter } from "./modules/messaging/messaging.routes";
+import { patientAuthRouter, patientAccountRouter, patientNotificationsRouter } from "./modules/patientAuth/patientAuth.routes";
+import internalRemindersRoutes from "./modules/reminders/reminders.routes";
 
 export function createApp() {
   const app = express();
@@ -65,6 +67,11 @@ export function createApp() {
   app.use("/api/admin/messages", adminMessagesRouter);
   app.use("/api/doctor", doctorSelfRoutes);
   app.use("/api/appointments", appointmentsRoutes);
+  // حساب المريض (تسجيل/دخول/مواعيدي/إشعارات) — قبل "/api/patient" الأعم لأن ذاك يفرض المصادقة
+  // على كل ما تحته فكان سيرفض طلب تسجيل الدخول نفسه.
+  app.use("/api/patient/auth", patientAuthRouter);
+  app.use("/api/patient/account", patientAccountRouter);
+  app.use("/api/patient/notifications", patientNotificationsRouter);
   app.use("/api/patient", patientSelfRoutes);
   app.use("/api/reviews", reviewsRoutes);
   app.use("/api/notifications", notificationsRoutes);
@@ -74,6 +81,8 @@ export function createApp() {
   app.use("/api/push", pushRoutes);
   // مسار عام للتحقق من رمز دعوة مساعد قبل التسجيل — بدون مصادقة.
   app.use("/api/assistants", assistantsPublicRoutes);
+  // مسارات داخلية محمية بسر (X-Cron-Secret) — تشغيل دورة التذكيرات من مُجدوِل خارجي.
+  app.use("/api/internal", internalRemindersRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

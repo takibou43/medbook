@@ -145,3 +145,50 @@ self.addEventListener("fetch", (event) => {
 
   // (و) أي شيء آخر: لا اعتراض ولا تخزين — يمرّ إلى الشبكة كالمعتاد.
 });
+
+// ===== إشعارات Push لحساب المريض (تذكير قبل الموعد بساعة وقبل 5 دقائق) =====
+// أُضيفت إلى نفس الـService Worker (لا SW ثانٍ)، ولا تلمس منطق الكاش أو offline أعلاه إطلاقًا.
+// الحمولة JSON فيها title وbody وurl وtag فقط — بلا أي معلومة طبية.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = {};
+  }
+
+  const title = data.title || "مادبوك";
+  const options = {
+    body: data.body || "لديك تحديث بخصوص موعدك.",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
+    dir: "rtl",
+    lang: "ar",
+    // نفس الوسم لنفس التذكير: لو وصل مرتين لأي سبب يستبدل الإشعار نفسه بدل أن يتكرر على الشاشة.
+    tag: data.tag || "medbook-patient",
+    renotify: true,
+    data: { url: data.url || "/account" },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// الضغط على الإشعار: يفتح صفحة «حسابي» (والموعد المعني) في نافذة الموقع المفتوحة إن وُجدت، وإلا نافذة جديدة.
+// نقبل مسارات داخلية فقط (تبدأ بـ"/") حتى لا يفتح الإشعار أي موقع خارجي.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const raw = (event.notification.data && event.notification.data.url) || "/account";
+  const target = typeof raw === "string" && raw.charAt(0) === "/" && raw.charAt(1) !== "/" ? raw : "/account";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && new URL(client.url).origin === self.location.origin && "focus" in client) {
+          if ("navigate" in client) client.navigate(target).catch(() => undefined);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    })
+  );
+});

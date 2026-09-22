@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/Toast";
 import { Spinner } from "../components/ui/States";
@@ -16,6 +16,8 @@ import { ConfirmStep } from "../components/booking/ConfirmStep";
 import { ConfirmedBooking, SuccessModal } from "../components/booking/SuccessModal";
 import { DoctorSearchModal } from "../components/booking/DoctorSearchModal";
 import { InlineError } from "../components/booking/StepParts";
+import { useAuth } from "../context/AuthContext";
+import { ReminderCard } from "../components/account/ReminderCard";
 
 // نجلب الأطباء الموثّقين (المفعّلين) مرة واحدة ونشتق منهم محليًا التخصصات وعدد أطباء كل تخصص وقوائم الأطباء —
 // فلا نطلب من الخادم شيئًا عند كل نقرة، ولا يظهر للمريض تخصص أو طبيب غير حقيقي. الخادم يحدّ الصفحة بـ 50
@@ -55,6 +57,16 @@ export default function BookAppointment() {
 
   // بيانات المريض (الاسم واللقب + الهاتف) — تُحفظ عند التنقل بين الخطوات وتُفرَّغ بعد نجاح الحجز.
   const form = useForm<PatientForm>({ defaultValues: { fullName: "", phone: "" } });
+
+  // مريض مسجّل الدخول (اختياري): نملأ الاسم والهاتف من حسابه إن كان الحقل فارغًا فقط (يبقى قابلًا للتعديل)،
+  // والخادم يربط الحجز بحسابه تلقائيًا من الجلسة. الضيف لا يتغيّر له شيء.
+  const { user } = useAuth();
+  useEffect(() => {
+    if (step !== "patient" || !user?.patient) return;
+    const fullName = [user.patient.firstName, user.patient.lastName].filter(Boolean).join(" ");
+    if (!form.getValues("fullName") && fullName) form.setValue("fullName", fullName);
+    if (!form.getValues("phone") && user.phone) form.setValue("phone", user.phone);
+  }, [step, user, form]);
 
   const {
     data: allDoctors,
@@ -219,7 +231,11 @@ export default function BookAppointment() {
       <div className="mx-auto max-w-xl">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-extrabold text-slate-900">احجز موعدك بسهولة</h1>
-          <p className="mt-1 text-slate-600">لا حاجة لإنشاء حساب — اختر التخصص ثم الطبيب، والموقع يمنحك أول دور متاح.</p>
+          <p className="mt-1 text-slate-600">
+            {user
+              ? "اختر التخصص ثم الطبيب، والموقع يمنحك أول دور متاح — ويُضاف الموعد إلى حسابك."
+              : "لا حاجة لإنشاء حساب — اختر التخصص ثم الطبيب، والموقع يمنحك أول دور متاح."}
+          </p>
         </div>
 
         <BookingSteps current={step} />
@@ -305,7 +321,22 @@ export default function BookAppointment() {
         )}
       </div>
 
-      {confirmed && <SuccessModal booking={confirmed} onClose={closeConfirmation} />}
+      {confirmed && (
+        <SuccessModal
+          booking={confirmed}
+          onClose={closeConfirmation}
+          extra={
+            user ? (
+              <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-right">
+                <ReminderCard compact />
+                <Link to="/account" className="block text-center text-sm font-semibold text-primary-700 hover:underline">
+                  عرض مواعيدي
+                </Link>
+              </div>
+            ) : null
+          }
+        />
+      )}
 
       {searchOpen && (
         <DoctorSearchModal

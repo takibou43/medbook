@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { ReactNode, useEffect } from "react";
 import { CalendarDays, CheckCircle2, MapPin } from "lucide-react";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/Toast";
@@ -16,7 +16,8 @@ export interface ConfirmedBooking {
 
 // شاشة النجاح الحالية (تفاصيل الموعد الفعلي + إضافة إلى Google Calendar) كما كانت،
 // مع دور dialog وإغلاق بـ Escape لتحسين إمكانية الوصول.
-export function SuccessModal({ booking, onClose }: { booking: ConfirmedBooking; onClose: () => void }) {
+// extra: محتوى إضافي اختياري (مثل بطاقة «ذكّرني بموعدي» للمريض المسجّل) — الضيف لا يرى أي تغيير.
+export function SuccessModal({ booking, onClose, extra }: { booking: ConfirmedBooking; onClose: () => void; extra?: ReactNode }) {
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -71,6 +72,8 @@ export function SuccessModal({ booking, onClose }: { booking: ConfirmedBooking; 
             <CalendarDays className="h-4 w-4" aria-hidden="true" /> إضافة إلى Google Calendar
           </a>
         </div>
+
+        {extra}
 
         <Button variant="outline" className="mt-4 min-h-[44px] w-full" onClick={onClose} autoFocus>
           لاحقًا

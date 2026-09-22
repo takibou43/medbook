@@ -67,6 +67,16 @@ export const env = {
     vapidSubject: process.env.VAPID_SUBJECT ?? "mailto:support@medbook.dz",
   },
 
+  // تذكيرات مواعيد المرضى عبر Push (قبل ساعة وقبل 5 دقائق). تعمل داخل الخادم كل دقيقة، ويمكن أيضًا
+  // تشغيلها من مُجدوِل خارجي عبر POST /api/internal/reminders/run بالترويسة X-Cron-Secret.
+  // cronSecret سرّ في متغيرات بيئة الخادم فقط؛ إن تُرك فارغًا يبقى ذلك المسار معطّلًا (404).
+  // REMINDERS_ENABLED=false يوقف المُجدوِل الداخلي دون أي تعديل في الكود.
+  reminders: {
+    cronSecret: process.env.REMINDER_CRON_SECRET ?? "",
+    enabled: (process.env.REMINDERS_ENABLED ?? "true") !== "false",
+    intervalMs: Number(process.env.REMINDERS_INTERVAL_MS ?? 60000),
+  },
+
   // فترة التجربة المجانية للأطباء: كل طبيب يُفتح له الاشتراك تلقائيًا حتى هذا التاريخ ثم
   // يتوقف وحده. يُضبط من متغير بيئة حتى تمديد التجربة لا يحتاج تعديل كود ولا إعادة نشر.
   // اتركه فارغًا (TRIAL_ENDS_AT="") لإلغاء التجربة نهائيًا والعودة إلى التفعيل اليدوي.

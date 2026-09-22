@@ -8,6 +8,9 @@ const APPT_LABELS: Record<AppointmentStatus, { label: string; className: string 
   COMPLETED: { label: "مكتمل", className: "bg-green-100 text-green-700" },
   CANCELLED: { label: "ملغى", className: "bg-red-100 text-red-700" },
   NO_SHOW: { label: "لم يحضر", className: "bg-slate-200 text-slate-600" },
+  // حالتا الطابور اليومي كما يراهما المريض في «حسابي».
+  IN_PROGRESS: { label: "عند الطبيب الآن", className: "bg-emerald-100 text-emerald-700" },
+  LATE: { label: "تم تجاوز دورك مؤقتًا", className: "bg-orange-100 text-orange-700" },
 };
 
 const VERIFY_LABELS: Record<VerificationStatus, { label: string; className: string }> = {

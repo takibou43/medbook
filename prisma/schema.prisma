@@ -364,6 +364,8 @@ model Appointment {
   review   Review?
   // سجل محاولة إرسال SMS "لم يحضر" الخاص بهذا الموعد (إن وُجد) — انظر SmsLog.
   smsLog   SmsLog?
+  // تذكيرات Push للمريض صاحب الحساب (قبل ساعة وقبل 5 دقائق) — انظر AppointmentReminder.
+  reminders AppointmentReminder[]
 
   @@unique([doctorId, date, startTime])
   @@index([patientId])
@@ -542,4 +544,44 @@ model DoctorMessage {
   @@index([conversationId, createdAt])
   @@index([senderRole, readAt])
   @@map("doctor_messages")
+}
+
+// ---------------- Patient appointment reminders (Web Push) ----------------
+
+// نوع التذكير: قبل الموعد بساعة، وقبل الموعد بخمس دقائق. لا يوجد تذكير 24 ساعة.
+enum ReminderType {
+  ONE_HOUR
+  FIVE_MINUTES
+}
+
+// PENDING: أُنشئ ولم يُعالَج بعد. PROCESSING: حجزه مُشغِّل واحد (قفل ذرّي عبر updateMany المشروط).
+// SENT: وصل لجهاز واحد على الأقل. SKIPPED: لم يُرسل عمدًا (موعد ملغى/مكتمل/غائب، فات الوقت، لا أجهزة).
+// FAILED: رفضته كل الأجهزة. أي حالة غير PENDING نهائية: لا يُعاد إرسال التذكير أبدًا.
+enum ReminderStatus {
+  PENDING
+  PROCESSING
+  SENT
+  SKIPPED
+  FAILED
+}
+
+// تذكير واحد لكل (موعد + نوع) بفضل القيد الفريد، فلو اشتغل الـscheduler مرتين أو على نسختين
+// من الخادم في نفس اللحظة لا يُنشأ ولا يُرسل نفس التذكير مرتين. لا يحمل أي بيانات طبية.
+model AppointmentReminder {
+  id            String         @id @default(uuid())
+  appointmentId String
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  type          ReminderType
+  scheduledFor  DateTime
+  status        ReminderStatus @default(PENDING)
+  sentAt        DateTime?
+  // عدد الأجهزة التي وصلها الإشعار، وسبب التخطي/الفشل (نص تقني قصير، بلا بيانات شخصية).
+  deliveredCount Int           @default(0)
+  skipReason    String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@unique([appointmentId, type])
+  @@index([status, scheduledFor])
+  @@map("appointment_reminders")
 }

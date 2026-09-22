@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as service from "./booking.service";
+import { Role } from "@prisma/client";
+import { findPatientIdForUser } from "../patientAuth/patientAuth.service";
 
 export const getSlots = asyncHandler(async (req: Request, res: Response) => {
   const slots = await service.getAggregatedSlots({
@@ -18,7 +20,11 @@ export const getNextSlot = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const createGuestBooking = asyncHandler(async (req: Request, res: Response) => {
-  const appointment = await service.createGuestAppointment(req.body);
+  // ربط الحجز بحساب المريض فقط إن كان صاحب التوكن مريضًا فعلًا؛ patientId لا يُقبل أبدًا من الجسم.
+  // أي دور آخر (طبيب/مساعد/إدارة يجرّب موقع المرضى) يُعامَل كضيف تمامًا كما كان.
+  const patientId =
+    req.user?.role === Role.PATIENT ? await findPatientIdForUser(req.user.id) : null;
+  const appointment = await service.createGuestAppointment(req.body, patientId);
   res.status(201).json({ success: true, data: appointment });
 });
 

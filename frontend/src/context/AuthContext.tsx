@@ -2,11 +2,20 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { api, setAccessToken, getAccessToken } from "../lib/api";
 import { User } from "../types";
 
+// حساب المريض في موقع المرضى: كل الطلبات عبر /api/patient/auth (مقصورة على دور المريض، وجلسة
+// تجديد منفصلة عن جلسة الأطباء). الحجز يبقى متاحًا بلا حساب تمامًا كما كان.
+export interface PatientRegisterInput {
+  name: string;
+  email: string;
+  password: string;
+  phone?: string;
+}
+
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
-  registerPatient: (data: Record<string, unknown>) => Promise<User>;
+  registerPatient: (data: PatientRegisterInput | Record<string, unknown>) => Promise<User>;
   registerDoctor: (data: Record<string, unknown>) => Promise<User>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -24,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const res = await api.get("/auth/me");
+      const res = await api.get("/patient/auth/me");
       setUser(res.data.data);
     } catch {
       setAccessToken(null);
@@ -38,20 +47,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshMe();
   }, [refreshMe]);
 
+  // انتهاء الجلسة نهائيًا (فشل التجديد) من أي طلب في أي صفحة.
+  useEffect(() => {
+    const onExpired = () => setUser(null);
+    window.addEventListener("medbook:session-expired", onExpired);
+    return () => window.removeEventListener("medbook:session-expired", onExpired);
+  }, []);
+
   async function login(email: string, password: string) {
-    const res = await api.post("/auth/login", { email, password });
+    const res = await api.post("/patient/auth/login", { email, password });
     setAccessToken(res.data.data.accessToken);
     setUser(res.data.data.user);
     return res.data.data.user as User;
   }
 
-  async function registerPatient(data: Record<string, unknown>) {
-    const res = await api.post("/auth/register/patient", data);
+  async function registerPatient(data: PatientRegisterInput | Record<string, unknown>) {
+    const res = await api.post("/patient/auth/register", data);
     setAccessToken(res.data.data.accessToken);
     setUser(res.data.data.user);
     return res.data.data.user as User;
   }
 
+  // تبقى لتوافق صفحات قديمة غير موصولة بأي مسار (لا تُستعمل في موقع المرضى الحالي).
   async function registerDoctor(data: Record<string, unknown>) {
     const res = await api.post("/auth/register/doctor", data);
     setAccessToken(res.data.data.accessToken);
@@ -61,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     try {
-      await api.post("/auth/logout");
+      await api.post("/patient/auth/logout");
     } finally {
       setAccessToken(null);
       setUser(null);

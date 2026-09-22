@@ -5,6 +5,7 @@ import { Role, SubscriptionStatus } from "@prisma/client";
 import { hashPassword } from "./utils/password";
 import { syncTrialSubscriptions } from "./lib/trial";
 import { sweepStaleAppointmentsForAllDoctors } from "./modules/appointments/appointments.service";
+import { runReminderCycle } from "./modules/reminders/reminders.service";
 
 const app = createApp();
 
@@ -116,6 +117,16 @@ Promise.all([
   setInterval(() => {
     void sweepStaleAppointmentsForAllDoctors();
   }, NO_SHOW_SWEEP_INTERVAL_MS);
+
+  // تذكيرات مواعيد المرضى (قبل ساعة وقبل 5 دقائق) — دقة الدقيقة ضرورية لتذكير الخمس دقائق.
+  // الحالة كلها في قاعدة البيانات (AppointmentReminder)، فإعادة تشغيل الخادم لا تُضيع ولا تكرّر شيئًا:
+  // الدورة التالية تكمل من حيث توقفت، والقيد الفريد + الحجز الذرّي يمنعان الإرسال المزدوج.
+  if (env.reminders.enabled) {
+    const intervalMs = Math.max(15_000, env.reminders.intervalMs || 60_000);
+    setInterval(() => {
+      runReminderCycle().catch((err) => console.error("تعذّر تشغيل دورة التذكيرات:", (err as Error)?.message));
+    }, intervalMs);
+  }
 
   startSelfPing();
 

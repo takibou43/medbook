@@ -10,6 +10,7 @@ import {
   nextSlotQuerySchema,
 } from "./booking.schema";
 import * as controller from "./booking.controller";
+import { authenticateIfPresent } from "../../middleware/auth";
 
 const router = Router();
 
@@ -27,7 +28,8 @@ router.get("/lookup", bookingLookupLimiter, validate({ query: lookupQuerySchema 
 // عن مرضى آخرين.
 router.get("/status/:id", validate({ params: bookingIdParamsSchema }), controller.getBookingStatus);
 
-router.post("/", validate({ body: guestBookingSchema }), controller.createGuestBooking);
+// الحجز يبقى متاحًا كضيف بلا حساب. إن كان المريض مسجّل الدخول (توكن صالح) يُربط الموعد بحسابه.
+router.post("/", authenticateIfPresent, validate({ body: guestBookingSchema }), controller.createGuestBooking);
 
 router.patch(
   "/:id/cancel",

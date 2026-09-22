@@ -290,7 +290,7 @@ describe("20) عدم كشف بيانات مريض آخر", () => {
   });
 });
 
-describe("7) ربط الحجز بحساب المريض (مع بقاء الحجز كضيف)", () => {
+describe("7) الحجز يتطلب حساب مريض مسجّل الدخول", () => {
   const BOOK = {
     firstName: "سارة",
     lastName: "بن يوسف",
@@ -300,29 +300,80 @@ describe("7) ربط الحجز بحساب المريض (مع بقاء الحجز
     doctorId: "33333333-3333-4333-8333-333333333333",
   };
 
-  it("بلا تسجيل دخول: حجز ضيف كما كان (patientId = null)", async () => {
+  it("بلا تسجيل دخول: 401 ولا يُنشأ أي موعد (حتى باستدعاء الـAPI مباشرة)", async () => {
     const r = await request(app).post("/api/booking").send(BOOK);
-    expect(r.status).toBe(201);
-    expect(h.createGuest.mock.calls[0][1]).toBeNull();
+    expect(r.status).toBe(401);
+    expect(h.createGuest).not.toHaveBeenCalled();
+  });
+
+  it("بلا تسجيل دخول مع patientId لمريض موجود في الجسم: 401 ولا حجز", async () => {
+    seedPatient(2);
+    const r = await request(app).post("/api/booking").send({ ...BOOK, patientId: "seed-patient-2" });
+    expect(r.status).toBe(401);
+    expect(h.createGuest).not.toHaveBeenCalled();
   });
 
   it("مريض مسجَّل الدخول: الموعد يُربط بحسابه (patientId من الجلسة، لا من الجسم)", async () => {
     const a = seedPatient(1);
+    seedPatient(2);
     const r = await request(app).post("/api/booking").set("Authorization", a.token).send({ ...BOOK, patientId: "seed-patient-2" });
     expect(r.status).toBe(201);
     expect(h.createGuest.mock.calls[0][1]).toBe(a.patientId);
     expect(h.createGuest.mock.calls[0][0]).not.toHaveProperty("patientId");
   });
 
-  it("توكن منتهٍ/غير صالح: 401 (لتجدّد الواجهة الجلسة) بدل حجز صامت كضيف", async () => {
+  it("توكن غير صالح: 401 ولا حجز", async () => {
     const r = await request(app).post("/api/booking").set("Authorization", "Bearer broken.token.value").send(BOOK);
     expect(r.status).toBe(401);
     expect(h.createGuest).not.toHaveBeenCalled();
   });
 
-  it("حساب غير مريض (طبيب) على موقع المرضى: يُعامَل كضيف", async () => {
-    await request(app).post("/api/booking").set("Authorization", doctorToken).send(BOOK).expect(201);
-    expect(h.createGuest.mock.calls[0][1]).toBeNull();
+  it("توكن منتهي الصلاحية: 401 ولا حجز", async () => {
+    const jwt = (await import("jsonwebtoken")).default;
+    const { env } = await import("../src/config/env");
+    const a = seedPatient(1);
+    const expired = jwt.sign({ sub: a.userId, role: "PATIENT", exp: Math.floor(Date.now() / 1000) - 60 }, env.jwtSecret);
+    const r = await request(app).post("/api/booking").set("Authorization", `Bearer ${expired}`).send(BOOK);
+    expect(r.status).toBe(401);
+    expect(h.createGuest).not.toHaveBeenCalled();
+  });
+
+  it("حساب غير مريض (طبيب) لا يستطيع إنشاء حجز: 403", async () => {
+    const r = await request(app).post("/api/booking").set("Authorization", doctorToken).send(BOOK);
+    expect(r.status).toBe(403);
+    expect(h.createGuest).not.toHaveBeenCalled();
+  });
+
+  it("توكن مريض بلا ملف مريض مرتبط: 403 ولا حجز", async () => {
+    const orphan = `Bearer ${signAccessToken({ sub: "user-without-patient", role: "PATIENT" as any })}`;
+    const r = await request(app).post("/api/booking").set("Authorization", orphan).send(BOOK);
+    expect(r.status).toBe(403);
+    expect(h.createGuest).not.toHaveBeenCalled();
+  });
+
+  it("تسجيل حساب ثم الحجز بتوكنه مباشرة: 201 ومربوط بالحساب الجديد", async () => {
+    const reg = await request(app)
+      .post("/api/patient/auth/register")
+      .send({ name: "سارة بن يوسف", email: "new.booker@x.dz", password: "password123" });
+    expect(reg.status).toBe(201);
+    const r = await request(app).post("/api/booking").set("Authorization", `Bearer ${reg.body.data.accessToken}`).send(BOOK);
+    expect(r.status).toBe(201);
+    expect(h.createGuest.mock.calls[0][1]).toBeTruthy();
+    expect(h.createGuest.mock.calls[0][1]).not.toBe("seed-patient-1");
+  });
+
+  it("تسجيل ← خروج ← دخول من جديد ← حجز: 201 ومربوط بنفس الحساب", async () => {
+    const { res, cookie } = await registerAndGetToken();
+    expect(res.status).toBe(201);
+    expect((await request(app).post("/api/patient/auth/logout").set("Cookie", cookie)).status).toBe(200);
+    const login = await request(app).post("/api/patient/auth/login").send({ email: REGISTER.email, password: REGISTER.password });
+    expect(login.status).toBe(200);
+    const me = await request(app).get("/api/patient/auth/me").set("Authorization", `Bearer ${login.body.data.accessToken}`);
+    expect(me.status).toBe(200);
+    const r = await request(app).post("/api/booking").set("Authorization", `Bearer ${login.body.data.accessToken}`).send(BOOK);
+    expect(r.status).toBe(201);
+    const patientId = h.createGuest.mock.calls[0][1];
+    expect(h.s.patients.find((p: any) => p.id === patientId)?.userId).toBe(me.body.data.id);
   });
 });
 

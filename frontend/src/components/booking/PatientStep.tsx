@@ -28,7 +28,7 @@ export const PatientStep = forwardRef<HTMLHeadingElement, Props>(({ form, onSubm
   return (
     <section aria-labelledby="step-patient-title">
       <BackButton onClick={onBack}>تغيير الموعد</BackButton>
-      <StepHeading ref={ref} id="step-patient-title" hint="لا حاجة لإنشاء حساب — نحتاج اسمك فقط لتسجيل الدور.">
+      <StepHeading ref={ref} id="step-patient-title" hint="الاسم الذي سيظهر للطبيب في الطابور.">
         معلومات المريض
       </StepHeading>
 

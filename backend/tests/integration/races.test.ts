@@ -27,6 +27,7 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
   let db: PrismaClient;
   let signAccessToken: (p: { sub: string; role: any }) => string;
   let today: Date;
+  let patientToken = ""; // الحجز يتطلب حساب مريض مسجّل الدخول
   const tag = `race${Date.now().toString(36)}`;
   const created = { userIds: [] as string[], doctorIds: [] as string[], wilayaId: "", cityId: "", specialtyId: "" };
 
@@ -67,6 +68,9 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
     ({ signAccessToken } = await import("../../src/utils/jwt"));
     const slots = await import("../../src/lib/slots");
     today = slots.algeriaTodayUTCMidnight();
+    const pu = await db.user.create({ data: { email: `${tag}-patient@test.local`, passwordHash: "x", role: "PATIENT", patient: { create: { firstName: "مريض", lastName: tag } } } });
+    created.userIds.push(pu.id);
+    patientToken = signAccessToken({ sub: pu.id, role: "PATIENT" });
     const { createApp } = await import("../../src/app");
     server = http.createServer(createApp());
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -100,7 +104,7 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
         call("POST", "/api/booking", {
           firstName: "مريض", lastName: "سباق" + i, phone: "05" + String(20000000 + i),
           wilayaId: created.wilayaId, specialtyId: created.specialtyId, doctorId: d.id, date, startTime: "09:00",
-        }, undefined, i)
+        }, patientToken, i)
       )
     );
     expect(rs.filter((r) => r.status === 201)).toHaveLength(1);
@@ -140,7 +144,7 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
         call("POST", "/api/booking", {
           firstName: "مريض", lastName: "ساخن" + i, phone: "05" + String(60000000 + i),
           wilayaId: created.wilayaId, specialtyId: created.specialtyId, doctorId: d.id,
-        }, undefined, i)
+        }, patientToken, i)
       )
     );
     expect(rs.filter((r) => r.status >= 500)).toHaveLength(0);

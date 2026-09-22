@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/Toast";
 import { Spinner } from "../components/ui/States";
@@ -60,7 +60,25 @@ export default function BookAppointment() {
 
   // مريض مسجّل الدخول (اختياري): نملأ الاسم والهاتف من حسابه إن كان الحقل فارغًا فقط (يبقى قابلًا للتعديل)،
   // والخادم يربط الحجز بحسابه تلقائيًا من الجلسة. الضيف لا يتغيّر له شيء.
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+
+  // الحجز يتطلب حسابًا مسجّل الدخول. نوجّه المريض لإنشاء حساب/تسجيل الدخول ثم نعيده لنفس الطبيب
+  // عبر رابط الحجز المباشر (?doctor=ID) — فلا يعيد اختيار التخصص والطبيب.
+  function goToAuth(doctorId: string | undefined) {
+    const back = doctorId ? `/?doctor=${encodeURIComponent(doctorId)}` : "/";
+    navigate(`/account/login?mode=register&redirect=${encodeURIComponent(back)}`);
+  }
+  function continueToPatient() {
+    if (authLoading) return;
+    if (!user) return goToAuth(selectedDoctor?.id);
+    setStep("patient");
+  }
+  // إن انتهت الجلسة أثناء الحجز (تسجيل خروج من تبويب آخر مثلًا) لا نترك المريض في خطوات لا تكتمل.
+  useEffect(() => {
+    if (!authLoading && !user && (step === "patient" || step === "confirm")) goToAuth(selectedDoctor?.id);
+  }, [authLoading, user, step]);
+
   useEffect(() => {
     if (step !== "patient" || !user?.patient) return;
     const fullName = [user.patient.firstName, user.patient.lastName].filter(Boolean).join(" ");
@@ -154,6 +172,7 @@ export default function BookAppointment() {
 
   async function confirmBooking() {
     if (!selectedDoctor) return;
+    if (!user) return goToAuth(selectedDoctor.id);
     const values = form.getValues();
     const name = splitFullName(values.fullName);
     if (!name) {
@@ -181,6 +200,12 @@ export default function BookAppointment() {
       queryClient.invalidateQueries({ queryKey: ["next-slot"] });
       queryClient.invalidateQueries({ queryKey: ["next-slot-preview"] });
     } catch (err) {
+      if ((err as any)?.response?.status === 401) {
+        // الجلسة انتهت ولم يمكن تجديدها: نعيده لتسجيل الدخول ثم لنفس الطبيب.
+        showToast("انتهت جلستك. سجّل الدخول لإتمام الحجز.", "info");
+        goToAuth(selectedDoctor.id);
+        return;
+      }
       const { kind, message } = bookingError(err, "تعذّر إتمام الحجز.");
       if (kind === "conflict") {
         // الدور أُخذ أو انتهت الأدوار: نحدّث الدور المعروض ونعيد المريض لخطوة الموعد برسالة واضحة.
@@ -234,7 +259,7 @@ export default function BookAppointment() {
           <p className="mt-1 text-slate-600">
             {user
               ? "اختر التخصص ثم الطبيب، والموقع يمنحك أول دور متاح — ويُضاف الموعد إلى حسابك."
-              : "لا حاجة لإنشاء حساب — اختر التخصص ثم الطبيب، والموقع يمنحك أول دور متاح."}
+              : "اختر التخصص ثم الطبيب، ثم أنشئ حسابك أو سجّل الدخول لتأكيد الحجز."}
           </p>
         </div>
 
@@ -294,17 +319,17 @@ export default function BookAppointment() {
                 errorKind={slotErr ? (slotErr.kind === "conflict" ? "noSlots" : "failed") : "none"}
                 errorMessage={slotErr?.message}
                 onRetry={() => refetchSlot()}
-                onContinue={() => setStep("patient")}
+                onContinue={continueToPatient}
                 onBack={() => setStep("doctor")}
                 backLabel="العودة إلى الأطباء"
               />
             )}
 
-            {step === "patient" && selectedDoctor && (
+            {step === "patient" && selectedDoctor && user && (
               <PatientStep ref={headingRef} form={form} onSubmit={() => setStep("confirm")} onBack={() => setStep("slot")} />
             )}
 
-            {step === "confirm" && selectedDoctor && nextSlot && (
+            {step === "confirm" && selectedDoctor && nextSlot && user && (
               <ConfirmStep
                 ref={headingRef}
                 doctor={selectedDoctor}

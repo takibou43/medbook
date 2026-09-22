@@ -10,7 +10,8 @@ import {
   nextSlotQuerySchema,
 } from "./booking.schema";
 import * as controller from "./booking.controller";
-import { authenticateIfPresent } from "../../middleware/auth";
+import { Role } from "@prisma/client";
+import { authenticate, authorize } from "../../middleware/auth";
 
 const router = Router();
 
@@ -28,8 +29,9 @@ router.get("/lookup", bookingLookupLimiter, validate({ query: lookupQuerySchema 
 // عن مرضى آخرين.
 router.get("/status/:id", validate({ params: bookingIdParamsSchema }), controller.getBookingStatus);
 
-// الحجز يبقى متاحًا كضيف بلا حساب. إن كان المريض مسجّل الدخول (توكن صالح) يُربط الموعد بحسابه.
-router.post("/", authenticateIfPresent, validate({ body: guestBookingSchema }), controller.createGuestBooking);
+// إنشاء حجز يتطلب حساب مريض مسجّل الدخول (توكن صالح + دور PATIENT). بلا توكن أو بتوكن منتهٍ → 401،
+// وبدور آخر (طبيب/مساعد/إدارة) → 403. صاحب الموعد يُحدَّد من الجلسة فقط، لا من جسم الطلب.
+router.post("/", authenticate, authorize(Role.PATIENT), validate({ body: guestBookingSchema }), controller.createGuestBooking);
 
 router.patch(
   "/:id/cancel",

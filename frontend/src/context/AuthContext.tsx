@@ -3,7 +3,7 @@ import { api, setAccessToken, getAccessToken } from "../lib/api";
 import { User } from "../types";
 
 // حساب المريض في موقع المرضى: كل الطلبات عبر /api/patient/auth (مقصورة على دور المريض، وجلسة
-// تجديد منفصلة عن جلسة الأطباء). الحجز يبقى متاحًا بلا حساب تمامًا كما كان.
+// تجديد منفصلة عن جلسة الأطباء). إنشاء حجز يتطلب حساب مريض مسجّل الدخول (يُفرض في الخادم أيضًا).
 export interface PatientRegisterInput {
   name: string;
   email: string;

@@ -173,14 +173,45 @@ describe.skipIf(!TEST_URL)("حساب المريض + التذكيرات (PostgreS
     expect(rows2.every((r) => r.status === "SKIPPED" && r.skipReason === "status_CANCELLED")).toBe(true);
   });
 
-  it("حجز الضيف بلا حساب يبقى كما كان: patientId = null ولا سجلات تذكير", async () => {
+  it("الحجز بلا حساب مرفوض (401) ولا يُنشأ موعد؛ والمواعيد القديمة بلا حساب لا تنكسر ولا تولّد تذكيرات", async () => {
+    const before = await db.appointment.count({ where: { doctorId: ids.doctor } });
     const guest = await call("POST", "/api/booking", bookBody());
-    expect(guest.status).toBe(201);
-    const a = await db.appointment.findUnique({ where: { id: guest.data.id } });
-    expect(a!.patientId).toBeNull();
-    const start = reminders.appointmentStartUtc(a!.date, a!.startTime);
+    expect(guest.status).toBe(401);
+    expect(await db.appointment.count({ where: { doctorId: ids.doctor } })).toBe(before);
+
+    // موعد قديم محفوظ كضيف قبل هذا التغيير (patientId = null) يبقى صالحًا ولا يُرسَل له أي تذكير.
+    const legacy = await db.appointment.create({
+      data: { doctorId: ids.doctor, date: new Date(Date.now() + 3 * 86400000), startTime: "10:00", endTime: "10:15", status: "CONFIRMED", guestFirstName: "قديم", guestLastName: "ضيف", guestPhone: "0551112233" },
+    });
+    const start = reminders.appointmentStartUtc(legacy.date, legacy.startTime);
     await reminders.runReminderCycle(new Date(start.getTime() - 60 * MIN));
-    expect(await db.appointmentReminder.count({ where: { appointmentId: a!.id } })).toBe(0);
+    expect(await db.appointmentReminder.count({ where: { appointmentId: legacy.id } })).toBe(0);
+  });
+
+  it("مريض B يرسل patientId الخاص بـA: الموعد يُسجَّل باسم B، وتذكيره لا يصل لأجهزة A", async () => {
+    const aUser = ids.patientUsers[0];
+    const aPatient = await db.patient.findUnique({ where: { userId: aUser } });
+    const regB = await call("POST", "/api/patient/auth/register", { email: `${tag}-spoof@test.local`, password: "Secret123!", name: "مريض منتحل" });
+    expect(regB.status).toBe(201);
+    ids.patientUsers.push(regB.data.user.id);
+    const booked = await call("POST", "/api/booking", { ...bookBody(), patientId: aPatient!.id }, regB.data.accessToken);
+    expect(booked.status).toBe(201);
+    const appt = await db.appointment.findUnique({ where: { id: booked.data.id }, include: { patient: true } });
+    expect(appt!.patient!.userId).toBe(regB.data.user.id);
+    expect(appt!.patientId).not.toBe(aPatient!.id);
+
+    const aEndpoints = new Set((await db.pushSubscription.findMany({ where: { userId: aUser } })).map((x) => x.endpoint));
+    expect(aEndpoints.size).toBeGreaterThan(0);
+    const callsBefore = h.sendNotification.mock.calls.length;
+    const start = reminders.appointmentStartUtc(appt!.date, appt!.startTime);
+    await reminders.runReminderCycle(new Date(start.getTime() - 61 * MIN));
+    await reminders.runReminderCycle(new Date(start.getTime() - 60 * MIN));
+    await reminders.runReminderCycle(new Date(start.getTime() - 5 * MIN));
+    const newCalls = h.sendNotification.mock.calls.slice(callsBefore);
+    expect(newCalls.some((c: any) => aEndpoints.has(c[0]?.endpoint))).toBe(false);
+    // الموعد نفسه يحمل بيانات التذكير: سجلّا ساعة و5 دقائق مرتبطان به
+    const rows = await db.appointmentReminder.findMany({ where: { appointmentId: appt!.id } });
+    expect(rows.map((r) => r.type).sort()).toEqual(["FIVE_MINUTES", "ONE_HOUR"]);
   });
 
   it("عزل المرضى: مريض B لا يرى مواعيد A ولا يحذف اشتراكه", async () => {

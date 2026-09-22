@@ -37,6 +37,8 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
   let db: PrismaClient;
   const created = { userIds: [] as string[], doctorIds: [] as string[], wilayaId: "", cityId: "", specialtyId: "" };
   const tag = `conc${Date.now().toString(36)}`;
+  let patientUserId = "";
+  let patientToken = ""; // الحجز يتطلب حساب مريض مسجّل الدخول
 
   beforeAll(async () => {
     assertSafeTestDb(TEST_URL!);
@@ -73,6 +75,13 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
       created.doctorIds.push(doctor.id);
     }
 
+    const pu = await db.user.create({
+      data: { email: `${tag}-patient@test.local`, passwordHash: "x", role: "PATIENT", patient: { create: { firstName: "مريض", lastName: tag } } },
+    });
+    patientUserId = pu.id;
+    const { signAccessToken } = await import("../../src/utils/jwt");
+    patientToken = signAccessToken({ sub: pu.id, role: "PATIENT" });
+
     const { createApp } = await import("../../src/app");
     server = http.createServer(createApp());
     await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -86,7 +95,7 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
       await db.appointment.deleteMany({ where: { doctorId: { in: created.doctorIds } } });
       await db.doctorSchedule.deleteMany({ where: { doctorId: { in: created.doctorIds } } });
       await db.doctor.deleteMany({ where: { id: { in: created.doctorIds } } });
-      await db.user.deleteMany({ where: { id: { in: created.userIds } } });
+      await db.user.deleteMany({ where: { id: { in: [...created.userIds, patientUserId].filter(Boolean) } } });
       await db.specialty.deleteMany({ where: { id: created.specialtyId } });
       await db.city.deleteMany({ where: { id: created.cityId } });
       await db.wilaya.deleteMany({ where: { id: created.wilayaId } });
@@ -134,7 +143,7 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
         try {
           const res = await fetch(`${base}/api/booking`, {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: { "content-type": "application/json", authorization: `Bearer ${patientToken}` },
             body: JSON.stringify(r.body),
           });
           const json: any = await res.json().catch(() => ({}));

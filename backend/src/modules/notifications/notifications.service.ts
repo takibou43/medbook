@@ -8,6 +8,7 @@ export type NotificationType =
   | "APPOINTMENT_COMPLETED"
   | "APPOINTMENT_NO_SHOW"
   | "APPOINTMENT_REMINDER"
+  | "APPOINTMENT_LATE"
   | "DOCTOR_VERIFIED"
   | "DOCTOR_REJECTED"
   | "NEW_MESSAGE";
@@ -20,6 +21,8 @@ const PUSH_BODY: Partial<Record<NotificationType, string>> = {
   APPOINTMENT_CONFIRMED: "تم تأكيد موعد. افتح التطبيق لعرض التفاصيل.",
   APPOINTMENT_REMINDER: "تذكير بموعد قريب. افتح التطبيق لعرض التفاصيل.",
   NEW_MESSAGE: "لديك رسالة جديدة. افتح قسم الرسائل.",
+  // للمريض صاحب الحساب عند تسجيله «متأخر» — بلا أي معلومة طبية.
+  APPOINTMENT_LATE: "تم تجاوز دورك مؤقتًا لأنك لم تكن حاضرًا عند المناداة. توجّه إلى العيادة، ما زلت في قائمة الانتظار.",
 };
 
 /**
@@ -28,13 +31,21 @@ const PUSH_BODY: Partial<Record<NotificationType, string>> = {
  * إرسال الـPush متعمدٌ بلا await: هو قناة مساعدة لا يجوز أن تُبطئ الحجز أو تُفشله إن تعطّلت
  * خدمة الدفع لدى المتصفح. وsendPushToUser لا ترمي استثناءً أصلًا، وتعود صفرًا إن كانت الميزة معطّلة.
  */
-export async function createNotification(userId: string, type: NotificationType, title: string, message: string, url?: string) {
+export async function createNotification(
+  userId: string,
+  type: NotificationType,
+  title: string,
+  message: string,
+  url?: string,
+  // وسم اختياري فريد للحدث (مثل late-<eventId>) — وإلا نوع الإشعار كما كان.
+  tag?: string
+) {
   const notification = await prisma.notification.create({ data: { userId, type, title, message } });
 
   void sendPushToUser(userId, {
     title,
     body: PUSH_BODY[type] ?? "افتح التطبيق لعرض التفاصيل.",
-    tag: type,
+    tag: tag ?? type,
     ...(url ? { url } : {}),
   });
 

@@ -11,6 +11,9 @@ export interface QueueState {
   current: Appointment | null;
   waiting: Appointment[];
   late: Appointment[];
+  // الترتيب الفعلي المتوقع للمناداة (المنتظرون والمتأخرون معًا)، محسوبًا في الخادم بنفس قاعدة «نادِ التالي».
+  // اختياري حتى تبقى الواجهة تعمل مع خادم قديم لم يُحدَّث بعد.
+  ordered?: (Appointment & { position: number })[];
   // المدة الذكية: تقدير مدة الجلسة القادمة اعتمادًا على متوسط آخر جلسات مكتملة صالحة
   // لهذا الطبيب (وليس المدة المجدولة للموعد).
   estimatedDurationMinutes: number;

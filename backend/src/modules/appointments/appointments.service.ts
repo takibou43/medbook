@@ -7,6 +7,7 @@ import { sendSms } from "../../lib/sms";
 import { lockDoctorCalls } from "../../lib/doctorLock";
 import { CreateAppointmentInput } from "./appointments.schema";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
+import { latePenaltyFor, pickNext, projectQueueOrder } from "../../lib/queueOrder";
 
 const SLOT_MINUTES = 20;
 
@@ -335,6 +336,12 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
     throw ApiError.badRequest(`لا يمكن تغيير حالة الموعد من ${appointment.status} إلى ${newStatus}.`);
   }
 
+  // «متأخر» عبر PATCH العام يمرّ بنفس منطق زر «متأخر» في الطابور (عقوبة المراكز، منع التكرار،
+  // إشعار المريض) — بدل تغيير الحالة وحدها فيعود المريض فورًا دون أن يمر قبله أحد.
+  if (newStatus === AppointmentStatus.LATE && (role === Role.DOCTOR || role === Role.ASSISTANT)) {
+    return markAsLate(userId, appointmentId, role);
+  }
+
   let extraData: Prisma.AppointmentUpdateInput = {};
   if (newStatus === AppointmentStatus.COMPLETED) {
     const endedAt = new Date();
@@ -439,9 +446,8 @@ export async function cancelByPatient(patientUserId: string, appointmentId: stri
 // طابور العيادة اليومي
 // ============================================================
 
-// عدد المرضى الذين يُنادَون قبل إعادة نداء المريض المتأخر. القاعدة المتفق عليها:
-// من لم يستجب لندائه لا يُشطب، بل يعود دوره تلقائيًا بعد مريضين.
-const QUEUE_DEFER_SKIPS = 2;
+// عدد المرضى الذين يُنادَون قبل إعادة نداء المريض المتأخر: التأخير الأول مريضان، وكل تأخير بعده في نفس
+// الموعد 4 مرضى إضافيين — انظر latePenaltyFor في lib/queueOrder.ts. من لم يستجب لندائه لا يُشطب أبدًا.
 
 const QUEUE_INCLUDE = {
   patient: { include: { user: { select: { phone: true } } } },
@@ -510,11 +516,18 @@ export async function getQueueForDoctor(doctorUserId: string, role: Role) {
     estimateSessionMinutes(doctor.id),
   ]);
 
+  // ordered: الترتيب الفعلي المتوقع للمناداة (المنتظرون والمتأخرون معًا) بنفس قواعد callNextPatient —
+  // حقل إضافي، والحقول السابقة (waiting/late) باقية كما هي لأي واجهة قديمة.
+  const ordered = projectQueueOrder(
+    appointments.filter((a) => a.status === AppointmentStatus.CONFIRMED || a.status === AppointmentStatus.LATE)
+  ).map((a, i) => ({ ...a, position: i + 1 }));
+
   return {
     date: algeriaTodayUTCMidnight().toISOString().slice(0, 10),
     current: appointments.find((a) => a.status === AppointmentStatus.IN_PROGRESS) ?? null,
     waiting: appointments.filter((a) => a.status === AppointmentStatus.CONFIRMED),
     late: appointments.filter((a) => a.status === AppointmentStatus.LATE),
+    ordered,
     estimatedDurationMinutes,
   };
 }
@@ -555,14 +568,10 @@ export async function callNextPatient(doctorUserId: string, role: Role) {
         orderBy: [{ startTime: "asc" }],
       });
 
-      const next = queue.find((a) => a.status === AppointmentStatus.CONFIRMED || a.skipCredits <= 0);
-      if (!next) {
-        throw ApiError.badRequest(
-          queue.length > 0
-            ? "كل المتأخرين ما زالوا ينتظرون دورهم. نادِ مريضًا آخر أو أعد المحاولة بعد قليل."
-            : "لا يوجد مريض في الانتظار اليوم."
-        );
-      }
+      // نفس قاعدة الترتيب المعروضة للطبيب وللمريض (lib/queueOrder.ts): متأخر نفد رصيده أولًا، ثم حسب
+      // وقت الموعد، وإن لم يبق إلا متأخرون فأقلهم رصيدًا — فلا يعلق الطابور أبدًا.
+      const next = pickNext(queue);
+      if (!next) throw ApiError.badRequest("لا يوجد مريض في الانتظار اليوم.");
 
       const called = await tx.appointment.update({
         where: { id: next.id },
@@ -596,15 +605,68 @@ export async function markAsLate(doctorUserId: string, appointmentId: string, ro
     throw ApiError.badRequest("لا يمكن تسجيل هذا الموعد كمتأخر في حالته الحالية.");
   }
 
-  return prisma.appointment.update({
-    where: { id: appointmentId },
-    data: {
-      status: AppointmentStatus.LATE,
-      skipCredits: QUEUE_DEFER_SKIPS,
-      deferredCount: { increment: 1 },
-    },
-    include: QUEUE_INCLUDE,
-  });
+  // متأخر أصلًا ولم يُنادَ من جديد: ضغطة ثانية/إعادة تحميل/نافذة «لم يحضر» على متأخر — لا تأخير جديد،
+  // لا عقوبة إضافية ولا إشعار. (كان هذا يعيد الرصيد ويزيد العدّاد فيُحتسب التأخير نفسه مرتين.)
+  if (appointment.status === AppointmentStatus.LATE) {
+    const current = await prisma.appointment.findUnique({ where: { id: appointmentId }, include: QUEUE_INCLUDE });
+    return { ...current!, duplicate: true, lateEvent: null };
+  }
+
+  // حدث تأخير جديد: رقمه في هذا الموعد = العدّاد الحالي + 1 (العدّاد مرتبط بالموعد، فيبدأ من صفر في كل موعد).
+  const sequence = appointment.deferredCount + 1;
+  const penalty = latePenaltyFor(sequence);
+
+  let result: { appointment: Awaited<ReturnType<typeof loadQueueAppointment>>; event: { id: string } } | null = null;
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      // compare-and-swap: نكتب فقط إن لم تتغير الحالة ولا العدّاد منذ القراءة. طلبان متزامنان لنفس
+      // الموعد: واحد فقط يجد count = 1، والآخر يُعامَل كتكرار. القيد الفريد (appointmentId, sequence)
+      // على جدول الأحداث حاجز ثانٍ على مستوى قاعدة البيانات.
+      const swapped = await tx.appointment.updateMany({
+        where: { id: appointmentId, status: appointment.status, deferredCount: appointment.deferredCount },
+        data: { status: AppointmentStatus.LATE, skipCredits: penalty, deferredCount: sequence },
+      });
+      if (swapped.count !== 1) return null;
+      const event = await tx.appointmentLateEvent.create({
+        data: { appointmentId, sequence, penalty, actorUserId: doctorUserId },
+        select: { id: true },
+      });
+      return { appointment: await loadQueueAppointment(appointmentId, tx), event };
+    });
+  } catch (err) {
+    if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) throw err;
+  }
+
+  if (!result) {
+    // خسر السباق أمام طلب مماثل: النتيجة هي ما سجّله الطلب الفائز، بلا أي أثر إضافي.
+    const current = await loadQueueAppointment(appointmentId);
+    if (current?.status === AppointmentStatus.LATE) return { ...current, duplicate: true, lateEvent: null };
+    throw ApiError.conflict("تغيّرت حالة الموعد للتو. حدّث الصفحة وأعد المحاولة.");
+  }
+
+  // إشعار المريض صاحب الحساب فقط (Appointment → Patient → أجهزته). بعد نجاح المعاملة وبمعزل عنها:
+  // فشل الإشعار لا يُلغي تسجيل التأخير أبدًا. الضيف بلا حساب لا يملك اشتراك Push.
+  const patientUserId = result.appointment?.patient?.userId;
+  if (patientUserId) {
+    try {
+      await createNotification(
+        patientUserId,
+        "APPOINTMENT_LATE",
+        "🔔 تنبيه بخصوص موعدك",
+        "تم تجاوز دورك مؤقتًا لأنك لم تكن حاضرًا عند المناداة. توجّه إلى العيادة، ما زلت في قائمة الانتظار.",
+        `/account?appointment=${appointmentId}`,
+        `late-${result.event.id}`
+      );
+    } catch (err) {
+      console.error("تعذّر إشعار المريض بالتأخير (التأخير مسجَّل):", (err as Error)?.message);
+    }
+  }
+
+  return { ...result.appointment!, duplicate: false, lateEvent: { id: result.event.id, sequence, penalty } };
+}
+
+function loadQueueAppointment(id: string, db: Prisma.TransactionClient = prisma) {
+  return db.appointment.findUnique({ where: { id }, include: QUEUE_INCLUDE });
 }
 
 /**

@@ -21,6 +21,23 @@ function patientPhone(a: Appointment): string | null {
   return a.patient?.user?.phone ?? a.guestPhone ?? null;
 }
 
+// "مريض واحد" / "مريضان" / "3 مرضى" / "11 مريضًا" — عدد المرضى الذين يمرّون قبل المتأخر.
+function patientsCount(n: number): string {
+  if (n === 1) return "مريض واحد";
+  if (n === 2) return "مريضين";
+  if (n >= 3 && n <= 10) return `${n} مرضى`;
+  return `${n} مريضًا`;
+}
+
+// رسالة ما بعد «متأخر» من رد الخادم نفسه: كم مركزًا تراجع فعلًا (2 أول مرة، ثم 4)، أو أن الضغطة تكرار.
+function lateToast(res: unknown): string {
+  const r = res as { duplicate?: boolean; lateEvent?: { penalty: number; sequence: number } | null } | undefined;
+  if (r?.duplicate) return "مسجَّل متأخرًا مسبقًا — لم يُحتسب تأخير إضافي.";
+  const penalty = r?.lateEvent?.penalty ?? 2;
+  const seq = r?.lateEvent?.sequence;
+  return `لم يُسجَّل غيابًا — بقي في الطابور ويعود دوره بعد ${patientsCount(penalty)}${seq && seq > 1 ? ` (التأخير رقم ${seq})` : ""}.`;
+}
+
 export default function DoctorQueue() {
   const { showToast } = useToast();
   const { data, isLoading, isFetching } = useQueue();
@@ -64,7 +81,7 @@ export default function DoctorQueue() {
   async function deferAndNotify(id: string) {
     try {
       const res = await markLate.mutateAsync(id);
-      showToast("لم يُسجَّل غيابًا نهائيًا — نُقل إلى المتأخرين ويعود دوره بعد مريضين.", "success");
+      showToast(lateToast(res), "success");
       return res;
     } catch (err) {
       showToast(apiErrorMessage(err, "تعذّر نقله إلى قائمة المتأخرين."), "error");
@@ -114,6 +131,10 @@ export default function DoctorQueue() {
   const waiting = data?.waiting ?? [];
   const late = data?.late ?? [];
   const estimatedDurationMinutes = data?.estimatedDurationMinutes ?? null;
+  // الطابور الموحّد بترتيب المناداة الفعلي من الخادم (المتأخر يظهر في مركزه الجديد مع شارة «متأخر»).
+  // مع خادم قديم بلا هذا الحقل نعود للعرض السابق: المنتظرون ثم قائمة المتأخرين منفصلة.
+  const ordered = data?.ordered;
+  const queueList: Appointment[] = ordered ?? waiting;
 
   return (
     <div className="space-y-5">
@@ -172,13 +193,14 @@ export default function DoctorQueue() {
               variant="outline"
               loading={markLate.isPending}
               disabled={busy}
-              onClick={() =>
-                run(
-                  markLate.mutateAsync(current.id),
-                  "نُقل إلى قائمة المتأخرين، ويعود دوره بعد مريضين.",
-                  "تعذّر تسجيله كمتأخر."
-                )
-              }
+              onClick={async () => {
+                try {
+                  const res = await markLate.mutateAsync(current.id);
+                  showToast(lateToast(res), "success");
+                } catch (err) {
+                  showToast(apiErrorMessage(err, "تعذّر تسجيله كمتأخر."), "error");
+                }
+              }}
             >
               <Clock3 className="ml-1.5 h-4 w-4" /> متأخر
             </Button>
@@ -212,21 +234,40 @@ export default function DoctorQueue() {
       {/* قائمة الانتظار بالترتيب */}
       <div>
         <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-slate-700">
-          <Users className="h-4 w-4" /> في الانتظار ({waiting.length})
+          <Users className="h-4 w-4" /> في الانتظار ({queueList.length})
         </p>
-        {waiting.length === 0 ? (
+        {queueList.length === 0 ? (
           <EmptyState title="لا أحد في الانتظار" description="كل مواعيد اليوم عولجت أو لم يحن وقتها بعد." />
         ) : (
           <div className="space-y-2">
-            {waiting.map((a, i) => (
-              <Card key={a.id} className="flex items-center justify-between gap-3 py-3">
+            {queueList.map((a, i) => {
+              const isLate = a.status === "LATE";
+              const remaining = a.skipCredits ?? 0;
+              return (
+              <Card key={a.id} className={"flex items-center justify-between gap-3 py-3" + (isLate ? " border-amber-200 bg-amber-50" : "")}>
                 <div className="flex items-center gap-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
-                    {i + 1}
+                  <span
+                    className={
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold " +
+                      (isLate ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600")
+                    }
+                  >
+                    {(a as Appointment & { position?: number }).position ?? i + 1}
                   </span>
                   <div>
-                    <p className="font-semibold text-slate-800">{patientName(a)}</p>
-                    <p className="text-xs text-slate-500">{a.startTime}</p>
+                    <p className="flex flex-wrap items-center gap-1.5 font-semibold text-slate-800">
+                      {patientName(a)}
+                      {isLate && (
+                        <span className="rounded-md bg-amber-200 px-1.5 py-0.5 text-[11px] font-bold text-amber-900">
+                          متأخر — ليس غيابًا نهائيًا
+                        </span>
+                      )}
+                    </p>
+                    <p className={"text-xs " + (isLate ? "text-amber-700" : "text-slate-500")}>
+                      {a.startTime}
+                      {isLate && (remaining > 0 ? " · يعود دوره بعد " + patientsCount(remaining) : " · دوره التالي مباشرة")}
+                      {isLate && a.deferredCount ? " · تأخّر " + a.deferredCount + " مرة" : ""}
+                    </p>
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
@@ -251,17 +292,29 @@ export default function DoctorQueue() {
                     onClick={() => run(callPatient.mutateAsync(a.id), "تمت مناداته.", "تعذّرت مناداته.")}
                     className="rounded-lg px-2 py-1 text-xs font-semibold text-primary-600 transition hover:bg-primary-50 disabled:opacity-40"
                   >
-                    نادِه
+                    {isLate ? "نادِه الآن" : "نادِه"}
                   </button>
+                  {isLate && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      title="لم يستجب — إشعاره برسالة دون تسجيل غياب نهائي"
+                      onClick={() => openNoShow(a)}
+                      className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-white disabled:opacity-40"
+                    >
+                      <UserX className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* المتأخرون: لم يُشطبوا، ويعود دور كل واحد تلقائيًا بعد مريضين */}
-      {late.length > 0 && (
+      {/* المتأخرون كقائمة منفصلة — فقط مع خادم قديم لا يرسل الترتيب الموحّد (ordered) */}
+      {!ordered && late.length > 0 && (
         <div>
           <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-amber-700">
             <Clock3 className="h-4 w-4" /> متأخرون ({late.length})
@@ -274,9 +327,7 @@ export default function DoctorQueue() {
                   <div>
                     <p className="font-semibold text-slate-800">{patientName(a)}</p>
                     <p className="text-xs text-amber-700">
-                      {remaining > 0
-                        ? "يعود دوره بعد " + remaining + (remaining === 1 ? " مريض" : " مريضين")
-                        : "دوره التالي مباشرة"}
+                      {remaining > 0 ? "يعود دوره بعد " + patientsCount(remaining) : "دوره التالي مباشرة"}
                       {a.deferredCount ? " · تأجّل " + a.deferredCount + " مرة" : ""}
                     </p>
                   </div>

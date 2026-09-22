@@ -9,6 +9,7 @@ const QUEUE_TURN_MAX_WAIT_MS = 30_000;
 import { createNotification } from "../notifications/notifications.service";
 import { GuestBookingInput, GuestSlotsQuery } from "./booking.schema";
 import { estimateSessionMinutes } from "../appointments/appointments.service";
+import { projectQueueOrder } from "../../lib/queueOrder";
 
 /**
  * حجز "ضيف" بدون تسجيل دخول: المريض لا يختار طبيبًا بعينه،
@@ -501,14 +502,14 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
 
   const someoneInside = dayQueue.some((a) => a.status === AppointmentStatus.IN_PROGRESS);
 
-  // من يسبقك فعليًا: المريض الجالس بالداخل الآن، ومن موعده قبل موعدك ولم يدخل بعد.
-  // نستثني المتأخرين الذين لم يعد دورهم بعد (رصيد تخطٍّ > 0) لأنهم لن يدخلوا قبلك.
-  const aheadOfYou = dayQueue.filter((a) => {
-    if (a.id === appointment.id) return false;
-    if (a.status === AppointmentStatus.IN_PROGRESS) return true;
-    if (a.status === AppointmentStatus.LATE && a.skipCredits > 0) return false;
-    return a.startTime < appointment.startTime;
-  }).length;
+  // من يسبقك فعليًا: المريض الجالس بالداخل الآن + من يسبقك في ترتيب المناداة المتوقع، محسوبًا بنفس
+  // قواعد الطابور التي يستعملها الطبيب (lib/queueOrder.ts) — ومنها تراجع المتأخر 2 ثم 4 مراكز.
+  const waitingOrder = projectQueueOrder(
+    dayQueue.filter((a) => a.status === AppointmentStatus.CONFIRMED || a.status === AppointmentStatus.LATE)
+  );
+  const myIndex = waitingOrder.findIndex((a) => a.id === appointment.id);
+  const insideOther = dayQueue.some((a) => a.status === AppointmentStatus.IN_PROGRESS && a.id !== appointment.id);
+  const aheadOfYou = myIndex >= 0 ? myIndex + (insideOther ? 1 : 0) : 0;
 
   // المدة الذكية: متوسط مدة آخر جلسات هذا الطبيب الفعلية (calledAt إلى endedAt)، وليس
   // الوقت المجدول للموعد — فتقدير الانتظار يعكس سير العيادة الحقيقي.

@@ -2,6 +2,7 @@ import { AppointmentStatus, Prisma, VerificationStatus, SubscriptionStatus } fro
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight } from "../../lib/slots";
+import { SLOT_OCCUPYING_WHERE, RELEASE_SLOT_DATA } from "../../lib/slotOccupancy";
 import { lockDoctorQueue, withDoctorQueueTurn, DoctorQueueBusyError } from "../../lib/doctorLock";
 
 // أقصى انتظار في طابور الحجز لطبيب واحد قبل الرفض بـ503 (أقل من مهلة العميل 45 ثانية).
@@ -73,13 +74,13 @@ async function bookedRangesForDoctorOnDate(doctorId: string, date: Date, db: Db 
   const endOfDay = new Date(date);
   endOfDay.setUTCHours(23, 59, 59, 999);
 
-  // نستبعد كل فترة يوجد بها سجل موعد مهما كانت حالته (حتى الملغاة أو "لم يحضر")،
-  // لأن قاعدة البيانات تفرض تفرّد (طبيب + تاريخ + وقت البداية) بغضّ النظر عن الحالة،
-  // فلو اعتبرناها شاغرة لفشل الإدراج بخطأ تعارض بدل أن يأخذ المريض الدور التالي.
+  // نستبعد كل فترة يشغلها موعد غير ملغى (بما فيها المكتملة و"لم يحضر")، مطابقةً لقيد قاعدة البيانات
+  // (doctorId, date, startTime, activeSlot). الموعد الملغى يبقى محفوظًا لكنه يحرّر وقته لحجز جديد.
   return db.appointment.findMany({
     where: {
       doctorId,
       date: { gte: startOfDay, lte: endOfDay },
+      ...SLOT_OCCUPYING_WHERE,
     },
     select: { startTime: true, endTime: true },
   });
@@ -431,7 +432,7 @@ export async function cancelGuestAppointment(id: string, phone: string) {
 
   const updated = await prisma.appointment.update({
     where: { id },
-    data: { status: AppointmentStatus.CANCELLED },
+    data: { status: AppointmentStatus.CANCELLED, ...RELEASE_SLOT_DATA },
     include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
   });
 

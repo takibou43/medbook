@@ -9,6 +9,7 @@ import { CreateAppointmentInput } from "./appointments.schema";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
 import { latePenaltyFor, pickNext, projectQueueOrder } from "../../lib/queueOrder";
 import { assertPatientCanBook, evaluateAutoBlockSafe } from "../patientBlocks/patientBlocks.service";
+import { SLOT_OCCUPYING_WHERE, RELEASE_SLOT_DATA } from "../../lib/slotOccupancy";
 
 const SLOT_MINUTES = 20;
 
@@ -62,7 +63,7 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
   endOfDay.setUTCHours(23, 59, 59, 999);
 
   const bookedForDay = await prisma.appointment.findMany({
-    where: { doctorId: doctor.id, date: { gte: startOfDay, lte: endOfDay }, status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] } },
+    where: { doctorId: doctor.id, date: { gte: startOfDay, lte: endOfDay }, ...SLOT_OCCUPYING_WHERE },
     select: { startTime: true, endTime: true },
   });
 
@@ -355,6 +356,9 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
     if (appointment.calledAt) {
       extraData.durationMinutes = Math.round((endedAt.getTime() - appointment.calledAt.getTime()) / 60000);
     }
+  } else if (newStatus === AppointmentStatus.CANCELLED) {
+    // الموعد الملغى يبقى محفوظًا، لكنه يحرّر وقته لحجز جديد (انظر lib/slotOccupancy).
+    Object.assign(extraData, RELEASE_SLOT_DATA);
   } else if (newStatus === AppointmentStatus.NO_SHOW) {
     extraData.calledAt = null;
     extraData.arrivedAt = null;

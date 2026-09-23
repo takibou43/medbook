@@ -2,6 +2,7 @@ import { Prisma, VerificationStatus, SubscriptionStatus, AppointmentStatus } fro
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { generateAvailableSlots, isPast } from "../../lib/slots";
+import { SLOT_OCCUPYING_WHERE } from "../../lib/slotOccupancy";
 import { haversineKm, roundDistanceKm } from "../../lib/geo";
 
 export interface DoctorSearchFilters {
@@ -136,7 +137,7 @@ export async function getDoctorAvailability(doctorId: string, dateStr: string) {
     where: {
       doctorId,
       date: { gte: startOfDay, lte: endOfDay },
-      status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] },
+      ...SLOT_OCCUPYING_WHERE,
     },
     select: { startTime: true, endTime: true },
   });

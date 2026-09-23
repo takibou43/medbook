@@ -14,6 +14,8 @@ interface BlockRow {
   email: string;
   phone: string | null;
   reason: string | null;
+  blockType: "MANUAL" | "AUTOMATIC";
+  noShowCount: number | null;
   blockedAt: string;
   blockedByEmail: string | null;
   unblockedAt: string | null;
@@ -43,11 +45,11 @@ export default function AdminPatientBlocks() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">المرضى المحظورون</h1>
-        <p className="mt-1 text-sm text-slate-500">المريض المحظور لا يستطيع إنشاء حجوزات جديدة فقط؛ حجوزاته وحسابه تبقى كما هي. للحظر: «المستخدمون» ← مريض ← «حظر».</p>
+        <p className="mt-1 text-sm text-slate-500">المريض المحظور لا يستطيع إنشاء حجوزات جديدة فقط؛ حجوزاته وحسابه تبقى كما هي. الحظر اليدوي: «المستخدمون» ← مريض ← «حظر». الحظر التلقائي: 3 غيابات خلال 7 أيام.</p>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Input placeholder="بحث بالاسم أو البريد..." value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="max-w-xs" />
+        <Input placeholder="بحث بالاسم أو البريد أو الهاتف..." value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="max-w-xs" />
         <select className="input max-w-[180px]" value={status} onChange={(e) => { setStatus(e.target.value as "active" | "all"); setPage(1); }}>
           <option value="active">المحظورون حاليًا</option>
           <option value="all">كل السجل (مع الملغى)</option>
@@ -65,6 +67,7 @@ export default function AdminPatientBlocks() {
                   <th className="px-4 py-3 font-semibold">المريض</th>
                   <th className="px-4 py-3 font-semibold">الهاتف</th>
                   <th className="px-4 py-3 font-semibold">تاريخ الحظر</th>
+                  <th className="px-4 py-3 font-semibold">النوع</th>
                   <th className="px-4 py-3 font-semibold">السبب</th>
                   <th className="px-4 py-3 font-semibold">بواسطة</th>
                   <th className="px-4 py-3 font-semibold">الحالة</th>
@@ -80,21 +83,38 @@ export default function AdminPatientBlocks() {
                     </td>
                     <td className="px-4 py-3 text-slate-600" dir="ltr">{b.phone ?? "—"}</td>
                     <td className="px-4 py-3 text-slate-600">{fmt(b.blockedAt)}</td>
-                    <td className="max-w-[220px] px-4 py-3 text-slate-600">{b.reason ?? "—"}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500" dir="ltr">{b.blockedByEmail ?? "—"}</td>
+                    <td className="px-4 py-3">
+                      {b.blockType === "AUTOMATIC" ? (
+                        <span className="badge bg-amber-100 text-amber-800">تلقائي</span>
+                      ) : (
+                        <span className="badge bg-slate-100 text-slate-700">يدوي</span>
+                      )}
+                    </td>
+                    <td className="max-w-[220px] px-4 py-3 text-slate-600">
+                      {b.reason ?? "—"}
+                      {b.blockType === "AUTOMATIC" && b.noShowCount != null && (
+                        <p className="mt-1 text-xs text-slate-500">عدد الغيابات: {b.noShowCount} خلال 7 أيام</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500" dir="ltr">
+                      {b.blockType === "AUTOMATIC" ? <span dir="rtl">النظام</span> : b.blockedByEmail ?? "—"}
+                    </td>
                     <td className="px-4 py-3">
                       {b.active ? (
                         <span className="badge bg-red-100 text-red-700">محظور</span>
                       ) : (
                         <span className="badge bg-slate-100 text-slate-600" title={b.unblockedByEmail ?? undefined}>
-                          أُلغي {fmt(b.unblockedAt)}
+                          رُفع {fmt(b.unblockedAt)}
                         </span>
+                      )}
+                      {!b.active && b.unblockedByEmail && (
+                        <p className="mt-1 text-xs text-slate-500" dir="ltr">{b.unblockedByEmail}</p>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       {b.active && (
                         <Button variant="outline" onClick={() => setTarget({ patientId: b.patientId, name: b.patientName, email: b.email })}>
-                          إلغاء الحظر
+                          رفع الحظر
                         </Button>
                       )}
                     </td>

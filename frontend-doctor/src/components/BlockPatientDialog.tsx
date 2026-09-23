@@ -40,7 +40,7 @@ export function BlockPatientDialog({
         showToast(`تم حظر المريض ${target.name}. لن يستطيع إنشاء حجوزات جديدة.`, "success");
       } else {
         await api.post(`/admin/patients/${target.patientId}/unblock`);
-        showToast(`تم إلغاء حظر المريض ${target.name}. يستطيع الحجز من جديد.`, "success");
+        showToast(`تم رفع الحظر عن المريض ${target.name}. يستطيع الحجز من جديد.`, "success");
       }
       qc.invalidateQueries({ queryKey: ["admin-users"] });
       qc.invalidateQueries({ queryKey: ["admin-patient-blocks"] });
@@ -56,14 +56,14 @@ export function BlockPatientDialog({
     <Modal
       open={Boolean(target)}
       onClose={close}
-      title={mode === "block" ? "حظر المريض" : "إلغاء حظر المريض"}
+      title={mode === "block" ? "حظر المريض" : "رفع الحظر"}
       footer={
         <>
           <Button variant="outline" onClick={close} disabled={busy}>
             إلغاء
           </Button>
           <Button variant={mode === "block" ? "danger" : "primary"} onClick={confirm} loading={busy}>
-            {mode === "block" ? "تأكيد الحظر" : "تأكيد إلغاء الحظر"}
+            {mode === "block" ? "تأكيد الحظر" : "تأكيد رفع الحظر"}
           </Button>
         </>
       }
@@ -85,7 +85,10 @@ export function BlockPatientDialog({
               </label>
             </>
           ) : (
-            <p className="rounded-xl bg-green-50 p-3 text-green-800">سيعود المريض للوضع الطبيعي ويستطيع إنشاء حجوزات جديدة. يبقى سجل الحظر السابق محفوظًا.</p>
+            <div className="space-y-2 rounded-xl bg-green-50 p-3 text-green-800">
+              <p className="font-bold">هل تريد رفع الحظر عن هذا المريض؟</p>
+              <p>بعد رفع الحظر سيتمكن المريض من إنشاء حجوزات جديدة. سجل الحظر والغيابات السابقة ومواعيده تبقى محفوظة كما هي.</p>
+            </div>
           )}
         </div>
       )}

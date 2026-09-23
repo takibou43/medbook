@@ -262,7 +262,10 @@ async function createAutoAssignedAppointment(
  */
 export async function createGuestAppointment(input: GuestBookingInput, patientId: string | null = null) {
   // حماية من الحجوزات المتكررة بدون حضور: نتحقق أولًا قبل أي محاولة حجز.
-  await checkGuestReliability(input.phone);
+  // تقييد رقم الضيف القديم (مجموع غيابات الضيف منذ البداية، بلا رفع من الإدارة) لا يُطبَّق على
+  // حجز صاحب حساب: المريض المسجَّل يخضع للحظر الموحّد في patient_blocks (3 غيابات خلال 7 أيام،
+  // يظهر في «المرضى المحظورون» وتستطيع الإدارة رفعه) ويُفحص في المتحكم قبل الوصول إلى هنا.
+  if (!patientId) await checkGuestReliability(input.phone);
 
   // الوضع الافتراضي الجديد: لم يُرسل وقت — النظام يعيّن أول دور متاح لدى الطبيب المختار.
   if (input.doctorId && (!input.date || !input.startTime)) {

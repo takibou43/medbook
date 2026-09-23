@@ -105,7 +105,7 @@ export default function AdminUsers() {
                               })
                             }
                           >
-                            {u.patient.blocks?.length > 0 ? "إلغاء الحظر" : "حظر المريض"}
+                            {u.patient.blocks?.length > 0 ? "رفع الحظر" : "حظر المريض"}
                           </Button>
                         )}
                         <Button variant="danger" onClick={() => remove(u.id)}>

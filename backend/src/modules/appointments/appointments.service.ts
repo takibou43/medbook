@@ -8,7 +8,7 @@ import { lockDoctorCalls } from "../../lib/doctorLock";
 import { CreateAppointmentInput } from "./appointments.schema";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
 import { latePenaltyFor, pickNext, projectQueueOrder } from "../../lib/queueOrder";
-import { assertPatientCanBook } from "../patientBlocks/patientBlocks.service";
+import { assertPatientCanBook, evaluateAutoBlockSafe } from "../patientBlocks/patientBlocks.service";
 
 const SLOT_MINUTES = 20;
 
@@ -167,7 +167,7 @@ export async function autoExpireStaleAppointments(doctorId: string) {
       status: { in: EXPIRABLE_STATUSES },
       date: { lte: algeriaTodayUTCMidnight() },
     },
-    select: { id: true, date: true, status: true },
+    select: { id: true, date: true, status: true, patientId: true },
   });
 
   const due = candidates.filter((a) => {
@@ -187,6 +187,10 @@ export async function autoExpireStaleAppointments(doctorId: string) {
 
   if (missed.length > 0) {
     await prisma.appointment.updateMany({ where: { id: { in: missed } }, data: { status: AppointmentStatus.NO_SHOW } });
+    // غياب نهائي جديد → إعادة تقييم الحظر التلقائي (3 غيابات خلال 7 أيام) لكل مريض حساب معني.
+    const missedSet = new Set(missed);
+    const patientIds = new Set(due.filter((a) => missedSet.has(a.id) && a.patientId).map((a) => a.patientId as string));
+    for (const pid of patientIds) await evaluateAutoBlockSafe(pid);
   }
 
   // لا حذف بعد اليوم: مواعيد "لم يحضر" تبقى محفوظة في قاعدة البيانات دائمًا لتُحتسب
@@ -374,6 +378,10 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
     }
     throw err;
   }
+
+  // الحظر التلقائي: بعد تثبيت NO_SHOW (commit) نعيد عدّ غيابات المريض خلال آخر 7 أيام.
+  // LATE لا يمر من هنا أصلًا (markAsLate أعلاه) فلا يُحتسب غيابًا.
+  if (newStatus === AppointmentStatus.NO_SHOW) await evaluateAutoBlockSafe(updated.patientId);
 
   // عند تسجيل "لم يحضر" نرسل SMS للمريض، مبنية بالكامل من بيانات الموعد الفعلية في قاعدة
   // البيانات (لا أسماء أو نصوص ثابتة). سجل SmsLog واحد فقط لكل موعد (قيد فريد appointmentId)

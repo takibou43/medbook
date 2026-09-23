@@ -207,6 +207,12 @@ model Patient {
   @@map("patients")
 }
 
+// نوع الحظر: يدوي من الإدارة، أو تلقائي بعد 3 غيابات NO_SHOW خلال 7 أيام.
+enum PatientBlockType {
+  MANUAL
+  AUTOMATIC
+}
+
 // سجل حظر المريض من إنشاء حجوزات جديدة (سجل لكل عملية حظر، ويُغلق عند إلغاء الحظر فيبقى التاريخ كاملًا).
 // activePatientId = patientId ما دام الحظر ساريًا، ويصير NULL عند الإلغاء. القيد الفريد عليه يضمن
 // حظرًا ساريًا واحدًا على الأكثر لكل مريض حتى مع طلبين متزامنين (NULL لا يتعارض في PostgreSQL).
@@ -217,6 +223,9 @@ model PatientBlock {
   patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
   activePatientId String?   @unique
   reason          String?
+  // يدوي (من الإدارة) أو تلقائي — للحظر التلقائي: noShowCount = عدد الغيابات داخل النافذة لحظة الحظر.
+  blockType       PatientBlockType @default(MANUAL)
+  noShowCount     Int?
   blockedAt       DateTime  @default(now())
   blockedBy       String?
   unblockedAt     DateTime?

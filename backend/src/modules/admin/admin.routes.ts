@@ -146,8 +146,8 @@ router.post(
   validate({ params: z.object({ patientId: z.string().uuid() }) }),
   asyncHandler(async (req, res) => {
     const block = await blocks.unblockPatient(req.params.patientId, req.user!.id);
-    await service.logAction(req.user!.id, "UNBLOCK_PATIENT", "Patient", req.params.patientId, { blockId: block?.id });
-    res.json({ success: true, message: "تم إلغاء حظر المريض.", data: block });
+    await service.logAction(req.user!.id, "UNBLOCK_PATIENT", "Patient", req.params.patientId, { blockId: block?.id, blockType: block?.blockType });
+    res.json({ success: true, message: "تم رفع الحظر عن المريض.", data: block });
   })
 );
 

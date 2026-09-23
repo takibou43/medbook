@@ -1,6 +1,7 @@
-import { Prisma } from "@prisma/client";
+import { AppointmentStatus, PatientBlockType, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
+import { algeriaTodayUTCMidnight } from "../../lib/slots";
 
 /**
  * حظر المرضى من إنشاء حجوزات جديدة.
@@ -47,6 +48,102 @@ export async function unblockPatient(patientId: string, adminUserId: string) {
   return prisma.patientBlock.findFirst({ where: { patientId }, orderBy: { blockedAt: "desc" } });
 }
 
+// ============================================================
+// الحظر التلقائي بسبب تكرار الغياب
+// ============================================================
+
+/** عدد غيابات NO_SHOW داخل النافذة الذي يفعّل الحظر التلقائي. */
+export const AUTO_BLOCK_NO_SHOW_LIMIT = 3;
+/** طول النافذة بالأيام التقويمية (اليوم الحالي بتوقيت الجزائر + 6 أيام قبله). */
+export const AUTO_BLOCK_WINDOW_DAYS = 7;
+
+export function autoBlockReason(noShowCount: number): string {
+  return `حظر تلقائي بسبب ${noShowCount} غيابات خلال ${AUTO_BLOCK_WINDOW_DAYS} أيام`;
+}
+
+/**
+ * بداية نافذة الغياب: منتصف ليل (UTC) لليوم التقويمي قبل 6 أيام من اليوم الحالي بتوقيت الجزائر.
+ * حقل Appointment.date يُخزَّن كتاريخ تقويمي عند 00:00 UTC، فالمقارنة gte مباشرة:
+ * يوم 25 → النافذة 19..25 (7 أيام)، وغياب يوم 17 (قبل 8 أيام) لا يُحتسب.
+ */
+export function noShowWindowStart(today: Date = algeriaTodayUTCMidnight()): Date {
+  const start = new Date(today);
+  start.setUTCDate(start.getUTCDate() - (AUTO_BLOCK_WINDOW_DAYS - 1));
+  return start;
+}
+
+/** عدد مواعيد المريض بالحالة النهائية NO_SHOW داخل النافذة (LATE/CANCELLED/COMPLETED... لا تُحتسب). */
+export async function countRecentNoShows(patientId: string, today?: Date): Promise<number> {
+  return prisma.appointment.count({
+    where: { patientId, status: AppointmentStatus.NO_SHOW, date: { gte: noShowWindowStart(today) } },
+  });
+}
+
+/**
+ * يُستدعى بعد حفظ حالة NO_SHOW (زر «لم يحضر» أو الاعتماد التلقائي عند إغلاق العيادة) — لا يُستدعى
+ * عند رفع الحظر، فلا حلقة حظر/رفع بدون غياب جديد.
+ *
+ * التزامن: يُستدعى دائمًا بعد أن يُثبَّت تحديث الموعد (commit)، فآخر فحص يجري بين طلبين متزامنين
+ * يرى غيابيهما معًا — لا يضيع عدّ. وإن وصل طلبان معًا إلى الإنشاء، القيد الفريد activePatientId
+ * يسمح بحظر نشط واحد فقط والآخر يأخذ P2002 فيُتجاهل بصمت.
+ */
+export async function evaluateAutoBlock(
+  patientId: string,
+  today?: Date
+): Promise<{ blocked: boolean; noShowCount: number; blockId?: string }> {
+  const noShowCount = await countRecentNoShows(patientId, today);
+  if (noShowCount < AUTO_BLOCK_NO_SHOW_LIMIT) return { blocked: false, noShowCount };
+  if (await isPatientBlocked(patientId)) return { blocked: false, noShowCount };
+
+  const reason = autoBlockReason(noShowCount);
+  let block;
+  try {
+    block = await prisma.patientBlock.create({
+      data: {
+        patientId,
+        activePatientId: patientId,
+        reason,
+        blockType: PatientBlockType.AUTOMATIC,
+        noShowCount,
+        blockedBy: null,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return { blocked: false, noShowCount };
+    }
+    throw err;
+  }
+  // سجل العمليات: الفاعل هو النظام (userId = null). لا تفاصيل طبية ولا هوية الطبيب.
+  await prisma.auditLog.create({
+    data: {
+      userId: null,
+      action: "BLOCK_PATIENT",
+      entity: "Patient",
+      entityId: patientId,
+      meta: {
+        blockId: block.id,
+        blockType: PatientBlockType.AUTOMATIC,
+        reason,
+        noShowCount,
+        windowDays: AUTO_BLOCK_WINDOW_DAYS,
+        limit: AUTO_BLOCK_NO_SHOW_LIMIT,
+      },
+    },
+  });
+  return { blocked: true, noShowCount, blockId: block.id };
+}
+
+/** غلاف آمن: فشل الحظر التلقائي لا يُفشل تسجيل الغياب نفسه (الغياب التالي يعيد التقييم). */
+export async function evaluateAutoBlockSafe(patientId: string | null | undefined): Promise<void> {
+  if (!patientId) return;
+  try {
+    await evaluateAutoBlock(patientId);
+  } catch (err) {
+    console.error(`تعذّر تقييم الحظر التلقائي للمريض ${patientId}:`, err);
+  }
+}
+
 export async function listPatientBlocks(params: { status?: "active" | "all"; q?: string; page?: number; pageSize?: number }) {
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 20));
@@ -60,6 +157,7 @@ export async function listPatientBlocks(params: { status?: "active" | "all"; q?:
               { firstName: { contains: q, mode: "insensitive" } },
               { lastName: { contains: q, mode: "insensitive" } },
               { user: { email: { contains: q, mode: "insensitive" } } },
+              { user: { phone: { contains: q } } },
             ],
           },
         }
@@ -92,6 +190,8 @@ export async function listPatientBlocks(params: { status?: "active" | "all"; q?:
     email: r.patient.user.email,
     phone: r.patient.user.phone,
     reason: r.reason,
+    blockType: r.blockType,
+    noShowCount: r.noShowCount,
     blockedAt: r.blockedAt,
     blockedByEmail: emailOf(r.blockedBy),
     unblockedAt: r.unblockedAt,

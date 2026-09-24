@@ -14,6 +14,8 @@ interface Props {
   errorMessage: string | null;
   onConfirm: () => void;
   onBack: () => void;
+  // الوقت اختاره المريض بنفسه (لا نقل تلقائي إلى وقت آخر إن أُخذ).
+  exactChoice?: boolean;
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -28,7 +30,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 // الخطوة 5: ملخص واضح قبل الإرسال. الخادم هو المرجع النهائي للدور (يعيد حسابه لحظة الحجز
 // ويمنع التكرار)، وشاشة النجاح تعرض الدور الفعلي الذي سجّله.
 export const ConfirmStep = forwardRef<HTMLHeadingElement, Props>(
-  ({ doctor, slot, patientName, patientPhone, submitting, errorMessage, onConfirm, onBack }, ref) => {
+  ({ doctor, slot, patientName, patientPhone, submitting, errorMessage, onConfirm, onBack, exactChoice }, ref) => {
     const address = doctorAddress(doctor);
     return (
       <section aria-labelledby="step-confirm-title">
@@ -45,13 +47,17 @@ export const ConfirmStep = forwardRef<HTMLHeadingElement, Props>(
           {address && <Row label="العنوان">{address}</Row>}
           <Row label="التاريخ">{formatLongDate(slot.date)}</Row>
           <Row label="الوقت">
-            <span dir="ltr">{slot.startTime}</span>
+            {/^\d{2}:\d{2}$/.test(slot.startTime) ? <span dir="ltr">{slot.startTime}</span> : slot.startTime}
           </Row>
           <Row label="اسم المريض">{patientName}</Row>
           <Row label="رقم الهاتف">{patientPhone ? <span dir="ltr">{patientPhone}</span> : "—"}</Row>
         </dl>
 
-        <p className="mt-3 text-xs text-slate-500">الأدوار تُمنح بالترتيب؛ إن حُجز هذا الوقت قبلك للتوّ سيُعطى لك الدور التالي مباشرة.</p>
+        <p className="mt-3 text-xs text-slate-500">
+          {exactChoice
+            ? "الخادم يتحقق من توفر الوقت لحظة التأكيد؛ إن حُجز قبلك للتوّ سنطلب منك اختيار وقت آخر."
+            : "الأدوار تُمنح بالترتيب؛ إن حُجز هذا الوقت قبلك للتوّ سيُعطى لك الدور التالي مباشرة."}
+        </p>
 
         {errorMessage && (
           <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">

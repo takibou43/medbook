@@ -28,8 +28,21 @@ export const guestBookingSchema = z.object({
     .string()
     .regex(/^\d{2}:\d{2}$/, "صيغة الوقت يجب أن تكون HH:mm")
     .optional(),
+  // اختيار المريض الاختياري للوقت: true = احجز هذا الوقت بالضبط أو ارفض (409 «هذا الموعد لم يعد متاحًا»).
+  // غيابه = السلوك السابق كما هو (الوقت المطلوب أو أقرب وقت بعده). يُتجاهَل بلا startTime.
+  exactTime: z.boolean().optional(),
   notes: z.string().max(1000).optional(),
 });
+
+// أيام/أوقات الطبيب المتاحة للاختيار الاختياري في واجهة الحجز. بلا date → الأيام المتاحة؛ مع date → أوقات ذلك اليوم.
+export const availabilityQuerySchema = z.object({
+  doctorId: z.string().uuid("طبيب غير صالح"),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "صيغة التاريخ يجب أن تكون YYYY-MM-DD")
+    .optional(),
+});
+export type AvailabilityQuery = z.infer<typeof availabilityQuerySchema>;
 
 // معاينة أول دور متاح لدى طبيب محدد قبل تأكيد الحجز.
 export const nextSlotQuerySchema = z.object({

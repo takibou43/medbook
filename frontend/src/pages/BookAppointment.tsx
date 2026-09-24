@@ -11,6 +11,7 @@ import { BookingSteps, StepId } from "../components/booking/BookingSteps";
 import { SpecialtyOption, SpecialtyStep } from "../components/booking/SpecialtyStep";
 import { DoctorStep } from "../components/booking/DoctorStep";
 import { SlotStep } from "../components/booking/SlotStep";
+import { DayTimePicker, DayTimeChoice } from "../components/booking/DayTimePicker";
 import { PatientForm, PatientStep } from "../components/booking/PatientStep";
 import { ConfirmStep } from "../components/booking/ConfirmStep";
 import { ConfirmedBooking, SuccessModal } from "../components/booking/SuccessModal";
@@ -44,6 +45,8 @@ export default function BookAppointment() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [confirmed, setConfirmed] = useState<ConfirmedBooking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // اختيار اختياري لليوم/الوقت. null = السلوك الحالي تمامًا (أول دور متاح يعيّنه الخادم).
+  const [choice, setChoice] = useState<DayTimeChoice | null>(null);
 
   // أثناء الحجز (أي اختيار أو خطوة متقدمة أو شاشة التأكيد) لا يجوز أن يُعيد التحديث التلقائي للـPWA تحميل الصفحة:
   // حالة المعالج محفوظة في الذاكرة فقط. register-sw.js يقرأ هذه العلامة ويؤجّل التحديث لنقطة آمنة.
@@ -114,6 +117,7 @@ export default function BookAppointment() {
   function chooseDoctorDirectly(d: Doctor) {
     setSpecialtyId(d.specialtyId);
     setSelectedDoctor(d);
+    setChoice(null);
     setSubmitError(null);
     setStep("slot");
   }
@@ -158,8 +162,9 @@ export default function BookAppointment() {
   const slotErr = slotError ? bookingError(slotError, "تعذّر تحميل الموعد.") : null;
 
   const bookMutation = useMutation({
-    // لا نرسل التاريخ ولا الوقت — الخادم هو من يعيّن الدور التالي لحظة الحجز ويمنع التكرار.
-    mutationFn: async (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor }) =>
+    // بلا اختيار: لا نرسل التاريخ ولا الوقت — الخادم يعيّن الدور التالي لحظة الحجز ويمنع التكرار (كما كان).
+    // مع اختيار: اليوم فقط (أول وقت شاغر فيه) أو اليوم + الوقت بالضبط (exactTime) — والخادم يعيد التحقق.
+    mutationFn: async (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor; choice: DayTimeChoice | null }) =>
       (
         await api.post("/booking", {
           firstName: payload.firstName,
@@ -168,6 +173,11 @@ export default function BookAppointment() {
           wilayaId: payload.doctor.wilaya.id,
           specialtyId: payload.doctor.specialtyId,
           doctorId: payload.doctor.id,
+          ...(payload.choice
+            ? payload.choice.startTime
+              ? { date: payload.choice.date, startTime: payload.choice.startTime, exactTime: true }
+              : { date: payload.choice.date }
+            : {}),
         })
       ).data.data,
   });
@@ -183,7 +193,7 @@ export default function BookAppointment() {
     }
     setSubmitError(null);
     try {
-      const appointment = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor });
+      const appointment = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice });
       // مدة الحدث في التقويم = المدة الفعلية للموعد كما سجّلها الخادم (وليس رقمًا ثابتًا)،
       // مع رجوع احتياطي لمدة الدور المعروضة قبل التأكيد إن تعذّر حساب الفرق لأي سبب.
       const durationMinutes = diffMinutes(appointment.startTime, appointment.endTime) || nextSlot?.slotMinutes || 20;
@@ -201,6 +211,8 @@ export default function BookAppointment() {
       form.reset({ fullName: "", phone: "" });
       queryClient.invalidateQueries({ queryKey: ["next-slot"] });
       queryClient.invalidateQueries({ queryKey: ["next-slot-preview"] });
+      queryClient.invalidateQueries({ queryKey: ["availability"] });
+      setChoice(null);
     } catch (err) {
       if ((err as any)?.response?.status === 401) {
         // الجلسة انتهت ولم يمكن تجديدها: نعيده لتسجيل الدخول ثم لنفس الطبيب.
@@ -218,6 +230,10 @@ export default function BookAppointment() {
       if (kind === "conflict") {
         // الدور أُخذ أو انتهت الأدوار: نحدّث الدور المعروض ونعيد المريض لخطوة الموعد برسالة واضحة.
         showToast(message, "error");
+        // اختيار المريض لم يعد متاحًا: نحدّث الأيام/الأوقات ونُبقي اليوم (أو نلغيه إن لم يعد متاحًا) ليختار غيره.
+        const code = (err as any)?.response?.data?.details?.code;
+        queryClient.invalidateQueries({ queryKey: ["availability", selectedDoctor.id] });
+        if (choice) setChoice(code === "SLOT_UNAVAILABLE" ? { date: choice.date, startTime: null } : null);
         queryClient.invalidateQueries({ queryKey: ["next-slot", selectedDoctor.id] });
         queryClient.invalidateQueries({ queryKey: ["next-slot-preview", selectedDoctor.id] });
         setStep("slot");
@@ -236,6 +252,7 @@ export default function BookAppointment() {
   function closeConfirmation() {
     setConfirmed(null);
     setSelectedDoctor(null);
+    setChoice(null);
     setSubmitError(null);
     setStep(specialtyId ? "doctor" : "specialty");
   }
@@ -317,6 +334,7 @@ export default function BookAppointment() {
                 errorMessage={doctorsFailed ? apiErrorMessage(doctorsError) : undefined}
                 onRetry={() => refetchDoctors()}
                 onSelect={(d) => {
+                  if (d.id !== selectedDoctor?.id) setChoice(null);
                   setSelectedDoctor(d);
                   setStep("slot");
                 }}
@@ -336,6 +354,8 @@ export default function BookAppointment() {
                 onContinue={continueToPatient}
                 onBack={() => setStep("doctor")}
                 backLabel="العودة إلى الأطباء"
+                choice={choice}
+                picker={<DayTimePicker doctorId={selectedDoctor.id} value={choice} onChange={setChoice} />}
               />
             )}
 
@@ -343,11 +363,16 @@ export default function BookAppointment() {
               <PatientStep ref={headingRef} form={form} onSubmit={() => setStep("confirm")} onBack={() => setStep("slot")} />
             )}
 
-            {step === "confirm" && selectedDoctor && nextSlot && user && (
+            {step === "confirm" && selectedDoctor && (nextSlot || choice) && user && (
               <ConfirmStep
                 ref={headingRef}
                 doctor={selectedDoctor}
-                slot={nextSlot}
+                slot={
+                  choice
+                    ? { date: choice.date, startTime: choice.startTime ?? "أول وقت متاح في هذا اليوم", endTime: "", slotMinutes: nextSlot?.slotMinutes ?? 0 }
+                    : nextSlot!
+                }
+                exactChoice={Boolean(choice?.startTime)}
                 patientName={form.getValues("fullName").trim().replace(/\s+/g, " ")}
                 patientPhone={form.getValues("phone").trim()}
                 submitting={bookMutation.isPending}

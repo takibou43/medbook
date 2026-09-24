@@ -14,6 +14,15 @@ export const getSlots = asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: { slots } });
 });
 
+// الأيام المتاحة لدى الطبيب، أو أوقات يوم معيّن — للاختيار الاختياري في واجهة الحجز.
+export const getAvailability = asyncHandler(async (req: Request, res: Response) => {
+  const data = await service.getDoctorAvailability({
+    doctorId: req.query.doctorId as string,
+    date: (req.query.date as string | undefined) || undefined,
+  });
+  res.json({ success: true, data });
+});
+
 // معاينة الدور الذي سيمنحه النظام للمريض قبل أن يؤكد الحجز.
 export const getNextSlot = asyncHandler(async (req: Request, res: Response) => {
   const data = await service.previewNextSlot(req.query.doctorId as string);

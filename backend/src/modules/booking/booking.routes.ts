@@ -8,6 +8,7 @@ import {
   cancelBookingSchema,
   bookingIdParamsSchema,
   nextSlotQuerySchema,
+  availabilityQuerySchema,
 } from "./booking.schema";
 import * as controller from "./booking.controller";
 import { Role } from "@prisma/client";
@@ -19,6 +20,10 @@ router.get("/slots", validate({ query: guestSlotsQuerySchema }), controller.getS
 
 // GET /api/booking/next-slot?doctorId= — أول دور متاح يعيّنه النظام (المريض لا يختار الوقت)
 router.get("/next-slot", validate({ query: nextSlotQuerySchema }), controller.getNextSlot);
+
+// GET /api/booking/availability?doctorId=[&date=YYYY-MM-DD] — اختيار اختياري: الأيام المتاحة، أو أوقات يوم
+// (من قاعدة البيانات مباشرة؛ الخادم يعيد التحقق لحظة الحجز). لا يكشف أي بيانات مرضى.
+router.get("/availability", validate({ query: availabilityQuerySchema }), controller.getAvailability);
 
 // lookup/cancel لا يتطلبان حسابًا — رقم الهاتف وحده هو التحقق، لذا نقيّدهما بمعدل صارم
 // (bookingLookupLimiter) يمنع تجربة أرقام هواتف عشوائية بسرعة لاكتشاف مواعيد مرضى آخرين.

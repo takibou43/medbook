@@ -151,3 +151,56 @@ export async function reserveRequestedOrNextSlot<T>(opts: {
   }
   throw new SlotRaceExhaustedError();
 }
+
+/** الوقت الذي اختاره المريض بنفسه لم يعد متاحًا (حُجز، أو خارج الدوام/الشبكة، أو مضى). */
+export class ExactSlotUnavailableError extends Error {
+  constructor() {
+    super("the exact requested slot is not available");
+    Object.setPrototypeOf(this, ExactSlotUnavailableError.prototype);
+  }
+}
+
+/**
+ * حجز «الوقت الذي اختاره المريض بالضبط» — للاختيار الاختياري لليوم والوقت في واجهة الحجز.
+ * بخلاف reserveRequestedOrNextSlot لا ينقل المريض إلى وقت آخر: إن لم يعد الوقت متاحًا يرمي
+ * ExactSlotUnavailableError فيعرض له العميل «هذا الموعد لم يعد متاحًا» ويحدّث الأوقات.
+ *
+ * نفس طبقات الحماية تمامًا: قفل طابور الطبيب (قراءة المشغول + الإدراج ذرّيان)، والقيد الفريد
+ * (doctorId, date, startTime, activeSlot) خط دفاع أخير — P2002 هنا يعني أن مريضًا آخر أخذه → غير متاح.
+ * «متاح» = ضمن generateAvailableSlots (أوقات العمل + الاستثناءات + مدة الجلسة + غير مشغول بموعد غير ملغى)
+ * ولم يمضِ وقته — نفس ما تعرضه واجهة الأوقات (getDoctorDaySlots).
+ */
+export async function reserveExactSlot<T>(opts: {
+  doctor: SlotDoctor;
+  date: Date;
+  startTime: string;
+  create: (tx: Prisma.TransactionClient, slot: AssignedSlot) => Promise<T>;
+}): Promise<{ result: T; slot: AssignedSlot }> {
+  const { doctor, date, startTime, create } = opts;
+  const slotMinutes = slotMinutesFor(doctor);
+  const slot = { startTime, endTime: addMinutes(startTime, slotMinutes), slotMinutes };
+  const startOfDay = new Date(date);
+  const endOfDay = new Date(date);
+  endOfDay.setUTCHours(23, 59, 59, 999);
+  try {
+    const result = await withDoctorQueueTurn(doctor.id, QUEUE_TURN_MAX_WAIT_MS, () =>
+      prisma.$transaction(
+        async (tx) => {
+          await lockDoctorQueue(tx, doctor.id);
+          const booked = await tx.appointment.findMany({
+            where: { doctorId: doctor.id, date: { gte: startOfDay, lte: endOfDay }, ...SLOT_OCCUPYING_WHERE },
+            select: { startTime: true, endTime: true },
+          });
+          const free = generateAvailableSlots(date, doctor.schedules, booked, slotMinutes);
+          if (!free.includes(startTime) || isPast(date, startTime)) throw new ExactSlotUnavailableError();
+          return create(tx, slot);
+        },
+        { maxWait: 20000, timeout: 30000 }
+      )
+    );
+    return { result, slot };
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new ExactSlotUnavailableError();
+    throw err;
+  }
+}

@@ -6,17 +6,20 @@ import { SLOT_OCCUPYING_WHERE, RELEASE_SLOT_DATA } from "../../lib/slotOccupancy
 import { lockDoctorQueue, withDoctorQueueTurn, DoctorQueueBusyError } from "../../lib/doctorLock";
 import {
   reserveRequestedOrNextSlot,
+  reserveExactSlot,
   slotMinutesFor,
   NoSlotAvailableError,
   SlotRaceExhaustedError,
+  ExactSlotUnavailableError,
 } from "../../lib/slotAssign";
 
 // أقصى انتظار في طابور الحجز لطبيب واحد قبل الرفض بـ503 (أقل من مهلة العميل 45 ثانية).
 const QUEUE_TURN_MAX_WAIT_MS = 30_000;
 import { createNotification } from "../notifications/notifications.service";
-import { GuestBookingInput, GuestSlotsQuery } from "./booking.schema";
+import { GuestBookingInput, GuestSlotsQuery, AvailabilityQuery } from "./booking.schema";
 import { estimateSessionMinutes } from "../appointments/appointments.service";
 import { locateInQueue, DAY_QUEUE_STATUSES } from "../../lib/doctorQueue";
+import { getDoctorAvailability as getDoctorDaySlots } from "../doctors/doctors.service";
 
 /**
  * حجز "ضيف" بدون تسجيل دخول: المريض لا يختار طبيبًا بعينه،
@@ -169,6 +172,65 @@ export async function previewNextSlot(doctorId: string) {
   };
 }
 
+// ===== اختيار اليوم/الوقت الاختياري =====
+// ليس نظام مواعيد منفصلًا: نفس الطبيب القابل للحجز (loadBookableDoctor)، نفس الفترات (generateAvailableSlots:
+// أوقات العمل + الاستثناءات + مدة الجلسة)، نفس «المشغول» (كل موعد غير ملغى — الملغى يحرّر وقته)،
+// ونفس استبعاد ما مضى من اليوم. الخادم يعيد التحقق كله لحظة الحجز تحت قفل الطبيب.
+
+/** كم يومًا نعرض للمريض ليختار منها. */
+export const AVAILABILITY_DAYS = 30;
+/** أقصى أفق للحجز (نفس أفق «أول دور متاح»). */
+export const BOOKING_HORIZON_DAYS = 60;
+
+export const SLOT_UNAVAILABLE_MESSAGE = "هذا الموعد لم يعد متاحًا، يرجى اختيار وقت آخر.";
+export const DAY_UNAVAILABLE_MESSAGE = "هذا اليوم غير متاح لدى الطبيب، يرجى اختيار يوم آخر.";
+
+function freeSlotsOn(doctor: Awaited<ReturnType<typeof loadBookableDoctor>>, date: Date, booked: { startTime: string; endTime: string }[]) {
+  return generateAvailableSlots(date, doctor.schedules, booked, slotMinutesFor(doctor)).filter((s) => !isPast(date, s));
+}
+
+/** هل التاريخ داخل أفق الحجز (اليوم .. اليوم + 60)؟ */
+function withinHorizon(date: Date): boolean {
+  const today = algeriaTodayUTCMidnight();
+  const last = new Date(today);
+  last.setUTCDate(last.getUTCDate() + BOOKING_HORIZON_DAYS - 1);
+  return date.getTime() >= today.getTime() && date.getTime() <= last.getTime();
+}
+
+/** الأيام المتاحة (بها وقت شاغر واحد على الأقل) أو أوقات يوم معيّن — من قاعدة البيانات مباشرة. */
+export async function getDoctorAvailability(query: AvailabilityQuery) {
+  const doctor = await loadBookableDoctor(query.doctorId);
+  const slotMinutes = slotMinutesFor(doctor);
+
+  if (query.date) {
+    const date = new Date(query.date + "T00:00:00Z");
+    if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");
+    if (!withinHorizon(date)) return { date: query.date, slotMinutes, slots: [] as string[] };
+    // نفس دالة «أوقات الطبيب المتاحة» الموجودة (GET /api/doctors/:id/availability) — لا تعريف ثانٍ.
+    const { slots } = await getDoctorDaySlots(doctor.id, query.date);
+    return { date: query.date, slotMinutes, slots };
+  }
+
+  const today = algeriaTodayUTCMidnight();
+  const last = new Date(today);
+  last.setUTCDate(last.getUTCDate() + AVAILABILITY_DAYS - 1);
+  last.setUTCHours(23, 59, 59, 999);
+  // استعلام واحد لكل المواعيد الشاغلة في الفترة بدل استعلام لكل يوم.
+  const occupying = await prisma.appointment.findMany({
+    where: { doctorId: doctor.id, date: { gte: today, lte: last }, ...SLOT_OCCUPYING_WHERE },
+    select: { date: true, startTime: true, endTime: true },
+  });
+  const days: { date: string; freeCount: number; firstTime: string }[] = [];
+  for (let i = 0; i < AVAILABILITY_DAYS; i++) {
+    const date = new Date(today);
+    date.setUTCDate(date.getUTCDate() + i);
+    const booked = occupying.filter((a) => a.date.getTime() === date.getTime());
+    const free = freeSlotsOn(doctor, date, booked);
+    if (free.length > 0) days.push({ date: date.toISOString().slice(0, 10), freeCount: free.length, firstTime: free[0] });
+  }
+  return { slotMinutes, days };
+}
+
 /** يرجع قائمة موحّدة (بدون تكرار) بالأوقات المتاحة عبر كل الأطباء الموثّقين المطابقين للولاية والتخصص في تاريخ معيّن. */
 export async function getAggregatedSlots(query: GuestSlotsQuery) {
   const date = new Date(query.date + "T00:00:00Z");
@@ -265,6 +327,77 @@ async function createAutoAssignedAppointment(
 }
 
 /**
+ * حجز بيوم اختاره المريض (وبوقت اختاره إن أرسله مع exactTime). نفس الطبيب/الفترات/القفل/القيد الفريد.
+ *  - اليوم غير متاح (خارج الأفق، يوم عطلة/استثناء، أو لم يبق فيه وقت) → 409 DAY_UNAVAILABLE.
+ *  - الوقت المختار غير متاح (محجوز، خارج الدوام أو الشبكة، أو مضى، أو سباق) → 409 SLOT_UNAVAILABLE.
+ */
+async function createChosenDayAppointment(
+  input: GuestBookingInput,
+  doctorId: string,
+  dateStr: string,
+  exactStart: string | null,
+  patientId: string | null
+) {
+  const date = new Date(dateStr + "T00:00:00Z");
+  if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");
+  const doctor = await loadBookableDoctor(doctorId);
+  if (!withinHorizon(date)) throw ApiError.conflict(DAY_UNAVAILABLE_MESSAGE, { code: "DAY_UNAVAILABLE" });
+
+  const create = (tx: Prisma.TransactionClient, slot: { startTime: string; endTime: string }) =>
+    tx.appointment.create({
+      data: {
+        patientId,
+        guestFirstName: input.firstName,
+        guestLastName: input.lastName,
+        guestPhone: input.phone || null,
+        doctorId: doctor.id,
+        date,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        status: AppointmentStatus.CONFIRMED,
+        notes: input.notes,
+      },
+      include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
+    });
+
+  let appointment;
+  try {
+    if (exactStart) {
+      appointment = (await reserveExactSlot({ doctor, date, startTime: exactStart, create })).result;
+    } else {
+      // اليوم فقط: أول وقت شاغر فيه (نفس دالة «الوقت المطلوب أو أقرب وقت بعده» بدءًا من أول اليوم).
+      appointment = (await reserveRequestedOrNextSlot({ doctor, date, requestedStart: "00:00", create })).result;
+    }
+  } catch (err) {
+    if (err instanceof ExactSlotUnavailableError) {
+      throw ApiError.conflict(SLOT_UNAVAILABLE_MESSAGE, { code: "SLOT_UNAVAILABLE" });
+    }
+    if (err instanceof NoSlotAvailableError || err instanceof SlotRaceExhaustedError) {
+      throw ApiError.conflict(DAY_UNAVAILABLE_MESSAGE, { code: "DAY_UNAVAILABLE" });
+    }
+    if (err instanceof DoctorQueueBusyError) {
+      throw ApiError.unavailable("الازدحام على هذا الطبيب مرتفع الآن. لم يُسجَّل أي حجز، الرجاء المحاولة بعد لحظات.");
+    }
+    throw err;
+  }
+
+  try {
+    await createNotification(
+      doctor.userId,
+      "APPOINTMENT_CREATED",
+      "طلب حجز موعد جديد",
+      `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} ${accountLabel(patientId)} بتاريخ ${dateStr} الساعة ${appointment.startTime}.`,
+      undefined,
+      undefined,
+      { id: appointment.id, date: appointment.date }
+    );
+  } catch (notifyErr) {
+    console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", notifyErr);
+  }
+  return appointment;
+}
+
+/**
  * إنشاء حجز ضيف فعلي: يعيد التحقق من التوفر لحظيًا (وليس فقط الاعتماد على ما عُرض للمستخدم سابقًا)،
  * يختار أول طبيب موثّق متاح، وينشئ الموعد. patientId = null (الافتراضي) حجز ضيف كما كان تمامًا؛
  * وإن مُرّر (مريض مسجَّل الدخول، مُستخرَج من الجلسة في الـcontroller) يُربط الموعد بحسابه، مع إبقاء
@@ -277,9 +410,14 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
   // يظهر في «المرضى المحظورون» وتستطيع الإدارة رفعه) ويُفحص في المتحكم قبل الوصول إلى هنا.
   if (!patientId) await checkGuestReliability(input.phone);
 
-  // الوضع الافتراضي الجديد: لم يُرسل وقت — النظام يعيّن أول دور متاح لدى الطبيب المختار.
-  if (input.doctorId && (!input.date || !input.startTime)) {
+  // الوضع الافتراضي (بلا يوم ولا وقت): النظام يعيّن أول دور متاح لدى الطبيب المختار — كما كان تمامًا.
+  if (input.doctorId && !input.date) {
     return createAutoAssignedAppointment(input, input.doctorId, 0, patientId);
+  }
+
+  // اختيار اختياري: اليوم فقط → أول وقت شاغر في ذلك اليوم، أو اليوم + الوقت بالضبط (exactTime).
+  if (input.doctorId && input.date && (!input.startTime || input.exactTime)) {
+    return createChosenDayAppointment(input, input.doctorId, input.date, input.exactTime ? input.startTime ?? null : null, patientId);
   }
 
   if (!input.date || !input.startTime) {

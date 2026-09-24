@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import { prisma } from "./prisma";
 import { env } from "../config/env";
+import { FIVE_MINUTE_ALARM_KIND } from "./pushKinds";
 
 // إشعارات المتصفح (Web Push). تعمل فقط إذا ضُبط مفتاحا VAPID في متغيرات البيئة.
 // عند غيابهما تُعطّل الميزة بهدوء: لا استثناءات ولا تأثير على أي وظيفة أخرى في الخادم.
@@ -30,7 +31,17 @@ export interface PushPayload {
   appointmentId?: string;
   appointmentDate?: string; // YYYY-MM-DD (يوم الموعد بتوقيت الجزائر)
   expiresAt?: string; // ISO — نهاية يوم الموعد بتوقيت الجزائر
+  // نوع خاص يعامله الـService Worker بسلوك مختلف. حاليًا نوع واحد: تنبيه «قبل 5 دقائق» بنمط منبّه.
+  // غيابه = إشعار عادي بالسلوك المعتاد تمامًا.
+  kind?: typeof FIVE_MINUTE_ALARM_KIND;
+  // آخر لحظة يفيد فيها تسليم الإشعار (ISO). إن وُجدت تحدّد TTL لدى خدمة الدفع بدل expiresAt:
+  // تنبيه «بعد 5 دقائق» لا معنى له بعد بداية الموعد، فلا يُسلَّم متأخرًا لهاتف عاد للاتصال.
+  deliverBy?: string;
+  // أولوية التسليم لدى خدمة الدفع (ترويسة Urgency). "high" يوقظ الهاتف في وضع السكون (Doze) حيث يسمح النظام.
+  urgency?: "very-low" | "low" | "normal" | "high";
 }
+
+export { FIVE_MINUTE_ALARM_KIND };
 
 // الحد الأعلى الذي تقبله خدمات الدفع لمدة الاحتفاظ (4 أسابيع).
 const MAX_TTL_SECONDS = 4 * 7 * 24 * 60 * 60;
@@ -41,8 +52,9 @@ const MAX_TTL_SECONDS = 4 * 7 * 24 * 60 * 60;
  * null = إشعار غير مرتبط بموعد (سلوك web-push الافتراضي كما كان). 0 أو أقل = منتهٍ، لا يُرسل إطلاقًا.
  */
 export function pushTtlSeconds(payload: PushPayload, now: Date = new Date()): number | null {
-  if (!payload.expiresAt) return null;
-  const ms = new Date(payload.expiresAt).getTime() - now.getTime();
+  const until = payload.deliverBy ?? payload.expiresAt;
+  if (!until) return null;
+  const ms = new Date(until).getTime() - now.getTime();
   if (!Number.isFinite(ms)) return null;
   return Math.min(MAX_TTL_SECONDS, Math.floor(ms / 1000));
 }
@@ -72,8 +84,11 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       subs.map(async (s) => {
         try {
           const target = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } };
-          if (ttl === null) await webpush.sendNotification(target, JSON.stringify(payload));
-          else await webpush.sendNotification(target, JSON.stringify(payload), { TTL: ttl });
+          const options: webpush.RequestOptions = {};
+          if (ttl !== null) options.TTL = ttl;
+          if (payload.urgency) options.urgency = payload.urgency;
+          if (Object.keys(options).length === 0) await webpush.sendNotification(target, JSON.stringify(payload));
+          else await webpush.sendNotification(target, JSON.stringify(payload), options);
           sent += 1;
         } catch (err) {
           const status = (err as { statusCode?: number })?.statusCode;

@@ -158,7 +158,7 @@ describe("نص الإشعار", () => {
     expect(one.body).toBe("لديك موعد مع د. أحمد بن علي اليوم على الساعة 10:00.");
     expect(one.url).toBe("/account?appointment=a1");
     const five = buildReminderPayload("FIVE_MINUTES" as any, appt, new Date("2026-10-01T08:55:00Z"));
-    expect(five.title).toBe("🔔 موعدك بعد 5 دقائق");
+    expect(five.title).toBe("موعدك مع الطبيب بعد 5 دقائق");
     expect(five.body).toBe("لديك موعد مع د. أحمد بن علي على الساعة 10:00.");
   });
 
@@ -196,7 +196,7 @@ describe("دورة الـscheduler", () => {
 
     const r2 = await runReminderCycle(new Date(START.getTime() - 5 * MIN));
     expect(r2.sent).toBe(1);
-    expect(sentTitles()).toEqual(["🔔 تذكير بموعدك", "🔔 موعدك بعد 5 دقائق"]);
+    expect(sentTitles()).toEqual(["🔔 تذكير بموعدك", "موعدك مع الطبيب بعد 5 دقائق"]);
     expect(reminder("a1", "FIVE_MINUTES")!.status).toBe("SENT");
   });
 
@@ -265,7 +265,7 @@ describe("دورة الـscheduler", () => {
     const now = new Date(START.getTime() - 3 * MIN);
     addAppt("a1", START);
     await runReminderCycle(now);
-    expect(sentTitles()).toEqual(["🔔 موعدك بعد 5 دقائق"]);
+    expect(sentTitles()).toEqual(["موعدك مع الطبيب بعد 5 دقائق"]);
     expect(reminder("a1", "ONE_HOUR")).toMatchObject({ status: "SKIPPED", skipReason: "superseded" });
   });
 
@@ -302,5 +302,77 @@ describe("دورة الـscheduler", () => {
     expect(s.created).toBe(2);
     expect(s.sent).toBe(1);
     expect((h.sendPushToUser.mock.calls[0][1] as any).body).toContain("غدًا على الساعة 00:30");
+  });
+});
+
+describe("تنبيه «موعدك مع الطبيب بعد 5 دقائق» (نمط منبّه)", () => {
+  const appt = { id: "a1", date: new Date("2026-10-01T00:00:00Z"), startTime: "10:00", doctor: { firstName: "أحمد", lastName: "بن علي" } };
+  const payloadsOf = (title: string) => h.sendPushToUser.mock.calls.map((c) => c[1] as any).filter((p) => p.title === title);
+  const FIVE = "موعدك مع الطبيب بعد 5 دقائق";
+
+  it("الحمولة: النص المطلوب + نوع المنبّه + أولوية عالية + لا تسليم بعد بداية الموعد", () => {
+    const p = buildReminderPayload("FIVE_MINUTES" as any, appt, new Date("2026-10-01T08:55:00Z"));
+    expect(p.title).toBe(FIVE);
+    expect(p.kind).toBe("APPOINTMENT_5MIN_ALARM");
+    expect(p.urgency).toBe("high");
+    expect(p.deliverBy).toBe("2026-10-01T09:00:00.000Z"); // 10:00 بتوقيت الجزائر
+    expect(p.tag).toBe("appt-a1");
+  });
+
+  it("تذكير الساعة لا يحمل نوع المنبّه ولا أولوية خاصة (سلوكه كما كان)، ويُسقط إن تأخر تسليمه حتى نافذة الخمس دقائق", () => {
+    const p = buildReminderPayload("ONE_HOUR" as any, appt, new Date("2026-10-01T08:00:00Z"));
+    expect(p.kind).toBeUndefined();
+    expect(p.urgency).toBeUndefined();
+    expect(p.title).toBe("🔔 تذكير بموعدك");
+    expect(p.deliverBy).toBe("2026-10-01T08:55:00.000Z");
+  });
+
+  it("موعد بعد أكثر من 5 دقائق: لا يُرسل تنبيه الخمس دقائق", async () => {
+    addAppt("a1", START);
+    await runReminderCycle(new Date(START.getTime() - 30 * MIN));
+    await runReminderCycle(new Date(START.getTime() - 5 * MIN - 1000));
+    expect(payloadsOf(FIVE)).toHaveLength(0);
+    expect(reminder("a1", "FIVE_MINUTES")!.status).toBe("PENDING");
+  });
+
+  it("عند الوصول إلى نافذة الخمس دقائق: إشعار واحد بنوع المنبّه، ولا يتكرر مع إعادة التشغيل", async () => {
+    addAppt("a1", START);
+    await runReminderCycle(new Date(START.getTime() - 61 * MIN));
+    await runReminderCycle(new Date(START.getTime() - 60 * MIN));
+    for (const m of [5, 4.5, 4, 3, 1]) await runReminderCycle(new Date(START.getTime() - m * MIN));
+    const five = payloadsOf(FIVE);
+    expect(five).toHaveLength(1);
+    expect(five[0]).toMatchObject({ kind: "APPOINTMENT_5MIN_ALARM", urgency: "high" });
+    // تذكير الساعة أُرسل مرة واحدة، بلا نوع المنبّه — لا تعارض بينهما.
+    const one = payloadsOf("🔔 تذكير بموعدك");
+    expect(one).toHaveLength(1);
+    expect(one[0].kind).toBeUndefined();
+    expect(reminder("a1", "FIVE_MINUTES")!.status).toBe("SENT");
+  });
+
+  it("حجز قبل 20 دقيقة: تذكير الساعة فورًا (كما كان) ثم تنبيه الخمس دقائق مرة واحدة", async () => {
+    addAppt("a1", START);
+    await runReminderCycle(new Date(START.getTime() - 20 * MIN));
+    await runReminderCycle(new Date(START.getTime() - 4 * MIN));
+    await runReminderCycle(new Date(START.getTime() - 3 * MIN));
+    expect(h.sendPushToUser).toHaveBeenCalledTimes(2);
+    expect(payloadsOf(FIVE)).toHaveLength(1);
+  });
+
+  it("أول دورة داخل نافذة الخمس دقائق (خادم كان نائمًا): تنبيه الخمس دقائق وحده، وتذكير الساعة SUPERSEDED", async () => {
+    addAppt("a1", START);
+    await runReminderCycle(new Date(START.getTime() - 4 * MIN));
+    await runReminderCycle(new Date(START.getTime() - 3 * MIN));
+    expect(h.sendPushToUser).toHaveBeenCalledTimes(1);
+    expect(payloadsOf(FIVE)).toHaveLength(1);
+    expect(reminder("a1", "ONE_HOUR")).toMatchObject({ status: "SKIPPED", skipReason: "superseded" });
+  });
+
+  it("بعد بداية الموعد: لا تنبيه متأخر", async () => {
+    addAppt("a1", START);
+    await runReminderCycle(new Date(START.getTime() - 61 * MIN));
+    await runReminderCycle(new Date(START.getTime() + 1 * MIN));
+    expect(payloadsOf(FIVE)).toHaveLength(0);
+    expect(reminder("a1", "FIVE_MINUTES")).toMatchObject({ status: "SKIPPED", skipReason: "expired" });
   });
 });

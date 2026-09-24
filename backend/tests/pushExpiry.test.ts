@@ -52,4 +52,27 @@ describe("sendPushToUser — إشعارات المواعيد", () => {
     await sendPushToUser("u1", { title: "t", body: "b", tag: "NEW_MESSAGE" });
     expect(h.sendNotification.mock.calls[0]).toHaveLength(2);
   });
+
+  it("تنبيه الخمس دقائق: TTL حتى بداية الموعد (deliverBy) لا نهاية اليوم، وبأولوية high", async () => {
+    const expiresAt = new Date(Date.now() + 5 * 3600 * 1000).toISOString();
+    const deliverBy = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    await sendPushToUser("u1", { title: "موعدك مع الطبيب بعد 5 دقائق", body: "b", tag: "appt-A1", appointmentId: "A1", expiresAt, deliverBy, urgency: "high", kind: "APPOINTMENT_5MIN_ALARM" });
+    const [, payloadRaw, options] = h.sendNotification.mock.calls[0] as any[];
+    expect(options.urgency).toBe("high");
+    expect(options.TTL).toBeGreaterThan(5 * 60 - 5);
+    expect(options.TTL).toBeLessThanOrEqual(5 * 60);
+    expect(JSON.parse(payloadRaw).kind).toBe("APPOINTMENT_5MIN_ALARM");
+  });
+
+  it("تنبيه فات وقت تسليمه (بدأ الموعد): لا إرسال", async () => {
+    const r = await sendPushToUser("u1", { title: "t", body: "b", appointmentId: "A1", expiresAt: new Date(Date.now() + 3600e3).toISOString(), deliverBy: new Date(Date.now() - 1000).toISOString() });
+    expect(r.sent).toBe(0);
+    expect(h.sendNotification).not.toHaveBeenCalled();
+  });
+
+  it("إشعار موعد عادي بلا urgency: خيارات TTL فقط كما كان (لا ترويسة urgency)", async () => {
+    await sendPushToUser("u1", { title: "t", body: "b", appointmentId: "A1", expiresAt: new Date(Date.now() + 3600e3).toISOString() });
+    const [, , options] = h.sendNotification.mock.calls[0] as any[];
+    expect(Object.keys(options)).toEqual(["TTL"]);
+  });
 });

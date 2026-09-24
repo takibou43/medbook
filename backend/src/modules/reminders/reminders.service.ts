@@ -1,6 +1,7 @@
 import { AppointmentStatus, ReminderStatus, ReminderType } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { sendPushToUser, isPushEnabled, PushPayload } from "../../lib/push";
+import { FIVE_MINUTE_ALARM_KIND } from "../../lib/pushKinds";
 import { ALGERIA_OFFSET_MINUTES } from "../../lib/slots";
 import { appointmentDayEndsAt, appointmentNotificationTag } from "../../lib/appointmentExpiry";
 
@@ -24,6 +25,8 @@ export const REMINDER_OFFSET_MINUTES: Record<ReminderType, number> = {
   ONE_HOUR: 60,
   FIVE_MINUTES: 5,
 };
+
+export const FIVE_MINUTE_REMINDER_TITLE = "موعدك مع الطبيب بعد 5 دقائق";
 
 export const REMINDER_TYPES: ReminderType[] = [ReminderType.ONE_HOUR, ReminderType.FIVE_MINUTES];
 
@@ -94,12 +97,17 @@ export function buildReminderPayload(
   };
 
   if (type === ReminderType.FIVE_MINUTES) {
+    // تنبيه بنمط منبّه (انظر sw.js: اهتزاز مميّز + يبقى ظاهرًا حتى يتفاعل المريض + رنة داخل التطبيق إن كان مفتوحًا).
+    // يُسلَّم فقط قبل بداية الموعد (deliverBy) وبأولوية عالية لخدمة الدفع.
     return {
-      title: "🔔 موعدك بعد 5 دقائق",
+      title: FIVE_MINUTE_REMINDER_TITLE,
       body: `لديك موعد مع ${doctorName} على الساعة ${appt.startTime}.`,
       url,
       tag,
       ...expiry,
+      kind: FIVE_MINUTE_ALARM_KIND,
+      deliverBy: appointmentStartUtc(appt.date, appt.startTime).toISOString(),
+      urgency: "high",
     };
   }
 
@@ -111,6 +119,9 @@ export function buildReminderPayload(
     url,
     tag,
     ...expiry,
+    // لا تعارض مع تنبيه الخمس دقائق: تذكير الساعة الذي تأخّر تسليمه (هاتف غير متصل) يُسقط عند بداية
+    // نافذة الخمس دقائق، فلا يصل بعد التنبيه ويستبدله على الشاشة (نفس وسم الموعد).
+    deliverBy: reminderScheduledFor(appointmentStartUtc(appt.date, appt.startTime), ReminderType.FIVE_MINUTES).toISOString(),
   };
 }
 

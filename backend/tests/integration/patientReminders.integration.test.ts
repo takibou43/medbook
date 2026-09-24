@@ -148,7 +148,15 @@ describe.skipIf(!TEST_URL)("حساب المريض + التذكيرات (PostgreS
     const c2 = await cycle(-5);
     expect(c2.sent).toBe(1);
     expect(h.sendNotification).toHaveBeenCalledTimes(4);
-    expect(JSON.parse((h.sendNotification.mock.calls[3] as any)[1]).title).toBe("🔔 موعدك بعد 5 دقائق");
+    const p2 = JSON.parse((h.sendNotification.mock.calls[3] as any)[1]);
+    expect(p2.title).toBe("موعدك مع الطبيب بعد 5 دقائق");
+    // تنبيه بنمط المنبّه: نوع خاص للـService Worker، أولوية high، ولا تسليم بعد بداية الموعد.
+    expect(p2.kind).toBe("APPOINTMENT_5MIN_ALARM");
+    expect((h.sendNotification.mock.calls[3] as any)[2].urgency).toBe("high");
+    expect(p2.deliverBy).toBe(start.toISOString());
+    // تذكير الساعة بلا نوع المنبّه ولا أولوية خاصة.
+    expect(p1.kind).toBeUndefined();
+    expect((h.sendNotification.mock.calls[0] as any)[2].urgency).toBeUndefined();
 
     // 7) تشغيل ثانٍ وثالث (ومتزامن) → لا تكرار
     await Promise.all([cycle(-4), cycle(-4), reminders.processDueReminders(new Date(start.getTime() - 3 * MIN), { created: 0, sent: 0, skipped: 0, failed: 0 })]);

@@ -10,10 +10,13 @@
 //
 // عند أي تغيير في بنية هذا الملف: ارفع رقم VERSION ليُنظَّف الكاش القديم.
 
-const VERSION = "v4";
+const VERSION = "v5";
 const SHELL_CACHE = "medbook-shell-" + VERSION;
 const ASSET_CACHE = "medbook-assets-" + VERSION;
-const KEEP = [SHELL_CACHE, ASSET_CACHE];
+// سجل دائم (غير مرتبط بالإصدار، فلا يُحذف عند التحديث) لتنبيهات «قبل 5 دقائق» التي عُرضت فعلًا —
+// يمنع تكرار الرنة إن أعادت خدمة الدفع تسليم الرسالة أو أُعيد تشغيل الـService Worker.
+const ALARM_CACHE = "medbook-alarms";
+const KEEP = [SHELL_CACHE, ASSET_CACHE, ALARM_CACHE];
 
 const OFFLINE_URL = "/offline.html";
 
@@ -163,6 +166,11 @@ self.addEventListener("push", (event) => {
     return;
   }
 
+  if (data.kind === MB_ALARM_KIND) {
+    event.waitUntil(mbCloseExpiredNotifications().then(() => mbShowFiveMinuteAlarm(data)));
+    return;
+  }
+
   const title = data.title || "مادبوك";
   const options = {
     body: data.body || "لديك تحديث بخصوص موعدك.",
@@ -243,4 +251,105 @@ self.addEventListener("activate", function (event) {
 
 self.addEventListener("message", function (event) {
   if (event.data && event.data.type === "MB_CLOSE_EXPIRED_NOTIFICATIONS") event.waitUntil(mbCloseExpiredNotifications());
+});
+
+// ===== تنبيه «موعدك مع الطبيب بعد 5 دقائق» (نمط منبّه) =====
+// الإشعارات الأخرى لا تمرّ من هنا إطلاقًا وسلوكها كما كان. ما يفعله هذا التنبيه وحده:
+//  - اهتزاز طويل مميّز بنمط المنبّه (Android حيث يدعمه المتصفح) — بقية الإشعارات بلا نمط اهتزاز خاص.
+//  - requireInteraction: يبقى ظاهرًا حتى يتفاعل المريض (حيث يدعمه المتصفح).
+//  - renotify: ينبّه حتى لو استبدل تذكير الساعة على نفس وسم الموعد.
+//  - إن كانت صفحة مادبوك مفتوحة: رسالة إلى الصفحة فتُشغّل رنة المنبّه الخاصة مرة واحدة (appointmentAlarm.ts).
+// ملاحظة صادقة: Web Push لا يسمح بتحديد ملف صوت للإشعار نفسه ولا بإنشاء Notification Channel على Android؛
+// صوت الإشعار في الخلفية/شاشة القفل هو صوت إشعارات المتصفح لهذا الموقع كما يضبطه النظام، ولا يتجاوز
+// الوضع الصامت ولا «عدم الإزعاج».
+const MB_ALARM_KIND = "APPOINTMENT_5MIN_ALARM";
+const MB_ALARM_VIBRATE = [700, 250, 700, 250, 700, 250, 1400];
+
+function mbAlarmKey(appointmentId) {
+  return "/__mb-alarm/" + encodeURIComponent(appointmentId);
+}
+
+// true إن سُجّل هذا التنبيه الآن لأول مرة، false إن كان معروضًا من قبل (تكرار).
+function mbClaimAlarm(data) {
+  if (!data.appointmentId || typeof caches === "undefined") return Promise.resolve(true);
+  const key = mbAlarmKey(data.appointmentId);
+  return caches
+    .open(ALARM_CACHE)
+    .then(function (cache) {
+      return cache.match(key).then(function (hit) {
+        if (hit) return false;
+        return cache
+          .put(key, new Response(JSON.stringify({ expiresAt: data.expiresAt || null, at: Date.now() }), { headers: { "Content-Type": "application/json" } }))
+          .then(function () { return true; });
+      });
+    })
+    .catch(function () { return true; });
+}
+
+// تنظيف سجلات التنبيه التي انتهى يوم موعدها (لا تتراكم).
+function mbPurgeAlarmLog() {
+  if (typeof caches === "undefined") return Promise.resolve();
+  const now = Date.now();
+  return caches
+    .open(ALARM_CACHE)
+    .then(function (cache) {
+      return cache.keys().then(function (keys) {
+        return Promise.all(
+          keys.map(function (req) {
+            return cache.match(req).then(function (res) {
+              if (!res) return;
+              return res.json().then(function (v) {
+                if (mbIsExpired(v, now)) return cache.delete(req);
+              }, function () { return cache.delete(req); });
+            });
+          })
+        );
+      });
+    })
+    .catch(function () { return undefined; });
+}
+
+function mbNotifyOpenPages(message) {
+  return self.clients
+    .matchAll({ type: "window", includeUncontrolled: true })
+    .then(function (list) {
+      list.forEach(function (c) {
+        try { c.postMessage(message); } catch (e) {}
+      });
+    })
+    .catch(function () { return undefined; });
+}
+
+function mbShowFiveMinuteAlarm(data) {
+  return mbClaimAlarm(data).then(function (first) {
+    // تسليم مكرر لنفس الموعد: لا إشعار ثانٍ ولا رنة ثانية.
+    if (!first) return;
+    const title = data.title || "موعدك مع الطبيب بعد 5 دقائق";
+    const options = {
+      body: data.body || "",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      dir: "rtl",
+      lang: "ar",
+      tag: data.tag || "medbook-patient",
+      renotify: true,
+      requireInteraction: true,
+      silent: false,
+      vibrate: MB_ALARM_VIBRATE,
+      data: {
+        url: data.url || "/account",
+        kind: MB_ALARM_KIND,
+        appointmentId: data.appointmentId || null,
+        appointmentDate: data.appointmentDate || null,
+        expiresAt: data.expiresAt || null,
+      },
+    };
+    return self.registration.showNotification(title, options).then(function () {
+      return mbNotifyOpenPages({ type: "MB_APPOINTMENT_ALARM", appointmentId: data.appointmentId || null, title: title, body: options.body });
+    });
+  });
+}
+
+self.addEventListener("activate", function (event) {
+  event.waitUntil(mbPurgeAlarmLog());
 });

@@ -108,7 +108,38 @@ describe("Service Worker (موقع المرضى) — تنبيه الخمس دق�
   it("يرسل رسالة إلى الصفحة المفتوحة لتشغيل الرنة الخاصة (مرة واحدة)", async () => {
     const sw = loadSw("frontend", caches, shown, messages);
     await sw.push(alarm());
-    expect(messages).toEqual([{ type: "MB_APPOINTMENT_ALARM", appointmentId: "A", title: "موعدك مع الطبيب بعد 5 دقائق", body: alarm().body }]);
+    expect(messages).toEqual([{ type: "MB_APPOINTMENT_ALARM", kind: "APPOINTMENT_5MIN_ALARM", appointmentId: "A", title: "موعدك مع الطبيب بعد 5 دقائق", body: alarm().body }]);
+  });
+
+  // ===== «دورك اقترب» =====
+  const approach = (id = "A") =>
+    alarm(id, {
+      title: "دورك اقترب",
+      body: "دورك اقترب، يرجى الاستعداد والتوجه إلى الطبيب.",
+      url: `/status/${id}`,
+      kind: "QUEUE_APPROACH_ALARM",
+    });
+
+  it("«دورك اقترب»: نفس نمط المنبّه (اهتزاز مميّز + يبقى ظاهرًا + رسالة الرنة للصفحة)", async () => {
+    const sw = loadSw("frontend", caches, shown, messages);
+    await sw.push(approach());
+    expect(shown.list).toHaveLength(1);
+    expect(shown.list[0].title).toBe("دورك اقترب");
+    expect(shown.list[0].options).toMatchObject({ requireInteraction: true, renotify: true, silent: false });
+    expect(shown.list[0].options.vibrate).toEqual([700, 250, 700, 250, 700, 250, 1400]);
+    expect(shown.list[0].options.data.kind).toBe("QUEUE_APPROACH_ALARM");
+    expect(messages).toEqual([{ type: "MB_APPOINTMENT_ALARM", kind: "QUEUE_APPROACH_ALARM", appointmentId: "A", title: "دورك اقترب", body: approach().body }]);
+  });
+
+  it("«دورك اقترب» مكرر (إعادة تسليم أو إعادة تشغيل الـSW) لا يعرض ولا يرنّ ثانية، ومستقل عن تنبيه الخمس دقائق", async () => {
+    let sw = loadSw("frontend", caches, shown, messages);
+    await sw.push(alarm());
+    await sw.push(approach());
+    expect(messages.map((m) => m.kind)).toEqual(["APPOINTMENT_5MIN_ALARM", "QUEUE_APPROACH_ALARM"]);
+    sw = loadSw("frontend", caches, shown, messages); // إعادة تشغيل الـService Worker
+    await sw.push(approach());
+    await sw.push(alarm());
+    expect(messages).toHaveLength(2);
   });
 
   it("تسليم مكرر لنفس الموعد لا يعرض إشعارًا ثانيًا ولا يرنّ ثانية — حتى بعد إغلاق الإشعار", async () => {
@@ -226,7 +257,10 @@ describe("وحدة الرنة داخل الصفحة (appointmentAlarm.ts)", () =
     expect(mod.claimAlarmPlayback("A")).toBe(true);
     expect(mod.claimAlarmPlayback("A")).toBe(false);
     expect(mod.claimAlarmPlayback("B")).toBe(true);
-    expect(JSON.parse(store.get("mb-alarm-played")!)).toEqual(["A", "B"]);
+    // «دورك اقترب» لنفس الموعد له مفتاح مستقل: يرنّ مرة واحدة فقط أيضًا.
+    expect(mod.claimAlarmPlayback("A", "QUEUE_APPROACH_ALARM")).toBe(true);
+    expect(mod.claimAlarmPlayback("A", "QUEUE_APPROACH_ALARM")).toBe(false);
+    expect(JSON.parse(store.get("mb-alarm-played")!)).toEqual(["A", "B", "approach:A"]);
     delete (globalThis as any).window;
   });
 

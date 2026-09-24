@@ -1,7 +1,7 @@
 import webpush from "web-push";
 import { prisma } from "./prisma";
 import { env } from "../config/env";
-import { FIVE_MINUTE_ALARM_KIND } from "./pushKinds";
+import { FIVE_MINUTE_ALARM_KIND, AlarmPushKind } from "./pushKinds";
 
 // إشعارات المتصفح (Web Push). تعمل فقط إذا ضُبط مفتاحا VAPID في متغيرات البيئة.
 // عند غيابهما تُعطّل الميزة بهدوء: لا استثناءات ولا تأثير على أي وظيفة أخرى في الخادم.
@@ -31,9 +31,9 @@ export interface PushPayload {
   appointmentId?: string;
   appointmentDate?: string; // YYYY-MM-DD (يوم الموعد بتوقيت الجزائر)
   expiresAt?: string; // ISO — نهاية يوم الموعد بتوقيت الجزائر
-  // نوع خاص يعامله الـService Worker بسلوك مختلف. حاليًا نوع واحد: تنبيه «قبل 5 دقائق» بنمط منبّه.
+  // نوع خاص يعامله الـService Worker بسلوك مختلف: تنبيه «قبل 5 دقائق» أو «دورك اقترب» بنمط منبّه.
   // غيابه = إشعار عادي بالسلوك المعتاد تمامًا.
-  kind?: typeof FIVE_MINUTE_ALARM_KIND;
+  kind?: AlarmPushKind;
   // آخر لحظة يفيد فيها تسليم الإشعار (ISO). إن وُجدت تحدّد TTL لدى خدمة الدفع بدل expiresAt:
   // تنبيه «بعد 5 دقائق» لا معنى له بعد بداية الموعد، فلا يُسلَّم متأخرًا لهاتف عاد للاتصال.
   deliverBy?: string;
@@ -67,11 +67,16 @@ export function pushTtlSeconds(payload: PushPayload, now: Date = new Date()): nu
  *    حتى لا تتراكم اشتراكات ميتة في القاعدة.
  * 2) الدالة لا ترمي استثناءً أبدًا: فشل الإشعار يجب ألا يُفشل عملية الحجز أو أي طلب آخر.
  */
-export async function sendPushToUser(userId: string, payload: PushPayload): Promise<{ sent: number; removed: number }> {
+export async function sendPushToUser(
+  userId: string,
+  payload: PushPayload,
+  opts: { now?: Date } = {}
+): Promise<{ sent: number; removed: number }> {
   if (!enabled) return { sent: 0, removed: 0 };
 
   // لا إرسال لإشعار موعد انتهى يومه (حارس أخير مهما كان المسار الذي استدعى الدالة).
-  const ttl = pushTtlSeconds(payload);
+  // now: لحظة دورة التذكيرات نفسها (في الإنتاج = الوقت الحقيقي) حتى يتسق TTL مع قرار الإرسال.
+  const ttl = pushTtlSeconds(payload, opts.now);
   if (ttl !== null && ttl <= 0) return { sent: 0, removed: 0 };
 
   let sent = 0;

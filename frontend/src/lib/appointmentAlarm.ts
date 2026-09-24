@@ -15,8 +15,12 @@ export const ALARM_MESSAGE_TYPE = "MB_APPOINTMENT_ALARM";
 const PLAYED_KEY = "mb-alarm-played";
 const PLAYED_MAX = 50;
 
+export const QUEUE_APPROACH_KIND = "QUEUE_APPROACH_ALARM";
+
 export interface AlarmMessage {
   type: typeof ALARM_MESSAGE_TYPE;
+  /** APPOINTMENT_5MIN_ALARM (أو غائب في رسائل v5) أو QUEUE_APPROACH_ALARM («دورك اقترب»). */
+  kind?: string;
   appointmentId: string | null;
   title?: string;
   body?: string;
@@ -36,13 +40,17 @@ function readPlayed(): string[] {
   }
 }
 
-/** true إن لم تُشغَّل الرنة لهذا الموعد على هذا الجهاز من قبل (ويسجّلها). حماية ثانية بعد الـSW. */
-export function claimAlarmPlayback(appointmentId: string | null): boolean {
+/**
+ * true إن لم تُشغَّل الرنة لهذا (الموعد + نوع التنبيه) على هذا الجهاز من قبل (ويسجّلها). حماية ثانية فقط —
+ * المصدر الموثوق لمنع التكرار هو سجل التذكير في قاعدة البيانات، ثم سجل الـService Worker.
+ */
+export function claimAlarmPlayback(appointmentId: string | null, kind?: string): boolean {
   if (!appointmentId) return true;
+  const key = kind === QUEUE_APPROACH_KIND ? `approach:${appointmentId}` : appointmentId;
   const played = readPlayed();
-  if (played.includes(appointmentId)) return false;
+  if (played.includes(key)) return false;
   try {
-    window.localStorage.setItem(PLAYED_KEY, JSON.stringify([...played, appointmentId].slice(-PLAYED_MAX)));
+    window.localStorage.setItem(PLAYED_KEY, JSON.stringify([...played, key].slice(-PLAYED_MAX)));
   } catch {
     // التخزين غير متاح (نافذة خاصة): الـService Worker ما زال يمنع التكرار.
   }
@@ -113,7 +121,7 @@ export function installAppointmentAlarm(onAlarm: (msg: AlarmMessage) => void): (
   primeOnFirstGesture();
   const handler = (event: MessageEvent) => {
     if (!isAlarmMessage(event.data)) return;
-    if (!claimAlarmPlayback(event.data.appointmentId)) return;
+    if (!claimAlarmPlayback(event.data.appointmentId, event.data.kind)) return;
     onAlarm(event.data);
     if (document.visibilityState === "visible") void playAlarmOnce();
   };

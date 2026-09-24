@@ -16,7 +16,7 @@ const QUEUE_TURN_MAX_WAIT_MS = 30_000;
 import { createNotification } from "../notifications/notifications.service";
 import { GuestBookingInput, GuestSlotsQuery } from "./booking.schema";
 import { estimateSessionMinutes } from "../appointments/appointments.service";
-import { projectQueueOrder } from "../../lib/queueOrder";
+import { locateInQueue, DAY_QUEUE_STATUSES } from "../../lib/doctorQueue";
 
 /**
  * حجز "ضيف" بدون تسجيل دخول: المريض لا يختار طبيبًا بعينه،
@@ -529,11 +529,9 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
     where: {
       doctorId: doctor.id,
       date: { gte: today, lte: endOfDay },
-      status: {
-        in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS],
-      },
+      status: { in: DAY_QUEUE_STATUSES },
     },
-    select: { id: true, startTime: true, status: true, skipCredits: true },
+    select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true },
     orderBy: [{ startTime: "asc" }],
   });
 
@@ -541,12 +539,8 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
 
   // من يسبقك فعليًا: المريض الجالس بالداخل الآن + من يسبقك في ترتيب المناداة المتوقع، محسوبًا بنفس
   // قواعد الطابور التي يستعملها الطبيب (lib/queueOrder.ts) — ومنها تراجع المتأخر 2 ثم 4 مراكز.
-  const waitingOrder = projectQueueOrder(
-    dayQueue.filter((a) => a.status === AppointmentStatus.CONFIRMED || a.status === AppointmentStatus.LATE)
-  );
-  const myIndex = waitingOrder.findIndex((a) => a.id === appointment.id);
-  const insideOther = dayQueue.some((a) => a.status === AppointmentStatus.IN_PROGRESS && a.id !== appointment.id);
-  const aheadOfYou = myIndex >= 0 ? myIndex + (insideOther ? 1 : 0) : 0;
+  // (التعريف المشترك في lib/doctorQueue.ts — يستعمله أيضًا تذكير الـ5 دقائق وتنبيه «دورك اقترب».)
+  const { aheadOfYou } = locateInQueue(dayQueue, appointment.id);
 
   // المدة الذكية: متوسط مدة آخر جلسات هذا الطبيب الفعلية (calledAt إلى endedAt)، وليس
   // الوقت المجدول للموعد — فتقدير الانتظار يعكس سير العيادة الحقيقي.

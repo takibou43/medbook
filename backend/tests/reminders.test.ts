@@ -6,18 +6,35 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const h = vi.hoisted(() => {
-  type Appt = { id: string; status: string; date: Date; startTime: string; patientUserId: string | null; patientId: string | null };
+  type Appt = { id: string; status: string; date: Date; startTime: string; patientUserId: string | null; patientId: string | null; doctorId: string };
   type Rem = { id: string; appointmentId: string; type: string; scheduledFor: Date; status: string; sentAt?: Date; deliveredCount?: number; skipReason?: string };
   const state = { appts: [] as Appt[], reminders: [] as Rem[], devices: new Map<string, number>(), seq: 0 };
 
+  // مطابقة مبسّطة لشروط Prisma المستعملة في reminders.service: مساواة، in، not، gte/lte (للتواريخ).
+  const val = (v: any) => (v instanceof Date ? v.getTime() : v);
+  const match = (row: any, where: any = {}): boolean =>
+    Object.entries(where).every(([k, cond]: [string, any]) => {
+      const v = row[k];
+      if (cond instanceof Date || cond === null || typeof cond !== "object") return val(v) === val(cond);
+      if ("in" in cond && !cond.in.map(val).includes(val(v))) return false;
+      if ("not" in cond && val(v) === val(cond.not)) return false;
+      if ("gte" in cond && !(val(v) >= val(cond.gte))) return false;
+      if ("lte" in cond && !(val(v) <= val(cond.lte))) return false;
+      return true;
+    });
+  const pick = (r: any, select?: any) => (select ? Object.fromEntries(Object.keys(select).map((k) => [k, r[k]])) : r);
+  const findRem = (where: any) =>
+    where.appointmentId_type
+      ? state.reminders.find((x) => x.appointmentId === where.appointmentId_type.appointmentId && x.type === where.appointmentId_type.type)
+      : state.reminders.find((x) => x.id === where.id);
+
   const db = {
     appointment: {
-      findMany: async ({ where }: any) =>
-        state.appts
-          .filter((a) => a.patientId !== null)
-          .filter((a) => where.status.in.includes(a.status))
-          .filter((a) => a.date.getTime() >= where.date.gte.getTime() && a.date.getTime() <= where.date.lte.getTime())
-          .map((a) => ({ id: a.id, date: a.date, startTime: a.startTime })),
+      findMany: async ({ where, select }: any) => state.appts.filter((a) => match(a, where)).map((a) => pick(a, select)),
+      findUnique: async ({ where }: any) => {
+        const a = state.appts.find((x) => x.id === where.id);
+        return a ? { ...a, patient: a.patientUserId ? { userId: a.patientUserId } : null } : null;
+      },
     },
     appointmentReminder: {
       createMany: async ({ data, skipDuplicates }: any) => {
@@ -33,22 +50,22 @@ const h = vi.hoisted(() => {
         }
         return { count };
       },
-      findMany: async ({ where, take }: any) =>
+      findMany: async ({ where, take, select }: any) =>
         state.reminders
-          .filter((r) => r.status === where.status && r.scheduledFor.getTime() <= where.scheduledFor.lte.getTime())
+          .filter((r) => match(r, where))
           .sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())
-          .slice(0, take)
-          .map((r) => ({ id: r.id, type: r.type })),
-      // الحجز الذرّي: يغيّر السجل فقط إن كانت حالته ما زالت كما في الشرط.
+          .slice(0, take ?? Infinity)
+          .map((r) => pick(r, select)),
+      // الحجز الذرّي: يغيّر السجلات المطابقة للشرط فقط (ومنه الحالة الحالية).
       updateMany: async ({ where, data }: any) => {
-        const r = state.reminders.find((x) => x.id === where.id && x.status === where.status);
-        if (!r) return { count: 0 };
-        Object.assign(r, data);
-        return { count: 1 };
+        const rows = state.reminders.filter((x) => match(x, where));
+        rows.forEach((r) => Object.assign(r, data));
+        return { count: rows.length };
       },
       findUnique: async ({ where }: any) => {
-        const r = state.reminders.find((x) => x.id === where.id);
+        const r = findRem(where);
         if (!r) return null;
+        if (where.appointmentId_type) return r;
         const a = state.appts.find((x) => x.id === r.appointmentId);
         return {
           id: r.id,
@@ -59,6 +76,7 @@ const h = vi.hoisted(() => {
                 status: a.status,
                 date: a.date,
                 startTime: a.startTime,
+                doctorId: a.doctorId,
                 patient: a.patientUserId ? { userId: a.patientUserId } : null,
                 doctor: { firstName: "أحمد", lastName: "بن علي" },
               }
@@ -76,11 +94,31 @@ const h = vi.hoisted(() => {
     },
   };
 
-  const sendPushToUser = vi.fn(async (userId: string, _payload: any) => ({ sent: state.devices.get(userId) ?? 0, removed: 0 }));
+  const sendPushToUser = vi.fn(async (userId: string, _payload: any, _opts?: any) => ({ sent: state.devices.get(userId) ?? 0, removed: 0 }));
   return { state, db, sendPushToUser };
 });
 
 vi.mock("../src/lib/prisma", () => ({ prisma: h.db }));
+// طابور اليوم في هذا الملف: كل مواعيد الطبيب CONFIRMED/LATE في يوم now (العيادة لم تبدأ المناداة بعد).
+// منطق الطابور الحقيقي على PostgreSQL مختبر في tests/integration/queueReminders.integration.test.ts.
+vi.mock("../src/lib/doctorQueue", async (importOriginal) => {
+  const real: any = await importOriginal();
+  return {
+    ...real,
+    loadDoctorDayQueue: async (_db: unknown, doctorId: string, now: Date) => {
+      const day = real.algeriaDayStart(now);
+      return {
+        day,
+        closed: false,
+        lastActivityAt: null,
+        rows: h.state.appts
+          .filter((a) => a.doctorId === doctorId && a.date.getTime() === day.getTime() && ["CONFIRMED", "LATE", "IN_PROGRESS"].includes(a.status))
+          .map((a) => ({ id: a.id, startTime: a.startTime, status: a.status, skipCredits: 0, calledAt: null })),
+      };
+    },
+  };
+});
+vi.mock("../src/modules/appointments/appointments.service", () => ({ estimateSessionMinutes: async () => 20 }));
 vi.mock("../src/lib/push", () => ({ sendPushToUser: h.sendPushToUser, isPushEnabled: () => true }));
 
 import {
@@ -106,6 +144,7 @@ function addAppt(id: string, startUtc: Date, opts: { status?: string; guest?: bo
     startTime,
     patientUserId: opts.guest ? null : PATIENT_USER,
     patientId: opts.guest ? null : "patient-1",
+    doctorId: "doc-1",
   });
   return h.state.appts[h.state.appts.length - 1];
 }

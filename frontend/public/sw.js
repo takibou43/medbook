@@ -10,7 +10,7 @@
 //
 // عند أي تغيير في بنية هذا الملف: ارفع رقم VERSION ليُنظَّف الكاش القديم.
 
-const VERSION = "v5";
+const VERSION = "v6";
 const SHELL_CACHE = "medbook-shell-" + VERSION;
 const ASSET_CACHE = "medbook-assets-" + VERSION;
 // سجل دائم (غير مرتبط بالإصدار، فلا يُحذف عند التحديث) لتنبيهات «قبل 5 دقائق» التي عُرضت فعلًا —
@@ -166,7 +166,7 @@ self.addEventListener("push", (event) => {
     return;
   }
 
-  if (data.kind === MB_ALARM_KIND) {
+  if (data.kind === MB_ALARM_KIND || data.kind === MB_QUEUE_APPROACH_KIND) {
     event.waitUntil(mbCloseExpiredNotifications().then(() => mbShowFiveMinuteAlarm(data)));
     return;
   }
@@ -253,7 +253,7 @@ self.addEventListener("message", function (event) {
   if (event.data && event.data.type === "MB_CLOSE_EXPIRED_NOTIFICATIONS") event.waitUntil(mbCloseExpiredNotifications());
 });
 
-// ===== تنبيه «موعدك مع الطبيب بعد 5 دقائق» (نمط منبّه) =====
+// ===== تنبيها «موعدك مع الطبيب بعد 5 دقائق» و«دورك اقترب» (نمط منبّه) =====
 // الإشعارات الأخرى لا تمرّ من هنا إطلاقًا وسلوكها كما كان. ما يفعله هذا التنبيه وحده:
 //  - اهتزاز طويل مميّز بنمط المنبّه (Android حيث يدعمه المتصفح) — بقية الإشعارات بلا نمط اهتزاز خاص.
 //  - requireInteraction: يبقى ظاهرًا حتى يتفاعل المريض (حيث يدعمه المتصفح).
@@ -263,16 +263,20 @@ self.addEventListener("message", function (event) {
 // صوت الإشعار في الخلفية/شاشة القفل هو صوت إشعارات المتصفح لهذا الموقع كما يضبطه النظام، ولا يتجاوز
 // الوضع الصامت ولا «عدم الإزعاج».
 const MB_ALARM_KIND = "APPOINTMENT_5MIN_ALARM";
+// «دورك اقترب» (مبني على الطابور الفعلي): نفس نمط المنبّه تمامًا، وسجل منع تكرار منفصل لكل موعد.
+const MB_QUEUE_APPROACH_KIND = "QUEUE_APPROACH_ALARM";
 const MB_ALARM_VIBRATE = [700, 250, 700, 250, 700, 250, 1400];
 
-function mbAlarmKey(appointmentId) {
+// مفتاح منع التكرار = النوع + الموعد (مفتاح تنبيه الخمس دقائق كما كان في v5 حتى يبقى السجل القديم صالحًا).
+function mbAlarmKey(appointmentId, kind) {
+  if (kind === MB_QUEUE_APPROACH_KIND) return "/__mb-alarm/" + MB_QUEUE_APPROACH_KIND + "/" + encodeURIComponent(appointmentId);
   return "/__mb-alarm/" + encodeURIComponent(appointmentId);
 }
 
 // true إن سُجّل هذا التنبيه الآن لأول مرة، false إن كان معروضًا من قبل (تكرار).
 function mbClaimAlarm(data) {
   if (!data.appointmentId || typeof caches === "undefined") return Promise.resolve(true);
-  const key = mbAlarmKey(data.appointmentId);
+  const key = mbAlarmKey(data.appointmentId, data.kind);
   return caches
     .open(ALARM_CACHE)
     .then(function (cache) {
@@ -324,7 +328,8 @@ function mbShowFiveMinuteAlarm(data) {
   return mbClaimAlarm(data).then(function (first) {
     // تسليم مكرر لنفس الموعد: لا إشعار ثانٍ ولا رنة ثانية.
     if (!first) return;
-    const title = data.title || "موعدك مع الطبيب بعد 5 دقائق";
+    const kind = data.kind === MB_QUEUE_APPROACH_KIND ? MB_QUEUE_APPROACH_KIND : MB_ALARM_KIND;
+    const title = data.title || (kind === MB_QUEUE_APPROACH_KIND ? "دورك اقترب" : "موعدك مع الطبيب بعد 5 دقائق");
     const options = {
       body: data.body || "",
       icon: "/icons/icon-192.png",
@@ -338,14 +343,14 @@ function mbShowFiveMinuteAlarm(data) {
       vibrate: MB_ALARM_VIBRATE,
       data: {
         url: data.url || "/account",
-        kind: MB_ALARM_KIND,
+        kind: kind,
         appointmentId: data.appointmentId || null,
         appointmentDate: data.appointmentDate || null,
         expiresAt: data.expiresAt || null,
       },
     };
     return self.registration.showNotification(title, options).then(function () {
-      return mbNotifyOpenPages({ type: "MB_APPOINTMENT_ALARM", appointmentId: data.appointmentId || null, title: title, body: options.body });
+      return mbNotifyOpenPages({ type: "MB_APPOINTMENT_ALARM", kind: kind, appointmentId: data.appointmentId || null, title: title, body: options.body });
     });
   });
 }

@@ -603,6 +603,9 @@ model DoctorMessage {
 enum ReminderType {
   ONE_HOUR
   FIVE_MINUTES
+  // «دورك اقترب»: يُحسب من موقع المريض الفعلي في طابور الطبيب والمدة الذكية، لا من وقت الموعد وحده.
+  // سجل واحد لكل موعد (القيد الفريد appointmentId+type) = إرسال مرة واحدة فقط لهذه المرحلة.
+  QUEUE_APPROACH
 }
 
 // PENDING: أُنشئ ولم يُعالَج بعد. PROCESSING: حجزه مُشغِّل واحد (قفل ذرّي عبر updateMany المشروط).

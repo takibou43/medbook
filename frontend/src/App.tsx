@@ -11,7 +11,7 @@ import MyAccount from "./pages/account/MyAccount";
 export default function App() {
   const { showToast } = useToast();
   // تنبيه «بعد 5 دقائق» والتطبيق مفتوح: رنة المنبّه الخاصة مرة واحدة + رسالة داخل الصفحة.
-  useEffect(() => installAppointmentAlarm((msg) => showToast(msg.title || "موعدك مع الطبيب بعد 5 دقائق", "info")), [showToast]);
+  useEffect(() => installAppointmentAlarm((msg) => showToast(msg.title || (msg.kind === "QUEUE_APPROACH_ALARM" ? "دورك اقترب" : "موعدك مع الطبيب بعد 5 دقائق"), "info")), [showToast]);
 
   return (
     <Routes>

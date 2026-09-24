@@ -159,26 +159,39 @@ self.addEventListener("push", (event) => {
     data = {};
   }
 
+  // إشعار موعد انتهى يومه (وصل متأخرًا رغم TTL، أو ساعة الجهاز متقدّمة): لا نعرضه، ونكتفي بإغلاق المنتهي.
+  if (mbIsExpired(data, Date.now())) {
+    event.waitUntil(mbCloseExpiredNotifications());
+    return;
+  }
+
   const title = data.title || "مادبوك";
   const options = {
     body: data.body || "افتح اللوحة لعرض التفاصيل.",
-    // PNG وليس SVG: أندرويد لا يعرض أيقونة SVG في الإشعارات بشكل موثوق.
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",
     dir: "rtl",
     lang: "ar",
+    // وسم الموعد (appt-<id>): أي إشعار جديد لنفس الموعد يستبدل السابق على الشاشة بدل أن يتراكم.
     tag: data.tag || "medbook",
     renotify: true,
-    data: { url: data.url || "/" },
+    data: {
+      url: data.url || "/",
+      appointmentId: data.appointmentId || null,
+      appointmentDate: data.appointmentDate || null,
+      expiresAt: data.expiresAt || null,
+    },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(mbCloseExpiredNotifications().then(() => self.registration.showNotification(title, options)));
 });
 
 // الضغط على الإشعار: نعيد استعمال نافذة مفتوحة للوحة إن وجدت بدل فتح نافذة جديدة في كل مرة.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || "/";
+  // إشعار موعد منتهٍ ضُغط عليه قبل أن يُغلق: نفتح اللوحة الرئيسية بدل صفحة الموعد المنتهي.
+  const expired = mbIsExpired(event.notification.data, Date.now());
+  const target = (!expired && event.notification.data && event.notification.data.url) || "/";
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
@@ -191,4 +204,43 @@ self.addEventListener("notificationclick", (event) => {
       return self.clients.openWindow(target);
     })
   );
+});
+
+// ===== انتهاء إشعارات الموعد بانتهاء يوم الموعد =====
+// كل إشعار موعد يحمل في data: appointmentId و expiresAt (نهاية يوم الموعد بتوقيت الجزائر، ISO).
+// لا يستطيع الخادم حذف إشعار ظهر فعلًا على الهاتف؛ الممكن فقط أن يُغلقه الـService Worker (أو الصفحة)
+// بـ Notification.close() حين يعمل: عند وصول أي Push جديد، وعند تفعيل الـSW، وعند فتح التطبيق
+// (register-sw.js). وسم الموعد (appt-<id>) يجعل إشعار الموعد الجديد يستبدل القديم بدل أن يتراكم.
+function mbIsExpired(data, now) {
+  if (!data || !data.expiresAt) return false;
+  var t = Date.parse(data.expiresAt);
+  return !isNaN(t) && t <= now;
+}
+
+function mbCloseExpiredNotifications() {
+  if (!self.registration || typeof self.registration.getNotifications !== "function") return Promise.resolve(0);
+  var now = Date.now();
+  return self.registration
+    .getNotifications()
+    .then(function (list) {
+      var closed = 0;
+      list.forEach(function (n) {
+        if (mbIsExpired(n.data, now)) {
+          n.close();
+          closed++;
+        }
+      });
+      return closed;
+    })
+    .catch(function () {
+      return 0;
+    });
+}
+
+self.addEventListener("activate", function (event) {
+  event.waitUntil(mbCloseExpiredNotifications());
+});
+
+self.addEventListener("message", function (event) {
+  if (event.data && event.data.type === "MB_CLOSE_EXPIRED_NOTIFICATIONS") event.waitUntil(mbCloseExpiredNotifications());
 });

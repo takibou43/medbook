@@ -1,6 +1,6 @@
 /**
  * سباقات متزامنة على قاعدة بيانات اختبار حقيقية (تُرفض أي قاعدة غير محلية أو بلا "test" في اسمها):
- *  1) 50 طلب حجز لنفس الطبيب والتاريخ والوقت → حجز واحد بالضبط والباقي 409.
+ *  1) 50 طلب حجز لنفس الطبيب والتاريخ والوقت → كل واحد يأخذ أقرب وقت شاغر بعد المطلوب حتى يمتلئ اليوم (27)، والباقي 409.
  *  2) 40 نداء "التالي" متزامنًا → مريض واحد فقط IN_PROGRESS.
  *  3) 30 طلب "لم يحضر" متزامنًا لنفس الموعد → فائز واحد، وسجل SMS واحد، ولا 500.
  *  4) 150 حجز تلقائي لطبيب واحد بمجمّع اتصالات صغير → لا 500 ولا فقدان ولا تكرار.
@@ -96,7 +96,7 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
     await prisma.$disconnect();
   });
 
-  it("50 طلب لنفس الطبيب/التاريخ/الوقت → حجز واحد والباقي 409", async () => {
+  it("50 طلب لنفس الطبيب/التاريخ/الوقت → كل الأوقات المتبقية في اليوم بلا تكرار، والباقي 409 (اليوم ممتلئ)", async () => {
     const d = await mkDoctor("slot");
     const date = new Date(today.getTime() + 2 * 86400000).toISOString().slice(0, 10);
     const rs = await Promise.all(
@@ -107,9 +107,17 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
         }, patientToken, i)
       )
     );
-    expect(rs.filter((r) => r.status === 201)).toHaveLength(1);
-    expect(rs.filter((r) => r.status === 409)).toHaveLength(49);
-    expect(await db.appointment.count({ where: { doctorId: d.id } })).toBe(1);
+    // دوام 08:00-18:00 بجلسات 20 دقيقة: من 09:00 يوجد 27 وقتًا فقط (09:00 … 17:40) — يُحجز كلها بلا تكرار،
+    // و23 طلبًا لا يجد وقتًا في ذلك اليوم فيُرفض بـ409 برسالة «لم يعد متاحًا» (لا وقت خارج الدوام ولا يوم آخر).
+    const ok = rs.filter((r) => r.status === 201);
+    expect(ok).toHaveLength(27);
+    expect(rs.filter((r) => r.status === 409)).toHaveLength(23);
+    expect(rs.some((r) => r.status >= 500)).toBe(false);
+    const times = ok.map((r) => r.data.startTime as string).sort();
+    expect(new Set(times).size).toBe(27);
+    expect(times[0]).toBe("09:00");
+    expect(times[26]).toBe("17:40");
+    expect(await db.appointment.count({ where: { doctorId: d.id } })).toBe(27);
   });
 
   it("40 نداء 'التالي' متزامنًا → مريض واحد فقط بالداخل", async () => {

@@ -126,6 +126,10 @@ export interface Notification {
   message: string;
   isRead: boolean;
   createdAt: string;
+  // إشعار مرتبط بموعد: ينتهي بنهاية يوم الموعد بتوقيت الجزائر (null = إشعار عام لا ينتهي).
+  appointmentId?: string | null;
+  appointmentDate?: string | null;
+  expiresAt?: string | null;
 }
 
 export interface User {

@@ -6,6 +6,10 @@ import { hashPassword } from "./utils/password";
 import { syncTrialSubscriptions } from "./lib/trial";
 import { sweepStaleAppointmentsForAllDoctors } from "./modules/appointments/appointments.service";
 import { runReminderCycle } from "./modules/reminders/reminders.service";
+import { purgeExpiredNotifications } from "./modules/notifications/notifications.service";
+
+// كل 15 دقيقة: حذف إشعارات المواعيد التي انتهى يومها (العرض يستبعدها فورًا أصلًا).
+const NOTIFICATION_PURGE_INTERVAL_MS = 15 * 60 * 1000;
 
 const app = createApp();
 
@@ -127,6 +131,13 @@ Promise.all([
       runReminderCycle().catch((err) => console.error("تعذّر تشغيل دورة التذكيرات:", (err as Error)?.message));
     }, intervalMs);
   }
+
+  // إشعارات المواعيد تنتهي بانتهاء يوم الموعد (توقيت الجزائر): تُخفى فورًا بفلتر القراءة، وتُحذف هنا دوريًا.
+  // لا تلمس الإشعارات العامة (expiresAt = NULL).
+  const purge = () =>
+    purgeExpiredNotifications().catch((err) => console.error("تعذّر حذف إشعارات المواعيد المنتهية:", (err as Error)?.message));
+  void purge();
+  setInterval(purge, NOTIFICATION_PURGE_INTERVAL_MS);
 
   startSelfPing();
 

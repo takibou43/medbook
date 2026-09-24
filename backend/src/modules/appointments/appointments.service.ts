@@ -1,17 +1,18 @@
 import { AppointmentStatus, Prisma, Role, SubscriptionStatus, SmsStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
-import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight, closingTimeForDate } from "../../lib/slots";
+import { isWithinWorkingHours, isPast, algeriaTodayUTCMidnight, closingTimeForDate } from "../../lib/slots";
 import { createNotification } from "../notifications/notifications.service";
 import { sendSms } from "../../lib/sms";
-import { lockDoctorCalls } from "../../lib/doctorLock";
+import { lockDoctorCalls, DoctorQueueBusyError } from "../../lib/doctorLock";
+import { reserveRequestedOrNextSlot, slotMinutesFor, NoSlotAvailableError, SlotRaceExhaustedError } from "../../lib/slotAssign";
 import { CreateAppointmentInput } from "./appointments.schema";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
 import { latePenaltyFor, pickNext, projectQueueOrder } from "../../lib/queueOrder";
 import { assertPatientCanBook, evaluateAutoBlockSafe } from "../patientBlocks/patientBlocks.service";
 import { SLOT_OCCUPYING_WHERE, RELEASE_SLOT_DATA } from "../../lib/slotOccupancy";
+import { appointmentNotificationTag } from "../../lib/appointmentExpiry";
 
-const SLOT_MINUTES = 20;
 
 function addMinutes(hhmm: string, minutes: number): string {
   const [h, m] = hhmm.split(":").map(Number);
@@ -27,9 +28,8 @@ function addMinutes(hhmm: string, minutes: number): string {
  * إنشاء موعد جديد مع منع كامل للتعارض (Double Booking):
  * 1) رفض المواعيد في الماضي.
  * 2) رفض الحجز خارج أوقات عمل الطبيب.
- * 3) التحقق المسبق من عدم وجود حجز على نفس الفترة (PENDING/CONFIRMED).
- * 4) الاعتماد على قيد فريد (unique) على مستوى قاعدة البيانات [doctorId, date, startTime]
- *    كخط دفاع أخير ضد Race Conditions (طلبين متزامنين لنفس الفترة).
+ * 3) الوقت المطلوب إن كان شاغرًا، وإلا أقرب وقت شاغر بعده في نفس اليوم، تحت قفل طابور الطبيب.
+ * 4) القيد الفريد [doctorId, date, startTime, activeSlot] خط دفاع أخير، و P2002 يُعاد معه الحساب.
  */
 export async function createAppointment(patientUserId: string, input: CreateAppointmentInput) {
   const patient = await prisma.patient.findUnique({ where: { userId: patientUserId } });
@@ -52,59 +52,65 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
     throw ApiError.badRequest("لا يمكن الحجز في وقت مضى.");
   }
 
-  const endTime = addMinutes(input.startTime, SLOT_MINUTES);
-
-  if (!isWithinWorkingHours(date, input.startTime, endTime, doctor.schedules)) {
+  // مدة الموعد = مدة جلسة الطبيب (نفس قاعدة الحجز الآلي والطابور)، والوقت المطلوب يجب أن يقع داخل دوامه.
+  const slotMinutes = slotMinutesFor(doctor);
+  if (!isWithinWorkingHours(date, input.startTime, addMinutes(input.startTime, slotMinutes), doctor.schedules)) {
     throw ApiError.badRequest("هذا الوقت خارج أوقات عمل الطبيب.");
   }
 
-  const startOfDay = new Date(date);
-  const endOfDay = new Date(date);
-  endOfDay.setUTCHours(23, 59, 59, 999);
-
-  const bookedForDay = await prisma.appointment.findMany({
-    where: { doctorId: doctor.id, date: { gte: startOfDay, lte: endOfDay }, ...SLOT_OCCUPYING_WHERE },
-    select: { startTime: true, endTime: true },
-  });
-
-  const availableSlots = generateAvailableSlots(date, doctor.schedules, bookedForDay, SLOT_MINUTES);
-  if (!availableSlots.includes(input.startTime)) {
-    throw ApiError.conflict("هذه الفترة محجوزة مسبقًا أو غير متاحة. الرجاء اختيار فترة أخرى.");
-  }
-
+  // الوقت المطلوب إن كان شاغرًا، وإلا أقرب وقت صالح وشاغر بعده في نفس اليوم (تحت قفل طابور الطبيب،
+  // والقيد الفريد خط دفاع أخير، وإعادة حساب عند P2002 — انظر lib/slotAssign.ts). لا 409 بسبب السباق.
+  let reserved;
   try {
-    const appointment = await prisma.appointment.create({
-      data: {
-        patientId: patient.id,
-        doctorId: doctor.id,
-        date,
-        startTime: input.startTime,
-        endTime,
-        type: input.type,
-        status: AppointmentStatus.PENDING,
-        notes: input.notes,
-        services: input.serviceIds
-          ? { create: input.serviceIds.map((serviceId) => ({ serviceId })) }
-          : undefined,
-      },
-      include: { doctor: true, patient: true, services: { include: { service: true } } },
+    reserved = await reserveRequestedOrNextSlot({
+      doctor,
+      date,
+      requestedStart: input.startTime,
+      create: (tx, slot) =>
+        tx.appointment.create({
+          data: {
+            patientId: patient.id,
+            doctorId: doctor.id,
+            date,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            type: input.type,
+            status: AppointmentStatus.PENDING,
+            notes: input.notes,
+            services: input.serviceIds
+              ? { create: input.serviceIds.map((serviceId) => ({ serviceId })) }
+              : undefined,
+          },
+          include: { doctor: true, patient: true, services: { include: { service: true } } },
+        }),
     });
+  } catch (err) {
+    if (err instanceof NoSlotAvailableError || err instanceof SlotRaceExhaustedError) {
+      throw ApiError.conflict("هذه الفترة محجوزة مسبقًا أو غير متاحة. الرجاء اختيار فترة أخرى.");
+    }
+    if (err instanceof DoctorQueueBusyError) {
+      throw ApiError.unavailable("الازدحام على هذا الطبيب مرتفع الآن. لم يُسجَّل أي حجز، الرجاء المحاولة بعد لحظات.");
+    }
+    throw err;
+  }
+  const appointment = reserved.result;
 
+  // الإشعار بعد اكتمال المعاملة وبالوقت المحجوز فعليًا (قد يختلف عن المطلوب)، وفشله لا يُفشل حجزًا محفوظًا.
+  try {
     await createNotification(
       doctor.userId,
       "APPOINTMENT_CREATED",
       "طلب حجز موعد جديد",
-      `لديك طلب حجز جديد من ${appointment.patient!.firstName} ${appointment.patient!.lastName} بتاريخ ${input.date} الساعة ${input.startTime}.`
+      `لديك طلب حجز جديد من ${appointment.patient!.firstName} ${appointment.patient!.lastName} بتاريخ ${input.date} الساعة ${appointment.startTime}.`,
+      undefined,
+      undefined,
+      { id: appointment.id, date: appointment.date }
     );
-
-    return appointment;
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      // خط الدفاع الأخير: تعارض حدث بين لحظة التحقق ولحظة الإنشاء الفعلي
-      throw ApiError.conflict("تم حجز هذه الفترة للتو من طرف مستخدم آخر. الرجاء اختيار فترة أخرى.");
-    }
-    throw err;
+  } catch (notifyErr) {
+    console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", notifyErr);
   }
+
+  return { ...appointment, requestedStartTime: input.startTime, shiftedFromRequested: reserved.shifted };
 }
 
 export async function listForPatient(patientUserId: string, status?: AppointmentStatus) {
@@ -339,6 +345,11 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
     if (appointment.doctorId !== actingDoctorId) throw ApiError.forbidden();
   }
 
+  // الموعد في الحالة المطلوبة أصلًا = طلب مكرر أو خاسر في سباق (طبيب ومساعد يضغطان معًا): 409 دائمًا،
+  // مثل خاسر الـcompare-and-swap أدناه، بدل 400 يتوقف على توقيت وصول الطلب (قبل/بعد commit الفائز).
+  if (appointment.status === newStatus) {
+    throw ApiError.conflict("تغيّرت حالة الموعد للتو. حدّث الصفحة وأعد المحاولة.");
+  }
   if (!canTransition(role, appointment.status, newStatus)) {
     throw ApiError.badRequest(`لا يمكن تغيير حالة الموعد من ${appointment.status} إلى ${newStatus}.`);
   }
@@ -447,7 +458,19 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
   };
 
   const notif = notifyMap[newStatus];
-  if (notif && notif.userId) await createNotification(notif.userId, notif.type, notif.title, notif.message);
+  // إشعار موعد: ينتهي بانتهاء يوم الموعد. للمريض وسم موحّد للموعد (appt-<id>) فيستبدل إشعاره السابق على الهاتف.
+  if (notif && notif.userId) {
+    const toPatient = notif.userId === updated.patient?.userId;
+    await createNotification(
+      notif.userId,
+      notif.type,
+      notif.title,
+      notif.message,
+      toPatient ? `/account?appointment=${updated.id}` : undefined,
+      toPatient ? appointmentNotificationTag(updated.id) : undefined,
+      { id: updated.id, date: updated.date }
+    );
+  }
 
   return updated;
 }
@@ -669,7 +692,8 @@ export async function markAsLate(doctorUserId: string, appointmentId: string, ro
         "🔔 تنبيه بخصوص موعدك",
         "تم تجاوز دورك مؤقتًا لأنك لم تكن حاضرًا عند المناداة. توجّه إلى العيادة، ما زلت في قائمة الانتظار.",
         `/account?appointment=${appointmentId}`,
-        `late-${result.event.id}`
+        appointmentNotificationTag(appointmentId),
+        { id: appointmentId, date: result.appointment!.date }
       );
     } catch (err) {
       console.error("تعذّر إشعار المريض بالتأخير (التأخير مسجَّل):", (err as Error)?.message);

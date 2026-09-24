@@ -2,6 +2,7 @@ import { AppointmentStatus, ReminderStatus, ReminderType } from "@prisma/client"
 import { prisma } from "../../lib/prisma";
 import { sendPushToUser, isPushEnabled, PushPayload } from "../../lib/push";
 import { ALGERIA_OFFSET_MINUTES } from "../../lib/slots";
+import { appointmentDayEndsAt, appointmentNotificationTag } from "../../lib/appointmentExpiry";
 
 /**
  * تذكيرات مواعيد المرضى عبر Web Push: تذكير قبل الموعد بساعة، وآخر قبله بخمس دقائق.
@@ -83,7 +84,14 @@ export function buildReminderPayload(
 ): PushPayload {
   const doctorName = `د. ${appt.doctor.firstName} ${appt.doctor.lastName}`.trim();
   const url = `/account?appointment=${appt.id}`;
-  const tag = `reminder-${appt.id}-${type}`;
+  // وسم الموعد الموحّد: تذكير الخمس دقائق يستبدل تذكير الساعة (وأي إشعار سابق لنفس الموعد) على الهاتف.
+  const tag = appointmentNotificationTag(appt.id);
+  // حقول الانتهاء: خدمة الدفع لا تسلّمه بعد نهاية يوم الموعد (TTL)، والـService Worker يُغلقه بعدها.
+  const expiry = {
+    appointmentId: appt.id,
+    appointmentDate: appt.date.toISOString().slice(0, 10),
+    expiresAt: appointmentDayEndsAt(appt.date).toISOString(),
+  };
 
   if (type === ReminderType.FIVE_MINUTES) {
     return {
@@ -91,6 +99,7 @@ export function buildReminderPayload(
       body: `لديك موعد مع ${doctorName} على الساعة ${appt.startTime}.`,
       url,
       tag,
+      ...expiry,
     };
   }
 
@@ -101,6 +110,7 @@ export function buildReminderPayload(
     body: `لديك موعد مع ${doctorName} ${sameDay ? "اليوم" : "غدًا"} على الساعة ${appt.startTime}.`,
     url,
     tag,
+    ...expiry,
   };
 }
 

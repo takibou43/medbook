@@ -220,8 +220,14 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
     const payload = JSON.parse(payloadRaw);
     expect(payload.title).toBe("🔔 تنبيه بخصوص موعدك");
     expect(payload.body).toContain("ما زلت في قائمة الانتظار");
-    expect(payload.tag).toBe(`late-${r.data.lateEvent.id}`);
+    // وسم الموعد الموحّد (appt-<id>): إشعار جديد لنفس الموعد يستبدل السابق على الهاتف بدل أن يتراكم.
+    expect(r.data.lateEvent.id).toBeTruthy();
+    expect(payload.tag).toBe(`appt-${m.A}`);
     expect(payload.url).toBe(`/account?appointment=${m.A}`);
+    // مرتبط بالموعد وينتهي بنهاية يومه بتوقيت الجزائر.
+    expect(payload.appointmentId).toBe(m.A);
+    expect(typeof payload.expiresAt).toBe("string");
+    expect((h.sendNotification.mock.calls[0] as any[])[2]?.TTL).toBeGreaterThan(0);
   });
 
   it("26) مريض ضيف بلا حساب/بلا اشتراك: التأخير ينجح بلا أي إشعار", async () => {

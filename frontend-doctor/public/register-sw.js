@@ -200,3 +200,26 @@
       .catch(function () {});
   });
 })();
+
+// ===== إغلاق إشعارات المواعيد المنتهية عند فتح التطبيق =====
+// إشعار الموعد يحمل data.expiresAt (نهاية يوم الموعد بتوقيت الجزائر). عند فتح التطبيق أو عودته للواجهة
+// نُغلق من مركز إشعارات الجهاز ما انتهى منها — في المتصفحات التي تدعم getNotifications()/close().
+(function () {
+  if (!("serviceWorker" in navigator)) return;
+  function closeExpired() {
+    navigator.serviceWorker.getRegistration().then(function (reg) {
+      if (!reg || typeof reg.getNotifications !== "function") return;
+      var now = Date.now();
+      reg.getNotifications().then(function (list) {
+        list.forEach(function (n) {
+          var t = n.data && n.data.expiresAt ? Date.parse(n.data.expiresAt) : NaN;
+          if (!isNaN(t) && t <= now) n.close();
+        });
+      }).catch(function () {});
+    }).catch(function () {});
+  }
+  window.addEventListener("load", closeExpired);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") closeExpired();
+  });
+})();

@@ -397,6 +397,8 @@ model Appointment {
   reminders AppointmentReminder[]
   // أحداث «متأخر» لهذا الموعد (سجل قابل للتتبّع، واحد لكل تأخير) — انظر AppointmentLateEvent.
   lateEvents AppointmentLateEvent[]
+  // إشعارات داخل التطبيق المرتبطة بهذا الموعد (تنتهي بانتهاء يومه) — انظر Notification.
+  notifications Notification[]
 
   // true ما دام الموعد يشغل وقته (كل الحالات عدا CANCELLED)، و NULL عند الإلغاء. القيد الفريد أدناه يشمله،
   // و NULL لا يتعارض في PostgreSQL: الموعد الملغى يبقى محفوظًا لكنه يحرّر وقته لحجز جديد، ويبقى
@@ -463,8 +465,17 @@ model Notification {
   message   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
+  // إشعار مرتبط بموعد (حجز/إلغاء/تأكيد/متأخر/تذكير...): يحمل الموعد ويومه ولحظة انتهاء صلاحيته
+  // (نهاية يوم الموعد بتوقيت الجزائر). بعد expiresAt لا يُعرض في مركز الإشعارات ويُحذف دوريًا.
+  // الإشعارات العامة (رسائل، توثيق الحساب...) تبقى هذه الحقول فيها NULL فلا تنتهي ولا تُحذف.
+  appointmentId   String?
+  appointment     Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  appointmentDate DateTime?
+  expiresAt       DateTime?
 
   @@index([userId, isRead])
+  @@index([userId, expiresAt])
+  @@index([appointmentId])
   @@map("notifications")
 }
 

@@ -149,12 +149,14 @@ describe.skipIf(!TEST_URL)("تحرير أوقات المواعيد الملغا�
   });
 
   for (const status of ["CONFIRMED", "PENDING", "IN_PROGRESS", "LATE"] as const) {
-    it(`2-5) موعد ${status} في 10:00 → حجز آخر في 10:00 يُرفض 409 والوقت غير معروض`, async () => {
+    it(`2-5) موعد ${status} في 10:00 → طلب 10:00 لا يأخذه (يُنقل تلقائيًا إلى 10:20) والوقت غير معروض`, async () => {
       const date = freshDate();
       await seedExisting(date, status);
       expect(await availability(date)).not.toContain("10:00");
       const r = await createAt(nextPatient().token, date);
-      expect(r.status).toBe(409);
+      // منذ «أقرب موعد متاح»: لا 409، بل أول وقت شاغر بعد المطلوب — و10:00 يبقى لصاحبه وحده.
+      expect(r.status).toBe(201);
+      expect(r.data).toMatchObject({ startTime: "10:20", requestedStartTime: "10:00", shiftedFromRequested: true });
       expect(await slotRows(date)).toHaveLength(1);
     });
   }
@@ -165,7 +167,9 @@ describe.skipIf(!TEST_URL)("تحرير أوقات المواعيد الملغا�
       const old = await seedExisting(date, status);
       expect(old.activeSlot).toBe(true);
       const r = await createAt(nextPatient().token, date);
-      expect(r.status).toBe(409); // كان 409 قبل التعديل أيضًا (القيد الفريد على الوقت)
+      // الوقت ما زال مشغولًا (السلوك السابق محفوظ): الطلب يُنقل إلى 10:20 ولا يلمس 10:00.
+      expect(r.status).toBe(201);
+      expect(r.data.startTime).toBe("10:20");
       expect(await slotRows(date)).toEqual([old]);
       expect(await availability(date)).not.toContain("10:00");
     });
@@ -177,7 +181,8 @@ describe.skipIf(!TEST_URL)("تحرير أوقات المواعيد الملغا�
     expect((await createAt(nextPatient().token, date)).status).toBe(201);
     expect(await availability(date)).not.toContain("10:00");
     const third = await createAt(nextPatient().token, date);
-    expect(third.status).toBe(409);
+    expect(third.status).toBe(201);
+    expect(third.data.startTime).toBe("10:20"); // لا موعد نشط ثانٍ في 10:00
     const rows = await slotRows(date);
     expect(rows.map((r) => r.status).sort()).toEqual(["CANCELLED", "PENDING"]);
     // وعلى مستوى قاعدة البيانات مباشرة (تجاوزًا لكل فحص في الكود): موعد نشط ثانٍ مرفوض
@@ -186,13 +191,13 @@ describe.skipIf(!TEST_URL)("تحرير أوقات المواعيد الملغا�
     await expect(seedExisting(date, "CANCELLED")).resolves.toBeTruthy();
   });
 
-  it("10) التزامن: 10 حجوزات متوازية لنفس الوقت الملغى → واحد فقط ينجح، ولا موعدين نشطين", async () => {
+  it("10) التزامن: 10 حجوزات متوازية لنفس الوقت الملغى → واحد فقط يأخذ 10:00 والبقية الأوقات التالية، ولا موعدين نشطين", async () => {
     const date = freshDate();
     const old = await seedExisting(date, "CANCELLED");
     const patients = Array.from({ length: 10 }, () => nextPatient());
     const res = await Promise.all(patients.map((p) => createAt(p.token, date)));
-    expect(res.filter((r) => r.status === 201)).toHaveLength(1);
-    expect(res.filter((r) => r.status === 409)).toHaveLength(9);
+    expect(res.filter((r) => r.status === 201)).toHaveLength(10);
+    expect(res.map((r) => r.data.startTime).sort()).toEqual(["10:00", "10:20", "10:40", "11:00", "11:20", "11:40", "12:00", "12:20", "12:40", "13:00"]);
     const rows = await slotRows(date);
     expect(rows.filter((r) => r.status !== "CANCELLED")).toHaveLength(1);
     expect(rows.find((r) => r.id === old.id)).toEqual(old);
@@ -203,12 +208,16 @@ describe.skipIf(!TEST_URL)("تحرير أوقات المواعيد الملغا�
     const p1 = nextPatient();
     const first = await createAt(p1.token, date);
     expect(first.status).toBe(201);
-    expect((await createAt(nextPatient().token, date)).status).toBe(409);
+    const second = await createAt(nextPatient().token, date);
+    expect(second.status).toBe(201);
+    expect(second.data.startTime).toBe("10:20"); // 10:00 مشغول → أقرب وقت بعده
     expect((await call("DELETE", `/api/appointments/${first.data.id}`, undefined, p1.token)).status).toBe(200);
     const cancelled = await db.appointment.findUnique({ where: { id: first.data.id } });
     expect(cancelled).toMatchObject({ status: "CANCELLED", activeSlot: null, startTime: "10:00", patientId: p1.patientId });
     expect(await availability(date)).toContain("10:00");
-    expect((await createAt(nextPatient().token, date)).status).toBe(201);
+    const again = await createAt(nextPatient().token, date);
+    expect(again.status).toBe(201);
+    expect(again.data.startTime).toBe("10:00"); // الوقت المحرَّر يُعاد استخدامه كما هو
   });
 
   it("الإلغاء من الطبيب (PATCH CANCELLED) يحرّر الوقت أيضًا", async () => {

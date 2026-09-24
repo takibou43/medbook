@@ -447,11 +447,14 @@ model Review {
   doctor        Doctor      @relation(fields: [doctorId], references: [id])
   patientId     String
   patient       Patient     @relation(fields: [patientId], references: [id])
+  // 1..5 فقط (Zod + الخدمة + قيد CHECK reviews_rating_range في قاعدة البيانات، انظر migration add_review_guards).
   rating        Int
+  // اختياري؛ الفارغ يُخزَّن NULL. التقييم نهائي: لا مسار تعديل، وtrigger يمنع UPDATE على قاعدة البيانات.
   comment       String?
   createdAt     DateTime    @default(now())
 
   @@index([doctorId])
+  @@index([patientId])
   @@map("reviews")
 }
 // ---------------- Notifications ----------------

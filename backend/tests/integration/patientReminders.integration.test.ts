@@ -128,7 +128,18 @@ describe.skipIf(!TEST_URL)("حساب المريض + التذكيرات (PostgreS
     expect(mine.data.map((a: any) => a.id)).toContain(appt!.id);
 
     const start = reminders.appointmentStartUtc(appt!.date, appt!.startTime);
-    const cycle = (offsetMin: number) => reminders.runReminderCycle(new Date(start.getTime() + offsetMin * MIN));
+    // ساعة النظام تُضبط على نفس لحظة الدورة المحاكاة: TTL/deliverBy في lib/push تُحسب من الوقت الحقيقي،
+    // والموعد المحجوز آليًا يبدأ بعد دقائق فقط، فبدون هذا تصبح النتيجة مرتبطة بساعة تشغيل الاختبار.
+    const cycle = async (offsetMin: number) => {
+      const at = new Date(start.getTime() + offsetMin * MIN);
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(at);
+      try {
+        return await reminders.runReminderCycle(at);
+      } finally {
+        vi.useRealTimers();
+      }
+    };
 
     // 4) قبل أكثر من ساعة: إنشاء السجلين فقط
     const c0 = await cycle(-61);

@@ -1,6 +1,7 @@
 import { Prisma, VerificationStatus, SubscriptionStatus, AppointmentStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
+import { maskLastName } from "../reviews/reviews.service";
 import { generateAvailableSlots, isPast } from "../../lib/slots";
 import { slotMinutesFor } from "../../lib/slotAssign";
 import { SLOT_OCCUPYING_WHERE } from "../../lib/slotOccupancy";
@@ -112,15 +113,19 @@ export async function getDoctorById(id: string) {
       city: true,
       clinic: true,
       schedules: true,
+      // صفحة عامة: لا معرّفات داخلية للمريض أو الموعد، واللقب مختصر لحرفه الأول (خصوصية المريض).
       reviews: {
-        include: { patient: { select: { firstName: true, lastName: true } } },
+        select: { id: true, doctorId: true, rating: true, comment: true, createdAt: true, patient: { select: { firstName: true, lastName: true } } },
         orderBy: { createdAt: "desc" },
         take: 20,
       },
     },
   });
   if (!doctor) throw ApiError.notFound("الطبيب غير موجود.");
-  return doctor;
+  return {
+    ...doctor,
+    reviews: doctor.reviews.map((r) => ({ ...r, patient: { firstName: r.patient.firstName, lastName: maskLastName(r.patient.lastName) } })),
+  };
 }
 
 export async function getDoctorAvailability(doctorId: string, dateStr: string) {

@@ -5,6 +5,7 @@ import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { Role } from "@prisma/client";
 import * as service from "./doctorSelf.service";
+import * as reviewsService from "../reviews/reviews.service";
 
 const router = Router();
 router.use(authenticate);
@@ -31,6 +32,17 @@ router.get(
 
 // كل ما يلي (الملف المهني، أوقات العمل والاستثناءات) — طبيب فقط.
 router.use(authorize(Role.DOCTOR));
+
+// تقييمات المرضى للطبيب الحالي (طبيب فقط): متوسط، عدد، توزيع النجوم، والتقييمات مع التعليقات.
+// قراءة فقط — لا يوجد أي مسار تعديل أو حذف للطبيب؛ doctorId من الجلسة وحدها.
+router.get(
+  "/reviews",
+  asyncHandler(async (req, res) => {
+    const page = Number(req.query.page ?? 1);
+    const pageSize = Number(req.query.pageSize ?? 20);
+    res.json({ success: true, data: await reviewsService.listForCurrentDoctor(req.user!.id, req.user!.role, page, pageSize) });
+  })
+);
 
 const profileSchema = z.object({
   bio: z.string().optional(),

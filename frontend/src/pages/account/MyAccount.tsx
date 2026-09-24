@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { api, apiErrorMessage } from "../../lib/api";
 import { disablePatientPush } from "../../lib/patientPush";
 import { ReminderCard } from "../../components/account/ReminderCard";
+import { RateDoctorForm, RatePrompt, StarsDisplay, canRate, readDismissed, saveDismissed } from "../../components/account/RateDoctor";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
 import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
@@ -24,8 +25,21 @@ function formatDay(iso: string) {
   return new Date(iso).toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 }
 
-function AppointmentItem({ a, highlight, onCancel, cancelling }: { a: MyAppointment; highlight: boolean; onCancel?: () => void; cancelling?: boolean }) {
+function AppointmentItem({
+  a,
+  highlight,
+  onCancel,
+  cancelling,
+  onRated,
+}: {
+  a: MyAppointment;
+  highlight: boolean;
+  onCancel?: () => void;
+  cancelling?: boolean;
+  onRated?: () => void;
+}) {
   const address = a.doctor.clinic?.address || a.doctor.address;
+  const [rating, setRating] = useState(false);
   return (
     <li className={clsx("glass p-4", highlight && "ring-2 ring-primary-500")}>
       <div className="flex items-start justify-between gap-2">
@@ -48,6 +62,25 @@ function AppointmentItem({ a, highlight, onCancel, cancelling }: { a: MyAppointm
       )}
       {a.status === "LATE" && (
         <p className="mt-2 text-sm text-orange-700">تم تجاوز دورك مؤقتًا، وما زلت في قائمة الانتظار. توجّه إلى العيادة.</p>
+      )}
+      {a.review && (
+        <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm">
+          <p className="flex items-center gap-2 font-semibold text-slate-800">
+            تقييمك: <StarsDisplay value={a.review.rating} />
+          </p>
+          {a.review.comment && <p className="mt-1 whitespace-pre-line break-words text-slate-600">{a.review.comment}</p>}
+        </div>
+      )}
+      {onRated && canRate(a) && (
+        <div className="mt-3">
+          {rating ? (
+            <RateDoctorForm appointment={a} onDone={() => { setRating(false); onRated(); }} onCancel={() => setRating(false)} />
+          ) : (
+            <button type="button" onClick={() => setRating(true)} className="min-h-[44px] text-sm font-semibold text-amber-700 hover:underline">
+              ★ قيّم الطبيب
+            </button>
+          )}
+        </div>
       )}
       {ACTIVE.has(a.status) && (
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
@@ -73,6 +106,7 @@ export default function MyAccount() {
   const [params] = useSearchParams();
   const focusId = params.get("appointment");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState<string[]>(() => readDismissed());
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["my-appointments"],
@@ -92,6 +126,27 @@ export default function MyAccount() {
     const upIds = new Set(up.map((a) => a.id));
     return { upcoming: up, past: list.filter((a) => !upIds.has(a.id)) };
   }, [data]);
+
+  // «كيف تقيّم الطبيب؟»: الموعد المفتوح من الإشعار إن كان قابلًا للتقييم، وإلا آخر موعد مكتمل فقط (إن لم
+  // يُقيَّم ولم يُخفَ) — لا نلاحق المريض بمواعيد أقدم؛ تلك يبقى تقييمها متاحًا في «المواعيد السابقة».
+  const ratePromptFor = useMemo(() => {
+    const list = data ?? [];
+    const focused = focusId ? list.find((a) => a.id === focusId && canRate(a)) : undefined;
+    if (focused) return focused;
+    const latestCompleted = list.find((a) => a.status === "COMPLETED");
+    return latestCompleted && canRate(latestCompleted) && !dismissed.includes(latestCompleted.id) ? latestCompleted : undefined;
+  }, [data, focusId, dismissed]);
+
+  function dismissPrompt(id: string) {
+    const next = [...dismissed.filter((x) => x !== id), id];
+    setDismissed(next);
+    saveDismissed(next);
+  }
+
+  async function afterRated() {
+    showToast("شكرًا! تم حفظ تقييمك.", "success");
+    await refetch();
+  }
 
   if (loading) return <Spinner label="جارٍ التحميل..." />;
   if (!user) return <Navigate to="/account/login?redirect=%2Faccount" replace />;
@@ -136,6 +191,18 @@ export default function MyAccount() {
           </button>
         </div>
 
+        {ratePromptFor && (
+          <RatePrompt
+            key={ratePromptFor.id}
+            appointment={ratePromptFor}
+            onDone={afterRated}
+            onDismiss={() => {
+              dismissPrompt(ratePromptFor.id);
+              if (focusId === ratePromptFor.id) navigate("/account", { replace: true });
+            }}
+          />
+        )}
+
         <ReminderCard />
 
         <Link to="/" className="btn-primary flex min-h-[48px] w-full items-center justify-center gap-2">
@@ -170,7 +237,7 @@ export default function MyAccount() {
                 <h2 className="mb-2 font-bold text-slate-900">المواعيد السابقة</h2>
                 <ul className="space-y-3">
                   {past.map((a) => (
-                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} />
+                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onRated={afterRated} />
                   ))}
                 </ul>
               </section>

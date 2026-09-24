@@ -244,6 +244,7 @@ export default function DoctorDashboard() {
           sub={(stats?.reviewsCount ?? 0) > 0 ? `من أصل ${stats?.reviewsCount} تقييم` : "لا توجد تقييمات بعد"}
           icon={Star}
           tone="amber"
+          to={isAssistant ? undefined : "/reviews"}
         />
 
         {!isAssistant && (

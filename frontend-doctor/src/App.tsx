@@ -26,6 +26,7 @@ import DoctorDashboard from "./pages/doctor/DoctorDashboard";
 import DoctorAppointments from "./pages/doctor/DoctorAppointments";
 import DoctorSchedule from "./pages/doctor/DoctorSchedule";
 import DoctorPatients from "./pages/doctor/DoctorPatients";
+import DoctorReviews from "./pages/doctor/DoctorReviews";
 import DoctorProfileSettings from "./pages/doctor/DoctorProfileSettings";
 import AssistantManagement from "./pages/doctor/AssistantManagement";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -52,6 +53,7 @@ const doctorOnlyNav = [
   { to: "/messages", label: "الرسائل", icon: MessageSquare },
   { to: "/schedule", label: "أوقات العمل", icon: Clock },
   { to: "/patients", label: "مرضاي", icon: UsersIcon },
+  { to: "/reviews", label: "التقييمات", icon: Star },
   { to: "/assistants", label: "المساعدون", icon: UserCog },
   { to: "/profile", label: "ملفي المهني", icon: Settings },
   { to: "/account", label: "إعدادات الحساب", icon: KeyRound },
@@ -123,6 +125,7 @@ export default function App() {
             <Route path="/messages" element={<DoctorMessages />} />
             <Route path="/schedule" element={<DoctorSchedule />} />
             <Route path="/patients" element={<DoctorPatients />} />
+            <Route path="/reviews" element={<DoctorReviews />} />
             <Route path="/assistants" element={<AssistantManagement />} />
             <Route path="/profile" element={<DoctorProfileSettings />} />
             <Route path="/account" element={<AccountSettings />} />

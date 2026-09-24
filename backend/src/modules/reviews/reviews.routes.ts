@@ -5,13 +5,16 @@ import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { Role } from "@prisma/client";
 import * as service from "./reviews.service";
+import { COMMENT_MAX } from "./reviews.service";
 
 const router = Router();
 
 const createSchema = z.object({
   appointmentId: z.string().uuid(),
   rating: z.number().int().min(1).max(5),
-  comment: z.string().max(1000).optional(),
+  // اختياري: غيابه أو null أو نص فارغ = بلا تعليق. أي حقل آخر (doctorId/patientId...) يُتجاهل؛
+  // الطبيب والمريض يُشتقّان دائمًا من الموعد والجلسة.
+  comment: z.string().max(COMMENT_MAX, `التعليق يجب ألا يتجاوز ${COMMENT_MAX} حرف.`).nullable().optional(),
 });
 
 router.post(

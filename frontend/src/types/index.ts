@@ -18,6 +18,8 @@ export interface MyAppointment {
     specialty?: { nameAr: string } | null;
     clinic?: { nameAr: string; address: string; phone?: string | null } | null;
   };
+  // تقييم المريض لهذا الموعد (null = لم يُقيَّم بعد).
+  review?: { id: string; rating: number; comment?: string | null; createdAt: string } | null;
 }
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 

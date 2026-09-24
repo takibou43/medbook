@@ -159,6 +159,8 @@ export async function listMyAppointments(userId: string) {
           clinic: { select: { nameAr: true, address: true, phone: true } },
         },
       },
+      // تقييم المريض لهذا الموعد (إن وُجد) — لإظهار «كيف تقيّم الطبيب؟» للمكتمل غير المقيَّم فقط.
+      review: { select: { id: true, rating: true, comment: true, createdAt: true } },
     },
     orderBy: [{ date: "desc" }, { startTime: "desc" }],
     take: 200,

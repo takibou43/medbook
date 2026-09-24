@@ -5,6 +5,7 @@ import { hashPassword } from "../../utils/password";
 import { createNotification } from "../notifications/notifications.service";
 import { algeriaTodayUTCMidnight } from "../../lib/slots";
 import { env } from "../../config/env";
+import { lockDoctorRow, recalcDoctorRating } from "../reviews/reviews.service";
 
 // ---------------- Dashboard stats ----------------
 
@@ -223,11 +224,11 @@ export async function listAllReviews() {
 export async function deleteReview(reviewId: string) {
     const review = await prisma.review.findUnique({ where: { id: reviewId } });
     if (!review) throw ApiError.notFound("التقييم غير موجود.");
-    await prisma.review.delete({ where: { id: reviewId } });
-    const agg = await prisma.review.aggregate({ where: { doctorId: review.doctorId }, _avg: { rating: true }, _count: { rating: true } });
-    await prisma.doctor.update({
-          where: { id: review.doctorId },
-          data: { avgRating: agg._avg.rating ?? 0, reviewsCount: agg._count.rating },
+    // نفس إعادة الحساب المستعملة عند إنشاء تقييم (تحت قفل صف الطبيب) — لا متوسط قديم عند التزامن.
+    await prisma.$transaction(async (tx) => {
+          await lockDoctorRow(tx, review.doctorId);
+          await tx.review.delete({ where: { id: reviewId } });
+          await recalcDoctorRating(tx, review.doctorId);
     });
 }
 

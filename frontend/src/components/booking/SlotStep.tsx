@@ -1,9 +1,10 @@
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import { ArrowLeft, CalendarDays, Clock, MapPin, Stethoscope } from "lucide-react";
 import { Doctor, NextSlot } from "../../types";
 import { doctorAddress, formatLongDate } from "../../lib/booking";
 import { StepHeading, BackButton, InlineError } from "./StepParts";
 import { SlotSkeleton } from "./Skeletons";
+import { DayTimePicker, PickedSlot } from "./DayTimePicker";
 
 interface Props {
   doctor: Doctor;
@@ -16,13 +17,17 @@ interface Props {
   onContinue: () => void;
   onBack: () => void;
   backLabel: string;
+  // اختيار يوم ووقت (اختياري) — null = أقرب دور يعيّنه النظام (الوضع الافتراضي كما كان).
+  picked: PickedSlot | null;
+  onPick: (v: PickedSlot | null) => void;
 }
 
 // الخطوة 3: "الموعد". نظام MedBook يمنح المريض أول دور شاغر لدى الطبيب تلقائيًا (الأدوار بالترتيب،
 // وهو قلب إدارة الطابور في العيادة) — لذلك نعرض التاريخ والوقت اللذين سيُحجزان، وليس منتقي تاريخ/وقت يدويًا.
 export const SlotStep = forwardRef<HTMLHeadingElement, Props>(
-  ({ doctor, slot, loading, errorKind, errorMessage, onRetry, onContinue, onBack, backLabel }, ref) => {
+  ({ doctor, slot, loading, errorKind, errorMessage, onRetry, onContinue, onBack, backLabel, picked, onPick }, ref) => {
     const address = doctorAddress(doctor);
+    const [pickerOpen, setPickerOpen] = useState(Boolean(picked));
     return (
       <section aria-labelledby="step-slot-title">
         <BackButton onClick={onBack}>{backLabel}</BackButton>
@@ -43,7 +48,20 @@ export const SlotStep = forwardRef<HTMLHeadingElement, Props>(
           </div>
         </div>
 
-        {loading && !slot ? (
+        {picked ? (
+          <div className="rounded-2xl border border-primary-200 bg-primary-50/70 p-5 backdrop-blur-md text-center" aria-live="polite">
+            <p className="flex items-center justify-center gap-1.5 text-sm text-slate-600">
+              <CalendarDays className="h-4 w-4" aria-hidden="true" /> الموعد الذي اخترته
+            </p>
+            <p className="mt-1 text-lg font-extrabold text-primary-800">{formatLongDate(picked.date)}</p>
+            <p className="text-3xl font-extrabold text-primary-700" dir="ltr">
+              {picked.startTime}
+            </p>
+            <button type="button" onClick={() => onPick(null)} className="mt-2 text-xs font-semibold text-primary-700 hover:underline">
+              العودة إلى أقرب موعد تلقائي
+            </button>
+          </div>
+        ) : loading && !slot ? (
           <SlotSkeleton />
         ) : slot ? (
           <div className="rounded-2xl border border-primary-200 bg-primary-50/70 p-5 backdrop-blur-md text-center" aria-live="polite">
@@ -73,10 +91,22 @@ export const SlotStep = forwardRef<HTMLHeadingElement, Props>(
           <InlineError title="تعذّر تحميل الموعد." message={errorMessage} onRetry={onRetry} />
         )}
 
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={() => setPickerOpen((o) => !o)}
+            aria-expanded={pickerOpen}
+            className="min-h-[44px] text-sm font-semibold text-primary-700 hover:underline"
+          >
+            {pickerOpen ? "إخفاء اختيار اليوم والوقت" : "اختيار يوم ووقت آخر (اختياري)"}
+          </button>
+          {pickerOpen && <DayTimePicker doctorId={doctor.id} value={picked} onChange={onPick} />}
+        </div>
+
         <button
           type="button"
           onClick={onContinue}
-          disabled={!slot}
+          disabled={!slot && !picked}
           className="btn-primary mt-5 min-h-[48px] w-full text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
         >
           متابعة إلى بيانات المريض

@@ -1,4 +1,5 @@
-import { Prisma } from "@prisma/client";
+import { AppointmentStatus, Prisma } from "@prisma/client";
+import { dayAvailability, DayAppointment } from "./liveAvailability";
 import { prisma } from "./prisma";
 import { generateAvailableSlots, isPast, ScheduleBlock } from "./slots";
 import { SLOT_OCCUPYING_WHERE } from "./slotOccupancy";
@@ -25,6 +26,8 @@ import { lockDoctorQueue, withDoctorQueueTurn } from "./doctorLock";
  * القواعد المستعملة هي نفسها في كل MadBook: مدة الموعد = مدة جلسة الطبيب (slotDurationMin، وإلا 20)،
  * الفترات من generateAvailableSlots (أوقات العمل، والاستراحات = الفجوات بين فترات العمل، واستثناءات الأيام)،
  * والوقت المشغول = كل موعد غير CANCELLED (SLOT_OCCUPYING_WHERE؛ COMPLETED/NO_SHOW تشغل وقتها، والملغى يحرّره).
+ * اليوم الحالي: إن كان طابور الطبيب فارغًا فعلًا (لا IN_PROGRESS ولا LATE ولا مريض حلّ دوره) تُضاف «أوقات حية»
+ * في الفراغات التي تركتها مواعيد انتهت مبكرًا — نفس dayAvailability المعروضة للمريض (lib/liveAvailability).
  * لا ننتقل أبدًا إلى يوم آخر، ولا نتجاوز نهاية دوام الطبيب، ولا نعطي وقتًا مضى.
  */
 
@@ -83,14 +86,19 @@ const toMinutes = (hhmm: string) => {
 export function firstFreeSlotAtOrAfter(
   date: Date,
   schedules: ScheduleBlock[],
-  booked: { startTime: string; endTime: string }[],
+  booked: { startTime: string; endTime: string; status?: AppointmentStatus }[],
   slotMinutes: number,
   requestedStart: string,
   exclude: ReadonlySet<string> = new Set(),
-  isPastFn: (date: Date, hhmm: string) => boolean = isPast
+  isPastFn: (date: Date, hhmm: string) => boolean = isPast,
+  nowMs?: number
 ): string | null {
   const from = toMinutes(requestedStart);
-  const slots = generateAvailableSlots(date, schedules, booked, slotMinutes);
+  // بلا حالة (استدعاء قديم/اختبار): شبكة الأوقات كما كانت. مع الحالة: نفس التوفر المعروض للمريض
+  // (الشبكة + الأوقات الحية حين يكون الطابور فارغًا فعلًا اليوم) — انظر lib/liveAvailability.
+  const slots = booked.every((b) => b.status)
+    ? dayAvailability({ date, schedules, appointments: booked as DayAppointment[], slotMinutes, nowMs, isPastFn }).slots
+    : generateAvailableSlots(date, schedules, booked, slotMinutes);
   return slots.find((s) => toMinutes(s) >= from && !exclude.has(s) && !isPastFn(date, s)) ?? null;
 }
 
@@ -128,7 +136,7 @@ export async function reserveRequestedOrNextSlot<T>(opts: {
             await lockDoctorQueue(tx, doctor.id);
             const booked = await tx.appointment.findMany({
               where: { doctorId: doctor.id, date: { gte: startOfDay, lte: endOfDay }, ...SLOT_OCCUPYING_WHERE },
-              select: { startTime: true, endTime: true },
+              select: { startTime: true, endTime: true, status: true },
             });
             const chosen = firstFreeSlotAtOrAfter(date, doctor.schedules, booked, slotMinutes, requestedStart, failed);
             if (!chosen) throw new NoSlotAvailableError();

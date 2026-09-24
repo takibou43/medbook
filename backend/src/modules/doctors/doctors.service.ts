@@ -2,7 +2,7 @@ import { Prisma, VerificationStatus, SubscriptionStatus, AppointmentStatus } fro
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { maskLastName } from "../reviews/reviews.service";
-import { generateAvailableSlots, isPast } from "../../lib/slots";
+import { dayAvailability } from "../../lib/liveAvailability";
 import { slotMinutesFor } from "../../lib/slotAssign";
 import { SLOT_OCCUPYING_WHERE } from "../../lib/slotOccupancy";
 import { haversineKm, roundDistanceKm } from "../../lib/geo";
@@ -145,14 +145,12 @@ export async function getDoctorAvailability(doctorId: string, dateStr: string) {
       date: { gte: startOfDay, lte: endOfDay },
       ...SLOT_OCCUPYING_WHERE,
     },
-    select: { startTime: true, endTime: true },
+    select: { startTime: true, endTime: true, status: true },
   });
 
-  // نفس مدة الموعد المستعملة عند الحجز (مدة جلسة الطبيب): كل وقت معروض هنا قابل للحجز كما هو.
-  const slots = generateAvailableSlots(date, doctor.schedules, booked, slotMinutesFor(doctor));
+  // نفس الدالة التي يستعملها الحجز بوقت تحت القفل (lib/liveAvailability): أوقات الشبكة الشاغرة بمدة جلسة
+  // الطبيب وبلا الماضي كما كانت، + «أوقات حية» اليوم إن كان الطابور فارغًا فعلًا والطبيب ما زال في دوامه.
+  const { slots, live } = dayAvailability({ date, schedules: doctor.schedules, appointments: booked, slotMinutes: slotMinutesFor(doctor) });
 
-  // لا تعرض فترات في الماضي (بتوقيت الجزائر) — نستعمل isPast الموحّدة بدل حساب محلي منفصل.
-  const filtered = slots.filter((s) => !isPast(date, s));
-
-  return { date: dateStr, slots: filtered };
+  return { date: dateStr, slots, live };
 }

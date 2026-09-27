@@ -302,13 +302,14 @@ export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus,
     // COMPLETED عند الإغلاق — وهو الصحيح لمريض دخل فعلًا على الطبيب.
     NO_SHOW: ["IN_PROGRESS"],
   },
-  // صلاحية كاملة مطابقة للطبيب على عمليات الطابور اليومي (حسب ما اتُّفق عليه) — المساعد
-  // لا يملك أي صلاحية خارج هذا النطاق أصلًا (لا وصول لأي مسار آخر خارج المواعيد/الطابور).
+  // صلاحيات الطابور اليومي مثل الطبيب، باستثناء واحد: «إنهاء الموعد» (COMPLETED) للطبيب وحده —
+  // الطبيب هو من يتحكم في إنهاء الموعد. المساعد لا يملك أي صلاحية خارج المواعيد/الطابور أصلًا.
+  // (الإغلاق التلقائي آخر الدوام IN_PROGRESS → COMPLETED يتم من الخادم ولا يمر بهذه القواعد.)
   ASSISTANT: {
     PENDING: ["CONFIRMED", "CANCELLED"],
-    CONFIRMED: ["IN_PROGRESS", "LATE", "COMPLETED", "CANCELLED", "NO_SHOW"],
-    IN_PROGRESS: ["COMPLETED", "LATE", "CANCELLED", "NO_SHOW"],
-    LATE: ["IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"],
+    CONFIRMED: ["IN_PROGRESS", "LATE", "CANCELLED", "NO_SHOW"],
+    IN_PROGRESS: ["LATE", "CANCELLED", "NO_SHOW"],
+    LATE: ["IN_PROGRESS", "CANCELLED", "NO_SHOW"],
     NO_SHOW: ["IN_PROGRESS"],
   },
   ADMIN: {

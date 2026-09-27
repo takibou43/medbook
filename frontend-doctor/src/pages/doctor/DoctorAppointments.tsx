@@ -12,6 +12,7 @@ import { apiErrorMessage } from "../../lib/api";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { AppointmentStatus } from "../../types";
 import DoctorQueue from "./DoctorQueue";
+import { useAuth } from "../../context/AuthContext";
 
 const FILTERS: { label: string; value?: AppointmentStatus }[] = [
   { label: "الكل", value: undefined },
@@ -149,7 +150,8 @@ function NoShowWarningBadge({ count }: { count: number }) {
 
 interface CardProps {
   appointment: any;
-  onComplete: () => void;
+  /** غير مُمرَّر = لا يظهر زر «حضر» (المساعد: إنهاء الموعد للطبيب وحده). */
+  onComplete?: () => void;
   onNoShow: () => void;
   /** وصل المريض بعد تسجيل غيابه: يُدخله الآن (IN_PROGRESS) دون أي رسالة. */
   onArrivedLate: () => void;
@@ -220,9 +222,11 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
                 <MessageCircle className="h-4 w-4" /> تذكير
               </a>
             )}
-            <Button onClick={onComplete} disabled={busy}>
-              حضر
-            </Button>
+            {onComplete && (
+              <Button onClick={onComplete} disabled={busy}>
+                حضر
+              </Button>
+            )}
             <Button variant="outline" onClick={onNoShow} disabled={busy}>
               لم يحضر
             </Button>
@@ -244,6 +248,8 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
 }
 
 function AppointmentsListSection() {
+  const { user } = useAuth();
+  const isAssistant = user?.role === "ASSISTANT";
   const [searchParams] = useSearchParams();
   const initial = readInitialFilters(searchParams);
   const [filter, setFilter] = useState<AppointmentStatus | undefined>(initial.status);
@@ -424,7 +430,7 @@ function AppointmentsListSection() {
             <AppointmentCard
               key={a.id}
               appointment={a}
-              onComplete={() => changeStatus(a.id, "COMPLETED")}
+              onComplete={isAssistant ? undefined : () => changeStatus(a.id, "COMPLETED")}
               onNoShow={() => openNoShow(a)}
               onArrivedLate={() => markArrivedLate(a.id)}
               busy={updateStatus.isPending}

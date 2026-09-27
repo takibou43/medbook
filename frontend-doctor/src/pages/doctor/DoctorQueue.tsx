@@ -278,15 +278,19 @@ export default function DoctorQueue() {
           </p>
 
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <Button
-              loading={finish.isPending}
-              disabled={busy}
-              onClick={() => run(finish.mutateAsync(current.id), "تم إنهاء الموعد.", "تعذّر إنهاء الموعد.")}
-            >
-              <CheckCircle2 className="ml-1.5 h-4 w-4" /> أنهى الموعد
-            </Button>
+            {/* إنهاء الموعد للطبيب وحده — لا يظهر في صفحة المساعد (والخادم يرفضه له أيضًا). */}
+            {!isAssistant && (
+              <Button
+                loading={finish.isPending}
+                disabled={busy}
+                onClick={() => run(finish.mutateAsync(current.id), "تم إنهاء الموعد.", "تعذّر إنهاء الموعد.")}
+              >
+                <CheckCircle2 className="ml-1.5 h-4 w-4" /> أنهى الموعد
+              </Button>
+            )}
             <Button
               variant="outline"
+              className={isAssistant ? "col-span-2" : undefined}
               loading={markLate.isPending || callNext.isPending}
               disabled={busy}
               title="غير موجود — يُسجَّل متأخرًا ويُنادى المريض التالي مباشرة"

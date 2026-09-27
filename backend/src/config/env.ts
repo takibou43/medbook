@@ -1,10 +1,13 @@
 import "dotenv/config";
 
-function required(name: string, fallback?: string): string {
-  const v = process.env[name] ?? fallback;
-  if (v === undefined) {
-    // Fail fast and loudly rather than booting with a broken config.
-    throw new Error(`متغير البيئة المطلوب مفقود: ${name}. راجع ملف .env.example`);
+/**
+ * متغير إلزامي بلا أي قيمة احتياطية: غيابه أو كونه فارغًا/مسافات فقط يُفشل الإقلاع فورًا.
+ * رسالة الخطأ تذكر اسم المتغير فقط ولا تطبع أي قيمة (لا أسرار في السجلات).
+ */
+export function required(name: string): string {
+  const v = process.env[name];
+  if (v === undefined || v.trim() === "") {
+    throw new Error(`متغير البيئة المطلوب مفقود أو فارغ: ${name}. راجع ملف .env.example`);
   }
   return v;
 }

@@ -69,12 +69,13 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const updateAccount = asyncHandler(async (req: Request, res: Response) => {
-  const user = await authService.updateAccount(req.user!.id, req.body);
-  // عند تغيير كلمة المرور نُبطل جلسات التحديث، لذا نمسح الكوكي هنا ليعيد المستخدم الدخول ببياناته الجديدة.
-  if (req.body.newPassword) res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+  const { user, sessionsRevoked } = await authService.updateAccount(req.user!.id, req.body);
+  // تغيير كلمة المرور أو البريد يُبطل جلسات التحديث، لذا نمسح الكوكي ليعيد المستخدم الدخول ببياناته الجديدة.
+  const relogin = sessionsRevoked;
+  if (relogin) res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
   res.json({
     success: true,
-    message: req.body.newPassword ? "تم تحديث بيانات الحساب. الرجاء تسجيل الدخول من جديد." : "تم تحديث بيانات الحساب.",
+    message: relogin ? "تم تحديث بيانات الحساب. الرجاء تسجيل الدخول من جديد." : "تم تحديث بيانات الحساب.",
     data: sanitizeUser(user),
   });
 });

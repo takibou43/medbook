@@ -124,10 +124,21 @@ export async function updateAccount(
 
   const data: { email?: string; passwordHash?: string } = {};
 
-  if (input.email && input.email !== user.email) {
-    const taken = await prisma.user.findUnique({ where: { email: input.email } });
+  const newEmail = input.email?.trim();
+  if (newEmail && newEmail.toLowerCase() !== user.email.toLowerCase()) {
+    // حل مؤقت آمن إلى حين توفّر تحقق بالبريد (رابط تأكيد) ضمن الخدمات المجانية:
+    // - كلمة المرور الحالية مطلوبة دائمًا (فُحصت أعلاه) + حدّ محاولات صارم على المسار.
+    // - حسابات الإدارة لا يُغيَّر بريدها من هنا إطلاقًا (أعلى صلاحية = أعلى خطر استيلاء).
+    // - تغيير البريد يُبطل كل جلسات التحديث، فتخرج أي جلسة أخرى مفتوحة على الحساب.
+    if (user.role === Role.ADMIN) {
+      throw ApiError.forbidden("لا يمكن تغيير البريد الإلكتروني لحساب الإدارة من هنا.");
+    }
+    const taken = await prisma.user.findFirst({
+      where: { email: { equals: newEmail, mode: "insensitive" }, NOT: { id: user.id } },
+      select: { id: true },
+    });
     if (taken) throw ApiError.conflict("البريد الإلكتروني مستخدم مسبقًا.");
-    data.email = input.email;
+    data.email = newEmail;
   }
 
   if (input.newPassword) {
@@ -140,11 +151,12 @@ export async function updateAccount(
 
   const updated = await prisma.user.update({ where: { id: userId }, data });
 
-  if (data.passwordHash) {
+  const sessionsRevoked = !!(data.passwordHash || data.email);
+  if (sessionsRevoked) {
     await prisma.refreshToken.updateMany({ where: { userId, revoked: false }, data: { revoked: true } });
   }
 
-  return updated;
+  return { user: updated, sessionsRevoked };
 }
 
 export async function refresh(refreshToken: string) {

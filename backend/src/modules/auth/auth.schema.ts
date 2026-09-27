@@ -45,11 +45,13 @@ export const loginSchema = z.object({
 // تغيير بيانات الحساب: كلمة المرور الحالية مطلوبة دائمًا.
 // ملاحظة: لا نستعمل .refine() هنا لأن middleware الـ validate يقبل ZodObject فقط
 // (‏.refine تُرجع ZodEffects)؛ شرط "تغيير واحد على الأقل" مطبَّق في الخدمة (updateAccount).
-export const updateAccountSchema = z.object({
-  currentPassword: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
-  email: z.string().email("بريد إلكتروني غير صالح").optional(),
-  newPassword: z.string().min(8, "كلمة المرور الجديدة يجب أن تكون 8 خانات على الأقل").optional(),
-});
+export const updateAccountSchema = z
+  .object({
+    currentPassword: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
+    email: z.string().trim().email("بريد إلكتروني غير صالح").max(254).optional(),
+    newPassword: z.string().min(8, "كلمة المرور الجديدة يجب أن تكون 8 خانات على الأقل").optional(),
+  })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
 
 export type RegisterPatientInput = z.infer<typeof registerPatientSchema>;
 export type RegisterDoctorInput = z.infer<typeof registerDoctorSchema>;

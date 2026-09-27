@@ -45,13 +45,11 @@ export default function AccountSettings() {
     setSaving(true);
     try {
       await api.patch("/auth/account", payload);
-      if (payload.newPassword) {
-        // تغيير كلمة المرور يُبطل الجلسات الحالية — نُخرج المستخدم ليدخل ببياناته الجديدة.
+      if (payload.newPassword || payload.email) {
+        // تغيير كلمة المرور أو البريد يُبطل الجلسات الحالية — نُخرج المستخدم ليدخل ببياناته الجديدة.
         showToast("تم تحديث بيانات الحساب. الرجاء تسجيل الدخول من جديد.", "success");
         await logout();
         navigate("/login");
-      } else {
-        showToast("تم تحديث البريد الإلكتروني.", "success");
       }
     } catch (err) {
       showToast(apiErrorMessage(err, "تعذّر تحديث بيانات الحساب."), "error");

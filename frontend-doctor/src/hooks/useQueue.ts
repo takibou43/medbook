@@ -19,11 +19,14 @@ export interface QueueState {
   estimatedDurationMinutes: number;
 }
 
-export function useQueue() {
+// المساعد يحتاج أن يرى المريض الذي نادى عليه الطبيب في ثوانٍ، فنُسرّع التحديث عنده فقط.
+export const ASSISTANT_QUEUE_POLL_MS = 4000;
+
+export function useQueue(pollMs: number = QUEUE_POLL_MS) {
   return useQuery({
     queryKey: ["queue"],
     queryFn: async () => (await api.get<{ data: QueueState }>("/appointments/queue")).data.data,
-    refetchInterval: QUEUE_POLL_MS,
+    refetchInterval: pollMs,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });

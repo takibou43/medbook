@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
-import { Bell, BellOff, CheckCircle2, Clock3, PhoneCall, UserCheck, UserX, Users } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bell, BellOff, CheckCircle2, Clock3, Megaphone, PhoneCall, UserCheck, UserX, Users, X } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Spinner, EmptyState } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
 import { disablePush, enablePush, isPushSubscribed, pushSupported } from "../../lib/push";
-import { useCallNext, useCallPatient, useFinishAppointment, useMarkArrived, useMarkLate, useQueue } from "../../hooks/useQueue";
+import { ASSISTANT_QUEUE_POLL_MS, QUEUE_POLL_MS, useCallNext, useCallPatient, useFinishAppointment, useMarkArrived, useMarkLate, useQueue } from "../../hooks/useQueue";
+import { useAuth } from "../../context/AuthContext";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { Appointment } from "../../types";
 
@@ -38,9 +39,53 @@ function lateToast(res: unknown): string {
   return `لم يُسجَّل غيابًا — بقي في الطابور ويعود دوره بعد ${patientsCount(penalty)}${seq && seq > 1 ? ` (التأخير رقم ${seq})` : ""}.`;
 }
 
+// تنبيه صوتي قصير (نغمتان) بلا ملفات صوت — قد يمنعه المتصفح قبل أول لمسة للصفحة، فنتجاهل الفشل بصمت.
+function playCallChime() {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    [880, 1175].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = freq;
+      const t = ctx.currentTime + i * 0.25;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.24);
+    });
+    setTimeout(() => ctx.close().catch(() => undefined), 1000);
+  } catch {
+    /* لا صوت — لا مشكلة */
+  }
+  try {
+    navigator.vibrate?.([150, 80, 150]);
+  } catch {
+    /* بعض المتصفحات لا تدعم الاهتزاز */
+  }
+}
+
+// مدة بقاء شريط «الطبيب نادى على...» عند المساعد قبل اختفائه تلقائيًا.
+const CALL_BANNER_MS = 20000;
+// أي تغيّر للمريض الحالي خلال هذه المدة بعد ضغطة من هذا الجهاز نفسه لا يُعدّ «نداءً من الطبيب».
+const SELF_ACTION_GRACE_MS = 8000;
+
 export default function DoctorQueue() {
   const { showToast } = useToast();
-  const { data, isLoading, isFetching } = useQueue();
+  const { user } = useAuth();
+  const isAssistant = user?.role === "ASSISTANT";
+  const { data, isLoading, isFetching } = useQueue(isAssistant ? ASSISTANT_QUEUE_POLL_MS : QUEUE_POLL_MS);
+
+  // شريط «الطبيب نادى على: فلان» الذي يظهر عند المساعد تلقائيًا.
+  const [callBanner, setCallBanner] = useState<{ id: string; name: string; time: string } | null>(null);
+  const prevCurrentId = useRef<string | null | undefined>(undefined);
+  const lastSelfActionAt = useRef(0);
+  const markSelfAction = () => {
+    lastSelfActionAt.current = Date.now();
+  };
 
   const callNext = useCallNext();
   const callPatient = useCallPatient();
@@ -79,6 +124,7 @@ export default function DoctorQueue() {
    * الطبيب عبر autoExpireStaleAppointments في الخادم — وهي القاعدة الموجودة أصلًا.
    */
   async function deferAndNotify(id: string) {
+    markSelfAction();
     try {
       const res = await markLate.mutateAsync(id);
       showToast(lateToast(res), "success");
@@ -88,6 +134,32 @@ export default function DoctorQueue() {
       throw err;
     }
   }
+
+  // المريض الحالي تغيّر دون أن يضغط هذا الجهاز شيئًا ⇒ الطبيب نادى عليه: نعرض اسمه للمساعد فورًا.
+  const currentId = data ? data.current?.id ?? null : undefined;
+  useEffect(() => {
+    if (currentId === undefined) return; // لم تصل البيانات بعد
+    const prev = prevCurrentId.current;
+    prevCurrentId.current = currentId;
+    if (prev === undefined) return; // أول تحميل للصفحة: لا تنبيه
+    if (!currentId) {
+      setCallBanner(null);
+      return;
+    }
+    if (currentId === prev) return;
+    if (!isAssistant || Date.now() - lastSelfActionAt.current < SELF_ACTION_GRACE_MS) return;
+    const c = data?.current;
+    if (!c) return;
+    setCallBanner({ id: c.id, name: patientName(c), time: c.startTime });
+    playCallChime();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId, isAssistant]);
+
+  useEffect(() => {
+    if (!callBanner) return;
+    const t = setTimeout(() => setCallBanner(null), CALL_BANNER_MS);
+    return () => clearTimeout(t);
+  }, [callBanner]);
 
   useEffect(() => {
     isPushSubscribed().then(setPushOn).catch(() => setPushOn(false));
@@ -117,6 +189,7 @@ export default function DoctorQueue() {
   }
 
   async function run(action: Promise<unknown>, successMessage: string, fallbackError: string) {
+    markSelfAction();
     try {
       await action;
       showToast(successMessage, "success");
@@ -171,6 +244,29 @@ export default function DoctorQueue() {
         )}
       </div>
 
+      {/* عند المساعد: الطبيب نادى على مريض — اسمه يظهر تلقائيًا */}
+      {isAssistant && callBanner && current?.id === callBanner.id && (
+        <div
+          role="alert"
+          className="flex items-center gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 shadow-sm animate-pulse"
+        >
+          <Megaphone className="h-7 w-7 shrink-0 text-amber-600" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-bold text-amber-700">الطبيب نادى الآن على</p>
+            <p className="truncate text-xl font-extrabold text-slate-900">{callBanner.name}</p>
+            <p className="text-xs text-slate-600">موعده {callBanner.time} · إن لم يكن موجودًا اضغط «متأخر» للانتقال إلى التالي</p>
+          </div>
+          <button
+            type="button"
+            aria-label="إخفاء"
+            onClick={() => setCallBanner(null)}
+            className="rounded-lg p-1 text-slate-500 hover:bg-amber-100"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* المريض الجالس الآن أمام الطبيب */}
       {current ? (
         <Card className="border-primary-200 bg-primary-50">
@@ -191,14 +287,38 @@ export default function DoctorQueue() {
             </Button>
             <Button
               variant="outline"
-              loading={markLate.isPending}
+              loading={markLate.isPending || callNext.isPending}
               disabled={busy}
+              title="غير موجود — يُسجَّل متأخرًا ويُنادى المريض التالي مباشرة"
               onClick={async () => {
+                markSelfAction();
+                // هل بقي في الطابور غير هذا المريض؟ إن لم يبق أحد لا نناديه هو نفسه من جديد.
+                const others = (ordered ?? [...waiting, ...late]).filter((a) => a.id !== current.id);
+                let res: unknown;
                 try {
-                  const res = await markLate.mutateAsync(current.id);
-                  showToast(lateToast(res), "success");
+                  res = await markLate.mutateAsync(current.id);
                 } catch (err) {
                   showToast(apiErrorMessage(err, "تعذّر تسجيله كمتأخر."), "error");
+                  return;
+                }
+                // المريض التالي يجب أن يكون شخصًا آخر: منتظر عادي، أو متأخر آخر رصيده أقل من رصيد هذا المريض الآن.
+                const penalty = (res as { lateEvent?: { penalty?: number } | null } | undefined)?.lateEvent?.penalty ?? 2;
+                const hasSomeoneElse = others.some((a) => a.status !== "LATE" || (a.skipCredits ?? 0) < penalty);
+                if (!hasSomeoneElse) {
+                  showToast(lateToast(res), "success");
+                  return;
+                }
+                // الانتقال مباشرة إلى المريض الذي بعده (نفس قاعدة «نادِ المريض التالي» في الخادم).
+                try {
+                  markSelfAction();
+                  const next = (await callNext.mutateAsync()) as Appointment | undefined;
+                  setCallBanner(null);
+                  showToast(
+                    "سُجّل متأخرًا — " + (next ? "تمت مناداة التالي: " + patientName(next) : "تمت مناداة المريض التالي."),
+                    "success"
+                  );
+                } catch (err) {
+                  showToast(lateToast(res) + " " + apiErrorMessage(err, "تعذّرت مناداة التالي تلقائيًا — اضغط «نادِ المريض التالي»."), "error");
                 }
               }}
             >

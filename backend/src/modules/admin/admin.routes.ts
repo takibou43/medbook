@@ -39,6 +39,26 @@ const updateWilayaSchema = z
 const verifyDoctorSchema = z.object({ status: z.nativeEnum(VerificationStatus) }).strict("يحتوي الطلب على حقول غير مسموح بها.");
 const emptyBody = z.object({}).strict("يحتوي الطلب على حقول غير مسموح بها.");
 
+// ---- مخططات معاملات القوائم (GET) — صارمة: قيم محدودة وأي معامل غير متوقَّع يُرفض بـ400 ----
+const pageParam = z.coerce.number().int("رقم الصفحة يجب أن يكون عددًا صحيحًا").min(1).max(1000);
+const pageSizeParam = z.coerce.number().int().min(1).max(50);
+const searchParam = z
+  .string()
+  .trim()
+  .max(100, "نص البحث طويل جدًا")
+  .transform((v) => (v === "" ? undefined : v));
+const listUsersQuery = z
+  .object({ role: z.nativeEnum(Role).optional(), q: searchParam.optional(), page: pageParam.optional(), pageSize: pageSizeParam.optional() })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+const listDoctorsQuery = z
+  .object({
+    verificationStatus: z.nativeEnum(VerificationStatus).optional(),
+    q: searchParam.optional(),
+    page: pageParam.optional(),
+    pageSize: pageSizeParam.optional(),
+  })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+
 function assertNotEmpty(body: Record<string, unknown>) {
   if (Object.keys(body).length === 0) throw ApiError.badRequest("لا يوجد أي حقل لتعديله.");
 }
@@ -96,17 +116,9 @@ router.post(
 // ---- Users ----
 router.get(
   "/users",
+  validate({ query: listUsersQuery }),
   asyncHandler(async (req, res) => {
-    const { role, q, page, pageSize } = req.query;
-    res.json({
-      success: true,
-      data: await service.listUsers({
-        role: role as Role,
-        q: q as string,
-        page: page ? Number(page) : undefined,
-        pageSize: pageSize ? Number(pageSize) : undefined,
-      }),
-    });
+    res.json({ success: true, data: await service.listUsers(req.query as z.infer<typeof listUsersQuery>) });
   })
 );
 
@@ -189,17 +201,9 @@ router.post(
 // ---- Doctors ----
 router.get(
   "/doctors",
+  validate({ query: listDoctorsQuery }),
   asyncHandler(async (req, res) => {
-    const { verificationStatus, q, page, pageSize } = req.query;
-    res.json({
-      success: true,
-      data: await service.listDoctorsAdmin({
-        verificationStatus: verificationStatus as VerificationStatus,
-        q: q as string,
-        page: page ? Number(page) : undefined,
-        pageSize: pageSize ? Number(pageSize) : undefined,
-      }),
-    });
+    res.json({ success: true, data: await service.listDoctorsAdmin(req.query as z.infer<typeof listDoctorsQuery>) });
   })
 );
 

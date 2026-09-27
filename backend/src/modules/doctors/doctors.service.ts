@@ -136,8 +136,10 @@ export async function searchDoctors(filters: DoctorSearchFilters) {
 }
 
 export async function getDoctorById(id: string) {
-  const doctor = await prisma.doctor.findUnique({
-    where: { id },
+  // صفحة عامة: الطبيب غير الموثَّق (PENDING/REJECTED) لا يظهر بالمعرّف أيضًا — نفس 404 لغير الموجود،
+  // حتى لا يكشف المسار وجود حسابات قيد المراجعة. الحقول نفسها المسموحة في القائمة العامة فقط.
+  const doctor = await prisma.doctor.findFirst({
+    where: { id, verificationStatus: VerificationStatus.VERIFIED },
     select: {
       ...PUBLIC_DOCTOR_SELECT,
       schedules: {

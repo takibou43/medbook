@@ -49,19 +49,27 @@ export const nextSlotQuerySchema = z.object({
   doctorId: z.string().uuid("طبيب غير صالح"),
 });
 
-export const lookupQuerySchema = z.object({
-  phone: z
-    .string()
-    .trim()
-    .regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)"),
-});
+// تتبّع حجز ضيف قديم: رقم الهاتف وحده لم يعد كافيًا (كان يسمح بتجربة أرقام عشوائية لاستخراج مواعيد
+// مرضى آخرين). المطلوب الآن معرّف الموعد (UUID غير قابل للتخمين) + رقم الهاتف المطابق معًا.
+// .strict() يرفض أي معامل إضافي.
+export const lookupQuerySchema = z
+  .object({
+    appointmentId: z.string().uuid("معرّف حجز غير صالح"),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)"),
+  })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
 
-export const cancelBookingSchema = z.object({
-  phone: z
-    .string()
-    .trim()
-    .regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)"),
-});
+export const cancelBookingSchema = z
+  .object({
+    phone: z
+      .string()
+      .trim()
+      .regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)"),
+  })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
 
 export const bookingIdParamsSchema = z.object({
   id: z.string().uuid("معرّف حجز غير صالح"),

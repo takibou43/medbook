@@ -557,23 +557,63 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
   throw ApiError.conflict("هذا الوقت لم يعد متاحًا لدى أي طبيب مطابق. الرجاء اختيار وقت آخر.");
 }
 
+/** يُخفي رقم الهاتف في أي رد عام: 0551234567 → 05******67. */
+export function maskPhone(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  if (phone.length <= 4) return "*".repeat(phone.length);
+  return phone.slice(0, 2) + "*".repeat(phone.length - 4) + phone.slice(-2);
+}
+
 /**
- * تتبّع حجوزات الضيف: يرجع المواعيد القادمة (غير الملغاة/المكتملة) المرتبطة برقم هاتف معيّن،
- * لأن الحجز كضيف لا يملك حسابًا يمكن الدخول إليه لاحقًا لمراجعة الموعد.
+ * الحقول الوحيدة المسموح بإرجاعها في مسارات الضيف العامة (lookup/cancel): تكفي لعرض الموعد وإلغائه،
+ * بلا اسم المريض ولا ملاحظاته ولا معرّفات داخلية للطبيب/الحساب ولا الهاتف كاملًا.
  */
-export async function lookupAppointmentsByPhone(phone: string) {
+const GUEST_PUBLIC_SELECT = {
+  id: true,
+  date: true,
+  startTime: true,
+  endTime: true,
+  status: true,
+  guestPhone: true,
+  doctor: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      address: true,
+      specialty: { select: { nameAr: true } },
+      wilaya: { select: { nameAr: true } },
+      city: { select: { nameAr: true } },
+    },
+  },
+} satisfies Prisma.AppointmentSelect;
+
+type GuestPublicRow = Prisma.AppointmentGetPayload<{ select: typeof GUEST_PUBLIC_SELECT }>;
+
+function toGuestPublic({ guestPhone, ...rest }: GuestPublicRow) {
+  return { ...rest, phoneMasked: maskPhone(guestPhone) };
+}
+
+/**
+ * تتبّع حجز ضيف قديم (قبل إلزامية الحساب): يتطلب معرّف الموعد + رقم الهاتف المطابق معًا.
+ * أي عدم تطابق (معرّف خاطئ، هاتف خاطئ، موعد لحساب مسجّل، موعد منتهٍ) يعيد نفس النتيجة الفارغة
+ * حتى لا يصبح المسار أداة لمعرفة أي الأرقام/المعرّفات صحيحة. محدود المعدل (bookingLookupLimiter).
+ */
+export async function lookupGuestAppointment(appointmentId: string, phone: string) {
   const startOfToday = algeriaTodayUTCMidnight();
 
-  return prisma.appointment.findMany({
+  const appointment = await prisma.appointment.findFirst({
     where: {
+      id: appointmentId,
       guestPhone: phone,
       patientId: null,
       date: { gte: startOfToday },
       status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] },
     },
-    include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
-    orderBy: [{ date: "asc" }, { startTime: "asc" }],
+    select: GUEST_PUBLIC_SELECT,
   });
+
+  return appointment ? [toGuestPublic(appointment)] : [];
 }
 
 /**
@@ -585,11 +625,9 @@ export async function cancelGuestAppointment(id: string, phone: string) {
     include: { doctor: true },
   });
 
-  if (!appointment || appointment.patientId !== null) {
+  // نفس الرد لكل حالات عدم التطابق — لا نكشف إن كان المعرّف موجودًا أو إن كان الهاتف هو الخاطئ.
+  if (!appointment || appointment.patientId !== null || appointment.guestPhone !== phone) {
     throw ApiError.notFound("الموعد غير موجود.");
-  }
-  if (appointment.guestPhone !== phone) {
-    throw ApiError.forbidden("رقم الهاتف لا يطابق صاحب هذا الحجز.");
   }
   if (appointment.status === AppointmentStatus.CANCELLED) {
     throw ApiError.conflict("تم إلغاء هذا الموعد مسبقًا.");
@@ -601,7 +639,7 @@ export async function cancelGuestAppointment(id: string, phone: string) {
   const updated = await prisma.appointment.update({
     where: { id },
     data: { status: AppointmentStatus.CANCELLED, ...RELEASE_SLOT_DATA },
-    include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
+    select: GUEST_PUBLIC_SELECT,
   });
 
   await createNotification(
@@ -614,7 +652,7 @@ export async function cancelGuestAppointment(id: string, phone: string) {
     { id: appointment.id, date: appointment.date }
   );
 
-  return updated;
+  return toGuestPublic(updated);
 }
 
 /**

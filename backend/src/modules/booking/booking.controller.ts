@@ -41,7 +41,7 @@ export const createGuestBooking = asyncHandler(async (req: Request, res: Respons
 });
 
 export const lookupBookings = asyncHandler(async (req: Request, res: Response) => {
-  const appointments = await service.lookupAppointmentsByPhone(req.query.phone as string);
+  const appointments = await service.lookupGuestAppointment(req.query.appointmentId as string, req.query.phone as string);
   res.json({ success: true, data: appointments });
 });
 

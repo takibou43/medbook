@@ -89,11 +89,16 @@ const h = vi.hoisted(() => {
       findMany: vi.fn(async ({ select }: any) => s.doctors.map((d) => applySelect(d, select))),
       count: vi.fn(async () => s.doctors.length),
       findUnique: vi.fn(async ({ where, select }: any) => applySelect(s.doctors.find((d) => d.id === where.id) ?? null, select)),
+      findFirst: vi.fn(async ({ where, select }: any) =>
+        applySelect(s.doctors.find((d) => d.id === where.id && (!where.verificationStatus || d.verificationStatus === where.verificationStatus)) ?? null, select)
+      ),
       update: vi.fn(async ({ where, data }: any) => Object.assign(s.doctors.find((d) => d.id === where.id), data)),
     },
     specialty: { update: vi.fn(async ({ where, data }: any) => ({ id: where.id, ...data })) },
     wilaya: { update: vi.fn(async ({ where, data }: any) => ({ id: where.id, ...data })) },
     user: {
+      findMany: vi.fn(async () => s.users.map(({ passwordHash: _p, ...u }) => u)),
+      count: vi.fn(async () => s.users.length),
       findUnique: vi.fn(async ({ where }: any) => s.users.find((u) => u.id === where.id) ?? null),
       findFirst: vi.fn(async ({ where }: any) => {
         const eq = String(where.email.equals).toLowerCase();
@@ -401,5 +406,72 @@ describe("PATCH /api/auth/account — تغيير البريد", () => {
     expect(h.s.users[1].email).toBe("new@madbook.dz");
     expect(h.s.tokens.every((t) => t.revoked)).toBe(true);
     expect(JSON.stringify(r.body)).not.toContain("passwordHash");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("GET /api/doctors/:id — الموثَّق فقط", () => {
+  it.each(["PENDING", "REJECTED"])("طبيب %s ⇒ 404 مثل غير الموجود", async (status) => {
+    h.s.doctors[0].verificationStatus = status;
+    const r = await request(app).get(`/api/doctors/${h.DOCTOR().id}`);
+    expect(r.status).toBe(404);
+    expect(JSON.stringify(r.body)).not.toContain("أمين");
+  });
+
+  it("معرّف غير موجود ⇒ نفس 404", async () => {
+    const r = await request(app).get(`/api/doctors/99999999-9999-4999-8999-999999999999`);
+    expect(r.status).toBe(404);
+  });
+
+  it("الاستعلام نفسه يشترط VERIFIED (لا تصفية بعد الجلب)", async () => {
+    await request(app).get(`/api/doctors/${h.DOCTOR().id}`);
+    expect(h.db.doctor.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: h.DOCTOR().id, verificationStatus: "VERIFIED" } }));
+    const select = (h.db.doctor.findFirst.mock.calls[0] as any[])[0].select;
+    expect(select).not.toHaveProperty("userId");
+    expect(select).not.toHaveProperty("subscriptionStatus");
+  });
+});
+
+describe("GET /api/admin/users و /api/admin/doctors — معاملات صارمة", () => {
+  const get = (url: string, query: Record<string, unknown>) => request(app).get(url).set("Authorization", ADMIN).query(query);
+
+  it.each([
+    ["/api/admin/users", { role: "DOCTOR", q: "doc", page: 2, pageSize: 50 }],
+    ["/api/admin/users", {}],
+    ["/api/admin/users", { q: "" }],
+    ["/api/admin/doctors", { verificationStatus: "PENDING", q: "أمين", page: 1, pageSize: 10 }],
+    ["/api/admin/doctors", {}],
+  ])("%s بمعاملات صحيحة ⇒ 200", async (url, q) => {
+    const r = await get(url, q);
+    expect(r.status).toBe(200);
+  });
+
+  it("الحدود تُمرَّر كأرقام إلى الخدمة", async () => {
+    const r = await get("/api/admin/users", { page: 3, pageSize: 5 });
+    expect(r.status).toBe(200);
+    expect(r.body.data).toMatchObject({ page: 3, pageSize: 5 });
+  });
+
+  it.each([
+    ["/api/admin/users", { pageSize: 51 }],
+    ["/api/admin/users", { pageSize: 0 }],
+    ["/api/admin/users", { page: 0 }],
+    ["/api/admin/users", { page: 1001 }],
+    ["/api/admin/users", { page: "abc" }],
+    ["/api/admin/users", { page: 1.5 }],
+    ["/api/admin/users", { role: "SUPERADMIN" }],
+    ["/api/admin/users", { q: "x".repeat(101) }],
+    ["/api/admin/users", { sort: "passwordHash" }],
+    ["/api/admin/doctors", { verificationStatus: "APPROVED" }],
+    ["/api/admin/doctors", { pageSize: 1000 }],
+    ["/api/admin/doctors", { userId: "x" }],
+  ])("%s %j ⇒ 400", async (url, q) => {
+    const r = await get(url, q);
+    expect(r.status).toBe(400);
+  });
+
+  it("غير الإدارة ⇒ 403 حتى بمعاملات صحيحة", async () => {
+    const r = await request(app).get("/api/admin/users").set("Authorization", DOCTOR);
+    expect(r.status).toBe(403);
   });
 });

@@ -54,7 +54,6 @@ export interface Clinic {
 
 export interface Doctor {
   id: string;
-  userId: string;
   firstName: string;
   lastName: string;
   specialtyId: string;

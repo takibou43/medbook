@@ -24,6 +24,37 @@ export interface DoctorSearchFilters {
   maxDistanceKm?: number;
 }
 
+/**
+ * الحقول العامة الوحيدة المسموح بإرجاعها للمرضى في /api/doctors و/api/doctors/:id.
+ * اختيار صريح بدل إعادة كائن قاعدة البيانات كاملًا: لا userId ولا حقول الاشتراك ولا الطوابع الداخلية.
+ * أي حقل جديد في جدول الأطباء لا يظهر للعامة إلا إذا أُضيف هنا عمدًا.
+ */
+export const PUBLIC_DOCTOR_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  specialtyId: true,
+  specialty: { select: { id: true, nameAr: true, nameFr: true, icon: true, description: true } },
+  clinic: { select: { id: true, nameAr: true, address: true, phone: true } },
+  wilayaId: true,
+  wilaya: { select: { id: true, code: true, nameAr: true, nameFr: true } },
+  cityId: true,
+  city: { select: { id: true, nameAr: true, wilayaId: true } },
+  bio: true,
+  yearsExperience: true,
+  languages: true,
+  gender: true,
+  phone: true,
+  address: true,
+  consultationFee: true,
+  photoUrl: true,
+  latitude: true,
+  longitude: true,
+  verificationStatus: true,
+  avgRating: true,
+  reviewsCount: true,
+} satisfies Prisma.DoctorSelect;
+
 const HAS_GEO_CAP = 500; // حد أعلى أمان عند الفرز بالمسافة يدويًا بدل SQL — يكفي بمراحل للحجم الحالي.
 
 export async function searchDoctors(filters: DoctorSearchFilters) {
@@ -60,7 +91,7 @@ export async function searchDoctors(filters: DoctorSearchFilters) {
     const [items, total] = await Promise.all([
       prisma.doctor.findMany({
         where,
-        include: { specialty: true, wilaya: true, city: true, clinic: true },
+        select: PUBLIC_DOCTOR_SELECT,
         orderBy: [{ avgRating: "desc" }, { reviewsCount: "desc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -75,7 +106,7 @@ export async function searchDoctors(filters: DoctorSearchFilters) {
   // لأن الفرز بالمسافة (Haversine) لا يمكن تفويضه لـ SQL هنا دون امتداد جغرافي إضافي.
   const all = await prisma.doctor.findMany({
     where,
-    include: { specialty: true, wilaya: true, city: true, clinic: true },
+    select: PUBLIC_DOCTOR_SELECT,
     take: HAS_GEO_CAP,
   });
 
@@ -107,12 +138,11 @@ export async function searchDoctors(filters: DoctorSearchFilters) {
 export async function getDoctorById(id: string) {
   const doctor = await prisma.doctor.findUnique({
     where: { id },
-    include: {
-      specialty: true,
-      wilaya: true,
-      city: true,
-      clinic: true,
-      schedules: true,
+    select: {
+      ...PUBLIC_DOCTOR_SELECT,
+      schedules: {
+        select: { id: true, dayOfWeek: true, startTime: true, endTime: true, isException: true, exceptionDate: true, isOff: true },
+      },
       // صفحة عامة: لا معرّفات داخلية للمريض أو الموعد، واللقب مختصر لحرفه الأول (خصوصية المريض).
       reviews: {
         select: { id: true, doctorId: true, rating: true, comment: true, createdAt: true, patient: { select: { firstName: true, lastName: true } } },

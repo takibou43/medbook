@@ -1,4 +1,4 @@
-import { Prisma, Role, VerificationStatus } from "@prisma/client";
+import { Prisma, Role, VerificationStatus, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { hashPassword } from "../../utils/password";
@@ -62,7 +62,8 @@ export async function listUsers(params: { role?: Role; q?: string; page?: number
 }
 
 export async function setUserActive(userId: string, isActive: boolean) {
-    const user = await prisma.user.update({ where: { id: userId }, data: { isActive } });
+    // لا نُرجع تجزئة كلمة المرور أبدًا (حتى للإدارة).
+    const { passwordHash: _omit, ...user } = await prisma.user.update({ where: { id: userId }, data: { isActive } });
     return user;
 }
 
@@ -122,7 +123,8 @@ export async function createAdminUser(email: string, password: string, phone?: s
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) throw ApiError.conflict("البريد الإلكتروني مستخدم مسبقًا.");
     const passwordHash = await hashPassword(password);
-    return prisma.user.create({ data: { email, phone, passwordHash, role: Role.ADMIN } });
+    const { passwordHash: _omit, ...user } = await prisma.user.create({ data: { email, phone, passwordHash, role: Role.ADMIN } });
+    return user;
 }
 
 // ---------------- Doctors management ----------------
@@ -158,7 +160,7 @@ export async function listDoctorsAdmin(params: { verificationStatus?: Verificati
 }
 
 export async function setDoctorVerification(doctorId: string, status: VerificationStatus) {
-    const doctor = await prisma.doctor.update({ where: { id: doctorId }, data: { verificationStatus: status }, include: { user: true } });
+    const doctor = await prisma.doctor.update({ where: { id: doctorId }, data: { verificationStatus: status }, include: { user: { select: { email: true, phone: true, isActive: true } } } });
 
   await createNotification(
         doctor.userId,
@@ -172,7 +174,11 @@ export async function setDoctorVerification(doctorId: string, status: Verificati
   return doctor;
 }
 
-export async function updateDoctorAdmin(doctorId: string, data: Prisma.DoctorUpdateInput) {
+// الحقول المسموح بها فقط (مخطط Zod الصارم في admin.routes) — لا علاقات متداخلة ولا userId.
+export async function updateDoctorAdmin(
+    doctorId: string,
+    data: { subscriptionStatus?: SubscriptionStatus; subscriptionExpiresAt?: Date | null }
+) {
     return prisma.doctor.update({ where: { id: doctorId }, data });
 }
 

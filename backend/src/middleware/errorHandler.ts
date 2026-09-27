@@ -21,7 +21,8 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   // Known Prisma errors
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2002") {
-      return res.status(409).json({ success: false, message: "القيمة مستخدمة مسبقًا (تعارض في البيانات).", meta: err.meta });
+      // لا نُرجع err.meta: يكشف أسماء القيود/الأعمدة الداخلية لقاعدة البيانات.
+      return res.status(409).json({ success: false, message: "القيمة مستخدمة مسبقًا (تعارض في البيانات)." });
     }
     // نفاد اتصالات المجمّع/انتهاء مهلة المعاملة/تعذّر الوصول لقاعدة البيانات: حمل مؤقت لا خلل في الطلب.
     // نُرجع 503 + Retry-After بدل 500 حتى يعرف العميل أنه يستطيع إعادة المحاولة.

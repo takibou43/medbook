@@ -1,14 +1,47 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Role, VerificationStatus } from "@prisma/client";
+import { Role, VerificationStatus, SubscriptionStatus } from "@prisma/client";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { ApiError } from "../../utils/ApiError";
 import * as service from "./admin.service";
 import * as blocks from "../patientBlocks/patientBlocks.service";
 
 const router = Router();
 router.use(authenticate, authorize(Role.ADMIN));
+
+// ---- مخططات مسارات التعديل (PATCH) ----
+// كل مخطط .strict(): أي حقل غير متوقَّع يُرفض بـ400 بدل أن يُمرَّر إلى Prisma (mass assignment).
+// middleware الـvalidate يقبل ZodObject فقط (لا .refine)، لذا شرط «حقل واحد على الأقل» يُفحص بـassertNotEmpty.
+const idParams = z.object({ id: z.string().uuid("معرّف غير صالح") }).strict("يحتوي الطلب على حقول غير مسموح بها.");
+const updateDoctorAdminSchema = z
+  .object({
+    subscriptionStatus: z.nativeEnum(SubscriptionStatus).optional(),
+    subscriptionExpiresAt: z.coerce.date().nullable().optional(),
+  })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+const updateSpecialtySchema = z
+  .object({
+    nameAr: z.string().trim().min(2).max(100).optional(),
+    nameFr: z.string().trim().max(100).nullable().optional(),
+    icon: z.string().trim().max(100).nullable().optional(),
+    description: z.string().trim().max(1000).nullable().optional(),
+  })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+const updateWilayaSchema = z
+  .object({
+    code: z.string().trim().min(1).max(10).optional(),
+    nameAr: z.string().trim().min(2).max(100).optional(),
+    nameFr: z.string().trim().max(100).nullable().optional(),
+  })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+const verifyDoctorSchema = z.object({ status: z.nativeEnum(VerificationStatus) }).strict("يحتوي الطلب على حقول غير مسموح بها.");
+const emptyBody = z.object({}).strict("يحتوي الطلب على حقول غير مسموح بها.");
+
+function assertNotEmpty(body: Record<string, unknown>) {
+  if (Object.keys(body).length === 0) throw ApiError.badRequest("لا يوجد أي حقل لتعديله.");
+}
 
 // ---- Stats ----
 router.get(
@@ -90,6 +123,7 @@ router.post(
 
 router.patch(
   "/users/:id/activate",
+  validate({ params: idParams, body: emptyBody }),
   asyncHandler(async (req, res) => {
     const user = await service.setUserActive(req.params.id, true);
     await service.logAction(req.user!.id, "ACTIVATE_USER", "User", req.params.id);
@@ -99,6 +133,7 @@ router.patch(
 
 router.patch(
   "/users/:id/deactivate",
+  validate({ params: idParams, body: emptyBody }),
   asyncHandler(async (req, res) => {
     const user = await service.setUserActive(req.params.id, false);
     await service.logAction(req.user!.id, "DEACTIVATE_USER", "User", req.params.id);
@@ -170,7 +205,7 @@ router.get(
 
 router.patch(
   "/doctors/:id/verify",
-  validate({ body: z.object({ status: z.enum(["PENDING", "VERIFIED", "REJECTED"]) }) }),
+  validate({ params: idParams, body: verifyDoctorSchema }),
   asyncHandler(async (req, res) => {
     const doctor = await service.setDoctorVerification(req.params.id, req.body.status);
     await service.logAction(req.user!.id, "SET_DOCTOR_VERIFICATION", "Doctor", req.params.id, { status: req.body.status });
@@ -180,9 +215,11 @@ router.patch(
 
 router.patch(
   "/doctors/:id",
+  validate({ params: idParams, body: updateDoctorAdminSchema }),
   asyncHandler(async (req, res) => {
+    assertNotEmpty(req.body);
     const doctor = await service.updateDoctorAdmin(req.params.id, req.body);
-    await service.logAction(req.user!.id, "UPDATE_DOCTOR", "Doctor", req.params.id);
+    await service.logAction(req.user!.id, "UPDATE_DOCTOR", "Doctor", req.params.id, { fields: Object.keys(req.body) });
     res.json({ success: true, data: doctor });
   })
 );
@@ -202,7 +239,11 @@ router.post(
 );
 router.patch(
   "/specialties/:id",
-  asyncHandler(async (req, res) => res.json({ success: true, data: await service.specialtiesAdmin.update(req.params.id, req.body) }))
+  validate({ params: idParams, body: updateSpecialtySchema }),
+  asyncHandler(async (req, res) => {
+    assertNotEmpty(req.body);
+    res.json({ success: true, data: await service.specialtiesAdmin.update(req.params.id, req.body) });
+  })
 );
 router.delete(
   "/specialties/:id",
@@ -227,7 +268,11 @@ router.post(
 );
 router.patch(
   "/wilayas/:id",
-  asyncHandler(async (req, res) => res.json({ success: true, data: await service.wilayasAdmin.update(req.params.id, req.body) }))
+  validate({ params: idParams, body: updateWilayaSchema }),
+  asyncHandler(async (req, res) => {
+    assertNotEmpty(req.body);
+    res.json({ success: true, data: await service.wilayasAdmin.update(req.params.id, req.body) });
+  })
 );
 router.delete(
   "/wilayas/:id",

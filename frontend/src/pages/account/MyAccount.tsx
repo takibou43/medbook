@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { CalendarDays, Clock, LogOut, MapPin, Plus } from "lucide-react";
+import { CalendarDays, Clock, LogOut, MapPin, Plus, WifiOff } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { api, apiErrorMessage } from "../../lib/api";
 import { disablePatientPush } from "../../lib/patientPush";
@@ -12,6 +12,7 @@ import { AppointmentStatusBadge } from "../../components/ui/Badge";
 import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
 import type { MyAppointment } from "../../types";
+import { clearInvalidAppointmentCaches, fromCachedPatientAppointment, loadAppointmentCache, saveAppointmentCache } from "../../lib/appointmentCache";
 
 const ACTIVE = new Set(["PENDING", "CONFIRMED", "IN_PROGRESS", "LATE"]);
 const CANCELLABLE = new Set(["PENDING", "CONFIRMED"]);
@@ -31,12 +32,14 @@ function AppointmentItem({
   onCancel,
   cancelling,
   onRated,
+  offline,
 }: {
   a: MyAppointment;
   highlight: boolean;
   onCancel?: () => void;
   cancelling?: boolean;
   onRated?: () => void;
+  offline: boolean;
 }) {
   const address = a.doctor.clinic?.address || a.doctor.address;
   const [rating, setRating] = useState(false);
@@ -63,7 +66,7 @@ function AppointmentItem({
       {a.status === "LATE" && (
         <p className="mt-2 text-sm text-orange-700">تم تجاوز دورك مؤقتًا، وما زلت في قائمة الانتظار. توجّه إلى العيادة.</p>
       )}
-      {a.review && (
+      {a.review && !offline && (
         <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm">
           <p className="flex items-center gap-2 font-semibold text-slate-800">
             تقييمك: <StarsDisplay value={a.review.rating} />
@@ -71,7 +74,7 @@ function AppointmentItem({
           {a.review.comment && <p className="mt-1 whitespace-pre-line break-words text-slate-600">{a.review.comment}</p>}
         </div>
       )}
-      {onRated && canRate(a) && (
+      {onRated && !offline && canRate(a) && (
         <div className="mt-3">
           {rating ? (
             <RateDoctorForm appointment={a} onDone={() => { setRating(false); onRated(); }} onCancel={() => setRating(false)} />
@@ -107,15 +110,50 @@ export default function MyAccount() {
   const focusId = params.get("appointment");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string[]>(() => readDismissed());
+  const initialCache = useMemo(() => {
+    clearInvalidAppointmentCaches();
+    return user ? loadAppointmentCache(user.id) : null;
+  }, [user?.id]);
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [usingOfflineCopy, setUsingOfflineCopy] = useState(() => !navigator.onLine && Boolean(initialCache));
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["my-appointments"],
-    queryFn: async () => (await api.get<{ data: MyAppointment[] }>("/patient/account/appointments")).data.data,
+    queryFn: async () => {
+      try {
+        const appointments = (await api.get<{ data: MyAppointment[] }>("/patient/account/appointments")).data.data;
+        if (user) saveAppointmentCache(user.id, appointments);
+        setUsingOfflineCopy(false);
+        return appointments;
+      } catch (err) {
+        const status = (err as { response?: { status?: number } }).response?.status;
+        if (!status && user) {
+          setUsingOfflineCopy(true);
+          const cached = loadAppointmentCache(user.id);
+          if (cached) return cached.appointments.map(fromCachedPatientAppointment);
+        }
+        throw err;
+      }
+    },
     enabled: Boolean(user),
+    initialData: initialCache?.appointments.map(fromCachedPatientAppointment),
+    initialDataUpdatedAt: initialCache?.savedAt,
+    retry: false,
+    networkMode: "always",
     // الطابور يتغيّر خلال اليوم (نداء، تأخير...) — تحديث خفيف كل دقيقة ما دامت الصفحة ظاهرة.
-    refetchInterval: 60000,
+    refetchInterval: online ? 60000 : false,
     refetchIntervalInBackground: false,
   });
+
+  useEffect(() => {
+    const onOnline = () => { setOnline(true); void refetch(); };
+    const onOffline = () => { setOnline(false); if (user && loadAppointmentCache(user.id)) setUsingOfflineCopy(true); };
+    window.addEventListener("online", onOnline); window.addEventListener("offline", onOffline);
+    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, [refetch, user?.id]);
+
+  const isOffline = !online || usingOfflineCopy;
+  const currentCache = user ? loadAppointmentCache(user.id) : null;
 
   const { upcoming, past } = useMemo(() => {
     const today = algeriaToday();
@@ -130,12 +168,12 @@ export default function MyAccount() {
   // «كيف تقيّم الطبيب؟»: الموعد المفتوح من الإشعار إن كان قابلًا للتقييم، وإلا آخر موعد مكتمل فقط (إن لم
   // يُقيَّم ولم يُخفَ) — لا نلاحق المريض بمواعيد أقدم؛ تلك يبقى تقييمها متاحًا في «المواعيد السابقة».
   const ratePromptFor = useMemo(() => {
-    const list = data ?? [];
+    const list = isOffline ? [] : data ?? [];
     const focused = focusId ? list.find((a) => a.id === focusId && canRate(a)) : undefined;
     if (focused) return focused;
     const latestCompleted = list.find((a) => a.status === "COMPLETED");
     return latestCompleted && canRate(latestCompleted) && !dismissed.includes(latestCompleted.id) ? latestCompleted : undefined;
-  }, [data, focusId, dismissed]);
+  }, [data, focusId, dismissed, isOffline]);
 
   function dismissPrompt(id: string) {
     const next = [...dismissed.filter((x) => x !== id), id];
@@ -161,6 +199,7 @@ export default function MyAccount() {
   }
 
   async function cancel(id: string) {
+    if (isOffline) return;
     if (!window.confirm("هل تريد إلغاء هذا الموعد؟")) return;
     setCancellingId(id);
     try {
@@ -205,12 +244,21 @@ export default function MyAccount() {
 
         <ReminderCard />
 
+        {isOffline && currentCache && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+            <p className="flex items-center gap-2 font-bold"><WifiOff className="h-5 w-5" /> أنت غير متصل بالإنترنت. يتم عرض آخر نسخة محفوظة.</p>
+            <p className="mt-1">آخر تحديث: {new Date(currentCache.savedAt).toLocaleString("ar-DZ")}</p>
+          </div>
+        )}
+
         <Link to="/" className="btn-primary flex min-h-[48px] w-full items-center justify-center gap-2">
           <Plus className="h-4 w-4" aria-hidden="true" /> حجز موعد جديد
         </Link>
 
-        {isLoading ? (
+        {isLoading && !data ? (
           <Spinner label="جارٍ تحميل مواعيدك..." />
+        ) : isOffline && !currentCache ? (
+          <div className="glass p-4 text-sm text-amber-800">لا يمكن تحميل المواعيد دون اتصال. اتصل بالإنترنت مرة واحدة لعرضها لاحقًا.</div>
         ) : isError ? (
           <div className="glass p-4 text-sm text-red-600">
             {apiErrorMessage(error, "تعذّر تحميل مواعيدك.")}{" "}
@@ -227,7 +275,7 @@ export default function MyAccount() {
               ) : (
                 <ul className="space-y-3">
                   {upcoming.map((a) => (
-                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onCancel={() => cancel(a.id)} cancelling={cancellingId === a.id} />
+                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onCancel={isOffline ? undefined : () => cancel(a.id)} cancelling={cancellingId === a.id} offline={isOffline} />
                   ))}
                 </ul>
               )}
@@ -237,7 +285,7 @@ export default function MyAccount() {
                 <h2 className="mb-2 font-bold text-slate-900">المواعيد السابقة</h2>
                 <ul className="space-y-3">
                   {past.map((a) => (
-                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onRated={afterRated} />
+                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onRated={isOffline ? undefined : afterRated} offline={isOffline} />
                   ))}
                 </ul>
               </section>

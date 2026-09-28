@@ -53,12 +53,15 @@ api.interceptors.response.use(
               setAccessToken(token);
               return token;
             })
-            .catch(() => {
-              const hadSession = Boolean(accessToken);
-              setAccessToken(null);
-              // تُعلِم AuthContext أن الجلسة انتهت فعلًا فيُظهر «تسجيل الدخول» بدل «حسابي».
-              if (hadSession) window.dispatchEvent(new Event("medbook:session-expired"));
-              return null;
+            .catch((refreshError) => {
+              const status = refreshError?.response?.status;
+              if (status === 401 || status === 403) {
+                const hadSession = Boolean(accessToken);
+                setAccessToken(null);
+                if (hadSession) window.dispatchEvent(new Event("medbook:session-expired"));
+                return null;
+              }
+              throw refreshError;
             })
             .finally(() => {
               refreshingPromise = null;
@@ -69,8 +72,8 @@ api.interceptors.response.use(
           original.headers.Authorization = `Bearer ${newToken}`;
           return api(original);
         }
-      } catch {
-        // fallthrough to reject below
+      } catch (refreshError) {
+        return Promise.reject(refreshError);
       }
     }
     return Promise.reject(error);

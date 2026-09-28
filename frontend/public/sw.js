@@ -10,26 +10,31 @@
 //
 // عند أي تغيير في بنية هذا الملف: ارفع رقم VERSION ليُنظَّف الكاش القديم.
 
-const VERSION = "v6";
+const VERSION = "v7";
 const SHELL_CACHE = "medbook-shell-" + VERSION;
 const ASSET_CACHE = "medbook-assets-" + VERSION;
-// سجل دائم (غير مرتبط بالإصدار، فلا يُحذف عند التحديث) لتنبيهات «قبل 5 دقائق» التي عُرضت فعلًا —
-// يمنع تكرار الرنة إن أعادت خدمة الدفع تسليم الرسالة أو أُعيد تشغيل الـService Worker.
-const ALARM_CACHE = "medbook-alarms";
-const KEEP = [SHELL_CACHE, ASSET_CACHE, ALARM_CACHE];
+// Cache Storage مخصص حصريًا لغلاف التطبيق والأصول العامة؛ لا تُحفظ فيه معرّفات مواعيد أو ردود API.
+const KEEP = [SHELL_CACHE, ASSET_CACHE];
 
 const OFFLINE_URL = "/offline.html";
 
 // أصول صغيرة ثابتة نحتاجها حتى بلا اتصال (صفحة الانقطاع وشعارها).
 const PRECACHE = [OFFLINE_URL, "/logo.svg", "/icons/icon-192.png"];
 
+async function precacheAppShell() {
+  const shell = await caches.open(SHELL_CACHE);
+  const indexResponse = await fetch("/index.html", { cache: "no-store" });
+  if (!indexResponse.ok) throw new Error("app shell unavailable");
+  const html = await indexResponse.clone().text();
+  const assets = Array.from(html.matchAll(/(?:src|href)=["'](\/assets\/[^"']+)["']/g), (match) => match[1]);
+  await shell.put("/index.html", indexResponse);
+  await Promise.all(PRECACHE.map((url) => shell.add(url).catch(() => undefined)));
+  await (await caches.open(ASSET_CACHE)).addAll(assets);
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(SHELL_CACHE)
-      // كل ملف على حدة: فشل أحدها (مثلًا لم يُنشر بعد) لا يُفشل التثبيت كله.
-      .then((cache) => Promise.all(PRECACHE.map((url) => cache.add(url).catch(() => undefined))))
-      .then(() => self.skipWaiting())
+    precacheAppShell().then(() => self.skipWaiting())
   );
 });
 
@@ -62,6 +67,10 @@ async function offlineFallback() {
   );
 }
 
+async function appShellFallback() {
+  return (await caches.match("/index.html", { cacheName: SHELL_CACHE })) || offlineFallback();
+}
+
 // طلب فتح صفحة: إن فشل على مستوى الشبكة (تقلّب لحظي في شبكة الهاتف/DNS/إعادة اتصال) نعيد المحاولة مرة
 // واحدة بعد لحظة قبل الحكم بالانقطاع وعرض صفحة offline. ردود الخادم (حتى 429 و5xx) لا ترمي استثناءً
 // أصلًا فتُعرض كما هي — أي أن أعطال الـAPI لا تصل إلى هذا المسار إطلاقًا.
@@ -73,7 +82,7 @@ async function navigateWithRetry(request) {
     try {
       return await fetch(request);
     } catch (e2) {
-      return offlineFallback();
+      return appShellFallback();
     }
   }
 }
@@ -267,7 +276,8 @@ const MB_ALARM_KIND = "APPOINTMENT_5MIN_ALARM";
 const MB_QUEUE_APPROACH_KIND = "QUEUE_APPROACH_ALARM";
 const MB_ALARM_VIBRATE = [700, 250, 700, 250, 700, 250, 1400];
 
-// مفتاح منع التكرار = النوع + الموعد (مفتاح تنبيه الخمس دقائق كما كان في v5 حتى يبقى السجل القديم صالحًا).
+// منع التكرار مؤقت داخل دورة حياة عامل الخدمة فقط، حتى لا يُكتب معرّف الموعد في Cache Storage.
+const MB_CLAIMED_ALARMS = new Map();
 function mbAlarmKey(appointmentId, kind) {
   if (kind === MB_QUEUE_APPROACH_KIND) return "/__mb-alarm/" + MB_QUEUE_APPROACH_KIND + "/" + encodeURIComponent(appointmentId);
   return "/__mb-alarm/" + encodeURIComponent(appointmentId);
@@ -275,42 +285,20 @@ function mbAlarmKey(appointmentId, kind) {
 
 // true إن سُجّل هذا التنبيه الآن لأول مرة، false إن كان معروضًا من قبل (تكرار).
 function mbClaimAlarm(data) {
-  if (!data.appointmentId || typeof caches === "undefined") return Promise.resolve(true);
+  if (!data.appointmentId) return Promise.resolve(true);
   const key = mbAlarmKey(data.appointmentId, data.kind);
-  return caches
-    .open(ALARM_CACHE)
-    .then(function (cache) {
-      return cache.match(key).then(function (hit) {
-        if (hit) return false;
-        return cache
-          .put(key, new Response(JSON.stringify({ expiresAt: data.expiresAt || null, at: Date.now() }), { headers: { "Content-Type": "application/json" } }))
-          .then(function () { return true; });
-      });
-    })
-    .catch(function () { return true; });
+  if (MB_CLAIMED_ALARMS.has(key)) return Promise.resolve(false);
+  MB_CLAIMED_ALARMS.set(key, data.expiresAt || null);
+  return Promise.resolve(true);
 }
 
 // تنظيف سجلات التنبيه التي انتهى يوم موعدها (لا تتراكم).
 function mbPurgeAlarmLog() {
-  if (typeof caches === "undefined") return Promise.resolve();
   const now = Date.now();
-  return caches
-    .open(ALARM_CACHE)
-    .then(function (cache) {
-      return cache.keys().then(function (keys) {
-        return Promise.all(
-          keys.map(function (req) {
-            return cache.match(req).then(function (res) {
-              if (!res) return;
-              return res.json().then(function (v) {
-                if (mbIsExpired(v, now)) return cache.delete(req);
-              }, function () { return cache.delete(req); });
-            });
-          })
-        );
-      });
-    })
-    .catch(function () { return undefined; });
+  MB_CLAIMED_ALARMS.forEach(function (expiresAt, key) {
+    if (mbIsExpired({ expiresAt: expiresAt }, now)) MB_CLAIMED_ALARMS.delete(key);
+  });
+  return Promise.resolve();
 }
 
 function mbNotifyOpenPages(message) {

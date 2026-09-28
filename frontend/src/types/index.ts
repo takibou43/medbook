@@ -8,6 +8,7 @@ export interface MyAppointment {
   date: string;
   startTime: string;
   endTime: string;
+  type: "IN_PERSON" | "FOLLOW_UP" | "ONLINE";
   status: AppointmentStatus;
   doctor: {
     id: string;

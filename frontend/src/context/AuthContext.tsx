@@ -1,6 +1,9 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { api, setAccessToken, getAccessToken } from "../lib/api";
 import { User } from "../types";
+import { clearAppointmentCache } from "../lib/appointmentCache";
+import { clearOfflineUser, loadOfflineUser, saveOfflineUser } from "../lib/offlineSession";
+import { queryClient } from "../lib/queryClient";
 
 // حساب المريض في موقع المرضى: كل الطلبات عبر /api/patient/auth (مقصورة على دور المريض، وجلسة
 // تجديد منفصلة عن جلسة الأطباء). إنشاء حجز يتطلب حساب مريض مسجّل الدخول (يُفرض في الخادم أيضًا).
@@ -35,9 +38,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await api.get("/patient/auth/me");
       setUser(res.data.data);
-    } catch {
-      setAccessToken(null);
-      setUser(null);
+      saveOfflineUser(res.data.data);
+    } catch (error) {
+      const status = (error as { response?: { status?: number } }).response?.status;
+      if (status === 401 || status === 403) {
+        setAccessToken(null); clearOfflineUser(); setUser(null);
+      } else {
+        setUser(loadOfflineUser());
+      }
     } finally {
       setLoading(false);
     }
@@ -49,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // انتهاء الجلسة نهائيًا (فشل التجديد) من أي طلب في أي صفحة.
   useEffect(() => {
-    const onExpired = () => setUser(null);
+    const onExpired = () => { clearOfflineUser(); setUser(null); };
     window.addEventListener("medbook:session-expired", onExpired);
     return () => window.removeEventListener("medbook:session-expired", onExpired);
   }, []);
@@ -58,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await api.post("/patient/auth/login", { email, password });
     setAccessToken(res.data.data.accessToken);
     setUser(res.data.data.user);
+    saveOfflineUser(res.data.data.user);
     return res.data.data.user as User;
   }
 
@@ -65,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await api.post("/patient/auth/register", data);
     setAccessToken(res.data.data.accessToken);
     setUser(res.data.data.user);
+    saveOfflineUser(res.data.data.user);
     return res.data.data.user as User;
   }
 
@@ -73,13 +83,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await api.post("/auth/register/doctor", data);
     setAccessToken(res.data.data.accessToken);
     setUser(res.data.data.user);
+    saveOfflineUser(res.data.data.user);
     return res.data.data.user as User;
   }
 
   async function logout() {
+    const userId = user?.id;
     try {
       await api.post("/patient/auth/logout");
     } finally {
+      if (userId) clearAppointmentCache(userId);
+      clearOfflineUser();
+      queryClient.removeQueries({ queryKey: ["my-appointments"] });
       setAccessToken(null);
       setUser(null);
     }

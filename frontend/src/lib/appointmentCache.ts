@@ -22,7 +22,7 @@ export interface AppointmentCacheEntry {
 }
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem" | "key" | "length">;
-const statuses: AppointmentStatus[] = ["PENDING", "CONFIRMED", "IN_PROGRESS", "LATE", "COMPLETED", "CANCELLED", "NO_SHOW"];
+const statuses: AppointmentStatus[] = ["PENDING", "CONFIRMED", "RESCHEDULE_REQUIRED", "IN_PROGRESS", "LATE", "COMPLETED", "CANCELLED", "NO_SHOW"];
 const types = ["IN_PERSON", "FOLLOW_UP", "ONLINE"] as const;
 
 function keyFor(userId: string) { return `${KEY_PREFIX}${userId}`; }

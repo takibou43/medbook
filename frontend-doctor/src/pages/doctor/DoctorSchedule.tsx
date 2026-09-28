@@ -54,7 +54,16 @@ export default function DoctorSchedule() {
   async function saveWeeklySchedule() {
     setSaving(true);
     try {
-      await api.put("/doctor/schedule", { blocks: blocks.map(({ dayOfWeek, startTime, endTime }) => ({ dayOfWeek, startTime, endTime })) });
+      const payload = { blocks: blocks.map(({ dayOfWeek, startTime, endTime }) => ({ dayOfWeek, startTime, endTime })) };
+      try {
+        await api.put("/doctor/schedule", payload);
+      } catch (err: any) {
+        const details = err?.response?.data?.details;
+        if (err?.response?.status !== 409 || details?.code !== "APPOINTMENTS_REQUIRE_RESCHEDULE") throw err;
+        const count = Number(details.affectedCount) || 0;
+        if (!window.confirm(`سيصبح ${count} موعدًا محجوزًا بحاجة إلى إعادة جدولة، وسيتم إشعار المرضى. هل تريد المتابعة؟`)) return;
+        await api.put("/doctor/schedule", { ...payload, confirmAffected: true });
+      }
       showToast("تم حفظ جدول العمل.", "success");
       qc.invalidateQueries({ queryKey: ["doctor-schedule"] });
     } catch (err) {
@@ -70,7 +79,16 @@ export default function DoctorSchedule() {
       return;
     }
     try {
-      await api.post("/doctor/schedule/exceptions", { exceptionDate, isOff: exceptionOff });
+      const payload = { exceptionDate, isOff: exceptionOff };
+      try {
+        await api.post("/doctor/schedule/exceptions", payload);
+      } catch (err: any) {
+        const details = err?.response?.data?.details;
+        if (err?.response?.status !== 409 || details?.code !== "APPOINTMENTS_REQUIRE_RESCHEDULE") throw err;
+        const count = Number(details.affectedCount) || 0;
+        if (!window.confirm(`يوجد ${count} موعدًا محجوزًا في هذا اليوم. ستصبح بحاجة إلى إعادة جدولة وسيتم إشعار المرضى. هل تريد جعله يوم عطلة؟`)) return;
+        await api.post("/doctor/schedule/exceptions", { ...payload, confirmAffected: true });
+      }
       showToast("تم إضافة الاستثناء.", "success");
       setExceptionDate("");
       qc.invalidateQueries({ queryKey: ["doctor-schedule"] });

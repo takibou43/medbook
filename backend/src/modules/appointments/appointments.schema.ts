@@ -13,6 +13,7 @@ export const createAppointmentSchema = z.object({
 // دقائق يُعاد إلى IN_PROGRESS عبر هذا المسار. من يملك حق أي انتقال يبقى محكومًا
 // بـ ALLOWED_TRANSITIONS وليس بهذا المُحقِّق.
 export const updateStatusSchema = z.object({
+  // RESCHEDULE_REQUIRED يضبطها الخادم وحده عند تعارض الدوام؛ لا يقبلها هذا المسار من العميل.
   status: z.enum(["PENDING", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"]),
 });
 

@@ -1,8 +1,7 @@
 /**
  * تنبيه «موعدك مع الطبيب بعد 5 دقائق» في الـService Worker الحقيقي لموقع المرضى (frontend/public/sw.js)
  * + وحدة الرنة داخل الصفحة (frontend/src/lib/appointmentAlarm.ts) + ملف الرنة نفسه.
- * الـSW يُحمَّل داخل vm مع محاكاة لـ self/registration/clients/caches. caches دائم بين "إعادات التشغيل"
- * (كما في المتصفح)، فتحميل الملف من جديد يحاكي إعادة تشغيل الـService Worker.
+ * منع التكرار مقصود داخل دورة حياة العامل فقط: لا نخزّن معرّف الموعد في Cache Storage الدائم.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import fs from "fs";
@@ -131,7 +130,7 @@ describe("Service Worker (موقع المرضى) — تنبيه الخمس دق�
     expect(messages).toEqual([{ type: "MB_APPOINTMENT_ALARM", kind: "QUEUE_APPROACH_ALARM", appointmentId: "A", title: "دورك اقترب", body: approach().body }]);
   });
 
-  it("«دورك اقترب» مكرر (إعادة تسليم أو إعادة تشغيل الـSW) لا يعرض ولا يرنّ ثانية، ومستقل عن تنبيه الخمس دقائق", async () => {
+  it("كل نوع تنبيه يُمنع تكراره داخل دورة العامل، ثم يمكن إعادة تسليمه بعد إعادة تشغيله", async () => {
     let sw = loadSw("frontend", caches, shown, messages);
     await sw.push(alarm());
     await sw.push(approach());
@@ -139,7 +138,12 @@ describe("Service Worker (موقع المرضى) — تنبيه الخمس دق�
     sw = loadSw("frontend", caches, shown, messages); // إعادة تشغيل الـService Worker
     await sw.push(approach());
     await sw.push(alarm());
-    expect(messages).toHaveLength(2);
+    expect(messages.map((m) => m.kind)).toEqual([
+      "APPOINTMENT_5MIN_ALARM",
+      "QUEUE_APPROACH_ALARM",
+      "QUEUE_APPROACH_ALARM",
+      "APPOINTMENT_5MIN_ALARM",
+    ]);
   });
 
   it("تسليم مكرر لنفس الموعد لا يعرض إشعارًا ثانيًا ولا يرنّ ثانية — حتى بعد إغلاق الإشعار", async () => {
@@ -151,16 +155,16 @@ describe("Service Worker (موقع المرضى) — تنبيه الخمس دق�
     expect(messages).toHaveLength(1);
   });
 
-  it("لا يتكرر بعد إعادة تشغيل الـService Worker (السجل في Cache Storage الدائم)، ولا بعد تفعيل نسخة جديدة", async () => {
+  it("لا يكتب معرّف الموعد في Cache Storage ويمكن إعادة التنبيه بعد إعادة تشغيل العامل", async () => {
     let sw = loadSw("frontend", caches, shown, messages);
     await sw.push(alarm());
     shown.list = [];
     sw = loadSw("frontend", caches, shown, messages); // إعادة تشغيل
     await sw.dispatch("activate", {});
     await sw.push(alarm());
-    expect(shown.list).toHaveLength(0);
-    expect(messages).toHaveLength(1);
-    expect(caches.stores.has("medbook-alarms")).toBe(true);
+    expect(shown.list).toHaveLength(1);
+    expect(messages).toHaveLength(2);
+    expect(caches.stores.has("medbook-alarms")).toBe(false);
   });
 
   it("موعد آخر يُنبَّه له بشكل مستقل", async () => {
@@ -199,13 +203,11 @@ describe("Service Worker (موقع المرضى) — تنبيه الخمس دق�
     expect(shown.list[0].options.requireInteraction).toBe(true);
   });
 
-  it("سجلات التنبيه المنتهية تُحذف عند التفعيل (لا تتراكم)", async () => {
+  it("لا ينشئ سجلًا دائمًا للتنبيهات عند التفعيل", async () => {
     const sw = loadSw("frontend", caches, shown, messages);
     await sw.push(alarm("OLD", { expiresAt: TODAY_END }));
-    const store = caches.stores.get("medbook-alarms")!;
-    store.set("/__mb-alarm/OLD2", new Response(JSON.stringify({ expiresAt: YESTERDAY_END })));
     await sw.dispatch("activate", {});
-    expect([...store.keys()]).toEqual(["/__mb-alarm/OLD"]);
+    expect(caches.stores.has("medbook-alarms")).toBe(false);
   });
 
   it("لوحة الأطباء لم تتغيّر: لا منطق منبّه في sw.js الخاص بها", () => {

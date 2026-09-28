@@ -5,6 +5,7 @@ import { AppointmentStatus, VerificationStatus, SubscriptionStatus, InviteStatus
 const APPT_LABELS: Record<AppointmentStatus, { label: string; className: string }> = {
   PENDING: { label: "بانتظار التأكيد", className: "bg-amber-100 text-amber-700" },
   CONFIRMED: { label: "مؤكد", className: "bg-blue-100 text-blue-700" },
+  RESCHEDULE_REQUIRED: { label: "يحتاج إعادة جدولة", className: "bg-red-100 text-red-700" },
   IN_PROGRESS: { label: "بالداخل الآن", className: "bg-primary-100 text-primary-700" },
   LATE: { label: "متأخر", className: "bg-amber-100 text-amber-700" },
   COMPLETED: { label: "مكتمل", className: "bg-green-100 text-green-700" },

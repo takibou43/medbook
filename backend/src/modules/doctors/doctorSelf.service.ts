@@ -4,6 +4,55 @@ import { ApiError } from "../../utils/ApiError";
 import { algeriaTodayUTCMidnight } from "../../lib/slots";
 import { autoExpireStaleAppointments } from "../appointments/appointments.service";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
+import { isWithinWorkingHours, ScheduleBlock } from "../../lib/slots";
+import { createNotification } from "../notifications/notifications.service";
+
+const SCHEDULE_ACTIVE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
+
+type AffectedAppointment = {
+  id: string;
+  date: Date;
+  startTime: string;
+  endTime: string;
+  patient: { userId: string } | null;
+};
+
+function conflictDetails(appointments: AffectedAppointment[]) {
+  return {
+    code: "APPOINTMENTS_REQUIRE_RESCHEDULE",
+    affectedCount: appointments.length,
+    appointments: appointments.map((a) => ({ id: a.id, date: a.date.toISOString().slice(0, 10), startTime: a.startTime })),
+  };
+}
+
+async function notifyAffectedAppointments(appointments: AffectedAppointment[]) {
+  const results = await Promise.allSettled(
+    appointments.flatMap((appointment) =>
+      appointment.patient
+        ? [createNotification(
+            appointment.patient.userId,
+            "APPOINTMENT_RESCHEDULE_REQUIRED",
+            "موعدك يحتاج إلى إعادة جدولة",
+            `غيّر الطبيب أوقات عمله وأصبح موعد ${appointment.date.toISOString().slice(0, 10)} الساعة ${appointment.startTime} غير متاح. يرجى اختيار موعد جديد أو انتظار تواصل العيادة.`,
+            `/account?appointment=${appointment.id}`,
+            `reschedule-${appointment.id}`,
+            { id: appointment.id, date: appointment.date }
+          )]
+        : []
+    )
+  );
+  if (results.some((result) => result.status === "rejected")) {
+    console.error("تعذّر إنشاء بعض إشعارات إعادة جدولة المواعيد.");
+  }
+}
+
+async function findAffectedAppointments(doctorId: string, schedules: ScheduleBlock[]): Promise<AffectedAppointment[]> {
+  const appointments = await prisma.appointment.findMany({
+    where: { doctorId, date: { gte: algeriaTodayUTCMidnight() }, status: { in: SCHEDULE_ACTIVE_STATUSES } },
+    select: { id: true, date: true, startTime: true, endTime: true, patient: { select: { userId: true } } },
+  });
+  return appointments.filter((appointment) => !isWithinWorkingHours(appointment.date, appointment.startTime, appointment.endTime, schedules));
+}
 
 // تُستعمل من الوظائف الخاصة بالطبيب فقط (الملف المهني، أوقات العمل، مرضاي) — هذه المسارات
 // محمية أصلًا بـ authorize(Role.DOCTOR) في doctorSelf.routes.ts، فلا حاجة لدعم المساعد هنا.
@@ -43,33 +92,74 @@ export async function getWeeklySchedule(userId: string) {
 
 export async function replaceWeeklySchedule(
   userId: string,
-  blocks: { dayOfWeek: number; startTime: string; endTime: string }[]
+  blocks: { dayOfWeek: number; startTime: string; endTime: string }[],
+  confirmAffected = false
 ) {
   const doctor = await getDoctorByUserId(userId);
+  const exceptions = await prisma.doctorSchedule.findMany({ where: { doctorId: doctor.id, isException: true } });
+  const proposed: ScheduleBlock[] = [
+    ...exceptions,
+    ...blocks.map((block) => ({ ...block, isException: false, exceptionDate: null, isOff: false })),
+  ];
+  const affected = await findAffectedAppointments(doctor.id, proposed);
+  if (affected.length > 0 && !confirmAffected) {
+    throw ApiError.conflict("سيؤثر هذا التعديل في مواعيد محجوزة مسبقًا. يلزم تأكيدك قبل الحفظ.", conflictDetails(affected));
+  }
   await prisma.$transaction([
     prisma.doctorSchedule.deleteMany({ where: { doctorId: doctor.id, isException: false } }),
     prisma.doctorSchedule.createMany({
       data: blocks.map((b) => ({ doctorId: doctor.id, dayOfWeek: b.dayOfWeek, startTime: b.startTime, endTime: b.endTime })),
     }),
+    ...(affected.length > 0
+      ? [prisma.appointment.updateMany({ where: { id: { in: affected.map((a) => a.id) } }, data: { status: AppointmentStatus.RESCHEDULE_REQUIRED } })]
+      : []),
   ]);
-  return getWeeklySchedule(userId);
+  await notifyAffectedAppointments(affected);
+  return { schedule: await getWeeklySchedule(userId), affectedAppointments: affected.length };
 }
 
 export async function addScheduleException(
   userId: string,
-  exception: { exceptionDate: string; isOff: boolean; startTime?: string; endTime?: string }
+  exception: { exceptionDate: string; isOff: boolean; startTime?: string; endTime?: string },
+  confirmAffected = false
 ) {
   const doctor = await getDoctorByUserId(userId);
-  return prisma.doctorSchedule.create({
-    data: {
-      doctorId: doctor.id,
+  const exceptionDate = new Date(exception.exceptionDate + "T00:00:00Z");
+  const current = await prisma.doctorSchedule.findMany({ where: { doctorId: doctor.id } });
+  const proposed: ScheduleBlock[] = [
+    ...current,
+    {
+      dayOfWeek: null,
       isException: true,
-      exceptionDate: new Date(exception.exceptionDate + "T00:00:00Z"),
+      exceptionDate,
       isOff: exception.isOff,
       startTime: exception.startTime ?? "00:00",
       endTime: exception.endTime ?? "23:59",
     },
-  });
+  ];
+  const affected = (await findAffectedAppointments(doctor.id, proposed)).filter(
+    (appointment) => appointment.date.toISOString().slice(0, 10) === exception.exceptionDate
+  );
+  if (affected.length > 0 && !confirmAffected) {
+    throw ApiError.conflict("يوجد في هذا اليوم مواعيد محجوزة مسبقًا. يلزم تأكيدك قبل جعله يوم عطلة.", conflictDetails(affected));
+  }
+  const [created] = await prisma.$transaction([
+    prisma.doctorSchedule.create({
+      data: {
+        doctorId: doctor.id,
+        isException: true,
+        exceptionDate,
+        isOff: exception.isOff,
+        startTime: exception.startTime ?? "00:00",
+        endTime: exception.endTime ?? "23:59",
+      },
+    }),
+    ...(affected.length > 0
+      ? [prisma.appointment.updateMany({ where: { id: { in: affected.map((a) => a.id) } }, data: { status: AppointmentStatus.RESCHEDULE_REQUIRED } })]
+      : []),
+  ]);
+  await notifyAffectedAppointments(affected);
+  return { schedule: created, affectedAppointments: affected.length };
 }
 
 export async function removeScheduleBlock(userId: string, blockId: string) {

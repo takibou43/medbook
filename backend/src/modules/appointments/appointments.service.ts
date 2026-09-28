@@ -289,6 +289,7 @@ export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus,
   PATIENT: {
     PENDING: ["CANCELLED"],
     CONFIRMED: ["CANCELLED"],
+    RESCHEDULE_REQUIRED: ["CANCELLED"],
   },
   DOCTOR: {
     PENDING: ["CONFIRMED", "CANCELLED"],
@@ -301,6 +302,7 @@ export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus,
     // NO_SHOW عند أول جلب للقائمة بعد وقت إغلاق العيادة، بينما IN_PROGRESS تصبح
     // COMPLETED عند الإغلاق — وهو الصحيح لمريض دخل فعلًا على الطبيب.
     NO_SHOW: ["IN_PROGRESS"],
+    RESCHEDULE_REQUIRED: ["CANCELLED"],
   },
   // صلاحيات الطابور اليومي مثل الطبيب، باستثناء واحد: «إنهاء الموعد» (COMPLETED) للطبيب وحده —
   // الطبيب هو من يتحكم في إنهاء الموعد. المساعد لا يملك أي صلاحية خارج المواعيد/الطابور أصلًا.
@@ -311,6 +313,7 @@ export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus,
     IN_PROGRESS: ["LATE", "CANCELLED", "NO_SHOW"],
     LATE: ["IN_PROGRESS", "CANCELLED", "NO_SHOW"],
     NO_SHOW: ["IN_PROGRESS"],
+    RESCHEDULE_REQUIRED: ["CANCELLED"],
   },
   ADMIN: {
     PENDING: ["CONFIRMED", "CANCELLED"],
@@ -320,6 +323,7 @@ export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus,
     COMPLETED: [],
     CANCELLED: [],
     NO_SHOW: [],
+    RESCHEDULE_REQUIRED: ["CANCELLED"],
   },
 };
 

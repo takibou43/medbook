@@ -1,6 +1,6 @@
 export type Role = "PATIENT" | "DOCTOR" | "ADMIN";
 export type Gender = "MALE" | "FEMALE";
-export type AppointmentStatus = "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "LATE" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+export type AppointmentStatus = "PENDING" | "CONFIRMED" | "RESCHEDULE_REQUIRED" | "IN_PROGRESS" | "LATE" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
 
 // موعد كما يعيده GET /api/patient/account/appointments (حقول الطبيب الآمنة فقط).
 export interface MyAppointment {

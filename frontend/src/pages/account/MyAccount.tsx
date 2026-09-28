@@ -14,8 +14,8 @@ import { useToast } from "../../components/ui/Toast";
 import type { MyAppointment } from "../../types";
 import { clearInvalidAppointmentCaches, fromCachedPatientAppointment, loadAppointmentCache, saveAppointmentCache } from "../../lib/appointmentCache";
 
-const ACTIVE = new Set(["PENDING", "CONFIRMED", "IN_PROGRESS", "LATE"]);
-const CANCELLABLE = new Set(["PENDING", "CONFIRMED"]);
+const ACTIVE = new Set(["PENDING", "CONFIRMED", "RESCHEDULE_REQUIRED", "IN_PROGRESS", "LATE"]);
+const CANCELLABLE = new Set(["PENDING", "CONFIRMED", "RESCHEDULE_REQUIRED"]);
 
 // يوم الجزائر اليوم بصيغة YYYY-MM-DD (UTC+1 ثابت) — عمود date يحمل يوم الموعد بهذا المرجع.
 function algeriaToday(): string {
@@ -66,6 +66,12 @@ function AppointmentItem({
       {a.status === "LATE" && (
         <p className="mt-2 text-sm text-orange-700">تم تجاوز دورك مؤقتًا، وما زلت في قائمة الانتظار. توجّه إلى العيادة.</p>
       )}
+      {a.status === "RESCHEDULE_REQUIRED" && (
+        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+          <p className="font-bold">الطبيب غير متاح في هذا اليوم.</p>
+          <p className="mt-1">يرجى حجز موعد جديد أو انتظار تواصل العيادة. يمكنك إلغاء هذا الموعد دون فقدان تفاصيله.</p>
+        </div>
+      )}
       {a.review && !offline && (
         <div className="mt-3 rounded-xl bg-amber-50 p-3 text-sm">
           <p className="flex items-center gap-2 font-semibold text-slate-800">
@@ -87,9 +93,14 @@ function AppointmentItem({
       )}
       {ACTIVE.has(a.status) && (
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
-          <Link to={`/status/${a.id}`} className="font-semibold text-primary-700 hover:underline">
-            متابعة دوري
-          </Link>
+          {a.status !== "RESCHEDULE_REQUIRED" && (
+            <Link to={`/status/${a.id}`} className="font-semibold text-primary-700 hover:underline">
+              متابعة دوري
+            </Link>
+          )}
+          {a.status === "RESCHEDULE_REQUIRED" && (
+            <Link to="/" className="font-semibold text-primary-700 hover:underline">حجز موعد جديد</Link>
+          )}
           {onCancel && CANCELLABLE.has(a.status) && (
             <button type="button" onClick={onCancel} disabled={cancelling} className="font-semibold text-red-600 hover:underline disabled:opacity-50">
               إلغاء الموعد

@@ -88,13 +88,14 @@ const weeklyScheduleSchema = z.object({
       endTime: z.string().regex(/^\d{2}:\d{2}$/),
     })
   ),
+  confirmAffected: z.boolean().optional().default(false),
 });
 
 router.put(
   "/schedule",
   validate({ body: weeklyScheduleSchema }),
   asyncHandler(async (req, res) => {
-    const updated = await service.replaceWeeklySchedule(req.user!.id, req.body.blocks);
+    const updated = await service.replaceWeeklySchedule(req.user!.id, req.body.blocks, req.body.confirmAffected);
     res.json({ success: true, data: updated });
   })
 );
@@ -104,13 +105,14 @@ const exceptionSchema = z.object({
   isOff: z.boolean(),
   startTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   endTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  confirmAffected: z.boolean().optional().default(false),
 });
 
 router.post(
   "/schedule/exceptions",
   validate({ body: exceptionSchema }),
   asyncHandler(async (req, res) => {
-    const created = await service.addScheduleException(req.user!.id, req.body);
+    const created = await service.addScheduleException(req.user!.id, req.body, req.body.confirmAffected);
     res.status(201).json({ success: true, data: created });
   })
 );

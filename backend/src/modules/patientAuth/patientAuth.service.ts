@@ -214,4 +214,4 @@ export async function sendTestPush(userId: string) {
   return { devices, sent: result.sent, removed: result.removed };
 }
 
-export const UPCOMING_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
+export const UPCOMING_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED, AppointmentStatus.RESCHEDULE_REQUIRED];

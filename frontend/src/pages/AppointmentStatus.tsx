@@ -12,7 +12,7 @@ interface QueueStatus {
   id: string;
   date: string;
   startTime: string;
-  status: "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "LATE" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+  status: "PENDING" | "CONFIRMED" | "RESCHEDULE_REQUIRED" | "IN_PROGRESS" | "LATE" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
   patientName: string;
   slotMinutes: number;
   deferredCount: number;
@@ -74,7 +74,7 @@ export default function AppointmentStatus() {
 
   // الحالات المنتهية: لا رقم دور، فقط رسالة واضحة.
   const finished =
-    data.status === "COMPLETED" || data.status === "CANCELLED" || data.status === "NO_SHOW";
+    data.status === "COMPLETED" || data.status === "CANCELLED" || data.status === "NO_SHOW" || data.status === "RESCHEDULE_REQUIRED";
 
   return (
     <div className="container-app py-8">
@@ -108,6 +108,13 @@ export default function AppointmentStatus() {
                 <AlertTriangle className="mx-auto mb-2 h-10 w-10 text-amber-500" />
                 <p className="text-lg font-extrabold text-slate-900">لم يُسجَّل حضورك</p>
                 <p className="mt-1 text-sm text-slate-500">يمكنك حجز موعد جديد في أي وقت.</p>
+              </>
+            )}
+            {data.status === "RESCHEDULE_REQUIRED" && (
+              <>
+                <AlertTriangle className="mx-auto mb-2 h-10 w-10 text-red-500" />
+                <p className="text-lg font-extrabold text-slate-900">موعدك يحتاج إلى إعادة جدولة</p>
+                <p className="mt-1 text-sm text-slate-600">الطبيب غير متاح في هذا اليوم. ارجع إلى حسابك لحجز موعد جديد أو لإلغاء الموعد الحالي.</p>
               </>
             )}
           </div>

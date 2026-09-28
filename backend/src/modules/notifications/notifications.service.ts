@@ -6,6 +6,7 @@ export type NotificationType =
   | "APPOINTMENT_CREATED"
   | "APPOINTMENT_CONFIRMED"
   | "APPOINTMENT_CANCELLED"
+  | "APPOINTMENT_RESCHEDULE_REQUIRED"
   | "APPOINTMENT_COMPLETED"
   | "APPOINTMENT_NO_SHOW"
   | "APPOINTMENT_REMINDER"
@@ -20,6 +21,7 @@ const PUSH_BODY: Partial<Record<NotificationType, string>> = {
   APPOINTMENT_CREATED: "لديك حجز جديد. افتح اللوحة لعرض التفاصيل.",
   APPOINTMENT_CANCELLED: "تم إلغاء أحد المواعيد. افتح اللوحة لعرض التفاصيل.",
   APPOINTMENT_CONFIRMED: "تم تأكيد موعد. افتح التطبيق لعرض التفاصيل.",
+  APPOINTMENT_RESCHEDULE_REQUIRED: "غيّر الطبيب أوقات عمله وأصبح موعدك بحاجة إلى إعادة جدولة. افتح التطبيق لعرض التفاصيل.",
   APPOINTMENT_REMINDER: "تذكير بموعد قريب. افتح التطبيق لعرض التفاصيل.",
   NEW_MESSAGE: "لديك رسالة جديدة. افتح قسم الرسائل.",
   // للمريض صاحب الحساب عند تسجيله «متأخر» — بلا أي معلومة طبية.

@@ -5,6 +5,7 @@ export type Gender = "MALE" | "FEMALE";
 export type AppointmentStatus =
   | "PENDING"
   | "CONFIRMED"
+  | "RESCHEDULE_REQUIRED"
   | "IN_PROGRESS"
   | "LATE"
   | "COMPLETED"

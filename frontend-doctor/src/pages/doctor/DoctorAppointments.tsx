@@ -17,6 +17,7 @@ import { useAuth } from "../../context/AuthContext";
 const FILTERS: { label: string; value?: AppointmentStatus }[] = [
   { label: "الكل", value: undefined },
   { label: "قادمة", value: "CONFIRMED" },
+  { label: "تحتاج إعادة جدولة", value: "RESCHEDULE_REQUIRED" },
   { label: "حضروا", value: "COMPLETED" },
   { label: "لم يحضروا", value: "NO_SHOW" },
   { label: "ملغاة", value: "CANCELLED" },

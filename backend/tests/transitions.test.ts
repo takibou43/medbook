@@ -6,6 +6,11 @@ describe("canTransition — حالات الموعد (Appointment Status)", () =>
     expect(canTransition("PATIENT", "PENDING", "CANCELLED")).toBe(true);
   });
 
+  it("يسمح للمريض بإلغاء موعد يحتاج إعادة جدولة دون إعادته إلى مؤكد", () => {
+    expect(canTransition("PATIENT", "RESCHEDULE_REQUIRED", "CANCELLED")).toBe(true);
+    expect(canTransition("PATIENT", "RESCHEDULE_REQUIRED", "CONFIRMED")).toBe(false);
+  });
+
   it("لا يسمح للمريض بتأكيد موعد بنفسه", () => {
     expect(canTransition("PATIENT", "PENDING", "CONFIRMED")).toBe(false);
   });

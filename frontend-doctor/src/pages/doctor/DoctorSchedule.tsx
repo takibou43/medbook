@@ -86,7 +86,10 @@ export default function DoctorSchedule() {
         const details = err?.response?.data?.details;
         if (err?.response?.status !== 409 || details?.code !== "APPOINTMENTS_REQUIRE_RESCHEDULE") throw err;
         const count = Number(details.affectedCount) || 0;
-        if (!window.confirm(`يوجد ${count} موعدًا محجوزًا في هذا اليوم. ستصبح بحاجة إلى إعادة جدولة وسيتم إشعار المرضى. هل تريد جعله يوم عطلة؟`)) return;
+        const warning = exceptionOff
+          ? `يوجد ${count} موعدًا محجوزًا في هذا اليوم. ستُلغى هذه المواعيد نهائيًا وسيتم إشعار المرضى لحجز موعد جديد. هل تريد جعله يوم عطلة؟`
+          : `يوجد ${count} موعدًا سيتأثر بساعات العمل الجديدة، وسيتم إشعار المرضى لإعادة الجدولة. هل تريد المتابعة؟`;
+        if (!window.confirm(warning)) return;
         await api.post("/doctor/schedule/exceptions", { ...payload, confirmAffected: true });
       }
       showToast("تم إضافة الاستثناء.", "success");

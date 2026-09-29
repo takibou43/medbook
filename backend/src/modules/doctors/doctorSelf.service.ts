@@ -25,17 +25,19 @@ function conflictDetails(appointments: AffectedAppointment[]) {
   };
 }
 
-async function notifyAffectedAppointments(appointments: AffectedAppointment[]) {
+async function notifyAffectedAppointments(appointments: AffectedAppointment[], cancelledForDayOff = false) {
   const results = await Promise.allSettled(
     appointments.flatMap((appointment) =>
       appointment.patient
         ? [createNotification(
             appointment.patient.userId,
-            "APPOINTMENT_RESCHEDULE_REQUIRED",
-            "موعدك يحتاج إلى إعادة جدولة",
-            `غيّر الطبيب أوقات عمله وأصبح موعد ${appointment.date.toISOString().slice(0, 10)} الساعة ${appointment.startTime} غير متاح. يرجى اختيار موعد جديد أو انتظار تواصل العيادة.`,
+            cancelledForDayOff ? "APPOINTMENT_CANCELLED" : "APPOINTMENT_RESCHEDULE_REQUIRED",
+            cancelledForDayOff ? "أُلغي موعدك بسبب عطلة الطبيب" : "موعدك يحتاج إلى إعادة جدولة",
+            cancelledForDayOff
+              ? `جعل الطبيب يوم ${appointment.date.toISOString().slice(0, 10)} عطلة، لذلك أُلغي موعدك الساعة ${appointment.startTime}. يرجى حجز موعد جديد يناسبك.`
+              : `غيّر الطبيب أوقات عمله وأصبح موعد ${appointment.date.toISOString().slice(0, 10)} الساعة ${appointment.startTime} غير متاح. يرجى اختيار موعد جديد أو انتظار تواصل العيادة.`,
             `/account?appointment=${appointment.id}`,
-            `reschedule-${appointment.id}`,
+            `${cancelledForDayOff ? "day-off-cancelled" : "reschedule"}-${appointment.id}`,
             { id: appointment.id, date: appointment.date }
           )]
         : []
@@ -147,8 +149,14 @@ export async function addScheduleException(
     (appointment) => appointment.date.toISOString().slice(0, 10) === exception.exceptionDate
   );
   if (affected.length > 0 && !confirmAffected) {
-    throw ApiError.conflict("يوجد في هذا اليوم مواعيد محجوزة مسبقًا. يلزم تأكيدك قبل جعله يوم عطلة.", conflictDetails(affected));
+    throw ApiError.conflict(
+      exception.isOff
+        ? "يوجد في هذا اليوم مواعيد محجوزة مسبقًا. سيؤدي تأكيد العطلة إلى إلغائها نهائيًا وإشعار المرضى."
+        : "سيؤثر هذا التعديل في مواعيد محجوزة مسبقًا. يلزم تأكيدك قبل الحفظ.",
+      conflictDetails(affected)
+    );
   }
+  const affectedStatus = exception.isOff ? AppointmentStatus.CANCELLED : AppointmentStatus.RESCHEDULE_REQUIRED;
   const [created] = await prisma.$transaction([
     prisma.doctorSchedule.create({
       data: {
@@ -161,10 +169,10 @@ export async function addScheduleException(
       },
     }),
     ...(affected.length > 0
-      ? [prisma.appointment.updateMany({ where: markRescheduleWhere(affected), data: { status: AppointmentStatus.RESCHEDULE_REQUIRED } })]
+      ? [prisma.appointment.updateMany({ where: markRescheduleWhere(affected), data: { status: affectedStatus } })]
       : []),
   ]);
-  await notifyAffectedAppointments(affected);
+  await notifyAffectedAppointments(affected, exception.isOff);
   return { schedule: created, affectedAppointments: affected.length };
 }
 

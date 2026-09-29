@@ -90,6 +90,18 @@ export function clearAppointmentCache(userId: string, storage: StorageLike = loc
   if (userId) storage.removeItem(keyFor(userId));
 }
 
+// يمسح كاش المواعيد لكل الحسابات على هذا المتصفح، مع إبقاء حساب واحد اختياريًا (keepUserId).
+// يُستدعى عند انتهاء الجلسة وتسجيل الخروج (بلا استثناء)، وعند دخول حساب (مع إبقاء كاشه فقط)،
+// حتى لا تبقى مواعيد مريض سابق مخزّنة على جهاز مشترك.
+export function clearAppointmentCachesExcept(keepUserId: string | null, storage: StorageLike = localStorage) {
+  const keys: string[] = [];
+  for (let i = 0; i < storage.length; i += 1) {
+    const key = storage.key(i);
+    if (key?.startsWith(KEY_PREFIX) && key !== (keepUserId ? keyFor(keepUserId) : null)) keys.push(key);
+  }
+  keys.forEach((key) => storage.removeItem(key));
+}
+
 export function clearInvalidAppointmentCaches(storage: StorageLike = localStorage, now = Date.now()) {
   const ids: string[] = [];
   for (let i = 0; i < storage.length; i += 1) {

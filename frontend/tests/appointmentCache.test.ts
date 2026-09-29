@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APPOINTMENT_CACHE_TTL_MS, loadAppointmentCache, saveAppointmentCache } from "../src/lib/appointmentCache.ts";
+import { APPOINTMENT_CACHE_TTL_MS, clearAppointmentCachesExcept, loadAppointmentCache, saveAppointmentCache } from "../src/lib/appointmentCache.ts";
 
 class MemoryStorage {
   values = new Map<string, string>();
@@ -28,4 +28,17 @@ test("deletes expired and corrupt entries", () => {
   s.setItem("medbook_patient_appointments_v1:bad", "{");
   assert.equal(loadAppointmentCache("bad", s as any), null);
   assert.equal(s.getItem("medbook_patient_appointments_v1:bad"), null);
+});
+
+test("clears every patient's cache, or all but the signed-in one", () => {
+  const s = new MemoryStorage();
+  saveAppointmentCache("a", [appointment], s as any, 1000);
+  saveAppointmentCache("b", [appointment], s as any, 1000);
+  s.setItem("unrelated", "keep");
+  clearAppointmentCachesExcept("b", s as any);
+  assert.equal(s.getItem("medbook_patient_appointments_v1:a"), null);
+  assert.notEqual(s.getItem("medbook_patient_appointments_v1:b"), null);
+  clearAppointmentCachesExcept(null, s as any);
+  assert.equal(s.getItem("medbook_patient_appointments_v1:b"), null);
+  assert.equal(s.getItem("unrelated"), "keep");
 });

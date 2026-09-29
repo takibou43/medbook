@@ -46,6 +46,12 @@ async function notifyAffectedAppointments(appointments: AffectedAppointment[]) {
   }
 }
 
+// شرط التحويل إلى RESCHEDULE_REQUIRED: نفس المواعيد المتأثرة، وبشرط أن تكون ما تزال نشطة لحظة
+// الكتابة. يمنع سباقًا يُلغى فيه الموعد أو يبدأ (IN_PROGRESS/LATE/COMPLETED) بين الفحص والحفظ فيُكتب فوقه.
+export function markRescheduleWhere(affected: { id: string }[]) {
+  return { id: { in: affected.map((a) => a.id) }, status: { in: SCHEDULE_ACTIVE_STATUSES } };
+}
+
 async function findAffectedAppointments(doctorId: string, schedules: ScheduleBlock[]): Promise<AffectedAppointment[]> {
   const appointments = await prisma.appointment.findMany({
     where: { doctorId, date: { gte: algeriaTodayUTCMidnight() }, status: { in: SCHEDULE_ACTIVE_STATUSES } },
@@ -111,7 +117,7 @@ export async function replaceWeeklySchedule(
       data: blocks.map((b) => ({ doctorId: doctor.id, dayOfWeek: b.dayOfWeek, startTime: b.startTime, endTime: b.endTime })),
     }),
     ...(affected.length > 0
-      ? [prisma.appointment.updateMany({ where: { id: { in: affected.map((a) => a.id) } }, data: { status: AppointmentStatus.RESCHEDULE_REQUIRED } })]
+      ? [prisma.appointment.updateMany({ where: markRescheduleWhere(affected), data: { status: AppointmentStatus.RESCHEDULE_REQUIRED } })]
       : []),
   ]);
   await notifyAffectedAppointments(affected);
@@ -155,7 +161,7 @@ export async function addScheduleException(
       },
     }),
     ...(affected.length > 0
-      ? [prisma.appointment.updateMany({ where: { id: { in: affected.map((a) => a.id) } }, data: { status: AppointmentStatus.RESCHEDULE_REQUIRED } })]
+      ? [prisma.appointment.updateMany({ where: markRescheduleWhere(affected), data: { status: AppointmentStatus.RESCHEDULE_REQUIRED } })]
       : []),
   ]);
   await notifyAffectedAppointments(affected);

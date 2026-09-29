@@ -1,0 +1,75 @@
+# فحص تلقائي لكل دفع إلى main ولكل طلب دمج: تثبيت نظيف من lockfile، TypeScript،
+# الاختبارات غير التكاملية، والبناء للمشروعات الثلاثة. مجاني (المستودع عام)، بلا أسرار،
+# ولا يمسّ قاعدة البيانات ولا Render ولا Vercel. اختبارات التكامل تبقى متخطاة لأنها
+# تحتاج قاعدة اختبار منفصلة (مهمة لاحقة).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --include=dev
+      - run: npx prisma generate --schema ../prisma/schema.prisma
+      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npx vitest run
+      - run: npm run build
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --include=dev
+      - run: npm test
+      - run: npm run build
+
+  frontend-doctor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend-doctor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend-doctor/package-lock.json
+      - run: npm ci --include=dev
+      - run: npm run build

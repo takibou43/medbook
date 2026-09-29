@@ -8,3 +8,4 @@ build/
 coverage/
 backend/generated/
 frontend/dist/
+*.tsbuildinfo

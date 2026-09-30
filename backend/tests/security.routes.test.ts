@@ -75,7 +75,7 @@ const h = vi.hoisted(() => {
     (!w.date?.gte || a.date >= w.date.gte) &&
     (!w.status?.in || w.status.in.includes(a.status));
 
-  const db = {
+  const db: any = {
     appointment: {
       findFirst: vi.fn(async ({ where, select }: any) => applySelect(s.appts.find((a) => matchWhere(a, where)) ?? null, select)),
       findUnique: vi.fn(async ({ where }: any) => s.appts.find((a) => a.id === where.id) ?? null),
@@ -115,6 +115,7 @@ const h = vi.hoisted(() => {
     },
     auditLog: { create: vi.fn(async ({ data }: any) => (s.audit.push(data), data)) },
   };
+  db.$transaction = vi.fn(async (work: (tx: typeof db) => unknown) => work(db));
   return { s, db, DOCTOR, future };
 });
 
@@ -285,7 +286,10 @@ describe("مسارات PATCH للإدارة — تحقق المدخلات", () =
   it("طبيب: حقل مسموح يُمرَّر كما هو فقط", async () => {
     const r = await patch(`/api/admin/doctors/${DOC_ID}`, { subscriptionStatus: "EXPIRED" });
     expect(r.status).toBe(200);
-    expect(h.db.doctor.update).toHaveBeenCalledWith({ where: { id: DOC_ID }, data: { subscriptionStatus: "EXPIRED" } });
+    expect(h.db.doctor.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: DOC_ID },
+      data: { subscriptionStatus: "EXPIRED" },
+    }));
   });
 
   it.each([

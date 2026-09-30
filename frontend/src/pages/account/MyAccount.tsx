@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { CalendarDays, Clock, LogOut, MapPin, Plus, WifiOff } from "lucide-react";
+import { Bell, BellRing, CalendarDays, Clock, LogOut, MapPin, Plus, WifiOff } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { api, apiErrorMessage } from "../../lib/api";
 import { disablePatientPush } from "../../lib/patientPush";
@@ -13,6 +13,8 @@ import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
 import type { MyAppointment } from "../../types";
 import { clearInvalidAppointmentCaches, fromCachedPatientAppointment, loadAppointmentCache, saveAppointmentCache } from "../../lib/appointmentCache";
+import { useWilayas } from "../../hooks/useCatalog";
+import { useMarkAllNotificationsRead, useNotifications } from "../../hooks/useNotifications";
 
 const ACTIVE = new Set(["PENDING", "CONFIRMED", "RESCHEDULE_REQUIRED", "IN_PROGRESS", "LATE"]);
 const CANCELLABLE = new Set(["PENDING", "CONFIRMED", "RESCHEDULE_REQUIRED"]);
@@ -121,6 +123,12 @@ export default function MyAccount() {
   const focusId = params.get("appointment");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string[]>(() => readDismissed());
+  const { data: wilayas } = useWilayas();
+  const { data: notifications } = useNotifications(Boolean(user));
+  const markAllNotificationsRead = useMarkAllNotificationsRead();
+  const [areaWilayaId, setAreaWilayaId] = useState("");
+  const [areaCityId, setAreaCityId] = useState("");
+  const [savingArea, setSavingArea] = useState(false);
   const initialCache = useMemo(() => {
     clearInvalidAppointmentCaches();
     return user ? loadAppointmentCache(user.id) : null;
@@ -155,6 +163,19 @@ export default function MyAccount() {
     refetchInterval: online ? 60000 : false,
     refetchIntervalInBackground: false,
   });
+
+  const { data: profile, refetch: refetchProfile } = useQuery({
+    queryKey: ["patient-profile"],
+    queryFn: async () => (await api.get<{ data: { cityId?: string | null; city?: { id: string; wilayaId: string; wilaya?: { id: string } } | null } }>("/patient/profile")).data.data,
+    enabled: Boolean(user),
+  });
+
+  useEffect(() => {
+    const city = profile?.city;
+    if (!city) return;
+    setAreaWilayaId(city.wilaya?.id ?? city.wilayaId);
+    setAreaCityId(city.id);
+  }, [profile?.city?.id, profile?.city?.wilayaId, profile?.city?.wilaya?.id]);
 
   useEffect(() => {
     const onOnline = () => { setOnline(true); void refetch(); };
@@ -224,6 +245,20 @@ export default function MyAccount() {
     }
   }
 
+  async function saveArea() {
+    if (!areaCityId) return;
+    setSavingArea(true);
+    try {
+      await api.patch("/patient/profile", { cityId: areaCityId });
+      await refetchProfile();
+      showToast("تم حفظ منطقتك. سنعلمك عند انضمام طبيب جديد في ولايتك.", "success");
+    } catch (err) {
+      showToast(apiErrorMessage(err, "تعذّر حفظ المنطقة."), "error");
+    } finally {
+      setSavingArea(false);
+    }
+  }
+
   const fullName = [user.patient?.firstName, user.patient?.lastName].filter(Boolean).join(" ");
 
   return (
@@ -251,6 +286,52 @@ export default function MyAccount() {
               if (focusId === ratePromptFor.id) navigate("/account", { replace: true });
             }}
           />
+        )}
+
+        <section className="glass p-4">
+          <h2 className="flex items-center gap-2 font-bold text-slate-900"><MapPin className="h-5 w-5 text-primary-600" /> منطقتي</h2>
+          <p className="mt-1 text-xs text-slate-500">اختر منطقتك لتصلك إشعارات الأطباء الجدد في ولايتك.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <select
+              className="input"
+              aria-label="الولاية"
+              value={areaWilayaId}
+              onChange={(event) => { setAreaWilayaId(event.target.value); setAreaCityId(""); }}
+            >
+              <option value="">اختر الولاية</option>
+              {wilayas?.map((wilaya) => <option key={wilaya.id} value={wilaya.id}>{wilaya.nameAr}</option>)}
+            </select>
+            <select className="input" aria-label="البلدية" value={areaCityId} disabled={!areaWilayaId} onChange={(event) => setAreaCityId(event.target.value)}>
+              <option value="">اختر البلدية</option>
+              {(wilayas?.find((wilaya) => wilaya.id === areaWilayaId)?.cities ?? []).map((city) => <option key={city.id} value={city.id}>{city.nameAr}</option>)}
+            </select>
+          </div>
+          <button type="button" className="btn-primary mt-3 min-h-[44px]" disabled={!areaCityId || savingArea} onClick={saveArea}>
+            {savingArea ? "جارٍ الحفظ..." : "حفظ المنطقة"}
+          </button>
+        </section>
+
+        {notifications && notifications.length > 0 && (
+          <section className="glass p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 font-bold text-slate-900"><Bell className="h-5 w-5 text-primary-600" /> الإشعارات</h2>
+              {notifications.some((notification) => !notification.isRead) && (
+                <button type="button" className="text-xs font-semibold text-primary-700 hover:underline" onClick={() => markAllNotificationsRead.mutate()}>
+                  تعليم الكل كمقروء
+                </button>
+              )}
+            </div>
+            <ul className="mt-3 space-y-2">
+              {notifications.slice(0, 5).map((notification) => (
+                <li key={notification.id} className={clsx("rounded-xl border p-3", notification.isRead ? "border-slate-200 bg-white/60" : "border-primary-200 bg-primary-50")}>
+                  <p className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                    {!notification.isRead && <BellRing className="h-4 w-4 text-primary-600" />}{notification.title}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">{notification.message}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         <ReminderCard />

@@ -140,7 +140,7 @@ export interface User {
   phone?: string | null;
   role: Role;
   isActive: boolean;
-  patient?: { id: string; firstName: string; lastName: string } | null;
+  patient?: { id: string; firstName: string; lastName: string; cityId?: string | null; city?: City | null } | null;
   doctor?: Doctor | null;
   // حظر من إنشاء حجوزات جديدة (يُحدّده الخادم؛ الخادم يرفض الحجز على أي حال).
   isBlocked?: boolean;

@@ -8,10 +8,11 @@ export function isNotificationExpired(n: Pick<Notification, "expiresAt">, now: n
   return !Number.isNaN(t) && t <= now;
 }
 
-export function useNotifications() {
+export function useNotifications(enabled = true) {
   return useQuery({
     queryKey: ["notifications"],
     queryFn: async () => (await api.get<{ data: Notification[] }>("/notifications")).data.data,
+    enabled,
     // الخادم لا يُرجع إشعارات المواعيد المنتهية أصلًا؛ هذا حاجز إضافي لبيانات مخزّنة في الذاكرة منذ
     // ما قبل منتصف الليل (تطبيق بقي مفتوحًا): تختفي عند انتهاء يوم الموعد دون انتظار إعادة الجلب.
     select: (list) => list.filter((n) => !isNotificationExpired(n)),

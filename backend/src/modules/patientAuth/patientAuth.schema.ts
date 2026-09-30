@@ -24,6 +24,9 @@ export const patientRegisterSchema = z.object({
     .regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)")
     .optional()
     .or(z.literal("").transform(() => undefined)),
+  // اختيار المنطقة اختياري على مستوى API للتوافق مع العملاء القدامى، وتطلبه الواجهة الجديدة
+  // حتى يتمكن المريض من تلقي إشعارات الأطباء الجدد في ولايته.
+  cityId: z.string().uuid("البلدية غير صالحة").optional(),
 });
 
 export const patientLoginSchema = z.object({

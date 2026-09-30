@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
 import { PHONE_REGEX } from "../../lib/booking";
+import { useWilayas } from "../../hooks/useCatalog";
 
 type Mode = "login" | "register";
 
@@ -18,6 +19,8 @@ interface LoginValues {
 interface RegisterValues extends LoginValues {
   name: string;
   phone: string;
+  wilayaId: string;
+  cityId: string;
 }
 
 const EMAIL_RULE = { required: "البريد الإلكتروني مطلوب", pattern: { value: /^\S+@\S+\.\S+$/, message: "بريد إلكتروني غير صالح" } };
@@ -35,10 +38,13 @@ export default function AccountAuth() {
   const [mode, setMode] = useState<Mode>(params.get("mode") === "register" ? "register" : "login");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { data: wilayas } = useWilayas();
   const redirect = safeRedirect(params.get("redirect"));
 
   const loginForm = useForm<LoginValues>({ defaultValues: { email: "", password: "" } });
-  const registerForm = useForm<RegisterValues>({ defaultValues: { name: "", email: "", password: "", phone: "" } });
+  const registerForm = useForm<RegisterValues>({ defaultValues: { name: "", email: "", password: "", phone: "", wilayaId: "", cityId: "" } });
+  const selectedWilayaId = registerForm.watch("wilayaId");
+  const cities = wilayas?.find((wilaya) => wilaya.id === selectedWilayaId)?.cities ?? [];
 
   if (!loading && user) return <Navigate to={redirect} replace />;
 
@@ -60,7 +66,7 @@ export default function AccountAuth() {
     setSubmitting(true);
     setError(null);
     try {
-      await registerPatient({ name: v.name.trim(), email: v.email.trim(), password: v.password, phone: v.phone.trim() || undefined });
+      await registerPatient({ name: v.name.trim(), email: v.email.trim(), password: v.password, phone: v.phone.trim() || undefined, cityId: v.cityId });
       showToast("تم إنشاء حسابك بنجاح.", "success");
       navigate(redirect, { replace: true });
     } catch (err) {
@@ -111,6 +117,30 @@ export default function AccountAuth() {
             <Input label="البريد الإلكتروني" type="email" dir="ltr" className="text-left" autoComplete="email" error={registerForm.formState.errors.email?.message} {...registerForm.register("email", EMAIL_RULE)} />
             <Input label="كلمة المرور (8 خانات على الأقل)" type="password" dir="ltr" className="text-left" autoComplete="new-password" error={registerForm.formState.errors.password?.message} {...registerForm.register("password", { required: "كلمة المرور مطلوبة", minLength: { value: 8, message: "كلمة المرور يجب أن تكون 8 خانات على الأقل" } })} />
             <Input label="رقم الهاتف (اختياري)" type="tel" inputMode="tel" dir="ltr" className="text-left" placeholder="0551234567" autoComplete="tel" error={registerForm.formState.errors.phone?.message} {...registerForm.register("phone", { pattern: { value: PHONE_REGEX, message: "رقم هاتف جزائري غير صالح (مثال: 0551234567)" } })} />
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="patient-wilaya">الولاية</label>
+              <select
+                id="patient-wilaya"
+                className="input"
+                {...registerForm.register("wilayaId", {
+                  required: "الولاية مطلوبة",
+                  onChange: () => registerForm.setValue("cityId", "", { shouldValidate: true }),
+                })}
+              >
+                <option value="">اختر الولاية</option>
+                {wilayas?.map((wilaya) => <option key={wilaya.id} value={wilaya.id}>{wilaya.nameAr}</option>)}
+              </select>
+              {registerForm.formState.errors.wilayaId && <p className="mt-1 text-xs text-red-600">{registerForm.formState.errors.wilayaId.message}</p>}
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="patient-city">البلدية</label>
+              <select id="patient-city" className="input" disabled={!selectedWilayaId} {...registerForm.register("cityId", { required: "البلدية مطلوبة" })}>
+                <option value="">اختر البلدية</option>
+                {cities.map((city) => <option key={city.id} value={city.id}>{city.nameAr}</option>)}
+              </select>
+              {registerForm.formState.errors.cityId && <p className="mt-1 text-xs text-red-600">{registerForm.formState.errors.cityId.message}</p>}
+              <p className="mt-1 text-xs text-slate-500">نستعمل المنطقة لإعلامك عند انضمام طبيب جديد في ولايتك.</p>
+            </div>
             {error && <p className="text-sm font-semibold text-red-600" role="alert">{error}</p>}
             <Button type="submit" className="min-h-[48px] w-full" loading={submitting}>
               إنشاء الحساب

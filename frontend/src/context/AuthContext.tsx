@@ -12,6 +12,7 @@ export interface PatientRegisterInput {
   email: string;
   password: string;
   phone?: string;
+  cityId?: string;
 }
 
 interface AuthContextValue {

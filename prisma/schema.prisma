@@ -144,6 +144,7 @@ model City {
 
   doctors Doctor[]
   clinics Clinic[]
+  patients Patient[]
 
   @@index([wilayaId])
   @@map("cities")
@@ -201,11 +202,13 @@ model Patient {
   birthDate DateTime?
   gender    Gender?
   cityId    String?
+  city      City?     @relation(fields: [cityId], references: [id], onDelete: SetNull)
 
   appointments Appointment[]
   reviews      Review[]
   blocks       PatientBlock[]
 
+  @@index([cityId])
   @@map("patients")
 }
 
@@ -281,6 +284,8 @@ model Doctor {
   favorites    Favorite[]
   assistants       Assistant[]
   assistantInvites AssistantInvite[]
+  // إشعارات المرضى التي أُنشئت عند توثيق هذا الطبيب في ولايتهم.
+  newDoctorNotifications Notification[] @relation("NewDoctorNotifications")
   // محادثة الإدارة مع هذا الطبيب (واحدة فقط) — علاقة عكسية بلا أي عمود جديد في جدول doctors.
   conversation     DoctorConversation?
 
@@ -477,10 +482,16 @@ model Notification {
   appointment     Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
   appointmentDate DateTime?
   expiresAt       DateTime?
+  // الطبيب الذي أُعلن عن انضمامه. وجوده مع القيد الفريد يمنع إرسال الإعلان نفسه
+  // للمريض أكثر من مرة إذا أعادت الإدارة طلب التوثيق أو أُعيدت المحاولة.
+  newDoctorId      String?
+  newDoctor        Doctor? @relation("NewDoctorNotifications", fields: [newDoctorId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
   @@index([userId, expiresAt])
   @@index([appointmentId])
+  @@index([newDoctorId])
+  @@unique([userId, type, newDoctorId])
   @@map("notifications")
 }
 

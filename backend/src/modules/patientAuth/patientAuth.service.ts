@@ -22,7 +22,7 @@ export const PATIENT_ME_SELECT = {
   phone: true,
   role: true,
   createdAt: true,
-  patient: { select: { id: true, firstName: true, lastName: true } },
+  patient: { select: { id: true, firstName: true, lastName: true, cityId: true, city: { select: { id: true, nameAr: true, wilayaId: true } } } },
 } satisfies Prisma.UserSelect;
 
 function splitName(full: string): { firstName: string; lastName: string } {
@@ -43,6 +43,11 @@ export async function registerPatientAccount(input: PatientRegisterInput) {
   });
   if (existing) throw ApiError.conflict("البريد الإلكتروني أو رقم الهاتف مستخدم مسبقًا.");
 
+  if (input.cityId) {
+    const city = await prisma.city.findUnique({ where: { id: input.cityId }, select: { id: true } });
+    if (!city) throw ApiError.badRequest("البلدية المختارة غير موجودة.");
+  }
+
   const passwordHash = await hashPassword(input.password);
   const { firstName, lastName } = splitName(input.name);
 
@@ -53,7 +58,7 @@ export async function registerPatientAccount(input: PatientRegisterInput) {
       phone: input.phone ?? null,
       passwordHash,
       role: Role.PATIENT,
-      patient: { create: { firstName, lastName } },
+      patient: { create: { firstName, lastName, cityId: input.cityId ?? null } },
     },
     select: PATIENT_ME_SELECT,
   });

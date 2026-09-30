@@ -16,7 +16,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const patient = await prisma.patient.findUnique({
       where: { userId: req.user!.id },
-      include: { user: { select: { email: true, phone: true } }, city: true } as any,
+      include: { user: { select: { email: true, phone: true } }, city: { include: { wilaya: true } } },
     });
     if (!patient) throw ApiError.notFound("الملف الشخصي غير موجود.");
     res.json({ success: true, data: patient });
@@ -40,7 +40,16 @@ router.patch(
     const patient = await prisma.patient.findUnique({ where: { userId: req.user!.id } });
     if (!patient) throw ApiError.notFound("الملف الشخصي غير موجود.");
 
-    const updated = await prisma.patient.update({ where: { id: patient.id }, data: patientData });
+    if (patientData.cityId) {
+      const city = await prisma.city.findUnique({ where: { id: patientData.cityId }, select: { id: true } });
+      if (!city) throw ApiError.badRequest("البلدية المختارة غير موجودة.");
+    }
+
+    const updated = await prisma.patient.update({
+      where: { id: patient.id },
+      data: patientData,
+      include: { city: { include: { wilaya: true } } },
+    });
     if (phone) await prisma.user.update({ where: { id: req.user!.id }, data: { phone } });
 
     res.json({ success: true, data: updated });

@@ -13,6 +13,7 @@ export type NotificationType =
   | "APPOINTMENT_LATE"
   | "DOCTOR_VERIFIED"
   | "DOCTOR_REJECTED"
+  | "NEW_DOCTOR_IN_AREA"
   | "NEW_MESSAGE";
 
 // نص محايد لإشعار المتصفح حسب نوع الحدث. متعمّد أن يخلو من اسم المريض ورقمه:
@@ -24,6 +25,7 @@ const PUSH_BODY: Partial<Record<NotificationType, string>> = {
   APPOINTMENT_RESCHEDULE_REQUIRED: "غيّر الطبيب أوقات عمله وأصبح موعدك بحاجة إلى إعادة جدولة. افتح التطبيق لعرض التفاصيل.",
   APPOINTMENT_REMINDER: "تذكير بموعد قريب. افتح التطبيق لعرض التفاصيل.",
   NEW_MESSAGE: "لديك رسالة جديدة. افتح قسم الرسائل.",
+  NEW_DOCTOR_IN_AREA: "انضم طبيب جديد إلى مادبوك في ولايتك. افتح التطبيق للاطلاع عليه.",
   // للمريض صاحب الحساب عند تسجيله «متأخر» — بلا أي معلومة طبية.
   APPOINTMENT_LATE: "تم تجاوز دورك مؤقتًا لأنك لم تكن حاضرًا عند المناداة. توجّه إلى العيادة، ما زلت في قائمة الانتظار.",
 };

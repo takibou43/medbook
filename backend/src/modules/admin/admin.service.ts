@@ -6,6 +6,7 @@ import { createNotification } from "../notifications/notifications.service";
 import { algeriaTodayUTCMidnight } from "../../lib/slots";
 import { env } from "../../config/env";
 import { lockDoctorRow, recalcDoctorRating } from "../reviews/reviews.service";
+import { sendPushToUser } from "../../lib/push";
 
 // ---------------- Dashboard stats ----------------
 
@@ -159,19 +160,115 @@ export async function listDoctorsAdmin(params: { verificationStatus?: Verificati
   return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
 }
 
+type AreaDoctor = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  wilayaId: string;
+  city: { nameAr: string };
+  specialty: { nameAr: string };
+};
+
+export function isDoctorPublic(status: VerificationStatus, subscription: SubscriptionStatus) {
+  return status === VerificationStatus.VERIFIED && subscription === SubscriptionStatus.ACTIVE;
+}
+
+export function shouldAnnounceDoctor(
+  beforeStatus: VerificationStatus,
+  beforeSubscription: SubscriptionStatus,
+  afterStatus: VerificationStatus,
+  afterSubscription: SubscriptionStatus
+) {
+  return !isDoctorPublic(beforeStatus, beforeSubscription) && isDoctorPublic(afterStatus, afterSubscription);
+}
+
+/**
+ * يضع إشعارًا عامًا لكل مريض حدّد مدينة داخل ولاية الطبيب. لا نستنتج الموقع من موعد سابق
+ * ولا من عنوان IP. القيد الفريد في قاعدة البيانات يمنع التكرار عند إعادة المحاولة.
+ */
+async function queueNewDoctorAreaNotifications(tx: Prisma.TransactionClient, doctor: AreaDoctor) {
+  const cities = await tx.city.findMany({ where: { wilayaId: doctor.wilayaId }, select: { id: true } });
+  if (cities.length === 0) return [] as string[];
+
+  const recipients = await tx.patient.findMany({
+    where: { cityId: { in: cities.map((city) => city.id) }, user: { isActive: true } },
+    select: { userId: true },
+  });
+  if (recipients.length === 0) return [] as string[];
+
+  const userIds = recipients.map((patient) => patient.userId);
+  const alreadyQueued = await tx.notification.findMany({
+    where: { userId: { in: userIds }, type: "NEW_DOCTOR_IN_AREA", newDoctorId: doctor.id },
+    select: { userId: true },
+  });
+  const existing = new Set(alreadyQueued.map((notification) => notification.userId));
+  const pendingUserIds = userIds.filter((userId) => !existing.has(userId));
+  if (pendingUserIds.length === 0) return [] as string[];
+
+  await tx.notification.createMany({
+    data: pendingUserIds.map((userId) => ({
+      userId,
+      type: "NEW_DOCTOR_IN_AREA",
+      newDoctorId: doctor.id,
+      title: "طبيب جديد في ولايتك",
+      message: `انضم د. ${doctor.firstName} ${doctor.lastName}، ${doctor.specialty.nameAr} في ${doctor.city.nameAr}، إلى مادبوك.`,
+    })),
+    skipDuplicates: true,
+  });
+  return pendingUserIds;
+}
+
+function pushNewDoctorAreaNotification(userIds: string[], doctor: AreaDoctor) {
+  for (const userId of userIds) {
+    void sendPushToUser(userId, {
+      title: "طبيب جديد في ولايتك",
+      body: "انضم طبيب جديد إلى مادبوك في ولايتك. افتح التطبيق للاطلاع عليه.",
+      url: "/",
+      tag: `new-doctor-${doctor.id}`,
+    });
+  }
+}
+
 export async function setDoctorVerification(doctorId: string, status: VerificationStatus) {
-    const doctor = await prisma.doctor.update({ where: { id: doctorId }, data: { verificationStatus: status }, include: { user: { select: { email: true, phone: true, isActive: true } } } });
+  const result = await prisma.$transaction(async (tx) => {
+    const before = await tx.doctor.findUnique({
+      where: { id: doctorId },
+      select: { verificationStatus: true, subscriptionStatus: true },
+    });
+    if (!before) throw ApiError.notFound("الطبيب غير موجود.");
 
-  await createNotification(
-        doctor.userId,
-        status === VerificationStatus.VERIFIED ? "DOCTOR_VERIFIED" : "DOCTOR_REJECTED",
-        status === VerificationStatus.VERIFIED ? "تم التحقق من ملفك المهني" : "تم رفض ملفك المهني",
-        status === VerificationStatus.VERIFIED
-          ? "تهانينا! تم التحقق من ملفك وأصبح ظاهرًا للمرضى على المنصة."
-          : "للأسف تم رفض ملفك المهني. الرجاء التواصل مع الإدارة لمزيد من المعلومات."
-      );
+    const doctor = await tx.doctor.update({
+      where: { id: doctorId },
+      data: { verificationStatus: status },
+      include: {
+        user: { select: { email: true, phone: true, isActive: true } },
+        city: { select: { nameAr: true } },
+        specialty: { select: { nameAr: true } },
+      },
+    });
 
-  return doctor;
+    const becamePublic = shouldAnnounceDoctor(
+      before.verificationStatus,
+      before.subscriptionStatus,
+      doctor.verificationStatus,
+      doctor.subscriptionStatus
+    );
+    const recipients = becamePublic ? await queueNewDoctorAreaNotifications(tx, doctor) : [];
+    return { doctor, recipients, statusChanged: before.verificationStatus !== status };
+  });
+
+  if (result.statusChanged) {
+    await createNotification(
+      result.doctor.userId,
+      status === VerificationStatus.VERIFIED ? "DOCTOR_VERIFIED" : "DOCTOR_REJECTED",
+      status === VerificationStatus.VERIFIED ? "تم التحقق من ملفك المهني" : "تم رفض ملفك المهني",
+      status === VerificationStatus.VERIFIED
+        ? "تهانينا! تم التحقق من ملفك وأصبح ظاهرًا للمرضى على المنصة."
+        : "للأسف تم رفض ملفك المهني. الرجاء التواصل مع الإدارة لمزيد من المعلومات."
+    );
+  }
+  pushNewDoctorAreaNotification(result.recipients, result.doctor);
+  return result.doctor;
 }
 
 // الحقول المسموح بها فقط (مخطط Zod الصارم في admin.routes) — لا علاقات متداخلة ولا userId.
@@ -179,7 +276,28 @@ export async function updateDoctorAdmin(
     doctorId: string,
     data: { subscriptionStatus?: SubscriptionStatus; subscriptionExpiresAt?: Date | null }
 ) {
-    return prisma.doctor.update({ where: { id: doctorId }, data });
+  const result = await prisma.$transaction(async (tx) => {
+    const before = await tx.doctor.findUnique({
+      where: { id: doctorId },
+      select: { verificationStatus: true, subscriptionStatus: true },
+    });
+    if (!before) throw ApiError.notFound("الطبيب غير موجود.");
+    const doctor = await tx.doctor.update({
+      where: { id: doctorId },
+      data,
+      include: { city: { select: { nameAr: true } }, specialty: { select: { nameAr: true } } },
+    });
+    const becamePublic = shouldAnnounceDoctor(
+      before.verificationStatus,
+      before.subscriptionStatus,
+      doctor.verificationStatus,
+      doctor.subscriptionStatus
+    );
+    const recipients = becamePublic ? await queueNewDoctorAreaNotifications(tx, doctor) : [];
+    return { doctor, recipients };
+  });
+  pushNewDoctorAreaNotification(result.recipients, result.doctor);
+  return result.doctor;
 }
 
 // ---------------- Specialties CRUD ----------------

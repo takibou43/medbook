@@ -2,10 +2,11 @@ import { Request, Response } from "express";
 import { AppointmentStatus } from "@prisma/client";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as service from "./appointments.service";
+import { redactDoctorSecrets } from "../../lib/redact";
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const appointment = await service.createAppointment(req.user!.id, req.body);
-  res.status(201).json({ success: true, data: appointment });
+  res.status(201).json({ success: true, data: redactDoctorSecrets(appointment) });
 });
 
 export const listMine = asyncHandler(async (req: Request, res: Response) => {
@@ -15,17 +16,17 @@ export const listMine = asyncHandler(async (req: Request, res: Response) => {
     role === "DOCTOR" || role === "ASSISTANT"
       ? await service.listForDoctor(req.user!.id, role, status, req.query.date as string | undefined)
       : await service.listForPatient(req.user!.id, status);
-  res.json({ success: true, data });
+  res.json({ success: true, data: redactDoctorSecrets(data) });
 });
 
 export const updateStatus = asyncHandler(async (req: Request, res: Response) => {
   const updated = await service.updateStatus(req.user!.id, req.user!.role, req.params.id, req.body.status);
-  res.json({ success: true, data: updated });
+  res.json({ success: true, data: redactDoctorSecrets(updated) });
 });
 
 export const cancel = asyncHandler(async (req: Request, res: Response) => {
   const updated = await service.cancelByPatient(req.user!.id, req.params.id);
-  res.json({ success: true, data: updated });
+  res.json({ success: true, data: redactDoctorSecrets(updated) });
 });
 
 // ---- طابور العيادة اليومي (للطبيب فقط) ----

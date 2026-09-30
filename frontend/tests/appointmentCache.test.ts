@@ -42,3 +42,16 @@ test("clears every patient's cache, or all but the signed-in one", () => {
   assert.equal(s.getItem("medbook_patient_appointments_v1:b"), null);
   assert.equal(s.getItem("unrelated"), "keep");
 });
+
+test("family members' appointments never enter the offline cache (no name, relationship or member id)", () => {
+  const s = new MemoryStorage();
+  const family = {
+    ...appointment, id: "fam", familyMemberId: "fm-secret-id",
+    beneficiary: { type: "FAMILY_MEMBER", name: "ياسين الابن", relationship: "CHILD", familyMemberId: "fm-secret-id" },
+  };
+  const self = { ...appointment, id: "self", beneficiary: { type: "SELF", name: "سارة", relationship: null, familyMemberId: null } };
+  saveAppointmentCache("u1", [family, self] as any, s as any, 1000);
+  const raw = s.getItem("medbook_patient_appointments_v1:u1")!;
+  for (const secret of ["fam", "fm-secret-id", "ياسين", "CHILD", "beneficiary", "relationship"]) assert.equal(raw.includes(secret), false, secret);
+  assert.deepEqual(loadAppointmentCache("u1", s as any, 1000)?.appointments.map((a) => a.id), ["self"]);
+});

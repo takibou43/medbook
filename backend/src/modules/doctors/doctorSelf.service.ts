@@ -6,6 +6,8 @@ import { autoExpireStaleAppointments } from "../appointments/appointments.servic
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
 import { isWithinWorkingHours, ScheduleBlock } from "../../lib/slots";
 import { createNotification } from "../notifications/notifications.service";
+import { syncDentalFollowUpsSafe } from "../../lib/dentalFollowUpSync";
+import { beneficiaryOf, FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
 
 const SCHEDULE_ACTIVE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
 
@@ -172,6 +174,8 @@ export async function addScheduleException(
       ? [prisma.appointment.updateMany({ where: markRescheduleWhere(affected), data: { status: affectedStatus } })]
       : []),
   ]);
+  // عطلة ألغت مواعيد: متابعات خطط الأسنان المرتبطة بها تعود DUE (لا تُحذف).
+  if (exception.isOff && affected.length > 0) await syncDentalFollowUpsSafe(affected.map((a) => a.id), "CANCELLED");
   await notifyAffectedAppointments(affected, exception.isOff);
   return { schedule: created, affectedAppointments: affected.length };
 }
@@ -293,28 +297,40 @@ export async function getOwnPatients(userId: string) {
   const doctor = await getDoctorByUserId(userId);
   const appointments = await prisma.appointment.findMany({
     where: { doctorId: doctor.id },
-    include: { patient: { include: { user: { select: { email: true, phone: true } } } } },
-    orderBy: { date: "desc" },
+    include: {
+      patient: { include: { user: { select: { email: true, phone: true } } } },
+      familyMember: { select: FAMILY_MEMBER_PUBLIC_SELECT },
+    },
+    orderBy: [{ date: "desc" }, { startTime: "desc" }],
   });
 
   const map = new Map<string, any>();
   for (const a of appointments) {
     // الحجوزات كضيف (بدون حساب) لا تملك patientId — نستخدم رقم الهاتف كمفتاح تفرّد بديل،
-    // وإن لم يتوفر فكل حجز يُعامل كسجل مستقل.
-    const key = a.patientId ?? `guest:${a.guestPhone ?? a.id}`;
+    // وإن لم يتوفر فكل حجز يُعامل كسجل مستقل. أفراد العائلة يظهرون كمرضى مستقلين (صاحب الحساب + الفرد).
+    const key = a.patientId ? `${a.patientId}:${a.familyMemberId ?? "self"}` : `guest:${a.guestPhone ?? a.id}`;
+    const beneficiary = beneficiaryOf(a);
     if (!map.has(key)) {
       map.set(key, {
         patientId: a.patientId,
+        familyMemberId: a.familyMemberId,
         isGuest: !a.patientId,
-        firstName: a.patient ? a.patient.firstName : a.guestFirstName,
-        lastName: a.patient ? a.patient.lastName : a.guestLastName,
+        firstName: a.familyMember ? a.familyMember.firstName : a.patient ? a.patient.firstName : a.guestFirstName,
+        lastName: a.familyMember ? a.familyMember.lastName : a.patient ? a.patient.lastName : a.guestLastName,
+        beneficiary,
+        // صاحب الحساب حين يكون المريض فردًا من عائلته (للتواصل فقط).
+        accountHolderName: a.familyMember && a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : null,
         email: a.patient ? a.patient.user.email : null,
         phone: a.patient?.user.phone ?? a.guestPhone,
         lastVisit: a.date,
         totalAppointments: 1,
+        // آخر موعد غير ملغى لمريض صاحب حساب — مرجع «برمجة موعد عودة» من ملف المريض.
+        lastAppointmentId: a.patientId && a.status !== AppointmentStatus.CANCELLED ? a.id : null,
       });
     } else {
-      map.get(key).totalAppointments += 1;
+      const row = map.get(key);
+      row.totalAppointments += 1;
+      if (!row.lastAppointmentId && a.patientId && a.status !== AppointmentStatus.CANCELLED) row.lastAppointmentId = a.id;
     }
   }
   return Array.from(map.values());

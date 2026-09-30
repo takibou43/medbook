@@ -4,6 +4,8 @@ import * as service from "./booking.service";
 import { ApiError } from "../../utils/ApiError";
 import { findPatientIdForUser } from "../patientAuth/patientAuth.service";
 import { assertPatientCanBook } from "../patientBlocks/patientBlocks.service";
+import { resolveBookableFamilyMember } from "../family/family.service";
+import { redactDoctorSecrets } from "../../lib/redact";
 
 export const getSlots = asyncHandler(async (req: Request, res: Response) => {
   const slots = await service.getAggregatedSlots({
@@ -36,8 +38,19 @@ export const createGuestBooking = asyncHandler(async (req: Request, res: Respons
   if (!patientId) throw ApiError.forbidden("لا يوجد ملف مريض مرتبط بهذا الحساب.");
   // الحظر يُفحص على مريض الجلسة نفسه (لا على أي معرّف من الطلب) قبل أي إنشاء.
   await assertPatientCanBook(patientId);
-  const appointment = await service.createGuestAppointment(req.body, patientId);
-  res.status(201).json({ success: true, data: appointment });
+  const { familyMemberId, ...input } = req.body as import("./booking.schema").GuestBookingInput;
+  // حجز لفرد من العائلة: الملكية تُفحص هنا (المعرّف + صاحب الجلسة + غير مؤرشف)، والاسم الذي يظهر للطبيب
+  // في الطابور يؤخذ من قاعدة البيانات لا من الطلب. الهاتف يبقى هاتف صاحب الحساب (لا هاتف لكل فرد).
+  let bookingInput = input;
+  if (familyMemberId) {
+    const member = await resolveBookableFamilyMember(patientId, familyMemberId);
+    bookingInput = { ...input, firstName: member.firstName, lastName: member.lastName };
+  }
+  const appointment = await service.createGuestAppointment(bookingInput, patientId, {
+    familyMemberId: familyMemberId ?? null,
+    createdByUserId: req.user!.id,
+  });
+  res.status(201).json({ success: true, data: redactDoctorSecrets(appointment) });
 });
 
 export const lookupBookings = asyncHandler(async (req: Request, res: Response) => {

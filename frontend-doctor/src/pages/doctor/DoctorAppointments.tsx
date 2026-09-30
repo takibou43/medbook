@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
-import { AlertTriangle, Bell, BellRing, CalendarDays, Clock3, MessageCircle, Phone, Search, UserCheck, X } from "lucide-react";
+import { AlertTriangle, Bell, BellRing, CalendarDays, CalendarPlus, Clock3, MessageCircle, Phone, Search, UserCheck, X } from "lucide-react";
 import { useMyAppointments, useUpdateAppointmentStatus } from "../../hooks/useAppointments";
 import { useNewAppointmentAlert, requestNotificationPermission } from "../../hooks/useNewAppointmentAlert";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
@@ -13,6 +13,8 @@ import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog"
 import { AppointmentStatus } from "../../types";
 import DoctorQueue from "./DoctorQueue";
 import { useAuth } from "../../context/AuthContext";
+import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
+import { canScheduleFollowUp, RELATIONSHIP_LABELS } from "../../lib/features";
 
 const FILTERS: { label: string; value?: AppointmentStatus }[] = [
   { label: "الكل", value: undefined },
@@ -83,6 +85,8 @@ function hasTimePassed(dateStr: string, startTime: string): boolean {
 }
 
 function patientFullName(a: any): string {
+  // موعد لفرد من عائلة صاحب الحساب: اسم المستفيد (لا اسم صاحب الحساب).
+  if (a.beneficiary?.type === "FAMILY_MEMBER") return a.beneficiary.name;
   if (a.patient) return `${a.patient.firstName} ${a.patient.lastName}`.trim();
   return [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ").trim() || "مريض بدون اسم";
 }
@@ -158,9 +162,11 @@ interface CardProps {
   onArrivedLate: () => void;
   /** طلب تحديث جارٍ — نُعطّل الإجراءات لمنع النقر المتكرر وطلبات PATCH زائدة. */
   busy?: boolean;
+  /** «برمجة موعد عودة» (الطبيب وحده، لمريض بحساب). */
+  onFollowUp?: () => void;
 }
 
-function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy }: CardProps) {
+function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy, onFollowUp }: CardProps) {
   const phone = patientPhone(a);
   const wa = toWhatsAppNumber(phone);
   const isOpen = a.status === "CONFIRMED" || a.status === "PENDING";
@@ -205,6 +211,20 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
           </div>
         )}
 
+        {(a.beneficiary?.type === "FAMILY_MEMBER" || (a.createdBy === "DOCTOR" && a.type === "FOLLOW_UP")) && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {a.beneficiary?.type === "FAMILY_MEMBER" && (
+              <span className="badge shrink-0 border border-primary-200 bg-primary-50 text-primary-800">
+                {a.beneficiary.relationship ? RELATIONSHIP_LABELS[a.beneficiary.relationship as keyof typeof RELATIONSHIP_LABELS] : "فرد عائلة"}
+                {a.patient ? ` — حساب ${a.patient.firstName} ${a.patient.lastName}` : ""}
+              </span>
+            )}
+            {a.createdBy === "DOCTOR" && a.type === "FOLLOW_UP" && (
+              <span className="badge shrink-0 border border-amber-200 bg-amber-50 text-amber-800">موعد عودة</span>
+            )}
+          </div>
+        )}
+
         {a.notes && <p className="mt-2 line-clamp-2 break-words text-xs text-slate-400">ملاحظات: {a.notes}</p>}
       </div>
 
@@ -233,6 +253,11 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
             </Button>
           </>
         )}
+        {onFollowUp && canScheduleFollowUp(a) && a.status !== "NO_SHOW" && (
+          <Button variant="outline" onClick={onFollowUp} disabled={busy} title="إنشاء موعد عودة فعلي لهذا المريض">
+            <CalendarPlus className="h-4 w-4" /> برمجة موعد عودة
+          </Button>
+        )}
         {a.status === "NO_SHOW" && (
           <>
             <Button onClick={onArrivedLate} disabled={busy} title="وصل بعد فوات موعده — أدخله الآن">
@@ -257,6 +282,16 @@ function AppointmentsListSection() {
   const [dateFilter, setDateFilter] = useState<string | undefined>(initial.date);
   const [query, setQuery] = useState("");
   const [noShowTarget, setNoShowTarget] = useState<NoShowTarget | null>(null);
+  // «برمجة موعد عودة»: النافذة + اقتراح بعد تسجيل «حضر» مباشرة.
+  const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
+  const [justCompleted, setJustCompleted] = useState<any | null>(null);
+  const openFollowUp = (a: any) =>
+    setFollowUpCtx({
+      parentAppointmentId: a.id,
+      beneficiaryName: patientFullName(a),
+      familyMemberId: a.familyMemberId ?? null,
+      accountHolderName: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : null,
+    });
 
   const { data: appointments, isLoading, isFetching, dataUpdatedAt } = useMyAppointments(filter, dateFilter);
   const updateStatus = useUpdateAppointmentStatus();
@@ -298,10 +333,11 @@ function AppointmentsListSection() {
     }
   }
 
-  async function changeStatus(id: string, status: AppointmentStatus) {
+  async function changeStatus(id: string, status: AppointmentStatus, appointment?: any) {
     try {
       await updateStatus.mutateAsync({ id, status });
       showToast("تم تحديث حالة الموعد.", "success");
+      if (status === "COMPLETED" && appointment && canScheduleFollowUp(appointment) && !isAssistant) setJustCompleted(appointment);
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
     }
@@ -423,6 +459,22 @@ function AppointmentsListSection() {
         )}
       </div>
 
+      {justCompleted && (
+        <div className="card flex flex-col gap-2 border-primary-200 bg-primary-50 p-3 text-sm sm:flex-row sm:items-center sm:justify-between" role="status">
+          <span>
+            اكتمل موعد <b>{patientFullName(justCompleted)}</b>. هل تريد برمجة موعد عودة؟
+          </span>
+          <div className="flex gap-2">
+            <Button onClick={() => { openFollowUp(justCompleted); setJustCompleted(null); }}>
+              <CalendarPlus className="h-4 w-4" /> برمجة موعد عودة
+            </Button>
+            <Button variant="ghost" onClick={() => setJustCompleted(null)}>لاحقًا</Button>
+          </div>
+        </div>
+      )}
+
+      <FollowUpModal open={Boolean(followUpCtx)} ctx={followUpCtx} onClose={() => setFollowUpCtx(null)} />
+
       {isLoading ? (
         <Spinner />
       ) : visible && visible.length > 0 ? (
@@ -431,10 +483,11 @@ function AppointmentsListSection() {
             <AppointmentCard
               key={a.id}
               appointment={a}
-              onComplete={isAssistant ? undefined : () => changeStatus(a.id, "COMPLETED")}
+              onComplete={isAssistant ? undefined : () => changeStatus(a.id, "COMPLETED", a)}
               onNoShow={() => openNoShow(a)}
               onArrivedLate={() => markArrivedLate(a.id)}
               busy={updateStatus.isPending}
+              onFollowUp={isAssistant ? undefined : () => openFollowUp(a)}
             />
           ))}
         </div>

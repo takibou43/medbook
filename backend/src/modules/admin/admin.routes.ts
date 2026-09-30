@@ -7,6 +7,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { ApiError } from "../../utils/ApiError";
 import * as service from "./admin.service";
 import * as blocks from "../patientBlocks/patientBlocks.service";
+import * as referrals from "../referrals/referrals.service";
 
 const router = Router();
 router.use(authenticate, authorize(Role.ADMIN));
@@ -211,7 +212,7 @@ router.patch(
   "/doctors/:id/verify",
   validate({ params: idParams, body: verifyDoctorSchema }),
   asyncHandler(async (req, res) => {
-    const doctor = await service.setDoctorVerification(req.params.id, req.body.status);
+    const doctor = await service.setDoctorVerification(req.params.id, req.body.status, req.user!.id);
     await service.logAction(req.user!.id, "SET_DOCTOR_VERIFICATION", "Doctor", req.params.id, { status: req.body.status });
     res.json({ success: true, data: doctor });
   })
@@ -225,6 +226,22 @@ router.patch(
     const doctor = await service.updateDoctorAdmin(req.params.id, req.body);
     await service.logAction(req.user!.id, "UPDATE_DOCTOR", "Doctor", req.params.id, { fields: Object.keys(req.body) });
     res.json({ success: true, data: doctor });
+  })
+);
+
+// ---- إحالات الأطباء (عرض فقط — المكافأة تُمنح تلقائيًا عند التوثيق، ولا زر مكافأة يدوي) ----
+const referralsQuery = z
+  .object({
+    status: z.enum(["PENDING", "QUALIFIED", "REWARDED", "REJECTED"]).optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+router.get(
+  "/referrals",
+  validate({ query: referralsQuery }),
+  asyncHandler(async (req, res) => {
+    res.json({ success: true, data: await referrals.listReferralsAdmin(req.query as z.infer<typeof referralsQuery>) });
   })
 );
 

@@ -13,6 +13,8 @@ import {
   UserCog,
   MessageSquare,
   UserX,
+  ClipboardList,
+  Gift,
 } from "lucide-react";
 
 import { DashboardLayout } from "./components/layout/DashboardLayout";
@@ -39,6 +41,9 @@ import AdminReviews from "./pages/admin/AdminReviews";
 import AdminAppointments from "./pages/admin/AdminAppointments";
 import AdminMessages from "./pages/admin/AdminMessages";
 import DoctorMessages from "./pages/doctor/DoctorMessages";
+import DoctorTreatmentPlans from "./pages/doctor/DoctorTreatmentPlans";
+import AdminReferrals from "./pages/admin/AdminReferrals";
+import { isDentalSpecialty } from "./lib/features";
 import AccountSettings from "./pages/AccountSettings";
 import { useAdminUnread, useDoctorUnread, useUnreadToast } from "./hooks/useMessaging";
 
@@ -59,7 +64,8 @@ const doctorOnlyNav = [
   { to: "/account", label: "إعدادات الحساب", icon: KeyRound },
 ];
 
-const doctorNav = [...sharedNav, ...doctorOnlyNav];
+// «خطط العلاج» تظهر لأطباء الأسنان فقط (الخادم يرفض غيرهم 403 على أي حال).
+const treatmentNavItem = { to: "/treatment-plans", label: "خطط العلاج", icon: ClipboardList };
 
 /**
  * الشريط الجانبي واحد لكل من الطبيب والمساعد، لكن العناصر والعنوان يختلفان حسب الدور —
@@ -73,6 +79,7 @@ function DoctorAreaLayout() {
   // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
   const unread = useDoctorUnread(!isAssistant && !!user);
   useUnreadToast(unread.data?.unread, () => "رسالة جديدة من الإدارة", "/messages?focus=unread");
+  const doctorNav = [...sharedNav, ...(isDentalSpecialty(user?.doctor?.specialty) ? [treatmentNavItem] : []), ...doctorOnlyNav];
   const items = isAssistant ? sharedNav : doctorNav.map((i) => (i.to === "/messages" ? { ...i, to: unread.data?.unread ? "/messages?focus=unread" : i.to, badge: unread.data?.unread } : i));
 
   return (
@@ -90,6 +97,7 @@ const adminNav = [
   { to: "/admin/messages", label: "الرسائل", icon: MessageSquare },
   { to: "/admin/users", label: "المستخدمون", icon: UsersIcon },
   { to: "/admin/patient-blocks", label: "المرضى المحظورون", icon: UserX },
+  { to: "/admin/referrals", label: "إحالات الأطباء", icon: Gift },
   { to: "/admin/doctors", label: "الأطباء", icon: Stethoscope },
   { to: "/admin/specialties", label: "التخصصات", icon: ShieldCheck },
   { to: "/admin/wilayas", label: "الولايات", icon: Building2 },
@@ -125,6 +133,7 @@ export default function App() {
             <Route path="/messages" element={<DoctorMessages />} />
             <Route path="/schedule" element={<DoctorSchedule />} />
             <Route path="/patients" element={<DoctorPatients />} />
+            <Route path="/treatment-plans" element={<DoctorTreatmentPlans />} />
             <Route path="/reviews" element={<DoctorReviews />} />
             <Route path="/assistants" element={<AssistantManagement />} />
             <Route path="/profile" element={<DoctorProfileSettings />} />
@@ -140,6 +149,7 @@ export default function App() {
           <Route path="/admin/messages" element={<AdminMessages />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/patient-blocks" element={<AdminPatientBlocks />} />
+          <Route path="/admin/referrals" element={<AdminReferrals />} />
           <Route path="/admin/doctors" element={<AdminDoctors />} />
           <Route path="/admin/specialties" element={<AdminSpecialties />} />
           <Route path="/admin/wilayas" element={<AdminWilayas />} />

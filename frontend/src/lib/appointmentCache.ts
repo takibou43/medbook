@@ -60,9 +60,15 @@ export function fromCachedPatientAppointment(a: CachedPatientAppointment): MyApp
   };
 }
 
+// مواعيد أفراد العائلة لا تُخزَّن دون اتصال إطلاقًا (لا اسم ولا صلة قرابة ولا معرّف فرد على الجهاز):
+// نموذج الخصوصية الحالي للكاش صُمّم لصاحب الحساب وحده. تبقى ظاهرة في الصفحة ما دام الاتصال قائمًا.
+export function isCacheableAppointment(a: Pick<MyAppointment, "beneficiary" | "familyMemberId">): boolean {
+  return a.beneficiary?.type !== "FAMILY_MEMBER" && !a.familyMemberId;
+}
+
 export function saveAppointmentCache(userId: string, appointments: MyAppointment[], storage: StorageLike = localStorage, now = Date.now()) {
   if (!userId) return;
-  const entry: AppointmentCacheEntry = { savedAt: now, appointments: appointments.map(toCachedPatientAppointment) };
+  const entry: AppointmentCacheEntry = { savedAt: now, appointments: appointments.filter(isCacheableAppointment).map(toCachedPatientAppointment) };
   storage.setItem(keyFor(userId), JSON.stringify(entry));
 }
 

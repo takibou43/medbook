@@ -7,6 +7,8 @@ export const createAppointmentSchema = z.object({
   type: z.enum(["IN_PERSON", "FOLLOW_UP", "ONLINE"]).default("IN_PERSON"),
   notes: z.string().max(1000).optional(),
   serviceIds: z.array(z.string().uuid()).optional(),
+  // الحساب العائلي: المستفيد من الموعد (يُتحقق من ملكيته في الخادم). غيابه = الموعد لصاحب الحساب.
+  familyMemberId: z.string().uuid("فرد عائلة غير صالح").optional(),
 });
 
 // IN_PROGRESS مطلوبة هنا لحالة "حضر متأخرًا": المريض الذي سُجّل غيابه ثم وصل بعد

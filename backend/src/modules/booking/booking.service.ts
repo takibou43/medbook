@@ -35,6 +35,24 @@ function accountLabel(patientId: string | null): string {
   return patientId ? "(حساب مريض)" : "(بدون حساب)";
 }
 
+/**
+ * بيانات إضافية للحجز من حساب مريض: المستفيد (فرد عائلة تحقق الـcontroller من ملكيته) ومن أنشأ الموعد.
+ * familyMemberId فارغ = الموعد لصاحب الحساب نفسه (السلوك السابق كما هو).
+ */
+export interface BookingMeta {
+  familyMemberId?: string | null;
+  createdByUserId?: string | null;
+}
+
+/** حقول المصدر/المستفيد التي تُضاف إلى كل إنشاء موعد في هذا الملف. */
+function bookingOriginData(patientId: string | null, meta: BookingMeta) {
+  return {
+    familyMemberId: patientId ? meta.familyMemberId ?? null : null,
+    createdBy: patientId ? ("PATIENT" as const) : ("GUEST" as const),
+    createdByUserId: meta.createdByUserId ?? null,
+  };
+}
+
 // عدد مرات "لم يحضر" التي إذا بلغها رقم هاتف ضيف معيّن (على مستوى المنصة كاملة)
 // نمنعه من إجراء حجز ضيف جديد — حماية لوقت الأطباء من الحجوزات المتكررة بدون حضور.
 // لا يؤثر هذا على الحجز بحساب مسجَّل (المريض المسجَّل يمكن التواصل معه ومحاسبته إداريًا).
@@ -260,7 +278,8 @@ async function createAutoAssignedAppointment(
   input: GuestBookingInput,
   doctorId: string,
   attempt = 0,
-  patientId: string | null = null
+  patientId: string | null = null,
+  meta: BookingMeta = {}
 ): Promise<any> {
   try {
     // قراءة "أول دور شاغر" + إنشاء الموعد معًا داخل معاملة واحدة تحت قفل طابور هذا الطبيب،
@@ -286,6 +305,7 @@ async function createAutoAssignedAppointment(
             // كل الحجوزات مقبولة تلقائيًا — الطبيب لا يوافق، بل يسجّل لاحقًا: حضر / لم يحضر.
             status: AppointmentStatus.CONFIRMED,
             notes: input.notes,
+            ...bookingOriginData(patientId, meta),
           },
         });
         // نفس شكل الرد السابق (doctor + specialty/wilaya/city/clinic) لكن من الطبيب المحمَّل مسبقًا
@@ -320,7 +340,7 @@ async function createAutoAssignedAppointment(
     }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002" && attempt < 3) {
       // خط دفاع أخير: تعارض مع مسار كتابة آخر لا يستخدم القفل (حجز بوقت محدد) — نعيد الحساب.
-      return createAutoAssignedAppointment(input, doctorId, attempt + 1, patientId);
+      return createAutoAssignedAppointment(input, doctorId, attempt + 1, patientId, meta);
     }
     throw err;
   }
@@ -336,7 +356,8 @@ async function createChosenDayAppointment(
   doctorId: string,
   dateStr: string,
   exactStart: string | null,
-  patientId: string | null
+  patientId: string | null,
+  meta: BookingMeta = {}
 ) {
   const date = new Date(dateStr + "T00:00:00Z");
   if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");
@@ -356,6 +377,7 @@ async function createChosenDayAppointment(
         endTime: slot.endTime,
         status: AppointmentStatus.CONFIRMED,
         notes: input.notes,
+        ...bookingOriginData(patientId, meta),
       },
       include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
     });
@@ -403,7 +425,7 @@ async function createChosenDayAppointment(
  * وإن مُرّر (مريض مسجَّل الدخول، مُستخرَج من الجلسة في الـcontroller) يُربط الموعد بحسابه، مع إبقاء
  * حقول الاسم/الهاتف كما هي لأن لوحة الطبيب والطابور وSMS «لم يحضر» تعتمد عليها.
  */
-export async function createGuestAppointment(input: GuestBookingInput, patientId: string | null = null) {
+export async function createGuestAppointment(input: GuestBookingInput, patientId: string | null = null, meta: BookingMeta = {}) {
   // حماية من الحجوزات المتكررة بدون حضور: نتحقق أولًا قبل أي محاولة حجز.
   // تقييد رقم الضيف القديم (مجموع غيابات الضيف منذ البداية، بلا رفع من الإدارة) لا يُطبَّق على
   // حجز صاحب حساب: المريض المسجَّل يخضع للحظر الموحّد في patient_blocks (3 غيابات خلال 7 أيام،
@@ -412,12 +434,12 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
 
   // الوضع الافتراضي (بلا يوم ولا وقت): النظام يعيّن أول دور متاح لدى الطبيب المختار — كما كان تمامًا.
   if (input.doctorId && !input.date) {
-    return createAutoAssignedAppointment(input, input.doctorId, 0, patientId);
+    return createAutoAssignedAppointment(input, input.doctorId, 0, patientId, meta);
   }
 
   // اختيار اختياري: اليوم فقط → أول وقت شاغر في ذلك اليوم، أو اليوم + الوقت بالضبط (exactTime).
   if (input.doctorId && input.date && (!input.startTime || input.exactTime)) {
-    return createChosenDayAppointment(input, input.doctorId, input.date, input.exactTime ? input.startTime ?? null : null, patientId);
+    return createChosenDayAppointment(input, input.doctorId, input.date, input.exactTime ? input.startTime ?? null : null, patientId, meta);
   }
 
   if (!input.date || !input.startTime) {
@@ -470,6 +492,7 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
               endTime: slot.endTime,
               status: AppointmentStatus.CONFIRMED,
               notes: input.notes,
+              ...bookingOriginData(patientId, meta),
             },
             include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
           }),
@@ -530,6 +553,7 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
           endTime,
           status: AppointmentStatus.CONFIRMED,
           notes: input.notes,
+          ...bookingOriginData(patientId, meta),
         },
         include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
       });

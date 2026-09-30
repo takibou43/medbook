@@ -83,6 +83,53 @@ enum SmsStatus {
   FAILED
 }
 
+// من أنشأ الموعد (للتدقيق وللتمييز في الواجهات). المواعيد القديمة تُملأ في الترحيل: بلا patientId → GUEST، وإلا PATIENT.
+enum AppointmentCreatedBy {
+  PATIENT
+  DOCTOR
+  ADMIN
+  GUEST
+}
+
+// صلة القرابة بين صاحب الحساب وفرد العائلة الذي يُحجز له.
+enum FamilyRelationship {
+  CHILD
+  SPOUSE
+  PARENT
+  SIBLING
+  OTHER
+}
+
+enum TreatmentPlanStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TreatmentSessionStatus {
+  PLANNED
+  COMPLETED
+  CANCELLED
+}
+
+// DUE: مستحقة بلا موعد. SCHEDULED: رُبطت بموعد عودة فعلي (لا تُعتبر مكتملة بمجرد الحجز).
+// COMPLETED: اكتمل الموعد أو حدّدها الطبيب يدويًا. DISMISSED: تجاهلها الطبيب.
+enum DentalFollowUpStatus {
+  DUE
+  SCHEDULED
+  COMPLETED
+  DISMISSED
+}
+
+// PENDING: سُجّل الطبيب المُحال بالكود. QUALIFIED/REWARDED: وثّقته الإدارة ومُنحت المكافأة مرة واحدة.
+// REJECTED: رفضت الإدارة توثيق الطبيب المُحال (يمكن أن تُمنح لاحقًا إن وُثّق فعلًا).
+enum DoctorReferralStatus {
+  PENDING
+  QUALIFIED
+  REWARDED
+  REJECTED
+}
+
 // ---------------- Core identity ----------------
 
 model User {
@@ -207,9 +254,36 @@ model Patient {
   appointments Appointment[]
   reviews      Review[]
   blocks       PatientBlock[]
+  // أفراد العائلة الذين يحجز لهم صاحب الحساب (بلا حسابات دخول مستقلة).
+  familyMembers  FamilyMember[]
+  treatmentPlans DentalTreatmentPlan[]
 
   @@index([cityId])
   @@map("patients")
+}
+
+// فرد عائلة يحجز له صاحب الحساب من حسابه نفسه — لا User ولا بيانات دخول ولا هاتف خاص به.
+// ownerPatientId لا يتغيّر بعد الإنشاء (لا مسار يسمح بذلك). الحذف = أرشفة (archivedAt) فقط:
+// يختفي من الاختيارات الجديدة وتبقى مواعيده وخطط علاجه كما هي. onDelete: Restrict حتى لا يُحذف
+// سجل طبي بالخطأ عبر حذف متسلسل.
+model FamilyMember {
+  id             String              @id @default(uuid())
+  ownerPatientId String
+  ownerPatient   Patient             @relation(fields: [ownerPatientId], references: [id], onDelete: Restrict)
+  firstName      String
+  lastName       String
+  birthDate      DateTime?
+  gender         Gender?
+  relationship   FamilyRelationship
+  archivedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  appointments   Appointment[]
+  treatmentPlans DentalTreatmentPlan[]
+
+  @@index([ownerPatientId])
+  @@map("family_members")
 }
 
 // نوع الحظر: يدوي من الإدارة، أو تلقائي بعد 3 غيابات NO_SHOW خلال 7 أيام.
@@ -274,9 +348,14 @@ model Doctor {
   subscriptionExpiresAt DateTime?
   avgRating   Float    @default(0)
   reviewsCount Int     @default(0)
+  // كود الإحالة الخاص بالطبيب (يُولَّد عند أول فتح لبطاقة «ادعُ طبيبًا»، عشوائي وغير قابل للتخمين بسهولة).
+  referralCode String? @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  referralsMade  DoctorReferral[]      @relation("ReferralReferrer")
+  referredBy     DoctorReferral?       @relation("ReferralReferred")
+  treatmentPlans DentalTreatmentPlan[]
   schedules    DoctorSchedule[]
   appointments Appointment[]
   reviews      Review[]
@@ -413,9 +492,39 @@ model Appointment {
   // تُضبط في كل مسار إلغاء، ويحرسها trigger في قاعدة البيانات (انظر migration release_cancelled_slots).
   activeSlot Boolean? @default(true)
 
+  // ---- الحساب العائلي ----
+  // patientId يبقى صاحب الحساب والمسؤول عن الحجز؛ familyMemberId (اختياري) = المستفيد من الموعد.
+  // فارغ = الموعد لصاحب الحساب نفسه (السلوك السابق كما هو).
+  familyMemberId String?
+  familyMember   FamilyMember? @relation(fields: [familyMemberId], references: [id], onDelete: Restrict)
+
+  // ---- موعد العودة الذي يبرمجه الطبيب ----
+  // الموعد الأصلي لا يُعدَّل أبدًا؛ موعد العودة موعد مستقل مرتبط به. حذف الأصلي (نادر) لا يحذف العودة.
+  parentAppointmentId String?
+  parentAppointment   Appointment?  @relation("FollowUpOf", fields: [parentAppointmentId], references: [id], onDelete: SetNull)
+  followUps           Appointment[] @relation("FollowUpOf")
+  treatmentPlanId     String?
+  treatmentPlan       DentalTreatmentPlan?    @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
+  treatmentSessionId  String?
+  treatmentSession    DentalTreatmentSession? @relation("SessionFollowUps", fields: [treatmentSessionId], references: [id], onDelete: SetNull)
+  // مصدر الإنشاء + الحساب الذي أنشأه (للتدقيق، بلا مفتاح أجنبي كي لا يضيع السجل إن حُذف الحساب).
+  createdBy       AppointmentCreatedBy @default(PATIENT)
+  createdByUserId String?
+  // مفتاح منع التكرار عند إعادة إرسال نفس طلب «برمجة موعد عودة» (فريد لكل طبيب؛ NULL لا يتعارض).
+  idempotencyKey  String?
+
+  // الجلسة (من خطة علاج) التي يحققها هذا الموعد، والمتابعة التي حُوّلت إليه.
+  treatmentSessionLink DentalTreatmentSession? @relation("SessionAppointment")
+  dentalFollowUp       DentalFollowUp?
+
   @@unique([doctorId, date, startTime, activeSlot])
+  @@unique([doctorId, idempotencyKey])
   @@index([patientId])
   @@index([doctorId, date])
+  @@index([familyMemberId])
+  @@index([parentAppointmentId])
+  // إحصائية الحجوزات الشهرية العامة: نطاق createdAt (+ الحالة).
+  @@index([createdAt, status])
   @@map("appointments")
 }
 
@@ -672,4 +781,100 @@ model AppointmentLateEvent {
 
   @@unique([appointmentId, sequence])
   @@map("appointment_late_events")
+}
+
+// ---------------- Dental treatment plans ----------------
+
+// خطة علاج أسنان متعددة الجلسات — عامة (لا إجراء ثابت). يملكها طبيب واحد (doctorId من الجلسة فقط)
+// لمريض صاحب حساب، واختياريًا لأحد أفراد عائلته. لا تُحذف أبدًا (إكمال/إلغاء فقط)، لذلك كل العلاقات
+// Restrict: لا حذف متسلسل لتاريخ طبي.
+model DentalTreatmentPlan {
+  id                 String              @id @default(uuid())
+  doctorId           String
+  doctor             Doctor              @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  patientId          String
+  patient            Patient             @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  familyMemberId     String?
+  familyMember       FamilyMember?       @relation(fields: [familyMemberId], references: [id], onDelete: Restrict)
+  title              String
+  description        String?
+  status             TreatmentPlanStatus @default(ACTIVE)
+  estimatedSessions  Int?
+  // بالدينار الجزائري (عدد صحيح، مثل consultationFee).
+  estimatedTotalCost Int?
+  startedAt          DateTime            @default(now())
+  completedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  sessions     DentalTreatmentSession[]
+  followUps    DentalFollowUp[]
+  appointments Appointment[]
+
+  @@index([doctorId])
+  @@index([patientId])
+  @@index([familyMemberId])
+  @@map("dental_treatment_plans")
+}
+
+model DentalTreatmentSession {
+  id              String                 @id @default(uuid())
+  treatmentPlanId String
+  treatmentPlan   DentalTreatmentPlan    @relation(fields: [treatmentPlanId], references: [id], onDelete: Restrict)
+  // موعد قائم يخص نفس الطبيب ونفس المستفيد (فريد: الموعد الواحد لا يحقق جلستين).
+  appointmentId   String?                @unique
+  appointment     Appointment?           @relation("SessionAppointment", fields: [appointmentId], references: [id], onDelete: SetNull)
+  sessionNumber   Int
+  title           String
+  notes           String?
+  plannedDate     DateTime?
+  completedAt     DateTime?
+  status          TreatmentSessionStatus @default(PLANNED)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  followUpAppointments Appointment[] @relation("SessionFollowUps")
+
+  @@index([treatmentPlanId])
+  @@map("dental_treatment_sessions")
+}
+
+model DentalFollowUp {
+  id              String               @id @default(uuid())
+  treatmentPlanId String
+  treatmentPlan   DentalTreatmentPlan  @relation(fields: [treatmentPlanId], references: [id], onDelete: Restrict)
+  dueDate         DateTime
+  status          DentalFollowUpStatus @default(DUE)
+  // موعد العودة الفعلي الذي حُوّلت إليه المتابعة (SCHEDULED). يُفرَّغ ويعود DUE إن أُلغي الموعد.
+  appointmentId   String?              @unique
+  appointment     Appointment?         @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  completedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([treatmentPlanId, dueDate])
+  @@map("dental_follow_ups")
+}
+
+// ---------------- Doctor referrals ----------------
+
+// إحالة طبيب لزميل: سجل واحد فقط لكل طبيب مُحال (referredDoctorId فريد) يُنشأ لحظة تسجيله ولا يتغيّر.
+// المكافأة (30 يومًا للمُحيل فقط) تُمنح مرة واحدة داخل نفس معاملة توثيق الطبيب المُحال — انظر
+// modules/referrals/referrals.service.ts. حذف أحد الطبيبين يحذف سجل الإحالة (AuditLog يبقى أثرًا).
+model DoctorReferral {
+  id               String               @id @default(uuid())
+  referrerDoctorId String
+  referrer         Doctor               @relation("ReferralReferrer", fields: [referrerDoctorId], references: [id], onDelete: Cascade)
+  referredDoctorId String               @unique
+  referred         Doctor               @relation("ReferralReferred", fields: [referredDoctorId], references: [id], onDelete: Cascade)
+  referralCodeUsed String
+  status           DoctorReferralStatus @default(PENDING)
+  qualifiedAt      DateTime?
+  rewardedAt       DateTime?
+  rewardDays       Int                  @default(30)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([referrerDoctorId])
+  @@map("doctor_referrals")
 }

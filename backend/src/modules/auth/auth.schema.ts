@@ -26,6 +26,8 @@ export const registerDoctorSchema = z.object({
   languages: z.array(z.string()).optional(),
   gender: z.enum(["MALE", "FEMALE"]).optional(),
   consultationFee: z.coerce.number().int().min(0).optional(),
+  // كود إحالة زميل (اختياري). فارغ = بلا إحالة. غير صحيح → 400 مرتبط بالحقل (لا يُنشأ الحساب حتى يُصحَّح أو يُحذف).
+  referralCode: z.string().trim().max(20, "كود الإحالة غير صحيح").optional(),
 });
 
 // تسجيل حساب مساعد — لا يُختار الدور أبدًا من الواجهة؛ رمز الدعوة (token) هو ما يحدد

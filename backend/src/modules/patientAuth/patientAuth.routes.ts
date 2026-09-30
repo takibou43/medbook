@@ -1,4 +1,5 @@
 import { Router, Request, Response, CookieOptions } from "express";
+import { z } from "zod";
 import { Role } from "@prisma/client";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
@@ -86,10 +87,17 @@ patientAuthRouter.get(
 export const patientAccountRouter = Router();
 patientAccountRouter.use(authenticate, authorize(Role.PATIENT));
 
+// ?beneficiary=all|self|<familyMemberId> — فلتر اختياري (الافتراضي: كل مواعيد الأسرة).
+// غير strict عمدًا: أي معامل آخر (مثل patientId) يُحذف بصمت ولا يؤثر — صاحب المواعيد من الجلسة وحدها.
+const appointmentsQuerySchema = z.object({
+  beneficiary: z.union([z.enum(["all", "self"]), z.string().uuid("فرد عائلة غير صالح")]).optional(),
+});
+
 patientAccountRouter.get(
   "/appointments",
+  validate({ query: appointmentsQuerySchema }),
   asyncHandler(async (req: Request, res: Response) => {
-    const data = await service.listMyAppointments(req.user!.id);
+    const data = await service.listMyAppointments(req.user!.id, (req.query.beneficiary as string | undefined) ?? "all");
     res.json({ success: true, data });
   })
 );

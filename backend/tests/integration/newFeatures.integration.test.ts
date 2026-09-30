@@ -231,7 +231,7 @@ describe.skipIf(!TEST_URL)("الميزات الجديدة (PostgreSQL حقيقي
       const r = await call(
         "POST",
         "/api/booking",
-        { firstName: "م", lastName: "م", wilayaId: ids.wilaya, specialtyId: ids.dental, doctorId: dentist.doctorId, familyMemberId: foreign.data.id },
+        { firstName: "مريم", lastName: "مراد", wilayaId: ids.wilaya, specialtyId: ids.dental, doctorId: dentist.doctorId, familyMemberId: foreign.data.id },
         owner.token
       );
       expect(r.status).toBe(404);
@@ -269,7 +269,7 @@ describe.skipIf(!TEST_URL)("الميزات الجديدة (PostgreSQL حقيقي
       expect(await db.appointment.count({ where: { familyMemberId: memberId } })).toBe(before);
       const list = await call("GET", "/api/patient/family-members", undefined, owner.token);
       expect(list.data.map((m: any) => m.id)).not.toContain(memberId);
-      const r = await call("POST", "/api/booking", { firstName: "م", lastName: "م", wilayaId: ids.wilaya, specialtyId: ids.dental, doctorId: dentist.doctorId, familyMemberId: memberId }, owner.token);
+      const r = await call("POST", "/api/booking", { firstName: "مريم", lastName: "مراد", wilayaId: ids.wilaya, specialtyId: ids.dental, doctorId: dentist.doctorId, familyMemberId: memberId }, owner.token);
       expect(r.status).toBe(404);
       // إعادة تفعيله للاختبارات اللاحقة.
       await db.familyMember.update({ where: { id: memberId }, data: { archivedAt: null } });

@@ -524,6 +524,7 @@ describe.skipIf(!TEST_URL)("الميزات الجديدة (PostgreSQL حقيقي
       const r = await call("POST", "/api/auth/register/doctor", registerBody("1", code));
       expect(r.status).toBe(201);
       const u = await trackRegistered(`${tag}-reg1@test.local`);
+      expect(u!.doctor).toMatchObject({ newDoctorTrial: true, trialStartedAt: null, subscriptionStatus: "UNPAID", subscriptionExpiresAt: null });
       const ref = await db.doctorReferral.findUniqueOrThrow({ where: { referredDoctorId: u!.doctor!.id } });
       expect(ref).toMatchObject({ referrerDoctorId: generalist.doctorId, status: "PENDING", referralCodeUsed: code, rewardDays: 30 });
       const after = await db.doctor.findUniqueOrThrow({ where: { id: generalist.doctorId } });
@@ -545,13 +546,21 @@ describe.skipIf(!TEST_URL)("الميزات الجديدة (PostgreSQL حقيقي
       // اشتراك فعّال ينتهي بعد نهاية أي تجربة مجانية عامة، حتى تبدأ الإضافة من تاريخ انتهائه بالضبط.
       await db.doctor.update({ where: { id: generalist.doctorId }, data: { subscriptionStatus: "ACTIVE", subscriptionExpiresAt: new Date(Date.now() + 400 * DAY) } });
       const before = await db.doctor.findUniqueOrThrow({ where: { id: generalist.doctorId } });
+      const approvalTime = Date.now();
       const rs = await Promise.all([
         call("PATCH", `/api/admin/doctors/${u.doctor!.id}/verify`, { status: "VERIFIED" }, adminToken),
         call("PATCH", `/api/admin/doctors/${u.doctor!.id}/verify`, { status: "VERIFIED" }, adminToken),
       ]);
       expect(rs.every((r) => r.status === 200)).toBe(true);
+      const approved = await db.doctor.findUniqueOrThrow({ where: { id: u.doctor!.id } });
+      expect(approved.subscriptionStatus).toBe("ACTIVE");
+      expect(approved.trialStartedAt!.getTime()).toBeGreaterThanOrEqual(approvalTime);
+      expect(approved.subscriptionExpiresAt!.getTime() - approved.trialStartedAt!.getTime()).toBe(30 * DAY);
       const again = await call("PATCH", `/api/admin/doctors/${u.doctor!.id}/verify`, { status: "VERIFIED" }, adminToken);
       expect(again.status).toBe(200);
+      const reapproved = await db.doctor.findUniqueOrThrow({ where: { id: u.doctor!.id } });
+      expect(reapproved.trialStartedAt).toEqual(approved.trialStartedAt);
+      expect(reapproved.subscriptionExpiresAt).toEqual(approved.subscriptionExpiresAt);
       const after = await db.doctor.findUniqueOrThrow({ where: { id: generalist.doctorId } });
       expect(after.subscriptionExpiresAt!.getTime() - before.subscriptionExpiresAt!.getTime()).toBe(30 * DAY);
       expect(after.subscriptionStatus).toBe("ACTIVE");

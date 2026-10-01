@@ -28,13 +28,13 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(values.email, values.password);
-      if (user.role !== "DOCTOR" && user.role !== "ADMIN" && user.role !== "ASSISTANT") {
+      if (user.role !== "DOCTOR" && user.role !== "ADMIN" && user.role !== "ASSISTANT" && user.role !== "CLINIC_OWNER") {
         showToast("هذا الموقع مخصص لحسابات الأطباء والمساعدين والإدارة فقط.", "error");
         await logout();
         return;
       }
       showToast("تم تسجيل الدخول بنجاح.", "success");
-      navigate(user.role === "ADMIN" ? "/admin" : "/");
+      navigate(user.role === "ADMIN" ? "/admin" : user.role === "CLINIC_OWNER" ? "/clinic" : "/");
     } catch (err) {
       showToast(apiErrorMessage(err, "بيانات الدخول غير صحيحة."), "error");
     } finally {
@@ -47,7 +47,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center">
           <Logo className="mb-2 h-14 w-14" />
-          <h1 className="text-xl font-extrabold text-slate-900">تسجيل دخول الأطباء والإدارة</h1>
+          <h1 className="text-xl font-extrabold text-slate-900">تسجيل دخول الأطباء والعيادات والإدارة</h1>
           <p className="mt-1 text-center text-sm text-slate-500">لوحة تحكم الطبيب والإدارة — إدارة المواعيد وجدول العمل والمرضى والمنصة.</p>
         </div>
 
@@ -65,6 +65,7 @@ export default function Login() {
             انضم كطبيب
           </a>
         </p>
+        <p className="mt-2 text-center text-sm text-slate-600"><a href="/register/clinic" className="font-semibold text-primary-700 hover:underline">إنشاء حساب صاحب عيادة</a></p>
       </div>
     </div>
   );

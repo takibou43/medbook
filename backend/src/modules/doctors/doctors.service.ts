@@ -6,6 +6,8 @@ import { generateAvailableSlots, isPast } from "../../lib/slots";
 import { slotMinutesFor } from "../../lib/slotAssign";
 import { SLOT_OCCUPYING_WHERE } from "../../lib/slotOccupancy";
 import { haversineKm, roundDistanceKm } from "../../lib/geo";
+import { doctorSubscriptionWhere } from "../../lib/clinicBilling";
+import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
 
 export interface DoctorSearchFilters {
   specialtyId?: string;
@@ -65,17 +67,23 @@ export async function searchDoctors(filters: DoctorSearchFilters) {
     verificationStatus: VerificationStatus.VERIFIED,
     // لا يظهر للمرضى إلا الأطباء ذوو الاشتراك المفعّل — انظر تعليق enum SubscriptionStatus
     // في schema.prisma. الأطباء المسجَّلون قبل هذه الميزة مثبَّتون على ACTIVE فلا يتأثرون.
-    subscriptionStatus: SubscriptionStatus.ACTIVE,
+    AND: [doctorSubscriptionWhere()],
+    user: { isActive: true },
     ...(filters.specialtyId ? { specialtyId: filters.specialtyId } : {}),
     ...(filters.wilayaId ? { wilayaId: filters.wilayaId } : {}),
     ...(filters.cityId ? { cityId: filters.cityId } : {}),
     ...(filters.gender ? { gender: filters.gender } : {}),
     ...(filters.minRating ? { avgRating: { gte: filters.minRating } } : {}),
-    ...(filters.q
+    ...(filters.q?.trim()
       ? {
           OR: [
+            { AND: filters.q.trim().split(/\s+/).filter(Boolean).slice(0, 8).map(word => ({ OR: [
+              { firstName: { contains: word, mode: "insensitive" as const } },
+              { lastName: { contains: word, mode: "insensitive" as const } },
+            ] })) },
             { firstName: { contains: filters.q, mode: "insensitive" } },
             { lastName: { contains: filters.q, mode: "insensitive" } },
+            { clinic: { nameAr: { contains: filters.q, mode: "insensitive" } } },
             { specialty: { nameAr: { contains: filters.q, mode: "insensitive" } } },
             { city: { nameAr: { contains: filters.q, mode: "insensitive" } } },
             { wilaya: { nameAr: { contains: filters.q, mode: "insensitive" } } },
@@ -139,7 +147,7 @@ export async function getDoctorById(id: string) {
   // صفحة عامة: الطبيب غير الموثَّق (PENDING/REJECTED) لا يظهر بالمعرّف أيضًا — نفس 404 لغير الموجود،
   // حتى لا يكشف المسار وجود حسابات قيد المراجعة. الحقول نفسها المسموحة في القائمة العامة فقط.
   const doctor = await prisma.doctor.findFirst({
-    where: { id, verificationStatus: VerificationStatus.VERIFIED },
+    where: { id, verificationStatus: VerificationStatus.VERIFIED, AND: [doctorSubscriptionWhere()], user: { isActive: true } },
     select: {
       ...PUBLIC_DOCTOR_SELECT,
       schedules: {
@@ -161,8 +169,8 @@ export async function getDoctorById(id: string) {
 }
 
 export async function getDoctorAvailability(doctorId: string, dateStr: string) {
-  const doctor = await prisma.doctor.findUnique({ where: { id: doctorId }, include: { schedules: true } });
-  if (!doctor) throw ApiError.notFound("الطبيب غير موجود.");
+  const doctor = await prisma.doctor.findUnique({ where: { id: doctorId }, include: { schedules: true, user: { select: { isActive: true } } } });
+  if (!doctor || doctor.verificationStatus !== VerificationStatus.VERIFIED || !(await isDoctorSubscriptionActive(doctor))) throw ApiError.notFound("الطبيب غير موجود.");
 
   const date = new Date(dateStr + "T00:00:00Z");
   if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");

@@ -38,6 +38,7 @@ export async function registerPatient(input: RegisterPatientInput) {
 }
 
 export async function registerDoctor(input: RegisterDoctorInput) {
+  if (input.clinicId) throw ApiError.forbidden("الانضمام إلى العيادة يتطلب دعوة من صاحبها.");
   const existing = await prisma.user.findFirst({ where: { OR: [{ email: input.email }, { phone: input.phone ?? undefined }] } });
   if (existing) throw ApiError.conflict("البريد الإلكتروني أو رقم الهاتف مستخدم مسبقًا.");
 
@@ -95,7 +96,7 @@ export async function login(email: string, password: string) {
   // /auth/me لاحقًا لإظهارها — لا تسريب: نفس الثابت المُدقَّق مسبقًا هو ما يُستعمل هنا أيضًا.
   const user = await prisma.user.findUnique({
     where: { email },
-    include: { patient: true, doctor: true, assistant: ASSISTANT_SAFE_SELECT },
+    include: { patient: true, doctor: { include: { clinic: true } }, assistant: ASSISTANT_SAFE_SELECT, ownedClinic: true },
   });
   if (!user) throw ApiError.unauthorized("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
   if (!user.isActive) throw ApiError.forbidden("هذا الحساب معطّل. تواصل مع الإدارة.");
@@ -196,8 +197,9 @@ export async function getMe(userId: string) {
     where: { id: userId },
     include: {
       patient: true,
+      ownedClinic: true,
       // الطبيب يرى سجلّه الكامل (كما كان دائمًا) — هذا حسابه هو نفسه.
-      doctor: { include: { specialty: true, wilaya: true, city: true } },
+      doctor: { include: { specialty: true, wilaya: true, city: true, clinic: true } },
       // المساعد: نحتاج فقط عرض اسم الطبيب/العيادة (شارة "مساعد لدى د. ...") ورابط الحجز
       // العام لطباعته — ثابت مشترك (ASSISTANT_SAFE_SELECT) يُستخدم هنا وفي acceptInvite
       // حتى لا يتكرر نفس خطأ include/select في مكان ولا يُصحَّح في الآخر.

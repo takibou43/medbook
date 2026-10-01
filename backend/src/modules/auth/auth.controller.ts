@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as authService from "./auth.service";
+import * as clinicsService from "../clinics/clinics.service";
+import { issueTokens } from "../../lib/tokens";
 import { env } from "../../config/env";
 
 function sanitizeUser(user: any) {
@@ -34,6 +36,19 @@ export const registerDoctor = asyncHandler(async (req: Request, res: Response) =
     message: "تم إنشاء الحساب. ملفك المهني قيد المراجعة من طرف الإدارة قبل الظهور للمرضى.",
     data: { user: sanitizeUser(result.user), accessToken: result.accessToken },
   });
+});
+
+export const registerClinic = asyncHandler(async (req: Request, res: Response) => {
+  const user = await clinicsService.registerClinic(req.body);
+  const tokens = await issueTokens(user.id, user.role);
+  res.cookie(REFRESH_COOKIE, tokens.refreshToken, cookieOptions);
+  res.status(201).json({ success: true, data: { user: sanitizeUser(user), accessToken: tokens.accessToken } });
+});
+export const registerClinicDoctor = asyncHandler(async (req: Request, res: Response) => {
+  const user = await clinicsService.acceptNewDoctor(req.body);
+  const tokens = await issueTokens(user.id, user.role);
+  res.cookie(REFRESH_COOKIE, tokens.refreshToken, cookieOptions);
+  res.status(201).json({ success: true, data: { user: sanitizeUser(user), accessToken: tokens.accessToken } });
 });
 
 export const registerAssistant = asyncHandler(async (req: Request, res: Response) => {

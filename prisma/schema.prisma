@@ -16,6 +16,7 @@ datasource db {
 // ---------------- Enums ----------------
 
 enum Role {
+  CLINIC_OWNER
   PATIENT
   DOCTOR
   ADMIN
@@ -104,6 +105,7 @@ model User {
   refreshTokens   RefreshToken[]
   pushSubscriptions PushSubscription[]
   assistant         Assistant?
+  ownedClinic       Clinic? @relation("ClinicOwner")
 
   @@map("users")
 }
@@ -184,6 +186,16 @@ model Clinic {
   wilaya   Wilaya @relation(fields: [wilayaId], references: [id])
   cityId   String
   city     City   @relation(fields: [cityId], references: [id])
+  ownerId String? @unique
+  owner User? @relation("ClinicOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  description String?
+  photoUrl String?
+  verificationStatus VerificationStatus @default(PENDING)
+  subscriptionStatus SubscriptionStatus @default(UNPAID)
+  subscriptionExpiresAt DateTime?
+  paidDoctorCount Int @default(0)
+  createdAt DateTime @default(now())
+  doctorInvites ClinicDoctorInvite[]
 
   doctors Doctor[]
 
@@ -210,6 +222,20 @@ model Patient {
 
   @@index([cityId])
   @@map("patients")
+}
+
+model ClinicDoctorInvite {
+  id String @id @default(uuid())
+  clinicId String
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  email String
+  tokenHash String @unique
+  status InviteStatus @default(PENDING)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  acceptedAt DateTime?
+  @@index([clinicId, status])
+  @@map("clinic_doctor_invites")
 }
 
 // نوع الحظر: يدوي من الإدارة، أو تلقائي بعد 3 غيابات NO_SHOW خلال 7 أيام.

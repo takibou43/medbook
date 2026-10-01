@@ -7,6 +7,7 @@ import BookAppointment from "./pages/BookAppointment";
 import AppointmentStatus from "./pages/AppointmentStatus";
 import AccountAuth from "./pages/account/AccountAuth";
 import MyAccount from "./pages/account/MyAccount";
+import Clinics from "./pages/Clinics";
 
 export default function App() {
   const { showToast } = useToast();
@@ -17,6 +18,8 @@ export default function App() {
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/" element={<BookAppointment />} />
+        <Route path="/clinics" element={<Clinics />} />
+        <Route path="/clinics/:id" element={<Clinics />} />
         <Route path="/status/:id" element={<AppointmentStatus />} />
         {/* حساب المريض (اختياري) — الحجز كضيف على "/" يبقى كما هو */}
         <Route path="/account/login" element={<AccountAuth />} />

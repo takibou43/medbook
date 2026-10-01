@@ -1,4 +1,4 @@
-export type Role = "PATIENT" | "DOCTOR" | "ADMIN" | "ASSISTANT";
+export type Role = "PATIENT" | "DOCTOR" | "ADMIN" | "ASSISTANT" | "CLINIC_OWNER";
 export type InviteStatus = "PENDING" | "ACCEPTED" | "REVOKED" | "EXPIRED";
 export type Gender = "MALE" | "FEMALE";
 // IN_PROGRESS = المريض الجالس الآن أمام الطبيب، LATE = نودي عليه فلم يستجب وينتظر عودة دوره.
@@ -37,6 +37,9 @@ export interface Wilaya {
 }
 
 export interface Clinic {
+  ownerId?: string | null;
+  subscriptionStatus?: SubscriptionStatus;
+  subscriptionExpiresAt?: string | null;
   id: string;
   nameAr: string;
   address: string;
@@ -175,6 +178,7 @@ export interface Notification {
 }
 
 export interface User {
+  ownedClinic?: Clinic | null;
   id: string;
   email: string;
   phone?: string | null;

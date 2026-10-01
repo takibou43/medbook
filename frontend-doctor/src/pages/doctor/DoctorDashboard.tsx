@@ -177,13 +177,16 @@ export default function DoctorDashboard() {
 
   // عدّ الأيام المتبقية من الاشتراك (أو التجربة المجانية). نعرض التنبيه طوال المدة لا في
   // آخر أيامها فقط، حتى يعرف الطبيب منذ اليوم الأول أن المدة محدودة ولا يُفاجأ بتوقف ظهوره.
-  const subscriptionEndsAt = user?.doctor?.subscriptionExpiresAt ? new Date(user.doctor.subscriptionExpiresAt) : null;
+  const clinicSubscription = user?.doctor?.clinic?.ownerId ? user.doctor.clinic : null;
+  const effectiveExpiry = clinicSubscription ? clinicSubscription.subscriptionExpiresAt : user?.doctor?.subscriptionExpiresAt;
+  const subscriptionEndsAt = effectiveExpiry ? new Date(effectiveExpiry) : null;
   const validEnd = subscriptionEndsAt && !isNaN(subscriptionEndsAt.getTime()) ? subscriptionEndsAt : null;
   const daysLeft = validEnd ? Math.max(0, Math.ceil((validEnd.getTime() - Date.now()) / 86400000)) : null;
 
   return (
     <div className="space-y-6">
-      {daysLeft !== null && validEnd && (
+      {!isAssistant && clinicSubscription && <p className="rounded-xl bg-primary-50 p-4 text-primary-800">اشتراكك مشمول في اشتراك {clinicSubscription.nameAr}. يدير صاحب العيادة التجديد والدفع.</p>}
+      {!clinicSubscription && daysLeft !== null && validEnd && (
         <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="leading-relaxed">

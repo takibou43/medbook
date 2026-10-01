@@ -68,7 +68,8 @@ async function findCandidateDoctors(wilayaId: string, specialtyId: string) {
       wilayaId,
       specialtyId,
       verificationStatus: VerificationStatus.VERIFIED,
-      subscriptionStatus: SubscriptionStatus.ACTIVE,
+      AND: [doctorSubscriptionWhere()],
+      user: { isActive: true },
     },
     include: { schedules: true },
     orderBy: [{ avgRating: "desc" }, { reviewsCount: "desc" }],
@@ -104,12 +105,12 @@ async function bookedRangesForDoctorOnDate(doctorId: string, date: Date, db: Db 
 async function loadBookableDoctor(doctorId: string, db: Db = prisma) {
   const doctor = await db.doctor.findUnique({
     where: { id: doctorId },
-    include: { schedules: true, specialty: true, wilaya: true, city: true, clinic: true },
+    include: { schedules: true, specialty: true, wilaya: true, city: true, clinic: true, user: { select: { isActive: true } } },
   });
   if (
     !doctor ||
     doctor.verificationStatus !== VerificationStatus.VERIFIED ||
-    doctor.subscriptionStatus !== SubscriptionStatus.ACTIVE
+    !(await isDoctorSubscriptionActive(doctor))
   ) {
     throw ApiError.notFound("الطبيب غير موجود أو غير موثّق.");
   }
@@ -435,11 +436,11 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
 
   // المريض اختار طبيبًا محددًا من القائمة المعروضة له — نحجز معه مباشرة (بدون تعيين تلقائي).
   if (input.doctorId) {
-    const doctor = await prisma.doctor.findUnique({ where: { id: input.doctorId }, include: { schedules: true } });
+    const doctor = await prisma.doctor.findUnique({ where: { id: input.doctorId }, include: { schedules: true, user: { select: { isActive: true } } } });
     if (
       !doctor ||
       doctor.verificationStatus !== VerificationStatus.VERIFIED ||
-      doctor.subscriptionStatus !== SubscriptionStatus.ACTIVE
+      !(await isDoctorSubscriptionActive(doctor))
     ) {
       throw ApiError.notFound("الطبيب غير موجود أو غير موثّق.");
     }
@@ -731,3 +732,4 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
     someoneInside,
   };
 }
+import { doctorSubscriptionWhere, isDoctorSubscriptionActive } from "../../lib/clinicBilling";

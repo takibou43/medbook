@@ -96,6 +96,28 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
     await prisma.$disconnect();
   });
 
+  it("PATCH حضور متأخر ونداء التالي من الطبيب والمساعد لا يُدخلان مريضين معًا", async () => {
+    const d = await mkDoctor("patch-call");
+    await db.doctorSchedule.create({ data: { doctorId: d.id, dayOfWeek: today.getUTCDay(), exceptionDate: today, isException: true, startTime: "00:00", endTime: "23:59" } });
+    const assistant = await db.user.create({ data: {
+      email: `${tag}-assistant@test.local`, passwordHash: "x", role: "ASSISTANT",
+      assistant: { create: { doctorId: d.id, firstName: "مساعد", lastName: "اختبار" } },
+    } });
+    created.userIds.push(assistant.id);
+    const assistantToken = signAccessToken({ sub: assistant.id, role: "ASSISTANT" });
+    const late = await db.appointment.create({ data: { doctorId: d.id, date: today, startTime: "08:00", endTime: "08:20", status: "NO_SHOW" } });
+    await db.appointment.create({ data: { doctorId: d.id, date: today, startTime: "08:20", endTime: "08:40", status: "CONFIRMED" } });
+    const results = await Promise.all([
+      call("PATCH", `/api/appointments/${late.id}`, { status: "IN_PROGRESS" }, assistantToken),
+      call("POST", "/api/appointments/queue/next", {}, d.token),
+    ]);
+    expect(results.filter(r => r.status === 200)).toHaveLength(1);
+    expect(results.filter(r => r.status === 400)).toHaveLength(1);
+    const active = await db.appointment.findMany({ where: { doctorId: d.id, status: "IN_PROGRESS" } });
+    expect(active).toHaveLength(1);
+    expect(active[0].calledAt).not.toBeNull();
+  });
+
   it("50 طلب لنفس الطبيب/التاريخ/الوقت → كل الأوقات المتبقية في اليوم بلا تكرار، والباقي 409 (اليوم ممتلئ)", async () => {
     const d = await mkDoctor("slot");
     const date = new Date(today.getTime() + 2 * 86400000).toISOString().slice(0, 10);

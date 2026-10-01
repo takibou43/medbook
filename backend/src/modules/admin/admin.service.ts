@@ -71,6 +71,8 @@ export async function setUserActive(userId: string, isActive: boolean) {
 export async function deleteUser(userId: string, actingAdminId?: string) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw ApiError.notFound("المستخدم غير موجود.");
+    if (await prisma.clinic.findUnique({ where: { ownerId: userId }, select: { id: true } }))
+      throw ApiError.conflict("الحساب يملك عيادة. عطّل الحساب بدل حذفه للحفاظ على بيانات العيادة.");
 
   if (actingAdminId && userId === actingAdminId) {
         throw ApiError.badRequest("لا يمكنك حذف حسابك الخاص.");
@@ -108,7 +110,7 @@ export async function purgeDemoData() {
     await prisma.patient.deleteMany({ where: { id: { in: patientIds } } });
     const users = await prisma.user.deleteMany({ where: { id: { in: userIds } } });
 
-  const clinics = await prisma.clinic.deleteMany({ where: { doctors: { none: {} } } });
+  const clinics = await prisma.clinic.deleteMany({ where: { ownerId: null, doctors: { none: {} } } });
 
   return {
         users: users.count,
@@ -279,9 +281,10 @@ export async function updateDoctorAdmin(
   const result = await prisma.$transaction(async (tx) => {
     const before = await tx.doctor.findUnique({
       where: { id: doctorId },
-      select: { verificationStatus: true, subscriptionStatus: true },
+      select: { verificationStatus: true, subscriptionStatus: true, clinic: { select: { ownerId: true } } },
     });
     if (!before) throw ApiError.notFound("الطبيب غير موجود.");
+    if (before.clinic?.ownerId) throw ApiError.badRequest("اشتراك هذا الطبيب يُدار من صفحة العيادات ضمن اشتراك واحد.");
     const doctor = await tx.doctor.update({
       where: { id: doctorId },
       data,

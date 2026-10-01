@@ -56,7 +56,7 @@ export function ProtectedRoute({ allow }: { allow: Role[] }) {
   if (sessionError) return <SessionError kind={sessionErrorKind} onRetry={() => void refreshMe()} />;
   if (!user) return <Navigate to="/login" replace />;
   if (!allow.includes(user.role)) {
-    return <Navigate to={user.role === "ADMIN" ? "/admin" : "/"} replace />;
+    return <Navigate to={user.role === "ADMIN" ? "/admin" : user.role === "CLINIC_OWNER" ? "/clinic" : "/"} replace />;
   }
 
   return <Outlet />;

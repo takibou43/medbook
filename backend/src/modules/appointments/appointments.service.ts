@@ -36,12 +36,12 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
   if (!patient) throw ApiError.notFound("لم يتم العثور على ملف مريض مرتبط بهذا الحساب.");
   await assertPatientCanBook(patient.id);
 
-  const doctor = await prisma.doctor.findUnique({ where: { id: input.doctorId }, include: { schedules: true } });
+  const doctor = await prisma.doctor.findUnique({ where: { id: input.doctorId }, include: { schedules: true, user: { select: { isActive: true } } } });
   if (!doctor) throw ApiError.notFound("الطبيب غير موجود.");
   if (doctor.verificationStatus !== "VERIFIED") {
     throw ApiError.badRequest("لا يمكن حجز موعد مع طبيب لم يتم التحقق منه بعد.");
   }
-  if (doctor.subscriptionStatus !== SubscriptionStatus.ACTIVE) {
+  if (!(await isDoctorSubscriptionActive(doctor))) {
     throw ApiError.badRequest("لا يمكن حجز موعد مع هذا الطبيب حاليًا.");
   }
 
@@ -286,6 +286,7 @@ export async function listForDoctor(doctorUserId: string, role: Role, status?: A
   }));
 }
 export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus, AppointmentStatus[]>>> = {
+  CLINIC_OWNER: {},
   PATIENT: {
     PENDING: ["CANCELLED"],
     CONFIRMED: ["CANCELLED"],
@@ -378,7 +379,7 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
   } else if (newStatus === AppointmentStatus.NO_SHOW) {
     extraData.calledAt = null;
     extraData.arrivedAt = null;
-  } else if (newStatus === AppointmentStatus.IN_PROGRESS && appointment.status === AppointmentStatus.NO_SHOW) {
+  } else if (newStatus === AppointmentStatus.IN_PROGRESS) {
     extraData.calledAt = new Date();
   }
 
@@ -387,11 +388,28 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
   // واحد فقط ويأخذ الآخر 409 دون أي أثر جانبي.
   let updated;
   try {
-    updated = await prisma.appointment.update({
+    const writeStatus = (db: Prisma.TransactionClient) => db.appointment.update({
       where: { id: appointmentId, status: appointment.status },
       data: { status: newStatus, ...extraData },
       include: { doctor: true, patient: { include: { user: { select: { phone: true } } } } },
     });
+    // شاشة المواعيد (ومنها الحضور بعد تسجيل الغياب) تستطيع إدخال المريض عبر PATCH.
+    // تشارك قفل المناداة مع queue/next و :id/call كي لا يدخل مريضان معًا عند عمل
+    // الطبيب والمساعد بالتزامن، حتى عندما يعدّلان موعدَين مختلفَين.
+    updated = newStatus === AppointmentStatus.IN_PROGRESS
+      ? await prisma.$transaction(async (tx) => {
+          await lockDoctorCalls(tx, appointment.doctorId);
+          const inProgress = await tx.appointment.findFirst({
+            where: { doctorId: appointment.doctorId, date: appointment.date, status: AppointmentStatus.IN_PROGRESS },
+            select: { id: true },
+          });
+          if (inProgress) {
+            if (inProgress.id === appointmentId) throw ApiError.conflict("تغيّرت حالة الموعد للتو. حدّث الصفحة وأعد المحاولة.");
+            throw ApiError.badRequest("هناك مريض بالداخل الآن. أنهِ موعده أو سجّله متأخرًا قبل مناداة غيره.");
+          }
+          return writeStatus(tx);
+        }, { maxWait: 10000, timeout: 15000 })
+      : await writeStatus(prisma);
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
       throw ApiError.conflict("تغيّرت حالة الموعد للتو. حدّث الصفحة وأعد المحاولة.");
@@ -779,3 +797,4 @@ export async function markPatientArrived(doctorUserId: string, appointmentId: st
     include: QUEUE_INCLUDE,
   });
 }
+import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";

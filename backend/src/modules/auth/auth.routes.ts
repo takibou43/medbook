@@ -10,8 +10,11 @@ import {
 } from "./auth.schema";
 import { authenticate } from "../../middleware/auth";
 import { authLimiter } from "../../middleware/rateLimiter";
+import { registerClinicSchema, acceptClinicInviteSchema } from "../clinics/clinics.schema";
 
 const router = Router();
+router.post("/register/clinic", authLimiter, validate({ body: registerClinicSchema }), controller.registerClinic);
+router.post("/register/clinic-doctor", authLimiter, validate({ body: acceptClinicInviteSchema }), controller.registerClinicDoctor);
 
 router.post("/register/patient", authLimiter, validate({ body: registerPatientSchema }), controller.registerPatient);
 router.post("/register/doctor", authLimiter, validate({ body: registerDoctorSchema }), controller.registerDoctor);

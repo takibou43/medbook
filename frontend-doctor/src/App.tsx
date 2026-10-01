@@ -40,6 +40,10 @@ import AdminAppointments from "./pages/admin/AdminAppointments";
 import AdminMessages from "./pages/admin/AdminMessages";
 import DoctorMessages from "./pages/doctor/DoctorMessages";
 import AccountSettings from "./pages/AccountSettings";
+import ClinicRegister from "./pages/clinic/ClinicRegister";
+import ClinicManagement from "./pages/clinic/ClinicManagement";
+import ClinicDoctorInvite from "./pages/clinic/ClinicDoctorInvite";
+import AdminClinics from "./pages/admin/AdminClinics";
 import { useAdminUnread, useDoctorUnread, useUnreadToast } from "./hooks/useMessaging";
 
 // الروابط المشتركة بين الطبيب والمساعد (الصفحات التي يُسمح للمساعد برؤيتها فقط).
@@ -50,6 +54,7 @@ const sharedNav = [
 
 // روابط إضافية للطبيب وحده — لا تظهر أبدًا في قائمة المساعد.
 const doctorOnlyNav = [
+  { to: "/clinic", label: "إدارة العيادة", icon: Building2 },
   { to: "/messages", label: "الرسائل", icon: MessageSquare },
   { to: "/schedule", label: "أوقات العمل", icon: Clock },
   { to: "/patients", label: "مرضاي", icon: UsersIcon },
@@ -85,6 +90,7 @@ function DoctorAreaLayout() {
 }
 
 const adminNav = [
+  { to: "/admin/clinics", label: "العيادات", icon: Building2 },
   { to: "/admin", label: "الرئيسية", icon: LayoutDashboard, end: true },
   { to: "/admin/appointments", label: "المواعيد", icon: CalendarClock },
   { to: "/admin/messages", label: "الرسائل", icon: MessageSquare },
@@ -109,7 +115,19 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/register/clinic" element={<ClinicRegister />} />
+      <Route path="/clinic/doctor/accept/:token" element={<ClinicDoctorInvite />} />
       <Route path="/assistant/accept/:token" element={<AssistantAcceptInvite />} />
+      <Route element={<ProtectedRoute allow={["CLINIC_OWNER", "DOCTOR"]} />}>
+        <Route element={<DashboardLayout title="إدارة العيادة" items={[
+          { to: "/clinic", label: "العيادة والأطباء", icon: Building2, end: true },
+          { to: "/clinic/account", label: "إعدادات الحساب", icon: KeyRound },
+          ...(useClinicDoctorNav()),
+        ]} />}>
+          <Route path="/clinic" element={<ClinicManagement />} />
+          <Route path="/clinic/account" element={<AccountSettings />} />
+        </Route>
+      </Route>
 
       {/* الطبيب والمساعد معًا: الدخول مسموح، ثم داخل نفس التخطيط تُقيَّد صفحات الطبيب فقط
           بحارس إضافي (ProtectedRoute allow=["DOCTOR"]) متداخل — أي محاولة من المساعد لفتح
@@ -136,6 +154,7 @@ export default function App() {
       <Route element={<ProtectedRoute allow={["ADMIN"]} />}>
         <Route element={<AdminAreaLayout />}>
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/clinics" element={<AdminClinics />} />
           <Route path="/admin/appointments" element={<AdminAppointments />} />
           <Route path="/admin/messages" element={<AdminMessages />} />
           <Route path="/admin/users" element={<AdminUsers />} />
@@ -151,4 +170,9 @@ export default function App() {
       <Route path="*" element={<Login />} />
     </Routes>
   );
+}
+
+function useClinicDoctorNav() {
+  const { user } = useAuth();
+  return user?.role === "DOCTOR" ? [{ to: "/", label: "لوحتي كطبيب", icon: Stethoscope, end: true }] : [];
 }

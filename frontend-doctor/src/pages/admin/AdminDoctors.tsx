@@ -80,7 +80,7 @@ export default function AdminDoctors() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <VerificationBadge status={d.verificationStatus} />
-                  <SubscriptionBadge status={d.subscriptionStatus ?? "UNPAID"} />
+                  {d.clinic?.ownerId ? <Link to="/admin/clinics" className="text-sm text-primary-700">اشتراك {d.clinic.nameAr}</Link> : <SubscriptionBadge status={d.subscriptionStatus ?? "UNPAID"} />}
                   <Link to={`/admin/messages?doctor=${d.id}`} className="btn-outline !px-3 !py-1.5 text-xs">مراسلة</Link>
                   {d.verificationStatus !== "VERIFIED" && (
                     <Button onClick={() => setVerification(d.id, "VERIFIED")}>توثيق</Button>
@@ -90,7 +90,7 @@ export default function AdminDoctors() {
                       رفض
                     </Button>
                   )}
-                  {d.subscriptionStatus !== "ACTIVE" ? (
+                  {d.clinic?.ownerId ? null : d.subscriptionStatus !== "ACTIVE" ? (
                     <Button variant="outline" onClick={() => setSubscription(d.id, "ACTIVE")}>
                       تفعيل الاشتراك
                     </Button>

@@ -429,7 +429,7 @@ describe("GET /api/doctors/:id — الموثَّق فقط", () => {
 
   it("الاستعلام نفسه يشترط VERIFIED (لا تصفية بعد الجلب)", async () => {
     await request(app).get(`/api/doctors/${h.DOCTOR().id}`);
-    expect(h.db.doctor.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: h.DOCTOR().id, verificationStatus: "VERIFIED" } }));
+    expect(h.db.doctor.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: h.DOCTOR().id, verificationStatus: "VERIFIED", user: { isActive: true }, AND: expect.any(Array) }) }));
     const select = (h.db.doctor.findFirst.mock.calls[0] as any[])[0].select;
     expect(select).not.toHaveProperty("userId");
     expect(select).not.toHaveProperty("subscriptionStatus");

@@ -90,6 +90,12 @@ export async function updateOwnProfile(
   }>
 ) {
   const doctor = await getDoctorByUserId(userId);
+  if (data.clinicId !== undefined) throw ApiError.forbidden("تغيير العيادة يتطلب دعوة من صاحبها.");
+  if (doctor.clinicId && (data.wilayaId !== undefined || data.cityId !== undefined || data.address !== undefined)) {
+    const clinic = await prisma.clinic.findUnique({ where: { id: doctor.clinicId } });
+    if (clinic?.ownerId && ((data.wilayaId && data.wilayaId !== clinic.wilayaId) || (data.cityId && data.cityId !== clinic.cityId) || (data.address !== undefined && data.address !== clinic.address)))
+      throw ApiError.badRequest("موقع طبيب العيادة يتبع موقع العيادة.");
+  }
   return prisma.doctor.update({ where: { id: doctor.id }, data });
 }
 

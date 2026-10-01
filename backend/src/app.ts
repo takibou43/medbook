@@ -8,6 +8,7 @@ import { apiLimiter } from "./middleware/rateLimiter";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler";
 
 import authRoutes from "./modules/auth/auth.routes";
+import clinicsRoutes from "./modules/clinics/clinics.routes";
 import specialtiesRoutes from "./modules/specialties/specialties.routes";
 import wilayasRoutes from "./modules/wilayas/wilayas.routes";
 import doctorsRoutes from "./modules/doctors/doctors.routes";
@@ -53,6 +54,7 @@ export function createApp() {
   app.get("/health", (_req, res) => res.json({ success: true, message: "MedBook API يعمل بنجاح 🩺" }));
 
   app.use("/api/auth", authRoutes);
+  app.use("/api/clinics", clinicsRoutes);
   app.use("/api/specialties", specialtiesRoutes);
   app.use("/api/wilayas", wilayasRoutes);
   app.use("/api/doctors", doctorsRoutes);

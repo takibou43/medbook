@@ -10,7 +10,7 @@ import { Pagination } from "../../components/ui/Pagination";
 import { Role } from "../../types";
 import { BlockPatientDialog, BlockTarget } from "../../components/BlockPatientDialog";
 
-const ROLE_LABELS: Record<Role, string> = { PATIENT: "مريض", DOCTOR: "طبيب", ADMIN: "إدارة", ASSISTANT: "مساعد" };
+const ROLE_LABELS: Record<Role, string> = { PATIENT: "مريض", DOCTOR: "طبيب", ADMIN: "إدارة", ASSISTANT: "مساعد", CLINIC_OWNER: "صاحب عيادة" };
 
 export default function AdminUsers() {
   const [q, setQ] = useState("");

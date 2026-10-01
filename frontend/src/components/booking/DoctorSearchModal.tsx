@@ -85,6 +85,7 @@ export function DoctorSearchModal({ onClose, onSelect }: Props) {
                         {d.specialty.nameAr} · {d.wilaya.nameAr}
                         {d.city ? ` — ${d.city.nameAr}` : ""}
                       </p>
+                      {d.clinic && <p className="text-xs text-primary-700">{d.clinic.nameAr}</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-1 text-sm text-amber-600">
                       <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />

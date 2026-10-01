@@ -17,6 +17,7 @@ export function Header() {
             الآن فيتابع المريض مواعيده من «حسابي». حجوزات الضيوف القديمة تبقى قابلة للاستعلام عبر
             GET /api/booking/lookup (معرّف الموعد + الهاتف) فقط. */}
         {/* حساب المريض (مطلوب لإتمام الحجز): رابط واحد صغير لا يزاحم خطوات الحجز. */}
+        <Link to="/clinics" className="rounded-xl px-3 py-2 text-sm font-semibold text-primary-700 hover:bg-white/70">العيادات</Link>
         {!loading && (
           <Link
             to={user ? "/account" : "/account/login"}

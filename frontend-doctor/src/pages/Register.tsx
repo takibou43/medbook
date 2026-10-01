@@ -55,6 +55,8 @@ export default function Register() {
         <div className="mb-6 flex flex-col items-center">
           <Logo className="mb-2 h-14 w-14" />
           <h1 className="text-xl font-extrabold text-slate-900">انضم كطبيب في MedBook</h1>
+          <a href="/register/clinic" className="mt-2 font-semibold text-primary-700 hover:underline">صاحب عيادة؟ سجّل عيادتك وأطباءها</a>
+          <p className="mt-2 text-sm text-slate-600">اشتراك الطبيب المستقل: 5,000 دج شهريًا، شامل حسابات المساعدين.</p>
           <p className="mt-1 text-center text-sm text-slate-500">
             مرضاك يحجزون معك مباشرة بدون حاجة لإنشاء حساب — أنت فقط من يحتاج تسجيل الدخول لإدارة مواعيدك.
           </p>

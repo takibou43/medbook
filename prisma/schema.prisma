@@ -243,6 +243,7 @@ model Clinic {
   paidDoctorCount Int @default(0)
   createdAt DateTime @default(now())
   doctorInvites ClinicDoctorInvite[]
+  transferRequests ClinicTransferRequest[]
 
   doctors Doctor[]
 
@@ -286,6 +287,21 @@ model ClinicDoctorInvite {
   acceptedAt DateTime?
   @@index([clinicId, status])
   @@map("clinic_doctor_invites")
+}
+
+model ClinicTransferRequest {
+  id String @id @default(uuid())
+  clinicId String
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctorId String
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  pendingDoctorId String? @unique
+  status InviteStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  reviewedAt DateTime?
+  reviewedBy String?
+  @@index([clinicId, status])
+  @@map("clinic_transfer_requests")
 }
 // فرد عائلة يحجز له صاحب الحساب من حسابه نفسه — لا User ولا بيانات دخول ولا هاتف خاص به.
 // ownerPatientId لا يتغيّر بعد الإنشاء (لا مسار يسمح بذلك). الحذف = أرشفة (archivedAt) فقط:
@@ -339,6 +355,7 @@ model PatientBlock {
   @@map("patient_blocks")
 }
 model Doctor {
+  clinicTransferRequests ClinicTransferRequest[]
   id          String    @id @default(uuid())
   userId      String    @unique
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)

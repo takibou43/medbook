@@ -17,6 +17,48 @@ const inviteSelect = { id: true, email: true, status: true, expiresAt: true, cre
 export async function lockClinic(tx: Prisma.TransactionClient, id: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"clinic-members:" + id}, 0))`;
 }
+async function requestTransfer(tx: Prisma.TransactionClient, doctorId: string, clinicId: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"clinic-transfer:" + doctorId}, 0))`;
+  const doctor = await tx.doctor.findUniqueOrThrow({ where: { id: doctorId } });
+  if (doctor.clinicId) throw ApiError.conflict("الطبيب مرتبط بعيادة بالفعل.");
+  if (await tx.clinicTransferRequest.findUnique({ where: { pendingDoctorId: doctorId } })) throw ApiError.conflict("لديك طلب انتقال بانتظار مراجعة الإدارة.");
+  return tx.clinicTransferRequest.create({ data: { doctorId, clinicId, pendingDoctorId: doctorId } });
+}
+export async function requestClinicTransfer(userId: string, clinicId: string) {
+  return prisma.$transaction(async tx => {
+    await lockClinic(tx, clinicId);
+    const clinic = await tx.clinic.findFirst({ where: { id: clinicId, ...activeClinicWhere() }, select: { id: true } });
+    const doctor = await tx.doctor.findUnique({ where: { userId }, include: { user: { select: { isActive: true } } } });
+    if (!clinic) throw ApiError.notFound("العيادة غير متاحة لطلب الانتقال.");
+    if (!doctor?.user.isActive) throw ApiError.forbidden();
+    return requestTransfer(tx, doctor.id, clinic.id);
+  });
+}
+export async function listOwnTransfers(userId: string) {
+  return prisma.clinicTransferRequest.findMany({ where: { doctor: { userId } }, select: { id: true, status: true, createdAt: true, reviewedAt: true, clinic: { select: { nameAr: true } } }, orderBy: { createdAt: "desc" }, take: 20 });
+}
+export async function adminListTransfers() {
+  return prisma.clinicTransferRequest.findMany({ where: { status: InviteStatus.PENDING }, include: { clinic: { select: { nameAr: true } }, doctor: { select: { firstName: true, lastName: true, user: { select: { email: true } } } } }, orderBy: { createdAt: "asc" }, take: 100 });
+}
+export async function reviewTransfer(adminId: string, id: string, approve: boolean) {
+  return prisma.$transaction(async tx => {
+    const request = await tx.clinicTransferRequest.findUnique({ where: { id } });
+    if (!request) throw ApiError.notFound();
+    await lockClinic(tx, request.clinicId);
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"clinic-transfer:" + request.doctorId}, 0))`;
+    const claimed = await tx.clinicTransferRequest.updateMany({ where: { id, status: InviteStatus.PENDING }, data: { status: approve ? InviteStatus.ACCEPTED : InviteStatus.REVOKED, pendingDoctorId: null, reviewedAt: new Date(), reviewedBy: adminId } });
+    if (!claimed.count) throw ApiError.conflict("تمت مراجعة الطلب بالفعل.");
+    if (approve) {
+      const clinic = await tx.clinic.findFirst({ where: { id: request.clinicId, ...activeClinicWhere() } });
+      if (!clinic) throw ApiError.badRequest("وثّق العيادة وفعّل اشتراكها قبل الموافقة على الانتقال.");
+      const count = await tx.doctor.count({ where: { clinicId: clinic.id } });
+      if (count >= clinic.paidDoctorCount) throw ApiError.conflict("زِد السعة المدفوعة قبل الموافقة على انتقال الطبيب.");
+      const joined = await tx.doctor.updateMany({ where: { id: request.doctorId, clinicId: null, user: { isActive: true } }, data: { clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } });
+      if (!joined.count) throw ApiError.conflict("الطبيب غير متاح للانتقال أو مرتبط بعيادة بالفعل.");
+    }
+    return tx.clinicTransferRequest.findUniqueOrThrow({ where: { id } });
+  });
+}
 async function validateLocation(input: ClinicProfileInput, db: Prisma.TransactionClient = prisma) {
   const city = await db.city.findFirst({ where: { id: input.cityId, wilayaId: input.wilayaId }, select: { id: true } });
   if (!city) throw ApiError.badRequest("المدينة لا تتبع الولاية المحددة.");
@@ -50,8 +92,7 @@ export async function createOwnClinic(userId: string, input: ClinicProfileInput)
     if (user.ownedClinic || user.doctor?.clinicId) throw ApiError.conflict("حسابك مرتبط بعيادة بالفعل.");
     const clinic = await tx.clinic.create({ data: { ...input, ownerId: userId } });
     if (user.doctor) {
-      const linked = await tx.doctor.updateMany({ where: { id: user.doctor.id, clinicId: null }, data: { clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } });
-      if (!linked.count) throw ApiError.conflict("الطبيب مرتبط بعيادة بالفعل.");
+      await requestTransfer(tx, user.doctor.id, clinic.id);
     }
     return clinic;
   });
@@ -136,14 +177,17 @@ export async function acceptNewDoctor(input: z.infer<typeof acceptClinicInviteSc
 }
 export async function acceptExistingDoctor(userId: string, token: string) {
   return prisma.$transaction(async tx => {
-    const { invite, clinic } = await consumeInvite(tx, token);
+    const invite = await tx.clinicDoctorInvite.findUnique({ where: { tokenHash: hashToken(token) } });
+    assertInvite(invite);
+    await lockClinic(tx, invite!.clinicId);
+    const clinic = await tx.clinic.findUniqueOrThrow({ where: { id: invite!.clinicId }, include: { owner: { select: { isActive: true } } } });
+    if (!clinic.owner?.isActive) throw ApiError.forbidden();
     const user = await tx.user.findUnique({ where: { id: userId }, include: { doctor: true } });
-    if (!user?.isActive || user.role !== Role.DOCTOR || !user.doctor || user.email.toLowerCase() !== invite.email.toLowerCase()) throw ApiError.forbidden("الدعوة مخصصة لبريد طبيب آخر.");
+    if (!user?.isActive || user.role !== Role.DOCTOR || !user.doctor || user.email.toLowerCase() !== invite!.email.toLowerCase()) throw ApiError.forbidden("الدعوة مخصصة لبريد طبيب آخر.");
     if (user.doctor.clinicId) throw ApiError.conflict("الطبيب مرتبط بعيادة بالفعل.");
-    // Conditional update also prevents simultaneous invitations to different clinics.
-    const joined = await tx.doctor.updateMany({ where: { id: user.doctor.id, clinicId: null }, data: { clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } });
-    if (!joined.count) throw ApiError.conflict("الطبيب مرتبط بعيادة بالفعل.");
-    return { clinicId: clinic.id };
+    const claimed = await tx.clinicDoctorInvite.updateMany({ where: { id: invite!.id, status: InviteStatus.PENDING, expiresAt: { gt: new Date() } }, data: { status: InviteStatus.ACCEPTED, acceptedAt: new Date() } });
+    if (!claimed.count) throw ApiError.conflict("تم استعمال الدعوة أو إلغاؤها.");
+    return requestTransfer(tx, user.doctor.id, clinic.id);
   });
 }
 export async function clinicDoctor(userId: string, doctorId: string) {

@@ -15,6 +15,10 @@ router.get("/", validate({ query: clinicSearchSchema }), asyncHandler(async (req
 router.get("/invites/:token", authLimiter, validate({ params: tokenSchema }), asyncHandler(async (req, res) => send(res, await service.previewInvite(req.params.token))));
 router.post("/invites/accept", authenticate, authorize(Role.DOCTOR), validate({ body: tokenSchema }), asyncHandler(async (req, res) => send(res, await service.acceptExistingDoctor(req.user!.id, req.body.token))));
 router.get("/mine", ...owner, asyncHandler(async (req, res) => send(res, await service.getOwnClinic(req.user!.id))));
+router.get("/transfers/mine", authenticate, authorize(Role.DOCTOR), asyncHandler(async (req, res) => send(res, await service.listOwnTransfers(req.user!.id))));
+router.post("/transfers", authenticate, authorize(Role.DOCTOR), validate({ body: z.object({ clinicId: z.string().uuid() }).strict() }), asyncHandler(async (req, res) => { res.status(201); send(res, await service.requestClinicTransfer(req.user!.id, req.body.clinicId)); }));
+router.get("/admin/transfers", authenticate, authorize(Role.ADMIN), asyncHandler(async (_req, res) => send(res, await service.adminListTransfers())));
+router.patch("/admin/transfers/:id", authenticate, authorize(Role.ADMIN), validate({ params: clinicIdParams, body: z.object({ approve: z.boolean() }).strict() }), asyncHandler(async (req, res) => send(res, await service.reviewTransfer(req.user!.id, req.params.id, req.body.approve))));
 router.post("/mine", ...owner, validate({ body: clinicProfileSchema }), asyncHandler(async (req, res) => { res.status(201); send(res, await service.createOwnClinic(req.user!.id, req.body)); }));
 router.patch("/mine", ...owner, validate({ body: clinicProfileSchema }), asyncHandler(async (req, res) => send(res, await service.updateOwnClinic(req.user!.id, req.body))));
 router.post("/mine/invites", ...owner, validate({ body: emailInviteSchema }), asyncHandler(async (req, res) => { res.status(201); send(res, await service.inviteDoctor(req.user!.id, req.body.email)); }));

@@ -126,14 +126,53 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
     expect(await db.doctor.count({ where: { clinicId: o.clinicId } })).toBe(2);
     expect(await db.clinicDoctorInvite.count({ where: { clinicId: o.clinicId, status: "PENDING" } })).toBe(1);
   });
-  it("allows an existing doctor to join only one clinic even when invitations race", async () => {
+  it("queues one transfer for an existing doctor and requires admin approval even when invitations race", async () => {
     const a = await owner(false); const b = await owner(false); const targetEmail = email();
     const u = await db.user.create({ data: { email: targetEmail, passwordHash: "unused-test-only", role: "DOCTOR", doctor: { create: { ...doctorProfile(), ...location } } }, include: { doctor: true } });
     const tokens = [await invite(a.token, targetEmail), await invite(b.token, targetEmail)];
     const doctorToken = sign({ sub: u.id, role: "DOCTOR" });
     const responses = await Promise.all(tokens.map(token => request(app).post("/api/clinics/invites/accept").set(bearer(doctorToken)).send({ token })));
     expect(responses.map(r => r.status).sort()).toEqual([200, 409]);
+    expect(await db.doctor.count({ where: { clinicId: { in: [a.clinicId, b.clinicId] } } })).toBe(0);
+    const pending = responses.find(r => r.status === 200)!.body.data;
+    expect(pending.status).toBe("PENDING");
+    expect((await request(app).patch(`/api/clinics/admin/transfers/${pending.id}`).set(bearer(doctorToken)).send({ approve: true })).status).toBe(403);
+    expect((await request(app).patch(`/api/clinics/admin/transfers/${pending.id}`).set(bearer(adminToken)).send({ approve: true })).status).toBe(400);
+    expect((await request(app).patch(`/api/clinics/admin/${pending.clinicId}`).set(bearer(adminToken)).send({ verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE", paidDoctorCount: 1, subscriptionExpiresAt: new Date(Date.now() + 86400000) })).status).toBe(200);
+    const approved = await request(app).patch(`/api/clinics/admin/transfers/${pending.id}`).set(bearer(adminToken)).send({ approve: true });
+    expect(approved.status).toBe(200); expect(approved.body.data.status).toBe("ACCEPTED");
     expect(await db.doctor.count({ where: { clinicId: { in: [a.clinicId, b.clinicId] } } })).toBe(1);
+    expect((await request(app).patch(`/api/clinics/admin/transfers/${pending.id}`).set(bearer(adminToken)).send({ approve: true })).status).toBe(409);
+  });
+  it("creating an owned clinic preserves an existing doctor's subscription until approval and rejection", async () => {
+    const u = await db.user.create({ data: { email: email(), passwordHash: "unused-test-only", role: "DOCTOR", doctor: { create: { ...doctorProfile(), ...location, subscriptionStatus: "ACTIVE", subscriptionExpiresAt: new Date(Date.now() + 86400000) } } }, include: { doctor: true } });
+    const token = sign({ sub: u.id, role: "DOCTOR" }); owners.push(u.id);
+    const created = await request(app).post("/api/clinics/mine").set(bearer(token)).send(clinicProfile());
+    expect(created.status).toBe(201);
+    expect(await db.doctor.findUnique({ where: { id: u.doctor!.id } })).toMatchObject({ clinicId: null, subscriptionStatus: "ACTIVE" });
+    const mine = await request(app).get("/api/clinics/transfers/mine").set(bearer(token));
+    expect(mine.status).toBe(200); expect(mine.body.data[0].status).toBe("PENDING");
+    const pendingId = mine.body.data[0].id;
+    expect((await request(app).get("/api/clinics/admin/transfers").set(bearer(token))).status).toBe(403);
+    expect((await request(app).patch(`/api/clinics/admin/transfers/${pendingId}`).set(bearer(adminToken)).send({ approve: false })).status).toBe(200);
+    expect(await db.doctor.findUnique({ where: { id: u.doctor!.id } })).toMatchObject({ clinicId: null, subscriptionStatus: "ACTIVE" });
+    expect(await db.clinicTransferRequest.findUnique({ where: { id: pendingId } })).toMatchObject({ status: "REVOKED", pendingDoctorId: null });
+  });
+  it("accepts direct transfer requests but never approves beyond paid capacity under concurrency", async () => {
+    const o = await owner();
+    await request(app).patch(`/api/clinics/admin/${o.clinicId}`).set(bearer(adminToken)).send({ verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE", paidDoctorCount: 2, subscriptionExpiresAt: new Date(Date.now() + 86400000) });
+    const pending: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const u = await db.user.create({ data: { email: email(), passwordHash: "unused-test-only", role: "DOCTOR", doctor: { create: { ...doctorProfile(), ...location, subscriptionStatus: "ACTIVE" } } } });
+      const doctorToken = sign({ sub: u.id, role: "DOCTOR" });
+      const result = await request(app).post("/api/clinics/transfers").set(bearer(doctorToken)).send({ clinicId: o.clinicId });
+      expect(result.status).toBe(201); pending.push(result.body.data.id);
+      expect((await request(app).post("/api/clinics/transfers").set(bearer(doctorToken)).send({ clinicId: o.clinicId })).status).toBe(409);
+    }
+    const results = await Promise.all(pending.map(id => request(app).patch(`/api/clinics/admin/transfers/${id}`).set(bearer(adminToken)).send({ approve: true })));
+    expect(results.map(r => r.status).sort()).toEqual([200, 409]);
+    expect(await db.doctor.count({ where: { clinicId: o.clinicId } })).toBe(2);
+    expect(await db.clinicTransferRequest.count({ where: { clinicId: o.clinicId, status: "PENDING" } })).toBe(1);
   });
   it("assigns clinic assistants to the selected doctor without leaking billing", async () => {
     const o = await owner(); const id = o.user.doctor.id;

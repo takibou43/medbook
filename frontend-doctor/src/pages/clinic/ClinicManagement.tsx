@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../../lib/api";
 import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Input";
 import { ClinicProfile, ClinicProfileFields, profileFromForm } from "./ClinicForms";
+import ClinicTransferRequests from "./ClinicTransferRequests";
 interface ManagedClinic extends ClinicProfile {
   id: string; verificationStatus: string; subscriptionStatus: string; subscriptionExpiresAt: string | null;
   billing: { doctorCount: number; monthlyTotal: number; monthlyPerDoctor: number; paidDoctorCount: number };
@@ -22,7 +23,7 @@ export default function ClinicManagement() {
   const missing = query.isError && (query.error as { response?: { status?: number } }).response?.status === 404;
   async function run(fn: () => Promise<void>) {
     setBusy(true); setError(""); setMessage("");
-    try { await fn(); await qc.invalidateQueries({ queryKey: ["my-clinic"] }); }
+    try { await fn(); await Promise.all([qc.invalidateQueries({ queryKey: ["my-clinic"] }), qc.invalidateQueries({ queryKey: ["my-clinic-transfers"] })]); }
     catch (err) { setError(apiErrorMessage(err, "تعذر تنفيذ العملية.")); } finally { setBusy(false); }
   }
   function save(e: FormEvent<HTMLFormElement>) {
@@ -44,13 +45,14 @@ export default function ClinicManagement() {
   if (query.isPending) return <p>جارٍ تحميل العيادة…</p>;
   return <section className="space-y-5" dir="rtl">
     <header><h1 className="text-2xl font-extrabold">{clinic?.nameAr || "إنشاء عيادتك"}</h1><p className="mt-2 text-slate-600">كل طبيب له جدول وحجوزات مستقلة، والعيادة تدفع اشتراكًا واحدًا.</p></header>
+    {user?.role === "DOCTOR" && <ClinicTransferRequests />}
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}
     {message && <p role="status" className="rounded-xl bg-primary-50 p-3 text-primary-800">{message}</p>}
     {query.isError && !missing && <p role="alert">{apiErrorMessage(query.error, "تعذر تحميل العيادة.")} <button onClick={() => void query.refetch()}>إعادة المحاولة</button></p>}
     {missing && user?.doctor?.clinic && <p>أنت مرتبط بعيادة. إنشاء عيادة أخرى يحتاج معالجة الارتباط الحالي من الإدارة.</p>}
     {((missing && !user?.doctor?.clinic) || editing) && <form onSubmit={save} className="card space-y-4 p-5"><ClinicProfileFields initial={clinic} />
-      {missing && user?.role === "DOCTOR" && <p className="text-sm">سيُربط ملفك الطبي بالعيادة الجديدة ويصبح الحجز تابعًا لاشتراكها بعد مراجعة الإدارة.</p>}
-      <Button type="submit" loading={busy}>{clinic ? "حفظ البيانات" : "إنشاء العيادة وربط حسابي"}</Button>
+      {missing && user?.role === "DOCTOR" && <p className="text-sm">إنشاء العيادة يرسل طلب انتقال ملفك الطبي إلى الإدارة، ويستمر اشتراكك الحالي إلى حين الموافقة.</p>}
+      <Button type="submit" loading={busy}>{clinic ? "حفظ البيانات" : "إنشاء العيادة"}</Button>
       {editing && <button type="button" className="mr-3" onClick={() => setEditing(false)}>إلغاء</button>}
     </form>}
     {clinic && <>
@@ -64,7 +66,7 @@ export default function ClinicManagement() {
       </div>
       <div className="card p-5"><h2 className="mb-3 text-lg font-bold">دعوة طبيب إلى العيادة</h2>
         <form onSubmit={e => invite(e)} className="flex flex-wrap items-end gap-3"><Input name="email" type="email" label="بريد الطبيب" required /><Button type="submit" loading={busy}>إنشاء رابط دعوة</Button></form>
-        <p className="mt-2 text-sm text-slate-500">يمكن للطبيب إنشاء حساب جديد، أو قبول الدعوة بحسابه المستقل الحالي.</p>
+        <p className="mt-2 text-sm text-slate-500">الطبيب الجديد ينشئ حسابًا عبر الدعوة. الطبيب المسجّل يرسل طلب انتقال لموافقة الإدارة.</p>
         {clinic.invites.map(i => <div key={i.id} className="mt-3 flex flex-wrap justify-between gap-2 border-t pt-3"><span dir="ltr">{i.email}</span><span>{new Date(i.expiresAt) <= new Date() ? "منتهية" : "بانتظار القبول"}</span><button disabled={busy} className="text-red-600" onClick={() => void run(async () => { await api.delete(`/clinics/mine/invites/${i.id}`); })}>إلغاء الدعوة</button></div>)}
       </div>
       {clinic.doctors.length > 0 && <div className="card p-5"><h2 className="mb-3 text-lg font-bold">إضافة مساعد</h2>

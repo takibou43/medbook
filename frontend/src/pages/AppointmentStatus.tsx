@@ -13,7 +13,6 @@ interface QueueStatus {
   date: string;
   startTime: string;
   status: "PENDING" | "CONFIRMED" | "RESCHEDULE_REQUIRED" | "IN_PROGRESS" | "LATE" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
-  patientName: string;
   slotMinutes: number;
   deferredCount: number;
   skipCredits: number;
@@ -82,7 +81,6 @@ export default function AppointmentStatus() {
         <div className="text-center">
           <h1 className="text-xl font-extrabold text-slate-900">متابعة دورك</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {data.patientName ? data.patientName + " · " : ""}
             {doctorName}
           </p>
         </div>

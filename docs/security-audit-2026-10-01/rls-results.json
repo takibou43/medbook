@@ -1,0 +1,67 @@
+{
+  "database": "medbook_rls_test",
+  "role": {
+    "name": "medbook_rls_runtime",
+    "rolsuper": false,
+    "rolbypassrls": false
+  },
+  "concurrentTransactions": 80,
+  "checks": [
+    {
+      "name": "Actual Prisma connection role is limited and has no RLS bypass",
+      "passed": true
+    },
+    {
+      "name": "No context defaults to deny",
+      "passed": true
+    },
+    {
+      "name": "Patient, doctor, assistant and admin see only their own notifications",
+      "passed": true
+    },
+    {
+      "name": "Foreign update denied; own read flag update allowed",
+      "passed": true
+    },
+    {
+      "name": "Column privileges prevent notification ownership transfer",
+      "passed": true
+    },
+    {
+      "name": "Runtime cannot author system notifications",
+      "passed": true
+    },
+    {
+      "name": "Push INSERT/UPDATE WITH CHECK prevents changing owner; foreign read denied",
+      "passed": true
+    },
+    {
+      "name": "Push DELETE limited to owner",
+      "passed": true
+    },
+    {
+      "name": "80 concurrent transactions with pool size 2 do not leak context",
+      "passed": true
+    },
+    {
+      "name": "Rollback clears local context too",
+      "passed": true
+    },
+    {
+      "name": "Deactivated identity is denied by policy",
+      "passed": true
+    },
+    {
+      "name": "Worker can insert notifications and purge expired only; cannot register devices",
+      "passed": true
+    },
+    {
+      "name": "RLS and FORCE RLS enabled on both pilot tables",
+      "passed": true
+    },
+    {
+      "name": "Rollback tested without removing any records",
+      "passed": true
+    }
+  ]
+}

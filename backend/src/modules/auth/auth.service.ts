@@ -73,6 +73,7 @@ export async function registerDoctor(input: RegisterDoctorInput) {
           gender: input.gender,
           consultationFee: input.consultationFee,
           verificationStatus: VerificationStatus.PENDING, // يجب أن تتحقق الإدارة من الطبيب أولًا
+          newDoctorTrial: true,
         },
       },
     },
@@ -191,7 +192,11 @@ export async function refresh(refreshToken: string) {
   if (!user || !user.isActive) throw ApiError.unauthorized();
 
   // rotate: revoke old, issue new
-  await prisma.refreshToken.update({ where: { id: stored.id }, data: { revoked: true } });
+  const consumed = await prisma.refreshToken.updateMany({
+    where: { id: stored.id, revoked: false, expiresAt: { gt: new Date() } },
+    data: { revoked: true },
+  });
+  if (consumed.count !== 1) throw ApiError.unauthorized("جلسة منتهية. الرجاء تسجيل الدخول من جديد.");
   const tokens = await issueTokens(user.id, user.role);
   return { user, ...tokens };
 }

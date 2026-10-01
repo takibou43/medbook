@@ -1,3 +1,4 @@
+import { safeErrorCode } from "../../lib/safeError";
 import { AppointmentStatus, ReminderStatus, ReminderType } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { sendPushToUser, isPushEnabled, PushPayload } from "../../lib/push";
@@ -324,7 +325,7 @@ export async function processDueReminders(now: Date, stats: ReminderRunStats): P
         stats.failed += 1;
       }
     } catch (err) {
-      console.error("تعذّر معالجة تذكير موعد:", (err as Error)?.message);
+      console.error("تعذّر معالجة تذكير موعد:", safeErrorCode(err));
       await finish(r.id, ReminderStatus.FAILED, { skipReason: "error" }).catch(() => undefined);
       stats.failed += 1;
     }
@@ -443,7 +444,7 @@ export async function processQueueApproach(now: Date, stats: ReminderRunStats): 
         await tryQueueApproach(appointmentId, doctorId, sessionMinutes, queue, now, stats);
       }
     } catch (err) {
-      console.error("تعذّر تقييم تنبيه «دورك اقترب»:", (err as Error)?.message);
+      console.error("تعذّر تقييم تنبيه «دورك اقترب»:", safeErrorCode(err));
     }
   }
 }
@@ -537,7 +538,7 @@ async function tryQueueApproach(
       stats.failed += 1;
     }
   } catch (err) {
-    console.error("تعذّر إرسال تنبيه «دورك اقترب»:", (err as Error)?.message);
+    console.error("تعذّر إرسال تنبيه «دورك اقترب»:", safeErrorCode(err));
     await finishApproach(ReminderStatus.FAILED, { skipReason: "error" }).catch(() => undefined);
     stats.failed += 1;
   }

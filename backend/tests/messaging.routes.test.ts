@@ -16,7 +16,10 @@ const db = vi.hoisted(() => ({
   doctorConversation: { findUnique: vi.fn(), upsert: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
   doctorMessage: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn(), count: vi.fn(), groupBy: vi.fn() },
   notification: { findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
-  user: { findMany: vi.fn() },
+  user: { findMany: vi.fn(), findUnique: vi.fn(async ({ where }: any) => {
+    const role = ({ "admin-9": "ADMIN", "user-ADMIN": "ADMIN", "user-DOCTOR": "DOCTOR", "user-DOCTOR-B": "DOCTOR", "user-ASSISTANT": "ASSISTANT", "user-PATIENT": "PATIENT" } as any)[where.id];
+    return role ? { id: where.id, role, isActive: true } : null;
+  }) },
   pushSubscription: { findMany: vi.fn(), deleteMany: vi.fn() },
   $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops)),
 }));

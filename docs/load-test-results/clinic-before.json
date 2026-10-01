@@ -1,0 +1,636 @@
+{
+  "tag": "load-1790773853954",
+  "environment": "local HTTP / PostgreSQL; not hosted production",
+  "quotas": [
+    100,
+    90,
+    85,
+    80,
+    75,
+    70,
+    70,
+    65,
+    65,
+    60,
+    55,
+    50,
+    50,
+    45,
+    40
+  ],
+  "doctors": 15,
+  "assistants": 15,
+  "patients": 1000,
+  "browserTabs": 0,
+  "bookingDate": "2026-10-01",
+  "phases": [
+    {
+      "bookings": 100,
+      "concurrency": 5,
+      "elapsedMs": 6546,
+      "requests": 420
+    },
+    {
+      "bookings": 300,
+      "concurrency": 20,
+      "elapsedMs": 12411,
+      "requests": 960
+    },
+    {
+      "bookings": 600,
+      "concurrency": 50,
+      "elapsedMs": 34606,
+      "requests": 1980
+    }
+  ],
+  "bookings": {
+    "successful": 1000,
+    "rows": 1000,
+    "perDoctor": [
+      {
+        "doctor": 1,
+        "expected": 100,
+        "actual": 100
+      },
+      {
+        "doctor": 2,
+        "expected": 90,
+        "actual": 90
+      },
+      {
+        "doctor": 3,
+        "expected": 85,
+        "actual": 85
+      },
+      {
+        "doctor": 4,
+        "expected": 80,
+        "actual": 80
+      },
+      {
+        "doctor": 5,
+        "expected": 75,
+        "actual": 75
+      },
+      {
+        "doctor": 6,
+        "expected": 70,
+        "actual": 70
+      },
+      {
+        "doctor": 7,
+        "expected": 70,
+        "actual": 70
+      },
+      {
+        "doctor": 8,
+        "expected": 65,
+        "actual": 65
+      },
+      {
+        "doctor": 9,
+        "expected": 65,
+        "actual": 65
+      },
+      {
+        "doctor": 10,
+        "expected": 60,
+        "actual": 60
+      },
+      {
+        "doctor": 11,
+        "expected": 55,
+        "actual": 55
+      },
+      {
+        "doctor": 12,
+        "expected": 50,
+        "actual": 50
+      },
+      {
+        "doctor": 13,
+        "expected": 50,
+        "actual": 50
+      },
+      {
+        "doctor": 14,
+        "expected": 45,
+        "actual": 45
+      },
+      {
+        "doctor": 15,
+        "expected": 40,
+        "actual": 40
+      }
+    ],
+    "duplicates": 0,
+    "lost": 0
+  },
+  "queueRaces": [
+    {
+      "doctor": 1,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 2,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 3,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 4,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 5,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 6,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 7,
+      "statuses": [
+        400,
+        200
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 8,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 9,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 10,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 11,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 12,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 13,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 14,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    },
+    {
+      "doctor": 15,
+      "statuses": [
+        200,
+        400
+      ],
+      "active": 1,
+      "foreign": 403,
+      "completed": 200
+    }
+  ],
+  "patchRaces": [
+    {
+      "doctor": 1,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 2,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 3,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 4,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 5,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 6,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 7,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 8,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 9,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 10,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 11,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 12,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 13,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 14,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    },
+    {
+      "doctor": 15,
+      "statuses": [
+        200,
+        200
+      ],
+      "active": 2
+    }
+  ],
+  "cancelled": 25,
+  "unexpectedResponses": [],
+  "violations": [
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic",
+    "PATCH allows multiple patients inside one clinic"
+  ],
+  "elapsedMs": 56246,
+  "requests": 3560,
+  "metrics": {
+    "login": {
+      "count": 45,
+      "p50": 202,
+      "p95": 463,
+      "p99": 554,
+      "max": 554,
+      "unexpected": 0,
+      "statuses": {
+        "200": 45
+      }
+    },
+    "patient.availability": {
+      "count": 1000,
+      "p50": 382,
+      "p95": 1257,
+      "p99": 4410,
+      "max": 4471,
+      "unexpected": 0,
+      "statuses": {
+        "200": 1000
+      }
+    },
+    "DOCTOR.queue": {
+      "count": 60,
+      "p50": 942,
+      "p95": 1678,
+      "p99": 1708,
+      "max": 1708,
+      "unexpected": 0,
+      "statuses": {
+        "200": 60
+      }
+    },
+    "ASSISTANT.queue": {
+      "count": 60,
+      "p50": 928,
+      "p95": 1637,
+      "p99": 1692,
+      "max": 1692,
+      "unexpected": 0,
+      "statuses": {
+        "200": 60
+      }
+    },
+    "patient.booking": {
+      "count": 1000,
+      "p50": 920,
+      "p95": 2210,
+      "p99": 4718,
+      "max": 5772,
+      "unexpected": 0,
+      "statuses": {
+        "201": 1000
+      }
+    },
+    "DOCTOR.appointments": {
+      "count": 60,
+      "p50": 626,
+      "p95": 1522,
+      "p99": 1685,
+      "max": 1685,
+      "unexpected": 0,
+      "statuses": {
+        "200": 60
+      }
+    },
+    "ASSISTANT.appointments": {
+      "count": 60,
+      "p50": 638,
+      "p95": 1523,
+      "p99": 1584,
+      "max": 1584,
+      "unexpected": 0,
+      "statuses": {
+        "200": 60
+      }
+    },
+    "patient.account": {
+      "count": 1000,
+      "p50": 277,
+      "p95": 884,
+      "p99": 1258,
+      "max": 4356,
+      "unexpected": 0,
+      "statuses": {
+        "200": 1000
+      }
+    },
+    "DOCTOR.dashboard": {
+      "count": 30,
+      "p50": 715,
+      "p95": 1938,
+      "p99": 1939,
+      "max": 1939,
+      "unexpected": 0,
+      "statuses": {
+        "200": 30
+      }
+    },
+    "DOCTOR.notifications": {
+      "count": 30,
+      "p50": 251,
+      "p95": 1199,
+      "p99": 1215,
+      "max": 1215,
+      "unexpected": 0,
+      "statuses": {
+        "200": 30
+      }
+    },
+    "ASSISTANT.dashboard": {
+      "count": 30,
+      "p50": 693,
+      "p95": 1936,
+      "p99": 1953,
+      "max": 1953,
+      "unexpected": 0,
+      "statuses": {
+        "200": 30
+      }
+    },
+    "ASSISTANT.notifications": {
+      "count": 30,
+      "p50": 137,
+      "p95": 1190,
+      "p99": 1192,
+      "max": 1192,
+      "unexpected": 0,
+      "statuses": {
+        "200": 30
+      }
+    },
+    "queue.race": {
+      "count": 30,
+      "p50": 699,
+      "p95": 915,
+      "p99": 917,
+      "max": 917,
+      "unexpected": 0,
+      "statuses": {
+        "200": 15,
+        "400": 15
+      }
+    },
+    "assistant.foreign": {
+      "count": 15,
+      "p50": 97,
+      "p95": 193,
+      "p99": 193,
+      "max": 193,
+      "unexpected": 0,
+      "statuses": {
+        "403": 15
+      }
+    },
+    "assistant.completeDenied": {
+      "count": 15,
+      "p50": 88,
+      "p95": 105,
+      "p99": 105,
+      "max": 105,
+      "unexpected": 0,
+      "statuses": {
+        "400": 15
+      }
+    },
+    "doctor.complete": {
+      "count": 15,
+      "p50": 157,
+      "p95": 207,
+      "p99": 207,
+      "max": 207,
+      "unexpected": 0,
+      "statuses": {
+        "200": 15
+      }
+    },
+    "queue.patchRace": {
+      "count": 30,
+      "p50": 288,
+      "p95": 323,
+      "p99": 324,
+      "max": 324,
+      "unexpected": 0,
+      "statuses": {
+        "200": 30
+      }
+    },
+    "patient.foreign": {
+      "count": 25,
+      "p50": 8,
+      "p95": 13,
+      "p99": 26,
+      "max": 26,
+      "unexpected": 0,
+      "statuses": {
+        "403": 25
+      }
+    },
+    "patient.cancel": {
+      "count": 25,
+      "p50": 19,
+      "p95": 46,
+      "p99": 46,
+      "max": 46,
+      "unexpected": 0,
+      "statuses": {
+        "200": 25
+      }
+    }
+  }
+}

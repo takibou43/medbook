@@ -1,0 +1,260 @@
+{
+  "project": "calm-lake-84943874",
+  "branch": "br-bitter-mouse-a5fk66jy",
+  "database": "neondb",
+  "source": "Read-only Neon connector metadata, not an inspection of Render's DATABASE_URL",
+  "roles": [
+    {
+      "name": "cloud_admin",
+      "login": true,
+      "bypassrls": true,
+      "superuser": true
+    },
+    {
+      "name": "neondb_owner",
+      "login": true,
+      "bypassrls": true,
+      "superuser": false
+    },
+    {
+      "name": "neon_service",
+      "login": true,
+      "bypassrls": true,
+      "superuser": false
+    },
+    {
+      "name": "neon_superuser",
+      "login": false,
+      "bypassrls": true,
+      "superuser": false
+    }
+  ],
+  "tables": [
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "ai_conversations",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "ai_messages",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "appointment_late_events",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "appointment_reminders",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "appointment_services",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "appointments",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "assistant_invites",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "assistants",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "audit_logs",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "cities",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "clinic_doctor_invites",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "clinic_transfer_requests",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "clinics",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "dental_follow_ups",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "dental_treatment_plans",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "dental_treatment_sessions",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "doctor_conversations",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "doctor_documents",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "doctor_messages",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "doctor_referrals",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "doctor_schedules",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "doctors",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "family_members",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "favorites",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "medical_services",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "notifications",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "patient_blocks",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "patients",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "push_subscriptions",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "refresh_tokens",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "reviews",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "sms_logs",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "specialties",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "users",
+      "force_rls": false
+    },
+    {
+      "rls": false,
+      "owner": "neondb_owner",
+      "table": "wilayas",
+      "force_rls": false
+    }
+  ],
+  "policies": [],
+  "triggers": [
+    {
+      "name": "appointments_sync_active_slot",
+      "table": "appointments",
+      "definition": "CREATE TRIGGER appointments_sync_active_slot BEFORE INSERT OR UPDATE OF status ON public.appointments FOR EACH ROW EXECUTE FUNCTION appointments_sync_active_slot()"
+    },
+    {
+      "name": "appointments_release_dental_follow_up",
+      "table": "appointments",
+      "definition": "CREATE TRIGGER appointments_release_dental_follow_up AFTER UPDATE OF status ON public.appointments FOR EACH ROW EXECUTE FUNCTION appointments_release_dental_follow_up()"
+    }
+  ],
+  "query_role": "neondb_owner",
+  "server_version": "18.6 (6569466)",
+  "observed_at_utc": "2026-10-01T17:09:43.490498+00:00"
+}

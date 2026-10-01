@@ -1,7 +1,9 @@
+import { safeErrorCode } from "./safeError";
 import webpush from "web-push";
 import { prisma } from "./prisma";
 import { env } from "../config/env";
 import { FIVE_MINUTE_ALARM_KIND, AlarmPushKind } from "./pushKinds";
+import { isTrustedPushEndpoint } from "./pushEndpoint";
 
 // إشعارات المتصفح (Web Push). تعمل فقط إذا ضُبط مفتاحا VAPID في متغيرات البيئة.
 // عند غيابهما تُعطّل الميزة بهدوء: لا استثناءات ولا تأثير على أي وظيفة أخرى في الخادم.
@@ -87,6 +89,8 @@ export async function sendPushToUser(
 
     await Promise.all(
       subs.map(async (s) => {
+        // Also guard old persisted subscriptions, before web-push performs I/O.
+        if (!isTrustedPushEndpoint(s.endpoint)) return;
         try {
           const target = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } };
           const options: webpush.RequestOptions = {};
@@ -101,13 +105,13 @@ export async function sendPushToUser(
             await prisma.pushSubscription.delete({ where: { id: s.id } }).catch(() => undefined);
             removed += 1;
           } else {
-            console.error("فشل إرسال إشعار Push:", status ?? (err as Error)?.message);
+            console.error("فشل إرسال إشعار Push:", status ?? safeErrorCode(err));
           }
         }
       })
     );
   } catch (err) {
-    console.error("تعذّر جلب اشتراكات الإشعارات:", err);
+    console.error("تعذّر جلب اشتراكات الإشعارات:", safeErrorCode(err));
   }
 
   return { sent, removed };

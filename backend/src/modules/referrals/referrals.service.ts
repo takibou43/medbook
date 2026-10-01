@@ -1,3 +1,4 @@
+import { safeErrorCode } from "../../lib/safeError";
 import { Prisma, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -244,7 +245,7 @@ export async function notifyReferrerRewarded(reward: GrantedReward) {
       `شكرًا على دعوة زميلك إلى MedBook! تم توثيق حسابه، وأُضيف ${REFERRAL_REWARD_DAYS} يومًا إلى اشتراكك حتى ${reward.newExpiresAt.toISOString().slice(0, 10)}.`
     );
   } catch (err) {
-    console.error("تعذّر إشعار الطبيب المُحيل (المكافأة محفوظة):", (err as Error)?.message);
+    console.error("تعذّر إشعار الطبيب المُحيل (المكافأة محفوظة):", safeErrorCode(err));
   }
 }
 

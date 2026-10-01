@@ -1,0 +1,9 @@
+# Raw test outputs stay local; commit the compact, sanitized results summary.
+*.log
+before.json
+*-before.json
+backend-*.json
+targeted*.json
+auth-final.json
+*-audit.json
+local-role.json

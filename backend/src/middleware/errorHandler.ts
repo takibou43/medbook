@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
 import { ApiError } from "../utils/ApiError";
 import { Prisma } from "@prisma/client";
+import { safeErrorCode } from "../lib/safeError";
 
 export function notFoundHandler(req: Request, res: Response) {
   res.status(404).json({ success: false, message: `المسار غير موجود: ${req.method} ${req.originalUrl}` });
@@ -40,6 +41,6 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     return res.status(err.statusCode).json({ success: false, message: err.message, details: err.details });
   }
 
-  console.error("Unhandled error:", err);
+  console.error("Unhandled error:", safeErrorCode(err));
   return res.status(500).json({ success: false, message: "حدث خطأ غير متوقع في الخادم." });
 }

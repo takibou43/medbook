@@ -52,6 +52,8 @@ const h = vi.hoisted(() => {
         return withPatient(u);
       }),
       findUnique: vi.fn(async ({ where }: any) => {
+        if (where.id === "user-without-patient") return { id: "user-without-patient", role: "PATIENT", isActive: true };
+        if (where.id === "doctor-user") return { id: "doctor-user", role: "DOCTOR", isActive: true };
         const u = s.users.find((x) => x.id === where.id);
         if (!u) return null;
         return { ...withPatient(u), isActive: u.isActive };
@@ -65,7 +67,11 @@ const h = vi.hoisted(() => {
       findFirst: vi.fn(async ({ where }: any) => s.tokens.find((t) => t.userId === where.userId && t.tokenHash === where.tokenHash && !t.revoked) ?? null),
       update: vi.fn(async ({ where, data }: any) => Object.assign(s.tokens.find((t) => t.id === where.id), data)),
       updateMany: vi.fn(async ({ where, data }: any) => {
-        const hit = s.tokens.filter((t) => t.tokenHash === where.tokenHash);
+        const hit = s.tokens.filter((t) =>
+          (!where.id || t.id === where.id) &&
+          (!where.tokenHash || t.tokenHash === where.tokenHash) &&
+          (where.revoked === undefined || t.revoked === where.revoked) &&
+          (!where.expiresAt?.gt || t.expiresAt > where.expiresAt.gt));
         hit.forEach((t) => Object.assign(t, data));
         return { count: hit.length };
       }),

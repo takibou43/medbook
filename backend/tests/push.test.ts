@@ -8,9 +8,9 @@ const h = vi.hoisted(() => {
   process.env.VAPID_PUBLIC_KEY = "test-public-key";
   process.env.VAPID_PRIVATE_KEY = "test-private-key";
   const subs = [
-    { id: "s1", userId: "u1", endpoint: "https://push.example/phone", p256dh: "p1", auth: "a1" },
-    { id: "s2", userId: "u1", endpoint: "https://push.example/laptop", p256dh: "p2", auth: "a2" },
-    { id: "s3", userId: "u1", endpoint: "https://push.example/tablet", p256dh: "p3", auth: "a3" },
+    { id: "s1", userId: "u1", endpoint: "https://fcm.googleapis.com/fcm/send/phone", p256dh: "p1", auth: "a1" },
+    { id: "s2", userId: "u1", endpoint: "https://fcm.googleapis.com/fcm/send/laptop", p256dh: "p2", auth: "a2" },
+    { id: "s3", userId: "u1", endpoint: "https://fcm.googleapis.com/fcm/send/tablet", p256dh: "p3", auth: "a3" },
   ];
   return {
     subs,
@@ -41,9 +41,9 @@ describe("sendPushToUser", () => {
     const r = await sendPushToUser("u1", { title: "t", body: "b" });
     expect(r).toEqual({ sent: 3, removed: 0 });
     expect(h.sendNotification.mock.calls.map((c) => c[0].endpoint)).toEqual([
-      "https://push.example/phone",
-      "https://push.example/laptop",
-      "https://push.example/tablet",
+      "https://fcm.googleapis.com/fcm/send/phone",
+      "https://fcm.googleapis.com/fcm/send/laptop",
+      "https://fcm.googleapis.com/fcm/send/tablet",
     ]);
   });
 

@@ -1,3 +1,4 @@
+import { safeErrorCode } from "../../lib/safeError";
 import { AppointmentStatus, PatientBlockType, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -140,7 +141,7 @@ export async function evaluateAutoBlockSafe(patientId: string | null | undefined
   try {
     await evaluateAutoBlock(patientId);
   } catch (err) {
-    console.error(`تعذّر تقييم الحظر التلقائي للمريض ${patientId}:`, err);
+    console.error(`تعذّر تقييم الحظر التلقائي:`, safeErrorCode(err));
   }
 }
 

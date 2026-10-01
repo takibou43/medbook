@@ -113,7 +113,11 @@ export async function refreshPatientSession(refreshToken: string | undefined) {
   if (!user || !user.isActive || user.role !== Role.PATIENT) throw expired();
 
   // تدوير: إبطال القديم وإصدار جديد (نفس سلوك /api/auth/refresh).
-  await prisma.refreshToken.update({ where: { id: stored.id }, data: { revoked: true } });
+  const consumed = await prisma.refreshToken.updateMany({
+    where: { id: stored.id, revoked: false, expiresAt: { gt: new Date() } },
+    data: { revoked: true },
+  });
+  if (consumed.count !== 1) throw expired();
   const tokens = await issueTokens(user.id, user.role);
   const me = await getPatientMe(user.id);
   return { user: me, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };

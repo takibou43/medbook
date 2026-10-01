@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { safePushSubscriptionSchema } from "../../lib/pushEndpoint";
 
 // البريد يُطبَّع دائمًا (trim + lowercase) قبل أي تحقق أو بحث أو حفظ، فلا يمكن إنشاء حسابين
 // لـ "Ali@Mail.com" و "ali@mail.com".
@@ -36,18 +37,7 @@ export const patientLoginSchema = z.object({
 
 // اشتراك Push كما يُرجعه PushSubscription.toJSON() في المتصفح. endpoint يجب أن يكون https
 // (خدمات الدفع الحقيقية كلها https)، والمفاتيح بصيغة base64url بطول معقول.
-const b64url = /^[A-Za-z0-9_-]+=*$/;
-export const pushSubscriptionSchema = z.object({
-  endpoint: z
-    .string()
-    .url()
-    .max(2048)
-    .refine((u) => u.startsWith("https://"), "عنوان اشتراك غير صالح"),
-  keys: z.object({
-    p256dh: z.string().min(16).max(256).regex(b64url, "مفتاح غير صالح"),
-    auth: z.string().min(8).max(128).regex(b64url, "مفتاح غير صالح"),
-  }),
-});
+export const pushSubscriptionSchema = safePushSubscriptionSchema;
 
 export const unsubscribeSchema = z.object({
   endpoint: z.string().url().max(2048),

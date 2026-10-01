@@ -99,7 +99,8 @@ const h = vi.hoisted(() => {
     user: {
       findMany: vi.fn(async () => s.users.map(({ passwordHash: _p, ...u }) => u)),
       count: vi.fn(async () => s.users.length),
-      findUnique: vi.fn(async ({ where }: any) => s.users.find((u) => u.id === where.id) ?? null),
+      findUnique: vi.fn(async ({ where }: any) => s.users.find((u) => u.id === where.id) ??
+        ({ "asst-1": { id: "asst-1", role: "ASSISTANT", isActive: true }, "pat-1": { id: "pat-1", role: "PATIENT", isActive: true } } as any)[where.id] ?? null),
       findFirst: vi.fn(async ({ where }: any) => {
         const eq = String(where.email.equals).toLowerCase();
         return s.users.find((u) => u.email.toLowerCase() === eq && u.id !== where.NOT?.id) ?? null;

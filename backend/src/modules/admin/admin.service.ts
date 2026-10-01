@@ -8,6 +8,7 @@ import { env } from "../../config/env";
 import { lockDoctorRow, recalcDoctorRating } from "../reviews/reviews.service";
 import { sendPushToUser } from "../../lib/push";
 import { applyReferralOnVerificationTx, notifyReferrerRewarded } from "../referrals/referrals.service";
+import { approvalTrialData } from "../../lib/doctorApprovalTrial";
 
 // ---------------- Dashboard stats ----------------
 
@@ -251,15 +252,16 @@ function pushNewDoctorAreaNotification(userIds: string[], doctor: AreaDoctor) {
 
 export async function setDoctorVerification(doctorId: string, status: VerificationStatus, actorUserId: string | null = null) {
   const result = await prisma.$transaction(async (tx) => {
+    await lockDoctorRow(tx, doctorId);
     const before = await tx.doctor.findUnique({
       where: { id: doctorId },
-      select: { verificationStatus: true, subscriptionStatus: true },
+      select: { verificationStatus: true, subscriptionStatus: true, subscriptionExpiresAt: true, newDoctorTrial: true, trialStartedAt: true },
     });
     if (!before) throw ApiError.notFound("الطبيب غير موجود.");
 
     const doctor = await tx.doctor.update({
       where: { id: doctorId },
-      data: { verificationStatus: status },
+      data: { verificationStatus: status, ...approvalTrialData(before, status) },
       include: {
         user: { select: { email: true, phone: true, isActive: true } },
         city: { select: { nameAr: true } },

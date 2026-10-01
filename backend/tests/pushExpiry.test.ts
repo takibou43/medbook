@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const h = vi.hoisted(() => {
   process.env.VAPID_PUBLIC_KEY = "test-public-key";
   process.env.VAPID_PRIVATE_KEY = "test-private-key";
-  const subs = [{ id: "s1", userId: "u1", endpoint: "https://push.example/phone", p256dh: "p1", auth: "a1" }];
+  const subs = [{ id: "s1", userId: "u1", endpoint: "https://fcm.googleapis.com/fcm/send/phone", p256dh: "p1", auth: "a1" }];
   return {
     sendNotification: vi.fn(async () => ({ statusCode: 201 })),
     db: {

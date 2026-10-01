@@ -1,3 +1,4 @@
+import { safeErrorCode } from "../../lib/safeError";
 import { AppointmentStatus, Prisma, Role, SubscriptionStatus, SmsStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -117,7 +118,7 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
       { id: appointment.id, date: appointment.date }
     );
   } catch (notifyErr) {
-    console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", notifyErr);
+    console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", safeErrorCode(notifyErr));
   }
 
   return { ...appointment, requestedStartTime: input.startTime, shiftedFromRequested: reserved.shifted };
@@ -234,11 +235,11 @@ export async function sweepStaleAppointmentsForAllDoctors() {
       try {
         await autoExpireStaleAppointments(doctor.id);
       } catch (err) {
-        console.error(`تعذّر اعتماد غيابات الطبيب ${doctor.id}:`, err);
+        console.error(`تعذّر اعتماد غيابات الطبيب:`, safeErrorCode(err));
       }
     }
   } catch (err) {
-    console.error("تعذّر تشغيل كنس المواعيد المنتهية:", err);
+    console.error("تعذّر تشغيل كنس المواعيد المنتهية:", safeErrorCode(err));
   }
 }
 
@@ -448,7 +449,7 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
         meta: { date: appointment.date.toISOString().slice(0, 10), startTime: appointment.startTime, byRole: role },
       });
     } catch (err) {
-      console.error("تعذّر تسجيل إلغاء موعد العودة في سجل التدقيق:", (err as Error)?.message);
+      console.error("تعذّر تسجيل إلغاء موعد العودة في سجل التدقيق:", safeErrorCode(err));
     }
   }
 
@@ -755,7 +756,7 @@ export async function markAsLate(doctorUserId: string, appointmentId: string, ro
         { id: appointmentId, date: result.appointment!.date }
       );
     } catch (err) {
-      console.error("تعذّر إشعار المريض بالتأخير (التأخير مسجَّل):", (err as Error)?.message);
+      console.error("تعذّر إشعار المريض بالتأخير (التأخير مسجَّل):", safeErrorCode(err));
     }
   }
 

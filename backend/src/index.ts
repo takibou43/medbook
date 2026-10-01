@@ -1,3 +1,4 @@
+import { safeErrorCode } from "./lib/safeError";
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { prisma } from "./lib/prisma";
@@ -30,7 +31,7 @@ async function grandfatherExistingDoctors() {
       console.log(`✅ Grandfathered ${result.count} pre-existing doctor(s) to ACTIVE subscription status.`);
     }
   } catch (err) {
-    console.error("Failed to grandfather existing doctors:", err);
+    console.error("Failed to grandfather existing doctors:", safeErrorCode(err));
   }
 }
 
@@ -50,9 +51,9 @@ async function bootstrapAdminUser() {
 
     const passwordHash = await hashPassword(password);
     await prisma.user.create({ data: { email, passwordHash, role: Role.ADMIN } });
-    console.log(`✅ تم إنشاء حساب إدارة أولي: ${email}`);
+    console.log("✅ تم إنشاء حساب إدارة أولي.");
   } catch (err) {
-    console.error("فشل إنشاء حساب الإدارة الأولي:", err);
+    console.error("فشل إنشاء حساب الإدارة الأولي:", safeErrorCode(err));
   }
 }
 
@@ -128,14 +129,14 @@ Promise.all([
   if (env.reminders.enabled) {
     const intervalMs = Math.max(15_000, env.reminders.intervalMs || 60_000);
     setInterval(() => {
-      runReminderCycle().catch((err) => console.error("تعذّر تشغيل دورة التذكيرات:", (err as Error)?.message));
+      runReminderCycle().catch((err) => console.error("تعذّر تشغيل دورة التذكيرات:", safeErrorCode(err)));
     }, intervalMs);
   }
 
   // إشعارات المواعيد تنتهي بانتهاء يوم الموعد (توقيت الجزائر): تُخفى فورًا بفلتر القراءة، وتُحذف هنا دوريًا.
   // لا تلمس الإشعارات العامة (expiresAt = NULL).
   const purge = () =>
-    purgeExpiredNotifications().catch((err) => console.error("تعذّر حذف إشعارات المواعيد المنتهية:", (err as Error)?.message));
+    purgeExpiredNotifications().catch((err) => console.error("تعذّر حذف إشعارات المواعيد المنتهية:", safeErrorCode(err)));
   void purge();
   setInterval(purge, NOTIFICATION_PURGE_INTERVAL_MS);
 

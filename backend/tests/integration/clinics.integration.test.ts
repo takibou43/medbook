@@ -26,7 +26,7 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
   const accept = (token: string) => request(app).post("/api/auth/register/clinic-doctor").send({ token, password: "ClinicTest123!", doctor: doctorProfile() });
   beforeAll(async () => {
     const parsed = new URL(url!);
-    if (!["127.0.0.1", "localhost", "[::1]"].includes(parsed.hostname) || !["/medbook_clinic_test", "/medbook_clinic_test_v2"].includes(parsed.pathname)) throw new Error("Only isolated loopback medbook_clinic_test databases are allowed");
+    if (!["127.0.0.1", "localhost", "[::1]"].includes(parsed.hostname) || !["/medbook_clinic_test", "/medbook_clinic_test_v2", "/medbook_security_test"].includes(parsed.pathname)) throw new Error("Only explicitly named isolated loopback test databases are allowed");
     process.env.DATABASE_URL = url!; process.env.RATE_LIMIT_MAX = "1000000"; process.env.NODE_ENV = "test";
     process.env.BUDGETSMS_USERNAME = ""; process.env.BUDGETSMS_USERID = ""; process.env.BUDGETSMS_HANDLE = "";
     process.env.VAPID_PUBLIC_KEY = ""; process.env.VAPID_PRIVATE_KEY = "";

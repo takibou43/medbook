@@ -5,6 +5,7 @@ import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { prisma } from "../../lib/prisma";
 import { getPublicKey, isPushEnabled } from "../../lib/push";
+import { safePushSubscriptionSchema } from "../../lib/pushEndpoint";
 
 const router = Router();
 
@@ -17,13 +18,7 @@ router.get(
   })
 );
 
-const subscribeSchema = z.object({
-  endpoint: z.string().url(),
-  keys: z.object({
-    p256dh: z.string().min(1),
-    auth: z.string().min(1),
-  }),
-});
+const subscribeSchema = safePushSubscriptionSchema;
 
 // إنشاء أو تحديث اشتراك هذا الجهاز. نستعمل upsert لأن المتصفح قد يعيد إرسال نفس
 // endpoint بعد تجديد المفاتيح، فلا نريد سجلات مكررة ولا خطأ تعارض.
@@ -33,7 +28,7 @@ router.post(
   validate({ body: subscribeSchema }),
   asyncHandler(async (req: Request, res: Response) => {
     const { endpoint, keys } = req.body as z.infer<typeof subscribeSchema>;
-    const userAgent = req.get("user-agent") ?? null;
+    const userAgent = req.get("user-agent")?.slice(0, 300) ?? null;
 
     const sub = await prisma.pushSubscription.upsert({
       where: { endpoint },

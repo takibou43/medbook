@@ -1,3 +1,4 @@
+import { safeErrorCode } from "./safeError";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 
@@ -39,6 +40,6 @@ export async function syncDentalFollowUpsSafe(appointmentIds: string[], status: 
   try {
     await syncDentalFollowUps(appointmentIds, status);
   } catch (err) {
-    console.error("تعذّرت مزامنة متابعات خطط العلاج:", (err as Error)?.message);
+    console.error("تعذّرت مزامنة متابعات خطط العلاج:", safeErrorCode(err));
   }
 }

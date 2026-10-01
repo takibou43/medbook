@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { Role } from "@prisma/client";
 import { verifyAccessToken } from "../utils/jwt";
 import { ApiError } from "../utils/ApiError";
+import { prisma } from "../lib/prisma";
 
 export interface AuthUser {
   id: string;
@@ -26,8 +27,14 @@ export function authenticate(req: Request, _res: Response, next: NextFunction) {
   const token = header.slice("Bearer ".length);
   try {
     const payload = verifyAccessToken(token);
-    req.user = { id: payload.sub, role: payload.role };
-    return next();
+    // JWT validity alone does not reflect account deactivation or a changed role.
+    return prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, isActive: true } })
+      .then((user) => {
+        if (!user || !user.isActive) return next(ApiError.unauthorized());
+        if (user.role !== payload.role) return next(ApiError.forbidden());
+        req.user = { id: user.id, role: user.role };
+        return next();
+      }).catch(next);
   } catch {
     return next(ApiError.unauthorized("جلسة منتهية أو غير صالحة. الرجاء تسجيل الدخول من جديد."));
   }
@@ -39,7 +46,11 @@ export function optionalAuthenticate(req: Request, _res: Response, next: NextFun
   if (header?.startsWith("Bearer ")) {
     try {
       const payload = verifyAccessToken(header.slice("Bearer ".length));
-      req.user = { id: payload.sub, role: payload.role };
+      return prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, isActive: true } })
+        .then((user) => {
+          if (user?.isActive && user.role === payload.role) req.user = { id: user.id, role: user.role };
+          next();
+        }).catch(next);
     } catch {
       // ignore invalid token on optional routes
     }

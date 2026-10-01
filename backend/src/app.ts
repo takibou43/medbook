@@ -52,7 +52,8 @@ export function createApp() {
   );
   app.use(express.json({ limit: "2mb" }));
   app.use(cookieParser());
-  if (!env.isProd) app.use(morgan("dev"));
+  // Paths/queries can contain invite tokens, patient identifiers or phone numbers.
+  if (!env.isProd) app.use(morgan(":method :status :response-time ms - :res[content-length]"));
   app.use("/api", apiLimiter);
 
   app.get("/health", (_req, res) => res.json({ success: true, message: "MedBook API يعمل بنجاح 🩺" }));

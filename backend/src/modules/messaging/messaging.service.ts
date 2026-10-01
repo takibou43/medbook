@@ -1,3 +1,4 @@
+import { safeErrorCode } from "../../lib/safeError";
 import { Prisma, Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -83,7 +84,7 @@ export async function sendMessage(params: {
     throw err;
   }
 
-  void notifyRecipients(sender.role, doctor).catch((e) => console.error("messaging notify failed:", (e as Error).message));
+  void notifyRecipients(sender.role, doctor).catch((e) => console.error("messaging notify failed:", safeErrorCode(e)));
   return { message, duplicate: false };
 }
 

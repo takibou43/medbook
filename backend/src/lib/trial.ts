@@ -1,3 +1,4 @@
+import { safeErrorCode } from "./safeError";
 import { SubscriptionStatus } from "@prisma/client";
 import { prisma } from "./prisma";
 import { env } from "../config/env";
@@ -42,7 +43,7 @@ export async function syncTrialSubscriptions(): Promise<{ activated: number; exp
   try {
     if (end && now < end) {
       const granted = await prisma.doctor.updateMany({
-        where: { subscriptionStatus: SubscriptionStatus.UNPAID, subscriptionExpiresAt: null },
+        where: { newDoctorTrial: false, subscriptionStatus: SubscriptionStatus.UNPAID, subscriptionExpiresAt: null },
         data: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionExpiresAt: end },
       });
       activated = granted.count;
@@ -50,7 +51,7 @@ export async function syncTrialSubscriptions(): Promise<{ activated: number; exp
       // الأطباء المفعّلون مسبقًا بلا تاريخ انتهاء (من قبل إضافة نظام الاشتراك) يأخذون نفس
       // تاريخ نهاية التجربة، وإلا بقوا مفعّلين إلى الأبد ولم يشملهم الإيقاف التلقائي.
       await prisma.doctor.updateMany({
-        where: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionExpiresAt: null },
+        where: { newDoctorTrial: false, subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionExpiresAt: null },
         data: { subscriptionExpiresAt: end },
       });
       if (activated > 0) {
@@ -67,7 +68,7 @@ export async function syncTrialSubscriptions(): Promise<{ activated: number; exp
       console.log("⏹️ انتهت صلاحية اشتراك " + expired + " طبيبًا.");
     }
   } catch (err) {
-    console.error("تعذّرت مزامنة فترة التجربة:", err);
+    console.error("تعذّرت مزامنة فترة التجربة:", safeErrorCode(err));
   }
 
   return { activated, expired };

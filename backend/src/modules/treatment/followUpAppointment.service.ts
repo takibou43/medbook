@@ -1,3 +1,4 @@
+import { safeErrorCode } from "../../lib/safeError";
 import { AppointmentStatus, Prisma, SubscriptionStatus, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
@@ -249,7 +250,7 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
       { id: created.id, date: created.date }
     );
   } catch (err) {
-    console.error("تعذّر إنشاء إشعار موعد العودة (الموعد محفوظ):", (err as Error)?.message);
+    console.error("تعذّر إنشاء إشعار موعد العودة (الموعد محفوظ):", safeErrorCode(err));
   }
 
   return { appointment: view(created), replayed: false };
@@ -320,7 +321,7 @@ export async function rescheduleFollowUpAppointment(userId: string, appointmentI
         { id: updated.id, date: updated.date }
       );
     } catch (err) {
-      console.error("تعذّر إشعار المريض بتغيير موعد العودة:", (err as Error)?.message);
+      console.error("تعذّر إشعار المريض بتغيير موعد العودة:", safeErrorCode(err));
     }
   }
   return view(updated);

@@ -389,6 +389,9 @@ model Doctor {
   subscriptionStatus SubscriptionStatus @default(UNPAID)
   subscriptionExpiresAt DateTime?
   avgRating   Float    @default(0)
+  // Existing accounts retain the legacy trial; only new registrations opt in.
+  newDoctorTrial Boolean @default(false)
+  trialStartedAt DateTime?
   reviewsCount Int     @default(0)
   // كود الإحالة الخاص بالطبيب (يُولَّد عند أول فتح لبطاقة «ادعُ طبيبًا»، عشوائي وغير قابل للتخمين بسهولة).
   referralCode String? @unique

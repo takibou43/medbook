@@ -1,3 +1,4 @@
+import { safeErrorCode } from "../../lib/safeError";
 import { AppointmentStatus, Prisma, VerificationStatus, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -331,7 +332,7 @@ async function createAutoAssignedAppointment(
         { id: appointment.id, date: slot.date }
       );
     } catch (notifyErr) {
-      console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", notifyErr);
+      console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", safeErrorCode(notifyErr));
     }
 
     return appointment;
@@ -415,7 +416,7 @@ async function createChosenDayAppointment(
       { id: appointment.id, date: appointment.date }
     );
   } catch (notifyErr) {
-    console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", notifyErr);
+    console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", safeErrorCode(notifyErr));
   }
   return appointment;
 }
@@ -521,7 +522,7 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
         { id: appointment.id, date: appointment.date }
       );
     } catch (notifyErr) {
-      console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", notifyErr);
+      console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", safeErrorCode(notifyErr));
     }
 
     // requestedStartTime: ليعرف العميل أن الوقت نُقل تلقائيًا إن كان المطلوب قد حُجز.
@@ -705,7 +706,6 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
     date: appointment.date.toISOString().slice(0, 10),
     startTime: appointment.startTime,
     status: appointment.status,
-    patientName: [appointment.guestFirstName, appointment.guestLastName].filter(Boolean).join(" ").trim(),
     slotMinutes,
     deferredCount: appointment.deferredCount,
     skipCredits: appointment.skipCredits,

@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../lib/api";
 import { Input, Select } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
-interface Clinic { id: string; nameAr: string; address: string; owner: { email: string }; verificationStatus: string; subscriptionStatus: string; subscriptionExpiresAt: string | null; paidDoctorCount: number; _count: { doctors: number }; monthlyTotal: number }
+interface Clinic { id: string; nameAr: string; address: string; owner: { email: string }; verificationStatus: string; subscriptionStatus: string; subscriptionExpiresAt: string | null; paidDoctorCount: number; _count: { doctors: number }; monthlyTotal: number; billedDoctorCount: number; discountedDoctorCount: number; referralDiscountUntil: string | null; pendingReferralDays: number }
 export default function AdminClinics() {
   const qc = useQueryClient(); const [busy, setBusy] = useState(""); const [error, setError] = useState(""); const [success, setSuccess] = useState("");
   const query = useQuery({ queryKey: ["admin-clinics"], queryFn: async () => (await api.get<{ data: Clinic[] }>("/clinics/admin/list")).data.data });
@@ -32,6 +32,8 @@ export default function AdminClinics() {
     {query.data?.map(c => <form key={`${c.id}-${c.subscriptionExpiresAt}-${c.verificationStatus}-${c.subscriptionStatus}-${c.paidDoctorCount}`} onSubmit={e => void save(e, c.id)} className="card space-y-4 p-5">
       <h2 className="text-lg font-bold">{c.nameAr}</h2><p>{c.address}</p><p dir="ltr">{c.owner.email}</p>
       <p>{c._count.doctors} أطباء · المبلغ الشهري الحالي: <b>{c.monthlyTotal.toLocaleString("ar-DZ")} دج</b></p>
+      {c.discountedDoctorCount > 0 && <p className="text-emerald-700">مكافأة الإحالة: تُحسب تكلفة {c.billedDoctorCount} أطباء بدل {c._count.doctors} حتى {c.referralDiscountUntil?.slice(0, 10)}.</p>}
+      {c.pendingReferralDays > 0 && <p>خصم محفوظ لمدة {c.pendingReferralDays} يومًا، يبدأ عند تفعيل اشتراك العيادة.</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         <Select name="verificationStatus" label="مراجعة العيادة" defaultValue={c.verificationStatus}><option value="PENDING">قيد المراجعة</option><option value="VERIFIED">موثّقة</option><option value="REJECTED">مرفوضة</option></Select>
         <Select name="subscriptionStatus" label="حالة الاشتراك" defaultValue={c.subscriptionStatus}><option value="UNPAID">غير مفعّل</option><option value="ACTIVE">نشط</option><option value="EXPIRED">منتهي</option></Select>
@@ -41,3 +43,4 @@ export default function AdminClinics() {
     </form>)}
   </section>;
 }
+

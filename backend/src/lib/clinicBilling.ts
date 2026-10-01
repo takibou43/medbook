@@ -1,8 +1,10 @@
 import { Prisma, SubscriptionStatus, VerificationStatus } from "@prisma/client";
 import { prisma } from "./prisma";
+import { hasEffectiveDoctorSubscription } from "./doctorVisibility";
 
 export const INDEPENDENT_DOCTOR_MONTHLY_DZD = 5000;
-export const CLINIC_DOCTOR_MONTHLY_DZD = 4000;
+import { CLINIC_DOCTOR_MONTHLY_DZD } from "./clinicReferralReward";
+export { CLINIC_DOCTOR_MONTHLY_DZD } from "./clinicReferralReward";
 export function clinicMonthlyTotal(count: number) {
   return count * CLINIC_DOCTOR_MONTHLY_DZD;
 }
@@ -29,12 +31,8 @@ export async function isDoctorSubscriptionActive(doctor: {
   clinicId?: string | null; subscriptionStatus: SubscriptionStatus; subscriptionExpiresAt?: Date | null; user?: { isActive: boolean };
 }, now = new Date()) {
   if (doctor.user?.isActive === false) return false;
-  if (doctor.clinicId) {
-    const clinic = await prisma.clinic.findUnique({ where: { id: doctor.clinicId }, include: { owner: { select: { isActive: true } } } });
-    if (clinic?.ownerId) return clinic.owner?.isActive === true && clinic.verificationStatus === VerificationStatus.VERIFIED &&
-      clinic.subscriptionStatus === SubscriptionStatus.ACTIVE && clinic.paidDoctorCount > 0 &&
-      !!clinic.subscriptionExpiresAt && clinic.subscriptionExpiresAt > now;
-  }
-  return doctor.subscriptionStatus === SubscriptionStatus.ACTIVE &&
-    (!doctor.subscriptionExpiresAt || doctor.subscriptionExpiresAt > now);
+  const clinic = doctor.clinicId
+    ? await prisma.clinic.findUnique({ where: { id: doctor.clinicId }, include: { owner: { select: { isActive: true } } } })
+    : null;
+  return hasEffectiveDoctorSubscription({ ...doctor, clinic }, now);
 }

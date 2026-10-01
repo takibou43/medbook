@@ -1,0 +1,21 @@
+export type AnnouncedDoctor = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  wilayaId: string;
+  city: { nameAr: string };
+  specialty: { nameAr: string };
+  clinic?: { nameAr: string } | null;
+};
+
+export function newDoctorAnnouncement(doctor: AnnouncedDoctor) {
+  return {
+    title: doctor.clinic ? "طبيب جديد تابع لعيادة في ولايتك" : "طبيب جديد في ولايتك",
+    message: doctor.clinic
+      ? `انضم د. ${doctor.firstName} ${doctor.lastName}، ${doctor.specialty.nameAr}، إلى عيادة ${doctor.clinic.nameAr} في ${doctor.city.nameAr}. يمكنك الآن الحجز لديه عبر مادبوك.`
+      : `انضم د. ${doctor.firstName} ${doctor.lastName}، ${doctor.specialty.nameAr} في ${doctor.city.nameAr}، إلى مادبوك.`,
+    pushBody: doctor.clinic
+      ? `طبيب جديد تابع لعيادة ${doctor.clinic.nameAr} في ولايتك. افتح التطبيق للاطلاع عليه.`
+      : "انضم طبيب جديد إلى مادبوك في ولايتك. افتح التطبيق للاطلاع عليه.",
+  };
+}

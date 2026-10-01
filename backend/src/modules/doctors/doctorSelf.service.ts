@@ -181,7 +181,15 @@ export async function addScheduleException(
   const affectedStatus = exception.isOff ? AppointmentStatus.CANCELLED : AppointmentStatus.RESCHEDULE_REQUIRED;
   // قاعدة المنتج: عطلة يوم كامل = إلغاء نهائي؛ ساعات جزئية = إعادة جدولة.
   const { created, changed } = await prisma.$transaction(async (tx) => {
-    const created = await tx.doctorSchedule.create({
+    // قفل صف الطبيب يجعل طلبين متزامنين لعطلة نفس اليوم يمرّان واحدًا بعد الآخر.
+    await tx.$queryRaw`SELECT id FROM "doctors" WHERE id = ${doctor.id} FOR UPDATE`;
+    // تكرار عطلة يوم كامل لنفس التاريخ لا ينشئ سجلًا ثانيًا؛ وإلا يبقى اليوم مغلقًا بعد حذف أحد السجلين.
+    const existing = exception.isOff
+      ? await tx.doctorSchedule.findFirst({
+          where: { doctorId: doctor.id, isException: true, isOff: true, exceptionDate },
+        })
+      : null;
+    const created = existing ?? await tx.doctorSchedule.create({
       data: {
         doctorId: doctor.id,
         isException: true,
@@ -355,3 +363,4 @@ export async function getOwnPatients(userId: string) {
   }
   return Array.from(map.values());
 }
+

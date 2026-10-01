@@ -219,8 +219,8 @@ export type DoctorReferralStatus = "PENDING" | "QUALIFIED" | "REWARDED" | "REJEC
 export interface MyReferrals {
   code: string;
   rewardDays: number;
-  referrals: { id: string; status: DoctorReferralStatus; createdAt: string; qualifiedAt?: string | null; rewardedAt?: string | null; rewardDays: number; referredName: string }[];
-  totals: { pending: number; rewarded: number; rewardedDays: number };
+  referrals: { id: string; status: DoctorReferralStatus; createdAt: string; qualifiedAt?: string | null; rewardedAt?: string | null; rewardDays: number; rewardClinicId?: string | null; referredName: string }[];
+  totals: { pending: number; rewarded: number; rewardedDays: number; clinicDiscountDays?: number };
 }
 
 export interface AdminReferral {
@@ -306,3 +306,4 @@ export interface Paginated<T> {
   pageSize: number;
   totalPages: number;
 }
+

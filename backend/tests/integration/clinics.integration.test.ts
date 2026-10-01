@@ -42,6 +42,7 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
   }, 60000);
   afterAll(async () => {
     if (!db || !location) return;
+    await db.doctorReferral.deleteMany({ where: { rewardClinic: { ownerId: { in: owners } } } });
     await db.clinic.deleteMany({ where: { ownerId: { in: owners } } });
     await db.appointment.deleteMany({ where: { doctor: { user: { email: { endsWith: `.${tag}@example.test` } } } } });
     await db.user.deleteMany({ where: { email: { endsWith: `.${tag}@example.test` } } });
@@ -50,6 +51,86 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
     await db.wilaya.delete({ where: { id: location.wilayaId } });
     await db.$disconnect();
     const { prisma } = await import("../../src/lib/prisma"); await prisma.$disconnect();
+  });
+  it("credits clinic referrals once, preserves capacity and serializes multiple rewards", async () => {
+    const a = await owner(); const b = await owner(); const c = await owner();
+    const now = new Date();
+    await db.clinic.update({ where: { id: a.clinicId }, data: { verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE", paidDoctorCount: 4, subscriptionExpiresAt: new Date(now.getTime() + 120 * 86400000) } });
+    const before = await db.doctor.findUniqueOrThrow({ where: { id: a.user.doctor.id } });
+    for (const referred of [b, c]) await db.doctorReferral.create({ data: { referrerDoctorId: a.user.doctor.id, referredDoctorId: referred.user.doctor.id, referralCodeUsed: "clinic-test" } });
+    const { grantReferralRewardTx } = await import("../../src/modules/referrals/referrals.service");
+    const grant = (id: string) => db.$transaction(tx => grantReferralRewardTx(tx, id, null, now));
+    const results = await Promise.all([grant(b.user.doctor.id), grant(b.user.doctor.id), grant(c.user.doctor.id)]);
+    expect(results.filter(Boolean)).toHaveLength(2);
+    const clinic = await db.clinic.findUniqueOrThrow({ where: { id: a.clinicId } });
+    expect(clinic.paidDoctorCount).toBe(4);
+    expect(clinic.referralDiscountUntil!.getTime() - now.getTime()).toBe(60 * 86400000);
+    expect(clinic.subscriptionExpiresAt!.getTime()).toBe(now.getTime() + 120 * 86400000);
+    const after = await db.doctor.findUniqueOrThrow({ where: { id: before.id } });
+    expect(after.subscriptionStatus).toBe(before.subscriptionStatus);
+    expect(after.subscriptionExpiresAt).toEqual(before.subscriptionExpiresAt);
+    const referral = await db.doctorReferral.findUniqueOrThrow({ where: { referredDoctorId: b.user.doctor.id } });
+    expect(referral.rewardClinicId).toBe(a.clinicId);
+    const { clinicReferralBilling } = await import("../../src/lib/clinicReferralReward");
+    expect(clinicReferralBilling(4, clinic.referralDiscountUntil, now)).toMatchObject({ billedDoctorCount: 3, monthlyTotal: 12000 });
+  });
+  it("rolls back the clinic discount together with referral status when the transaction fails", async () => {
+    const a = await owner(); const b = await owner();
+    await db.doctorReferral.create({ data: { referrerDoctorId: a.user.doctor.id, referredDoctorId: b.user.doctor.id, referralCodeUsed: "clinic-rollback" } });
+    const { grantReferralRewardTx } = await import("../../src/modules/referrals/referrals.service");
+    await expect(db.$transaction(async tx => {
+      await grantReferralRewardTx(tx, b.user.doctor.id, null);
+      throw new Error("rollback-reward");
+    })).rejects.toThrow("rollback-reward");
+    const clinic = await db.clinic.findUniqueOrThrow({ where: { id: a.clinicId } });
+    const referral = await db.doctorReferral.findUniqueOrThrow({ where: { referredDoctorId: b.user.doctor.id } });
+    expect(clinic.pendingReferralDays).toBe(0); expect(clinic.referralDiscountUntil).toBeNull();
+    expect(referral.status).toBe("PENDING"); expect(referral.rewardClinicId).toBeNull();
+  });
+  it("keeps an inactive clinic reward pending until an admin activates its subscription", async () => {
+    const a = await owner(); const b = await owner();
+    await db.doctorReferral.create({ data: { referrerDoctorId: a.user.doctor.id, referredDoctorId: b.user.doctor.id, referralCodeUsed: "clinic-pending" } });
+    const { grantReferralRewardTx } = await import("../../src/modules/referrals/referrals.service");
+    await db.$transaction(tx => grantReferralRewardTx(tx, b.user.doctor.id, null));
+    const pending = await db.clinic.findUniqueOrThrow({ where: { id: a.clinicId } });
+    expect(pending.pendingReferralDays).toBe(30); expect(pending.referralDiscountUntil).toBeNull();
+    const activate = { verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE", paidDoctorCount: 1, subscriptionExpiresAt: new Date(Date.now() + 60 * 86400000) };
+    expect((await request(app).patch(`/api/clinics/admin/${a.clinicId}`).set(bearer(adminToken)).send(activate)).status).toBe(200);
+    const activated = await db.clinic.findUniqueOrThrow({ where: { id: a.clinicId } });
+    expect(activated.pendingReferralDays).toBe(0); expect(activated.referralDiscountUntil!.getTime()).toBeGreaterThan(Date.now());
+    const end = activated.referralDiscountUntil!.getTime();
+    expect((await request(app).patch(`/api/clinics/admin/${a.clinicId}`).set(bearer(adminToken)).send(activate)).status).toBe(200);
+    expect((await db.clinic.findUniqueOrThrow({ where: { id: a.clinicId } })).referralDiscountUntil!.getTime()).toBe(end);
+    const mine = await request(app).get("/api/clinics/mine").set(bearer(a.token));
+    expect(mine.body.data.billing).toMatchObject({ doctorCount: 1, billedDoctorCount: 0, monthlyTotal: 0, paidDoctorCount: 1 });
+  });
+  it("announces a clinic doctor when the clinic activates, with its name, once per patient", async () => {
+    const o = await owner();
+    const patient = await db.user.create({ data: { email: email(), passwordHash: "unused-test-only", role: "PATIENT", patient: { create: { firstName: "مريض", lastName: "الإعلان", cityId: location.cityId } } } });
+    expect((await request(app).patch(`/api/admin/doctors/${o.user.doctor.id}/verify`).set(bearer(adminToken)).send({ status: "VERIFIED" })).status).toBe(200);
+    const before = await db.notification.count({ where: { userId: patient.id, type: "NEW_DOCTOR_IN_AREA", newDoctorId: o.user.doctor.id } });
+    expect(before).toBe(0);
+    const active = { verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE", paidDoctorCount: 1, subscriptionExpiresAt: new Date(Date.now() + 60 * 86400000) };
+    expect((await request(app).patch(`/api/clinics/admin/${o.clinicId}`).set(bearer(adminToken)).send(active)).status).toBe(200);
+    const notifications = await db.notification.findMany({ where: { userId: patient.id, type: "NEW_DOCTOR_IN_AREA", newDoctorId: o.user.doctor.id } });
+    expect(notifications).toHaveLength(1);
+    const clinic = await db.clinic.findUniqueOrThrow({ where: { id: o.clinicId } });
+    expect(notifications[0].message).toContain(clinic.nameAr);
+    expect(notifications[0].title).toContain("تابع لعيادة");
+    expect((await request(app).patch(`/api/clinics/admin/${o.clinicId}`).set(bearer(adminToken)).send(active)).status).toBe(200);
+    expect(await db.notification.count({ where: { userId: patient.id, type: "NEW_DOCTOR_IN_AREA", newDoctorId: o.user.doctor.id } })).toBe(1);
+  });
+  it("announces a newly approved doctor in an already active clinic with the clinic name", async () => {
+    const o = await owner();
+    const patient = await db.user.create({ data: { email: email(), passwordHash: "unused-test-only", role: "PATIENT", patient: { create: { firstName: "مريض", lastName: "الموافقة", cityId: location.cityId } } } });
+    const active = { verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE", paidDoctorCount: 1, subscriptionExpiresAt: new Date(Date.now() + 60 * 86400000) };
+    expect((await request(app).patch(`/api/clinics/admin/${o.clinicId}`).set(bearer(adminToken)).send(active)).status).toBe(200);
+    expect(await db.notification.count({ where: { userId: patient.id, type: "NEW_DOCTOR_IN_AREA", newDoctorId: o.user.doctor.id } })).toBe(0);
+    expect((await request(app).patch(`/api/admin/doctors/${o.user.doctor.id}/verify`).set(bearer(adminToken)).send({ status: "VERIFIED" })).status).toBe(200);
+    const notification = await db.notification.findFirstOrThrow({ where: { userId: patient.id, type: "NEW_DOCTOR_IN_AREA", newDoctorId: o.user.doctor.id } });
+    const clinic = await db.clinic.findUniqueOrThrow({ where: { id: o.clinicId } });
+    expect(notification.message).toContain(clinic.nameAr);
+    expect(notification.title).toContain("تابع لعيادة");
   });
   it("uses one account and counts a practising owner once", async () => {
     const o = await owner(); expect(o.user.role).toBe("DOCTOR");
@@ -186,3 +267,4 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
     expect((await request(app).get("/api/appointments/queue").set(bearer(token))).status).toBe(403);
   });
 });
+

@@ -47,6 +47,14 @@ vi.mock("../src/lib/prisma", () => {
     findMany: async ({ where }: any) =>
       db.schedules.filter((s) => s.doctorId === where.doctorId && (where.isException === undefined || s.isException === where.isException)),
     findUnique: async () => null,
+    findFirst: async ({ where }: any) =>
+      db.schedules.find(
+        (s) =>
+          s.doctorId === where.doctorId &&
+          s.isException === where.isException &&
+          s.isOff === where.isOff &&
+          s.exceptionDate?.getTime() === where.exceptionDate?.getTime()
+      ) ?? null,
     deleteMany: async ({ where }: any) => {
       db.schedules = db.schedules.filter((s) => !(s.doctorId === where.doctorId && s.isException === where.isException));
       return { count: 0 };
@@ -65,6 +73,7 @@ vi.mock("../src/lib/prisma", () => {
     appointment,
     doctorSchedule,
     doctor: { findUnique: async ({ where }: any) => (where.userId === "doc-user" ? { id: "doc1", userId: "doc-user" } : null) },
+    $queryRaw: async () => [],
     $transaction: async (arg: any) => (typeof arg === "function" ? arg(client) : Promise.all(arg)),
   };
   return { prisma: client };
@@ -165,6 +174,16 @@ describe("عطلة يوم كامل = إلغاء نهائي", () => {
     expect(notify.calls).toHaveLength(0);
   });
 
+  it("إعادة طلب عطلة نفس اليوم لا تنشئ سجل عطلة ثانيًا (حذف العطلة لاحقًا يفتح اليوم فعلًا)", async () => {
+    const first = await addScheduleException("doc-user", { exceptionDate: DAY_STR, isOff: true }, true);
+    const again = await addScheduleException("doc-user", { exceptionDate: DAY_STR, isOff: true }, true);
+    const offRows = db.schedules.filter(
+      (s) => s.isException && s.isOff && s.exceptionDate?.getTime() === DAY_DATE.getTime()
+    );
+    expect(offRows).toHaveLength(1);
+    expect(again.schedule.id).toBe(first.schedule.id);
+  });
+
   it("سباق: موعد قُرئ متأثرًا ثم لم يعد نشطًا لحظة الكتابة — لا يتغير ولا يُحتسب ولا يُشعَر", async () => {
     db.beforeFirstUpdate = () => {
       db.appointments.find((a) => a.id === "c")!.status = AppointmentStatus.IN_PROGRESS;
@@ -218,3 +237,4 @@ describe("ساعات جزئية أو جدول أسبوعي = إعادة جدول
     expect(notify.calls.map((c) => c[0])).toEqual(["u-otherDay"]);
   });
 });
+

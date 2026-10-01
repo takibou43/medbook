@@ -1,3 +1,6 @@
+import { isDoctorProfilePublic } from "../../lib/doctorVisibility";
+import { queueNewDoctorAreaNotifications, pushNewDoctorAreaNotification } from "../notifications/newDoctorArea.service";
+import { activatePendingClinicRewards, clinicReferralBilling } from "../../lib/clinicReferralReward";
 import crypto from "crypto";
 import { Prisma, Role, InviteStatus, SubscriptionStatus, VerificationStatus } from "@prisma/client";
 import { z } from "zod";
@@ -5,7 +8,7 @@ import { prisma } from "../../lib/prisma";
 import { hashPassword } from "../../utils/password";
 import { hashToken } from "../../lib/tokens";
 import { ApiError } from "../../utils/ApiError";
-import { clinicMonthlyTotal, CLINIC_DOCTOR_MONTHLY_DZD, activeClinicWhere } from "../../lib/clinicBilling";
+import { CLINIC_DOCTOR_MONTHLY_DZD, activeClinicWhere } from "../../lib/clinicBilling";
 import { PUBLIC_DOCTOR_SELECT } from "../doctors/doctors.service";
 import { ClinicProfileInput, registerClinicSchema, acceptClinicInviteSchema } from "./clinics.schema";
 
@@ -121,8 +124,8 @@ export async function getOwnClinic(userId: string) {
   ]);
   const { owner: _owner, ...safeClinic } = clinic;
   return { ...safeClinic, doctors, invites, billing: {
-    doctorCount: doctors.length, monthlyPerDoctor: CLINIC_DOCTOR_MONTHLY_DZD,
-    monthlyTotal: clinicMonthlyTotal(doctors.length), paidDoctorCount: clinic.paidDoctorCount,
+    ...clinicReferralBilling(doctors.length, clinic.referralDiscountUntil), monthlyPerDoctor: CLINIC_DOCTOR_MONTHLY_DZD,
+    paidDoctorCount: clinic.paidDoctorCount,
   } };
 }
 export async function inviteDoctor(userId: string, email: string) {
@@ -213,15 +216,15 @@ export async function publicClinic(id: string) {
 }
 export async function adminListClinics() {
   const clinics = await prisma.clinic.findMany({ where: { ownerId: { not: null } }, include: { owner: { select: { email: true } }, _count: { select: { doctors: true } } }, orderBy: { createdAt: "desc" }, take: 100 });
-  return clinics.map(c => ({ ...c, monthlyTotal: clinicMonthlyTotal(c._count.doctors) }));
+  return clinics.map(c => ({ ...c, ...clinicReferralBilling(c._count.doctors, c.referralDiscountUntil) }));
 }
 export async function adminUpdateClinic(id: string, data: {
   verificationStatus?: VerificationStatus; subscriptionStatus?: SubscriptionStatus; subscriptionExpiresAt?: Date | null; paidDoctorCount?: number;
 }) {
   if (!Object.keys(data).length) throw ApiError.badRequest("لا يوجد تغيير.");
-  return prisma.$transaction(async tx => {
+  const result = await prisma.$transaction(async tx => {
     await lockClinic(tx, id);
-    const clinic = await tx.clinic.findUnique({ where: { id } });
+    const clinic = await tx.clinic.findUnique({ where: { id }, include: { owner: { select: { isActive: true } } } });
     if (!clinic?.ownerId) throw ApiError.notFound("العيادة غير موجودة.");
     const count = await tx.doctor.count({ where: { clinicId: id } });
     const status = data.subscriptionStatus ?? clinic.subscriptionStatus;
@@ -230,6 +233,26 @@ export async function adminUpdateClinic(id: string, data: {
     if (status === SubscriptionStatus.ACTIVE && (!expires || expires <= new Date() || paidCount < count || paidCount < 1)) {
       throw ApiError.badRequest("تفعيل الاشتراك يتطلب تاريخ انتهاء مستقبليًا وعددًا مدفوعًا يشمل جميع أطباء العيادة.");
     }
-    return tx.clinic.update({ where: { id }, data });
+    const updated = await tx.clinic.update({ where: { id }, data });
+    const rewardData = activatePendingClinicRewards(updated);
+    const finalClinic = Object.keys(rewardData).length ? await tx.clinic.update({ where: { id }, data: rewardData }) : updated;
+    const now = new Date();
+    const doctors = await tx.doctor.findMany({ where: { clinicId: id }, include: {
+      user: { select: { isActive: true } }, city: { select: { nameAr: true } }, specialty: { select: { nameAr: true } },
+    } });
+    const announcements: { doctor: typeof doctors[number] & { clinic: typeof finalClinic }; recipients: string[] }[] = [];
+    for (const doctor of doctors) {
+      const after = { ...doctor, clinic: { ...finalClinic, owner: clinic.owner } };
+      if (!isDoctorProfilePublic({ ...doctor, clinic }, now) && isDoctorProfilePublic(after, now)) {
+        const recipients = await queueNewDoctorAreaNotifications(tx, after);
+        announcements.push({ doctor: after, recipients });
+      }
+    }
+    return { clinic: finalClinic, announcements };
   });
+  for (const announcement of result.announcements) {
+    pushNewDoctorAreaNotification(announcement.recipients, announcement.doctor);
+  }
+  return result.clinic;
 }
+

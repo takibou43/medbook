@@ -21,6 +21,78 @@ export interface MyAppointment {
   };
   // تقييم المريض لهذا الموعد (null = لم يُقيَّم بعد).
   review?: { id: string; rating: number; comment?: string | null; createdAt: string } | null;
+  // الحساب العائلي: المستفيد من الموعد (صاحب الحساب أو فرد من عائلته — الاسم وصلة القرابة فقط).
+  beneficiary?: Beneficiary;
+  familyMemberId?: string | null;
+  // موعد عودة برمجه الطبيب (DOCTOR) أو حجز عادي.
+  createdBy?: "PATIENT" | "DOCTOR" | "ADMIN" | "GUEST";
+  parentAppointmentId?: string | null;
+}
+
+export type FamilyRelationship = "CHILD" | "SPOUSE" | "PARENT" | "SIBLING" | "OTHER";
+
+export interface Beneficiary {
+  type: "SELF" | "FAMILY_MEMBER";
+  name: string;
+  relationship: FamilyRelationship | null;
+  familyMemberId: string | null;
+}
+
+// فرد عائلة كما يعيده GET /api/patient/family-members (لا يُخزَّن أبدًا في localStorage ولا في الـService Worker).
+export interface FamilyMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  birthDate?: string | null;
+  gender?: Gender | null;
+  relationship: FamilyRelationship;
+  archivedAt?: string | null;
+  createdAt?: string;
+}
+
+export type TreatmentPlanStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
+
+// خطة علاج كما يراها المريض (قراءة فقط، بلا ملاحظات الطبيب الداخلية).
+export interface PatientTreatmentPlan {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: TreatmentPlanStatus;
+  estimatedSessions?: number | null;
+  estimatedTotalCost?: number | null;
+  startedAt: string;
+  completedAt?: string | null;
+  beneficiary: Beneficiary;
+  doctor: { firstName: string; lastName: string; specialty?: { nameAr: string } | null };
+  sessions: {
+    id: string;
+    sessionNumber: number;
+    title: string;
+    plannedDate?: string | null;
+    completedAt?: string | null;
+    status: "PLANNED" | "COMPLETED" | "CANCELLED";
+    appointment?: { id: string; date: string; startTime: string; status: AppointmentStatus } | null;
+  }[];
+  followUps: {
+    id: string;
+    dueDate: string;
+    status: "DUE" | "SCHEDULED" | "COMPLETED" | "DISMISSED";
+    completedAt?: string | null;
+    appointment?: { id: string; date: string; startTime: string; status: AppointmentStatus } | null;
+  }[];
+}
+
+// GET /api/public/stats/bookings — بلا أي بيانات شخصية.
+export interface BookingStats {
+  count: number | null;
+  displayCount: number | null;
+  displayText: string;
+  level: "NONE" | "LOW" | "NUMBER";
+  scope: "WILAYA" | "NATIONAL";
+  wilayaId: string | null;
+  wilayaName: string | null;
+  period: string;
+  definition: string;
 }
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 

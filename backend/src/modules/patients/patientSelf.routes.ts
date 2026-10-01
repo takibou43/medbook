@@ -7,6 +7,7 @@ import { Role, AppointmentStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import * as appointmentsService from "../appointments/appointments.service";
+import { redactDoctorSecrets } from "../../lib/redact";
 
 const router = Router();
 router.use(authenticate, authorize(Role.PATIENT));
@@ -62,7 +63,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const status = req.query.status as AppointmentStatus | undefined;
     const data = await appointmentsService.listForPatient(req.user!.id, status);
-    res.json({ success: true, data });
+    res.json({ success: true, data: redactDoctorSecrets(data) });
   })
 );
 

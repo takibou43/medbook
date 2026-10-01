@@ -122,6 +122,117 @@ export interface Appointment {
   durationMinutes?: number | null;
   // يُرسله الخادم مع قائمة مواعيد الطبيب: عدد مرات غياب هذا المريض سابقًا
   patientNoShowCount?: number;
+  // الحساب العائلي: المستفيد (الاسم وصلة القرابة فقط) — familyMemberId فارغ = صاحب الحساب.
+  familyMemberId?: string | null;
+  familyMember?: { id: string; firstName: string; lastName: string; relationship: FamilyRelationship } | null;
+  beneficiary?: Beneficiary;
+  // موعد عودة برمجه الطبيب.
+  createdBy?: "PATIENT" | "DOCTOR" | "ADMIN" | "GUEST";
+  parentAppointmentId?: string | null;
+}
+
+export type FamilyRelationship = "CHILD" | "SPOUSE" | "PARENT" | "SIBLING" | "OTHER";
+
+export interface Beneficiary {
+  type: "SELF" | "FAMILY_MEMBER";
+  name: string;
+  relationship: FamilyRelationship | null;
+  familyMemberId: string | null;
+}
+
+export type TreatmentPlanStatus = "ACTIVE" | "COMPLETED" | "CANCELLED";
+export type TreatmentSessionStatus = "PLANNED" | "COMPLETED" | "CANCELLED";
+export type DentalFollowUpStatus = "DUE" | "SCHEDULED" | "COMPLETED" | "DISMISSED";
+
+export interface TreatmentAppointmentRef {
+  id: string;
+  date: string;
+  startTime: string;
+  status: AppointmentStatus;
+}
+
+export interface TreatmentSession {
+  id: string;
+  sessionNumber: number;
+  title: string;
+  notes?: string | null;
+  plannedDate?: string | null;
+  completedAt?: string | null;
+  status: TreatmentSessionStatus;
+  appointmentId?: string | null;
+  appointment?: TreatmentAppointmentRef | null;
+}
+
+export interface DentalFollowUp {
+  id: string;
+  dueDate: string;
+  status: DentalFollowUpStatus;
+  completedAt?: string | null;
+  appointmentId?: string | null;
+  appointment?: TreatmentAppointmentRef | null;
+}
+
+export interface TreatmentPlanSummary {
+  id: string;
+  title: string;
+  status: TreatmentPlanStatus;
+  estimatedSessions?: number | null;
+  estimatedTotalCost?: number | null;
+  startedAt: string;
+  completedAt?: string | null;
+  patientId: string;
+  familyMemberId?: string | null;
+  beneficiary: Beneficiary;
+  sessionsCount: number;
+  completedSessions: number;
+  nextFollowUp: { id: string; dueDate: string; status: DentalFollowUpStatus } | null;
+}
+
+export interface TreatmentPlanDetail {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: TreatmentPlanStatus;
+  estimatedSessions?: number | null;
+  estimatedTotalCost?: number | null;
+  startedAt: string;
+  completedAt?: string | null;
+  patientId: string;
+  familyMemberId?: string | null;
+  patient: { id: string; firstName: string; lastName: string };
+  beneficiary: Beneficiary;
+  /** آخر موعد غير ملغى لنفس المستفيد عندك — مرجع «برمجة موعد عودة» من الخطة. */
+  anchorAppointmentId: string | null;
+  sessions: TreatmentSession[];
+  followUps: DentalFollowUp[];
+}
+
+export interface PlanCandidate {
+  id: string;
+  firstName: string;
+  lastName: string;
+  familyMembers: { id: string; firstName: string; lastName: string; relationship: FamilyRelationship }[];
+}
+
+export type DoctorReferralStatus = "PENDING" | "QUALIFIED" | "REWARDED" | "REJECTED";
+
+export interface MyReferrals {
+  code: string;
+  rewardDays: number;
+  referrals: { id: string; status: DoctorReferralStatus; createdAt: string; qualifiedAt?: string | null; rewardedAt?: string | null; rewardDays: number; referredName: string }[];
+  totals: { pending: number; rewarded: number; rewardedDays: number };
+}
+
+export interface AdminReferral {
+  id: string;
+  status: DoctorReferralStatus;
+  referralCodeUsed: string;
+  rewardDays: number;
+  createdAt: string;
+  qualifiedAt?: string | null;
+  rewardedAt?: string | null;
+  referrer: { id: string; firstName: string; lastName: string; subscriptionStatus: string; subscriptionExpiresAt?: string | null };
+  referred: { id: string; firstName: string; lastName: string; verificationStatus: VerificationStatus };
 }
 
 /**

@@ -72,4 +72,5 @@ jobs:
           cache: npm
           cache-dependency-path: frontend-doctor/package-lock.json
       - run: npm ci --include=dev
+      - run: npm test
       - run: npm run build

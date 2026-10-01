@@ -6,6 +6,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
+import { redactDoctorSecrets } from "../../lib/redact";
 
 const router = Router();
 router.use(authenticate, authorize(Role.PATIENT));
@@ -18,7 +19,7 @@ router.get(
       include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
       orderBy: { createdAt: "desc" },
     });
-    res.json({ success: true, data: favorites });
+    res.json({ success: true, data: redactDoctorSecrets(favorites) });
   })
 );
 

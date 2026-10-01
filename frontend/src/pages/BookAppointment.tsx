@@ -5,7 +5,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/Toast";
 import { Spinner } from "../components/ui/States";
-import { Doctor, NextSlot, Paginated } from "../types";
+import { Doctor, FamilyMember, NextSlot, Paginated } from "../types";
 import { bookingError, diffMinutes, doctorAddress, splitFullName } from "../lib/booking";
 import { BookingSteps, StepId } from "../components/booking/BookingSteps";
 import { SpecialtyOption, SpecialtyStep } from "../components/booking/SpecialtyStep";
@@ -19,6 +19,9 @@ import { DoctorSearchModal } from "../components/booking/DoctorSearchModal";
 import { InlineError } from "../components/booking/StepParts";
 import { useAuth } from "../context/AuthContext";
 import { ReminderCard } from "../components/account/ReminderCard";
+import { BeneficiaryPicker } from "../components/booking/BeneficiaryPicker";
+import { BookingCounterCard } from "../components/booking/BookingCounterCard";
+import { beneficiaryLabel, bookableMembers, memberFullName } from "../lib/family";
 
 // نجلب الأطباء الموثّقين (المفعّلين) مرة واحدة ونشتق منهم محليًا التخصصات وعدد أطباء كل تخصص وقوائم الأطباء —
 // فلا نطلب من الخادم شيئًا عند كل نقرة، ولا يظهر للمريض تخصص أو طبيب غير حقيقي. الخادم يحدّ الصفحة بـ 50
@@ -47,6 +50,11 @@ export default function BookAppointment() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   // اختيار اختياري لليوم/الوقت. null = السلوك الحالي تمامًا (أول دور متاح يعيّنه الخادم).
   const [choice, setChoice] = useState<DayTimeChoice | null>(null);
+  // الحساب العائلي: «الموعد لي» (الافتراضي، السلوك السابق) أو لفرد من العائلة.
+  const [familyMode, setFamilyMode] = useState(false);
+  const [familyMemberId, setFamilyMemberId] = useState<string | null>(null);
+  // ولاية اختارها المريض في فلتر الأطباء — لعدّاد الحجوزات فقط.
+  const [counterWilayaId, setCounterWilayaId] = useState<string>("");
 
   // أثناء الحجز (أي اختيار أو خطوة متقدمة أو شاشة التأكيد) لا يجوز أن يُعيد التحديث التلقائي للـPWA تحميل الصفحة:
   // حالة المعالج محفوظة في الذاكرة فقط. register-sw.js يقرأ هذه العلامة ويؤجّل التحديث لنقطة آمنة.
@@ -90,6 +98,20 @@ export default function BookAppointment() {
     if (!form.getValues("fullName") && fullName) form.setValue("fullName", fullName);
     if (!form.getValues("phone") && user.phone) form.setValue("phone", user.phone);
   }, [step, user, form]);
+
+  // أفراد العائلة: من الخادم، في ذاكرة React Query فقط (لا localStorage ولا Service Worker).
+  const familyQuery = useQuery({
+    queryKey: ["family-members"],
+    queryFn: async () => (await api.get<{ data: FamilyMember[] }>("/patient/family-members")).data.data,
+    enabled: Boolean(user) && (step === "patient" || step === "confirm"),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const members = bookableMembers(familyQuery.data);
+  const selectedMember = familyMode && familyMemberId ? members.find((m) => m.id === familyMemberId) ?? null : null;
+  const selectedMemberLabel = selectedMember
+    ? beneficiaryLabel({ type: "FAMILY_MEMBER", name: memberFullName(selectedMember), relationship: selectedMember.relationship, familyMemberId: selectedMember.id })
+    : null;
 
   const {
     data: allDoctors,
@@ -164,7 +186,7 @@ export default function BookAppointment() {
   const bookMutation = useMutation({
     // بلا اختيار: لا نرسل التاريخ ولا الوقت — الخادم يعيّن الدور التالي لحظة الحجز ويمنع التكرار (كما كان).
     // مع اختيار: اليوم فقط (أول وقت شاغر فيه) أو اليوم + الوقت بالضبط (exactTime) — والخادم يعيد التحقق.
-    mutationFn: async (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor; choice: DayTimeChoice | null }) =>
+    mutationFn: async (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor; choice: DayTimeChoice | null; familyMemberId: string | null }) =>
       (
         await api.post("/booking", {
           firstName: payload.firstName,
@@ -173,6 +195,8 @@ export default function BookAppointment() {
           wilayaId: payload.doctor.wilaya.id,
           specialtyId: payload.doctor.specialtyId,
           doctorId: payload.doctor.id,
+          // الخادم يتحقق من ملكية فرد العائلة ويأخذ اسمه من قاعدة البيانات.
+          ...(payload.familyMemberId ? { familyMemberId: payload.familyMemberId } : {}),
           ...(payload.choice
             ? payload.choice.startTime
               ? { date: payload.choice.date, startTime: payload.choice.startTime, exactTime: true }
@@ -186,14 +210,18 @@ export default function BookAppointment() {
     if (!selectedDoctor) return;
     if (!user) return goToAuth(selectedDoctor.id);
     const values = form.getValues();
-    const name = splitFullName(values.fullName);
+    if (familyMode && !selectedMember) {
+      setStep("patient");
+      return;
+    }
+    const name = selectedMember ? { firstName: selectedMember.firstName, lastName: selectedMember.lastName } : splitFullName(values.fullName);
     if (!name) {
       setStep("patient");
       return;
     }
     setSubmitError(null);
     try {
-      const appointment = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice });
+      const appointment = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice, familyMemberId: selectedMember?.id ?? null });
       // مدة الحدث في التقويم = المدة الفعلية للموعد كما سجّلها الخادم (وليس رقمًا ثابتًا)،
       // مع رجوع احتياطي لمدة الدور المعروضة قبل التأكيد إن تعذّر حساب الفرق لأي سبب.
       const durationMinutes = diffMinutes(appointment.startTime, appointment.endTime) || nextSlot?.slotMinutes || 20;
@@ -237,6 +265,12 @@ export default function BookAppointment() {
         queryClient.invalidateQueries({ queryKey: ["next-slot", selectedDoctor.id] });
         queryClient.invalidateQueries({ queryKey: ["next-slot-preview", selectedDoctor.id] });
         setStep("slot");
+      } else if (kind === "notFound" && selectedMember) {
+        // فرد العائلة أُرشف أو لم يعد متاحًا: نحدّث القائمة ونعيده لاختيار المستفيد.
+        showToast(message, "error");
+        setFamilyMemberId(null);
+        queryClient.invalidateQueries({ queryKey: ["family-members"] });
+        setStep("patient");
       } else if (kind === "notFound") {
         // الطبيب لم يعد متاحًا (أُوقف/انتهى اشتراكه): نحدّث القائمة ونعيده لاختيار طبيب آخر.
         showToast(message, "error");
@@ -253,6 +287,8 @@ export default function BookAppointment() {
     setConfirmed(null);
     setSelectedDoctor(null);
     setChoice(null);
+    setFamilyMode(false);
+    setFamilyMemberId(null);
     setSubmitError(null);
     setStep(specialtyId ? "doctor" : "specialty");
   }
@@ -293,6 +329,8 @@ export default function BookAppointment() {
             <InlineError title="لا يمكنك الحجز حاليًا" message={BLOCKED_MSG} />
           </div>
         )}
+
+        <BookingCounterCard wilayaId={counterWilayaId || null} />
 
         <BookingSteps current={step} />
 
@@ -339,6 +377,7 @@ export default function BookAppointment() {
                   setStep("slot");
                 }}
                 onBack={() => setStep("specialty")}
+                onWilayaChange={setCounterWilayaId}
               />
             )}
 
@@ -360,7 +399,28 @@ export default function BookAppointment() {
             )}
 
             {step === "patient" && selectedDoctor && user && (
-              <PatientStep ref={headingRef} form={form} onSubmit={() => setStep("confirm")} onBack={() => setStep("slot")} />
+              <PatientStep
+                ref={headingRef}
+                form={form}
+                onSubmit={() => setStep("confirm")}
+                onBack={() => setStep("slot")}
+                familyMemberName={selectedMember ? memberFullName(selectedMember) : null}
+                familyPending={familyMode && !selectedMember}
+                beneficiary={
+                  <BeneficiaryPicker
+                    members={members}
+                    loading={familyQuery.isLoading}
+                    error={familyQuery.isError}
+                    onRetry={() => familyQuery.refetch()}
+                    value={familyMemberId}
+                    familyMode={familyMode}
+                    onChange={({ familyMode: fm, memberId }) => {
+                      setFamilyMode(fm);
+                      setFamilyMemberId(fm ? memberId : null);
+                    }}
+                  />
+                }
+              />
             )}
 
             {step === "confirm" && selectedDoctor && (nextSlot || choice) && user && (
@@ -373,7 +433,8 @@ export default function BookAppointment() {
                     : nextSlot!
                 }
                 exactChoice={Boolean(choice?.startTime)}
-                patientName={form.getValues("fullName").trim().replace(/\s+/g, " ")}
+                patientName={selectedMember ? memberFullName(selectedMember) : form.getValues("fullName").trim().replace(/\s+/g, " ")}
+                beneficiaryLabel={selectedMemberLabel}
                 patientPhone={form.getValues("phone").trim()}
                 submitting={bookMutation.isPending}
                 errorMessage={submitError}

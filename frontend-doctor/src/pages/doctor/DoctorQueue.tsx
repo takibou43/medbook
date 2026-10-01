@@ -10,9 +10,12 @@ import { ASSISTANT_QUEUE_POLL_MS, QUEUE_POLL_MS, useCallNext, useCallPatient, us
 import { useAuth } from "../../context/AuthContext";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { Appointment } from "../../types";
+import { RELATIONSHIP_LABELS } from "../../lib/features";
 
 // المريض قد يكون صاحب حساب أو ضيفًا حجز باسمه فقط — نعرض الاسم المتوفر أيًّا كان مصدره.
 function patientName(a: Appointment): string {
+  // موعد لفرد من عائلة صاحب الحساب: المستفيد هو من يدخل على الطبيب (مع صلة القرابة).
+  if (a.familyMember) return `${a.familyMember.firstName} ${a.familyMember.lastName} (${RELATIONSHIP_LABELS[a.familyMember.relationship]})`;
   if (a.patient) return a.patient.firstName + " " + a.patient.lastName;
   const guest = [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ").trim();
   return guest || "مريض بدون اسم";

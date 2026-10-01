@@ -8,6 +8,7 @@ import { Spinner } from "../../components/ui/States";
 import { VerificationBadge } from "../../components/ui/Badge";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/ui/Toast";
+import { ReferralCard } from "../../components/ReferralCard";
 
 // رابط موقع الحجز الخاص بالمرضى — يُستخدم لبناء رابط/رمز QR خاص بكل طبيب.
 // TODO: تحويله إلى متغيّر بيئة عند اعتماد نطاق مخصص للموقع مستقبلًا.
@@ -335,6 +336,9 @@ export default function DoctorDashboard() {
           </div>
         </section>
       )}
+
+      {/* «ادعُ طبيبًا» — للطبيب وحده (المساعد لا يرى الإحالات ولا الاشتراك). */}
+      {!isAssistant && <ReferralCard />}
     </div>
   );
 }

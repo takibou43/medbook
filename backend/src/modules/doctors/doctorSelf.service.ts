@@ -1,4 +1,4 @@
-import { AppointmentStatus, Role } from "@prisma/client";
+import { AppointmentStatus, Prisma, Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { algeriaTodayUTCMidnight } from "../../lib/slots";
@@ -6,6 +6,8 @@ import { autoExpireStaleAppointments } from "../appointments/appointments.servic
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
 import { isWithinWorkingHours, ScheduleBlock } from "../../lib/slots";
 import { createNotification } from "../notifications/notifications.service";
+import { syncDentalFollowUpsSafe } from "../../lib/dentalFollowUpSync";
+import { beneficiaryOf, FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
 
 const SCHEDULE_ACTIVE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
 
@@ -52,6 +54,22 @@ async function notifyAffectedAppointments(appointments: AffectedAppointment[], c
 // الكتابة. يمنع سباقًا يُلغى فيه الموعد أو يبدأ (IN_PROGRESS/LATE/COMPLETED) بين الفحص والحفظ فيُكتب فوقه.
 export function markRescheduleWhere(affected: { id: string }[]) {
   return { id: { in: affected.map((a) => a.id) }, status: { in: SCHEDULE_ACTIVE_STATUSES } };
+}
+
+// يطبّق الحالة الجديدة على كل موعد متأثر بشرط أن يبقى نشطًا لحظة الكتابة، ويعيد فقط المواعيد التي
+// تغيّرت فعلًا. updateMany لكل صف (count = 0 أو 1) يعطي نتيجة دقيقة دون raw SQL؛ فالموعد الذي أُلغي
+// أو بدأ بين القراءة والكتابة لا يتغير ولا يُحتسب ولا يُشعَر صاحبه.
+export async function applyStatusToAffected<T extends { id: string }>(
+  tx: Pick<Prisma.TransactionClient, "appointment">,
+  affected: T[],
+  status: AppointmentStatus
+): Promise<T[]> {
+  const changed: T[] = [];
+  for (const appointment of affected) {
+    const { count } = await tx.appointment.updateMany({ where: markRescheduleWhere([appointment]), data: { status } });
+    if (count > 0) changed.push(appointment);
+  }
+  return changed;
 }
 
 async function findAffectedAppointments(doctorId: string, schedules: ScheduleBlock[]): Promise<AffectedAppointment[]> {
@@ -119,17 +137,15 @@ export async function replaceWeeklySchedule(
   if (affected.length > 0 && !confirmAffected) {
     throw ApiError.conflict("سيؤثر هذا التعديل في مواعيد محجوزة مسبقًا. يلزم تأكيدك قبل الحفظ.", conflictDetails(affected));
   }
-  await prisma.$transaction([
-    prisma.doctorSchedule.deleteMany({ where: { doctorId: doctor.id, isException: false } }),
-    prisma.doctorSchedule.createMany({
+  const changed = await prisma.$transaction(async (tx) => {
+    await tx.doctorSchedule.deleteMany({ where: { doctorId: doctor.id, isException: false } });
+    await tx.doctorSchedule.createMany({
       data: blocks.map((b) => ({ doctorId: doctor.id, dayOfWeek: b.dayOfWeek, startTime: b.startTime, endTime: b.endTime })),
-    }),
-    ...(affected.length > 0
-      ? [prisma.appointment.updateMany({ where: markRescheduleWhere(affected), data: { status: AppointmentStatus.RESCHEDULE_REQUIRED } })]
-      : []),
-  ]);
-  await notifyAffectedAppointments(affected);
-  return { schedule: await getWeeklySchedule(userId), affectedAppointments: affected.length };
+    });
+    return applyStatusToAffected(tx, affected, AppointmentStatus.RESCHEDULE_REQUIRED);
+  });
+  await notifyAffectedAppointments(changed);
+  return { schedule: await getWeeklySchedule(userId), affectedAppointments: changed.length };
 }
 
 export async function addScheduleException(
@@ -163,8 +179,9 @@ export async function addScheduleException(
     );
   }
   const affectedStatus = exception.isOff ? AppointmentStatus.CANCELLED : AppointmentStatus.RESCHEDULE_REQUIRED;
-  const [created] = await prisma.$transaction([
-    prisma.doctorSchedule.create({
+  // قاعدة المنتج: عطلة يوم كامل = إلغاء نهائي؛ ساعات جزئية = إعادة جدولة.
+  const { created, changed } = await prisma.$transaction(async (tx) => {
+    const created = await tx.doctorSchedule.create({
       data: {
         doctorId: doctor.id,
         isException: true,
@@ -173,13 +190,14 @@ export async function addScheduleException(
         startTime: exception.startTime ?? "00:00",
         endTime: exception.endTime ?? "23:59",
       },
-    }),
-    ...(affected.length > 0
-      ? [prisma.appointment.updateMany({ where: markRescheduleWhere(affected), data: { status: affectedStatus } })]
-      : []),
-  ]);
-  await notifyAffectedAppointments(affected, exception.isOff);
-  return { schedule: created, affectedAppointments: affected.length };
+    });
+    const changed = await applyStatusToAffected(tx, affected, affectedStatus);
+    return { created, changed };
+  });
+  // عطلة ألغت مواعيد: متابعات خطط الأسنان المرتبطة بها تعود DUE (لا تُحذف).
+  if (exception.isOff && changed.length > 0) await syncDentalFollowUpsSafe(changed.map((a) => a.id), "CANCELLED");
+  await notifyAffectedAppointments(changed, exception.isOff);
+  return { schedule: created, affectedAppointments: changed.length };
 }
 
 export async function removeScheduleBlock(userId: string, blockId: string) {
@@ -299,28 +317,40 @@ export async function getOwnPatients(userId: string) {
   const doctor = await getDoctorByUserId(userId);
   const appointments = await prisma.appointment.findMany({
     where: { doctorId: doctor.id },
-    include: { patient: { include: { user: { select: { email: true, phone: true } } } } },
-    orderBy: { date: "desc" },
+    include: {
+      patient: { include: { user: { select: { email: true, phone: true } } } },
+      familyMember: { select: FAMILY_MEMBER_PUBLIC_SELECT },
+    },
+    orderBy: [{ date: "desc" }, { startTime: "desc" }],
   });
 
   const map = new Map<string, any>();
   for (const a of appointments) {
     // الحجوزات كضيف (بدون حساب) لا تملك patientId — نستخدم رقم الهاتف كمفتاح تفرّد بديل،
-    // وإن لم يتوفر فكل حجز يُعامل كسجل مستقل.
-    const key = a.patientId ?? `guest:${a.guestPhone ?? a.id}`;
+    // وإن لم يتوفر فكل حجز يُعامل كسجل مستقل. أفراد العائلة يظهرون كمرضى مستقلين (صاحب الحساب + الفرد).
+    const key = a.patientId ? `${a.patientId}:${a.familyMemberId ?? "self"}` : `guest:${a.guestPhone ?? a.id}`;
+    const beneficiary = beneficiaryOf(a);
     if (!map.has(key)) {
       map.set(key, {
         patientId: a.patientId,
+        familyMemberId: a.familyMemberId,
         isGuest: !a.patientId,
-        firstName: a.patient ? a.patient.firstName : a.guestFirstName,
-        lastName: a.patient ? a.patient.lastName : a.guestLastName,
+        firstName: a.familyMember ? a.familyMember.firstName : a.patient ? a.patient.firstName : a.guestFirstName,
+        lastName: a.familyMember ? a.familyMember.lastName : a.patient ? a.patient.lastName : a.guestLastName,
+        beneficiary,
+        // صاحب الحساب حين يكون المريض فردًا من عائلته (للتواصل فقط).
+        accountHolderName: a.familyMember && a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : null,
         email: a.patient ? a.patient.user.email : null,
         phone: a.patient?.user.phone ?? a.guestPhone,
         lastVisit: a.date,
         totalAppointments: 1,
+        // آخر موعد غير ملغى لمريض صاحب حساب — مرجع «برمجة موعد عودة» من ملف المريض.
+        lastAppointmentId: a.patientId && a.status !== AppointmentStatus.CANCELLED ? a.id : null,
       });
     } else {
-      map.get(key).totalAppointments += 1;
+      const row = map.get(key);
+      row.totalAppointments += 1;
+      if (!row.lastAppointmentId && a.patientId && a.status !== AppointmentStatus.CANCELLED) row.lastAppointmentId = a.id;
     }
   }
   return Array.from(map.values());

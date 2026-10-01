@@ -7,6 +7,7 @@ import { algeriaTodayUTCMidnight } from "../../lib/slots";
 import { env } from "../../config/env";
 import { lockDoctorRow, recalcDoctorRating } from "../reviews/reviews.service";
 import { sendPushToUser } from "../../lib/push";
+import { applyReferralOnVerificationTx, notifyReferrerRewarded } from "../referrals/referrals.service";
 
 // ---------------- Dashboard stats ----------------
 
@@ -82,7 +83,15 @@ export async function deleteUser(userId: string, actingAdminId?: string) {
           if (admins <= 1) throw ApiError.badRequest("لا يمكن حذف آخر حساب إدارة في المنصة.");
     }
 
-  await prisma.user.delete({ where: { id: userId } });
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+  } catch (err) {
+    // سجلات طبية مرتبطة (أفراد عائلة/خطط علاج بقيد RESTRICT): لا نحذفها ضمنيًا — 409 واضح بدل 500.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+      throw ApiError.conflict("لا يمكن حذف هذا الحساب لارتباطه بسجلات طبية (أفراد عائلة أو خطط علاج). عطّل الحساب بدل حذفه.");
+    }
+    throw err;
+  }
 }
 
 export async function purgeDemoData() {
@@ -98,12 +107,21 @@ export async function purgeDemoData() {
     const doctorIds = doctors.map((d) => d.id);
     const patientIds = patients.map((p) => p.id);
 
+  // بيانات الميزات الجديدة المرتبطة بحسابات التجربة فقط (قبل المواعيد والمرضى بسبب قيود RESTRICT).
+  const demoPlanWhere = { OR: [{ doctorId: { in: doctorIds } }, { patientId: { in: patientIds } }] };
+  await prisma.dentalFollowUp.deleteMany({ where: { treatmentPlan: demoPlanWhere } });
+  await prisma.dentalTreatmentSession.deleteMany({ where: { treatmentPlan: demoPlanWhere } });
+  await prisma.appointment.updateMany({ where: { treatmentPlan: demoPlanWhere }, data: { treatmentPlanId: null, treatmentSessionId: null } });
+  await prisma.dentalTreatmentPlan.deleteMany({ where: demoPlanWhere });
+  await prisma.doctorReferral.deleteMany({ where: { OR: [{ referrerDoctorId: { in: doctorIds } }, { referredDoctorId: { in: doctorIds } }] } });
+
   const reviews = await prisma.review.deleteMany({
         where: { OR: [{ doctorId: { in: doctorIds } }, { patientId: { in: patientIds } }] },
   });
     const appointments = await prisma.appointment.deleteMany({
           where: { OR: [{ doctorId: { in: doctorIds } }, { patientId: { in: patientIds } }] },
     });
+    await prisma.familyMember.deleteMany({ where: { ownerPatientId: { in: patientIds } } });
     await prisma.doctorSchedule.deleteMany({ where: { doctorId: { in: doctorIds } } });
     await prisma.notification.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.doctor.deleteMany({ where: { id: { in: doctorIds } } });
@@ -231,7 +249,7 @@ function pushNewDoctorAreaNotification(userIds: string[], doctor: AreaDoctor) {
   }
 }
 
-export async function setDoctorVerification(doctorId: string, status: VerificationStatus) {
+export async function setDoctorVerification(doctorId: string, status: VerificationStatus, actorUserId: string | null = null) {
   const result = await prisma.$transaction(async (tx) => {
     const before = await tx.doctor.findUnique({
       where: { id: doctorId },
@@ -249,6 +267,9 @@ export async function setDoctorVerification(doctorId: string, status: Verificati
       },
     });
 
+    // مكافأة الإحالة (مرة واحدة، compare-and-swap) في نفس المعاملة — انظر referrals.service.ts.
+    const reward = await applyReferralOnVerificationTx(tx, doctorId, status, actorUserId);
+
     const becamePublic = shouldAnnounceDoctor(
       before.verificationStatus,
       before.subscriptionStatus,
@@ -256,8 +277,10 @@ export async function setDoctorVerification(doctorId: string, status: Verificati
       doctor.subscriptionStatus
     );
     const recipients = becamePublic ? await queueNewDoctorAreaNotifications(tx, doctor) : [];
-    return { doctor, recipients, statusChanged: before.verificationStatus !== status };
+    return { doctor, reward, recipients, statusChanged: before.verificationStatus !== status };
   });
+
+  if (result.reward) await notifyReferrerRewarded(result.reward);
 
   if (result.statusChanged) {
     await createNotification(

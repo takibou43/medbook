@@ -16,6 +16,8 @@ interface Props {
   onBack: () => void;
   // الوقت اختاره المريض بنفسه (لا نقل تلقائي إلى وقت آخر إن أُخذ).
   exactChoice?: boolean;
+  // الحساب العائلي: «ياسين بن علي (ابن/ابنة)» — يُعرض بوضوح قبل التأكيد. غيابه = الموعد لصاحب الحساب.
+  beneficiaryLabel?: string | null;
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -30,7 +32,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 // الخطوة 5: ملخص واضح قبل الإرسال. الخادم هو المرجع النهائي للدور (يعيد حسابه لحظة الحجز
 // ويمنع التكرار)، وشاشة النجاح تعرض الدور الفعلي الذي سجّله.
 export const ConfirmStep = forwardRef<HTMLHeadingElement, Props>(
-  ({ doctor, slot, patientName, patientPhone, submitting, errorMessage, onConfirm, onBack, exactChoice }, ref) => {
+  ({ doctor, slot, patientName, patientPhone, submitting, errorMessage, onConfirm, onBack, exactChoice, beneficiaryLabel }, ref) => {
     const address = doctorAddress(doctor);
     return (
       <section aria-labelledby="step-confirm-title">
@@ -49,7 +51,13 @@ export const ConfirmStep = forwardRef<HTMLHeadingElement, Props>(
           <Row label="الوقت">
             {/^\d{2}:\d{2}$/.test(slot.startTime) ? <span dir="ltr">{slot.startTime}</span> : slot.startTime}
           </Row>
-          <Row label="اسم المريض">{patientName}</Row>
+          {beneficiaryLabel ? (
+            <Row label="الموعد لـ">
+              <span className="rounded-full bg-primary-50 px-2 py-0.5 text-primary-800">{beneficiaryLabel}</span>
+            </Row>
+          ) : (
+            <Row label="اسم المريض">{patientName}</Row>
+          )}
           <Row label="رقم الهاتف">{patientPhone ? <span dir="ltr">{patientPhone}</span> : "—"}</Row>
         </dl>
 

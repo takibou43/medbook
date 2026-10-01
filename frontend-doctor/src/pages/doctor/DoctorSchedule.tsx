@@ -55,6 +55,7 @@ export default function DoctorSchedule() {
     setSaving(true);
     try {
       const payload = { blocks: blocks.map(({ dayOfWeek, startTime, endTime }) => ({ dayOfWeek, startTime, endTime })) };
+      let changed = 0;
       try {
         await api.put("/doctor/schedule", payload);
       } catch (err: any) {
@@ -62,9 +63,10 @@ export default function DoctorSchedule() {
         if (err?.response?.status !== 409 || details?.code !== "APPOINTMENTS_REQUIRE_RESCHEDULE") throw err;
         const count = Number(details.affectedCount) || 0;
         if (!window.confirm(`سيصبح ${count} موعدًا محجوزًا بحاجة إلى إعادة جدولة، وسيتم إشعار المرضى. هل تريد المتابعة؟`)) return;
-        await api.put("/doctor/schedule", { ...payload, confirmAffected: true });
+        const res = await api.put("/doctor/schedule", { ...payload, confirmAffected: true });
+        changed = Number(res?.data?.data?.affectedAppointments) || 0;
       }
-      showToast("تم حفظ جدول العمل.", "success");
+      showToast(changed > 0 ? `تم حفظ جدول العمل. ${changed} موعدًا بحاجة إلى إعادة جدولة وأُشعر أصحابها.` : "تم حفظ جدول العمل.", "success");
       qc.invalidateQueries({ queryKey: ["doctor-schedule"] });
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
@@ -80,6 +82,7 @@ export default function DoctorSchedule() {
     }
     try {
       const payload = { exceptionDate, isOff: exceptionOff };
+      let changed = 0;
       try {
         await api.post("/doctor/schedule/exceptions", payload);
       } catch (err: any) {
@@ -90,9 +93,17 @@ export default function DoctorSchedule() {
           ? `يوجد ${count} موعدًا محجوزًا في هذا اليوم. ستُلغى هذه المواعيد نهائيًا وسيتم إشعار المرضى لحجز موعد جديد. هل تريد جعله يوم عطلة؟`
           : `يوجد ${count} موعدًا سيتأثر بساعات العمل الجديدة، وسيتم إشعار المرضى لإعادة الجدولة. هل تريد المتابعة؟`;
         if (!window.confirm(warning)) return;
-        await api.post("/doctor/schedule/exceptions", { ...payload, confirmAffected: true });
+        const res = await api.post("/doctor/schedule/exceptions", { ...payload, confirmAffected: true });
+        changed = Number(res?.data?.data?.affectedAppointments) || 0;
       }
-      showToast("تم إضافة الاستثناء.", "success");
+      showToast(
+        changed === 0
+          ? "تم إضافة الاستثناء."
+          : exceptionOff
+            ? `تم تسجيل العطلة. أُلغي ${changed} موعدًا نهائيًا وأُشعر المرضى.`
+            : `تم إضافة الاستثناء. ${changed} موعدًا بحاجة إلى إعادة جدولة وأُشعر أصحابها.`,
+        "success"
+      );
       setExceptionDate("");
       qc.invalidateQueries({ queryKey: ["doctor-schedule"] });
     } catch (err) {

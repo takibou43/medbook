@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../context/AuthContext";
 import { useSpecialties, useWilayas } from "../hooks/useCatalog";
@@ -7,7 +7,8 @@ import { Input, Select } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { useToast } from "../components/ui/Toast";
 import { Logo } from "../components/ui/Logo";
-import { apiErrorMessage } from "../lib/api";
+import { api, apiErrorMessage } from "../lib/api";
+import { referralCodeFromSearch } from "../lib/features";
 
 interface DoctorForm {
   firstName: string;
@@ -20,6 +21,7 @@ interface DoctorForm {
   wilayaId: string;
   cityId: string;
   yearsExperience: number;
+  referralCode: string;
   [key: string]: unknown;
 }
 
@@ -32,15 +34,39 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [selectedWilaya, setSelectedWilaya] = useState("");
 
-  const doctorForm = useForm<DoctorForm>();
+  const location = useLocation();
+  // رابط الدعوة (?ref=MB-XXXX) يملأ الحقل تلقائيًا؛ يبقى اختياريًا وقابلًا للتعديل أو الحذف.
+  const doctorForm = useForm<DoctorForm>({ defaultValues: { referralCode: referralCodeFromSearch(location.search) } as Partial<DoctorForm> });
+  const [referralState, setReferralState] = useState<"idle" | "valid" | "invalid">("idle");
+
+  async function checkReferral(code: string) {
+    const c = code.trim();
+    doctorForm.clearErrors("referralCode");
+    if (!c) return setReferralState("idle");
+    try {
+      const r = await api.post("/doctor/referrals/validate-code", { code: c });
+      const valid = Boolean(r.data?.data?.valid);
+      setReferralState(valid ? "valid" : "invalid");
+      if (!valid) doctorForm.setError("referralCode", { message: "كود الإحالة غير صحيح. صحّحه أو احذفه لإكمال التسجيل." });
+    } catch {
+      setReferralState("idle"); // تعذّر التحقق الآن — الخادم سيتحقق عند التسجيل.
+    }
+  }
 
   async function onSubmitDoctor(values: DoctorForm) {
     setLoading(true);
     try {
-      await registerDoctor({ ...values, yearsExperience: Number(values.yearsExperience) });
+      const referralCode = (values.referralCode ?? "").trim();
+      await registerDoctor({ ...values, referralCode: referralCode || undefined, yearsExperience: Number(values.yearsExperience) });
       showToast("تم إنشاء الحساب! ملفك قيد المراجعة من الإدارة قبل الظهور للمرضى.", "success");
       navigate("/");
     } catch (err) {
+      // كود إحالة غير صحيح: الخطأ بجانب الحقل نفسه (لا يُنشأ الحساب حتى يُصحَّح الكود أو يُحذف).
+      if ((err as any)?.response?.data?.details?.field === "referralCode") {
+        setReferralState("invalid");
+        doctorForm.setError("referralCode", { message: apiErrorMessage(err) }, { shouldFocus: true });
+        return;
+      }
       showToast(apiErrorMessage(err, "تعذّر إنشاء الحساب."), "error");
     } finally {
       setLoading(false);
@@ -100,6 +126,23 @@ export default function Register() {
             </Select>
           </div>
           <Input label="سنوات الخبرة" type="number" min={0} {...doctorForm.register("yearsExperience")} />
+          <div>
+            <Input
+              label="كود دعوة من زميل (اختياري)"
+              placeholder="MB-XXXXXXXX"
+              dir="ltr"
+              autoCapitalize="characters"
+              maxLength={20}
+              error={doctorForm.formState.errors.referralCode?.message as string | undefined}
+              {...doctorForm.register("referralCode", { onBlur: (e) => checkReferral(e.target.value), onChange: () => setReferralState("idle") })}
+            />
+            {referralState === "valid" && <p className="mt-1 text-xs text-emerald-700">كود صحيح ✓</p>}
+            {referralState === "invalid" && (
+              <button type="button" className="mt-1 text-xs font-semibold text-primary-700 underline" onClick={() => { doctorForm.setValue("referralCode", ""); doctorForm.clearErrors("referralCode"); setReferralState("idle"); }}>
+                حذف الكود والتسجيل بدونه
+              </button>
+            )}
+          </div>
           <Input
             label="كلمة المرور"
             type="password"

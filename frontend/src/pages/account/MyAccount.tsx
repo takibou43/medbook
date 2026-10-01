@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bell, BellRing, CalendarDays, Clock, LogOut, MapPin, Plus, WifiOff } from "lucide-react";
+import { Bell, BellRing, CalendarDays, ClipboardList, Clock, LogOut, MapPin, Plus, RotateCcw, Users, WifiOff } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { api, apiErrorMessage } from "../../lib/api";
 import { disablePatientPush } from "../../lib/patientPush";
@@ -11,7 +11,8 @@ import { RateDoctorForm, RatePrompt, StarsDisplay, canRate, readDismissed, saveD
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
 import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
-import type { MyAppointment } from "../../types";
+import type { FamilyMember, MyAppointment } from "../../types";
+import { beneficiaryLabel, filterByBeneficiary, isFamilyAppointment, memberFullName, type BeneficiaryFilter } from "../../lib/family";
 import { clearInvalidAppointmentCaches, fromCachedPatientAppointment, loadAppointmentCache, saveAppointmentCache } from "../../lib/appointmentCache";
 import { useWilayas } from "../../hooks/useCatalog";
 import { useMarkAllNotificationsRead, useNotifications } from "../../hooks/useNotifications";
@@ -56,6 +57,17 @@ function AppointmentItem({
         </div>
         <AppointmentStatusBadge status={a.status} />
       </div>
+      {/* المستفيد: يظهر فقط حين يكون الموعد لفرد من العائلة (الموعد الذاتي كما كان). */}
+      {isFamilyAppointment(a) && (
+        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-800">
+          <Users className="h-3.5 w-3.5" aria-hidden="true" /> الموعد لـ {beneficiaryLabel(a.beneficiary)}
+        </p>
+      )}
+      {a.createdBy === "DOCTOR" && a.type === "FOLLOW_UP" && (
+        <p className="mt-2 mr-1 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> موعد عودة برمجه الطبيب
+        </p>
+      )}
       <p className="mt-2 flex items-center gap-1.5 text-sm text-slate-700">
         <CalendarDays className="h-4 w-4 shrink-0" aria-hidden="true" /> {formatDay(a.date)}
         <Clock className="mr-2 h-4 w-4 shrink-0" aria-hidden="true" /> {a.startTime}
@@ -122,6 +134,8 @@ export default function MyAccount() {
   const [params] = useSearchParams();
   const focusId = params.get("appointment");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  // فلتر المستفيد: أنا / كل الأسرة / فرد محدد (فلترة محلية على نفس القائمة).
+  const [beneficiary, setBeneficiary] = useState<BeneficiaryFilter>("all");
   const [dismissed, setDismissed] = useState<string[]>(() => readDismissed());
   const { data: wilayas } = useWilayas();
   const { data: notifications } = useNotifications(Boolean(user));
@@ -185,17 +199,25 @@ export default function MyAccount() {
   }, [refetch, user?.id]);
 
   const isOffline = !online || usingOfflineCopy;
+  // أفراد العائلة لخيارات الفلتر (من الخادم فقط، ولا يُخزَّنون على الجهاز).
+  const { data: familyMembers } = useQuery({
+    queryKey: ["family-members-all"],
+    queryFn: async () => (await api.get<{ data: FamilyMember[] }>("/patient/family-members", { params: { includeArchived: "true" } })).data.data,
+    enabled: Boolean(user) && online,
+    retry: false,
+    staleTime: 60_000,
+  });
   const currentCache = user ? loadAppointmentCache(user.id) : null;
 
   const { upcoming, past } = useMemo(() => {
     const today = algeriaToday();
-    const list = data ?? [];
+    const list = filterByBeneficiary(data ?? [], beneficiary);
     const up = list
       .filter((a) => ACTIVE.has(a.status) && a.date.slice(0, 10) >= today)
       .sort((x, y) => (x.date + x.startTime).localeCompare(y.date + y.startTime));
     const upIds = new Set(up.map((a) => a.id));
     return { upcoming: up, past: list.filter((a) => !upIds.has(a.id)) };
-  }, [data]);
+  }, [data, beneficiary]);
 
   // «كيف تقيّم الطبيب؟»: الموعد المفتوح من الإشعار إن كان قابلًا للتقييم، وإلا آخر موعد مكتمل فقط (إن لم
   // يُقيَّم ولم يُخفَ) — لا نلاحق المريض بمواعيد أقدم؛ تلك يبقى تقييمها متاحًا في «المواعيد السابقة».
@@ -346,6 +368,38 @@ export default function MyAccount() {
         <Link to="/" className="btn-primary flex min-h-[48px] w-full items-center justify-center gap-2">
           <Plus className="h-4 w-4" aria-hidden="true" /> حجز موعد جديد
         </Link>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Link to="/account/family" className="glass flex min-h-[48px] items-center justify-center gap-2 text-sm font-semibold text-primary-700">
+            <Users className="h-4 w-4" aria-hidden="true" /> أفراد العائلة
+          </Link>
+          <Link to="/account/treatment-plans" className="glass flex min-h-[48px] items-center justify-center gap-2 text-sm font-semibold text-primary-700">
+            <ClipboardList className="h-4 w-4" aria-hidden="true" /> خطط العلاج
+          </Link>
+        </div>
+
+        {!isOffline && (familyMembers?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-2" role="group" aria-label="عرض مواعيد">
+            {[
+              { id: "all", label: "كل الأسرة" },
+              { id: "self", label: "أنا" },
+              ...(familyMembers ?? []).map((m) => ({ id: m.id, label: memberFullName(m) + (m.archivedAt ? " (مؤرشف)" : "") })),
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                aria-pressed={beneficiary === f.id}
+                onClick={() => setBeneficiary(f.id)}
+                className={clsx(
+                  "min-h-[40px] rounded-full border px-3 text-sm font-semibold transition",
+                  beneficiary === f.id ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-primary-400"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {isLoading && !data ? (
           <Spinner label="جارٍ تحميل مواعيدك..." />

@@ -26,6 +26,10 @@ import assistantsPublicRoutes from "./modules/assistants/assistants.public.route
 import { adminMessagesRouter, doctorMessagesRouter } from "./modules/messaging/messaging.routes";
 import { patientAuthRouter, patientAccountRouter, patientNotificationsRouter } from "./modules/patientAuth/patientAuth.routes";
 import internalRemindersRoutes from "./modules/reminders/reminders.routes";
+import familyRoutes from "./modules/family/family.routes";
+import { doctorTreatmentRouter, patientTreatmentRouter } from "./modules/treatment/treatment.routes";
+import referralsRoutes from "./modules/referrals/referrals.routes";
+import publicStatsRoutes from "./modules/publicStats/publicStats.routes";
 
 export function createApp() {
   const app = express();
@@ -67,6 +71,10 @@ export function createApp() {
   // مراسلة الإدارة ↔ الطبيب (طبيب فقط، المساعد يُرفض). قبل "/api/doctor" الأعم للسبب نفسه أعلاه.
   app.use("/api/doctor/messages", doctorMessagesRouter);
   app.use("/api/admin/messages", adminMessagesRouter);
+  // إحالات الأطباء (/me طبيب فقط، /validate-code عام محدود المعدل) — قبل "/api/doctor" الأعم الذي يفرض المصادقة.
+  app.use("/api/doctor/referrals", referralsRoutes);
+  // خطط علاج الأسنان + «برمجة موعد عودة» (طبيب فقط، المصادقة لكل مسار فتمرّ بقية الطلبات إلى doctorSelfRoutes).
+  app.use("/api/doctor", doctorTreatmentRouter);
   app.use("/api/doctor", doctorSelfRoutes);
   app.use("/api/appointments", appointmentsRoutes);
   // حساب المريض (تسجيل/دخول/مواعيدي/إشعارات) — قبل "/api/patient" الأعم لأن ذاك يفرض المصادقة
@@ -74,6 +82,9 @@ export function createApp() {
   app.use("/api/patient/auth", patientAuthRouter);
   app.use("/api/patient/account", patientAccountRouter);
   app.use("/api/patient/notifications", patientNotificationsRouter);
+  // الحساب العائلي وخطط العلاج (قراءة) — قبل "/api/patient" الأعم.
+  app.use("/api/patient/family-members", familyRoutes);
+  app.use("/api/patient/treatment-plans", patientTreatmentRouter);
   app.use("/api/patient", patientSelfRoutes);
   app.use("/api/reviews", reviewsRoutes);
   app.use("/api/notifications", notificationsRoutes);
@@ -81,6 +92,8 @@ export function createApp() {
   app.use("/api/admin", adminRoutes);
   app.use("/api/booking", bookingRoutes);
   app.use("/api/push", pushRoutes);
+  // إحصائيات عامة مجمّعة بلا أي بيانات شخصية (عدّاد الحجوزات الشهري).
+  app.use("/api/public/stats", publicStatsRoutes);
   // مسار عام للتحقق من رمز دعوة مساعد قبل التسجيل — بدون مصادقة.
   app.use("/api/assistants", assistantsPublicRoutes);
   // مسارات داخلية محمية بسر (X-Cron-Secret) — تشغيل دورة التذكيرات من مُجدوِل خارجي.

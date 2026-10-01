@@ -1,5 +1,6 @@
 import { Prisma, Role, AppointmentStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { beneficiaryOf, FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
 import { hashPassword, comparePassword } from "../../utils/password";
 import { verifyRefreshToken } from "../../utils/jwt";
 import { ApiError } from "../../utils/ApiError";
@@ -141,10 +142,13 @@ async function requirePatientId(userId: string): Promise<string> {
  * مواعيد المريض الحالي فقط (patientId من الجلسة، لا من الطلب). اختيار حقول الطبيب صريح (select)
  * حتى لا يصل للمريض أي حقل داخلي للطبيب (رسوم الاشتراك، userId، حالة التوثيق...).
  */
-export async function listMyAppointments(userId: string) {
+export async function listMyAppointments(userId: string, beneficiary: BeneficiaryFilter = "all") {
   const patientId = await requirePatientId(userId);
-  return prisma.appointment.findMany({
-    where: { patientId },
+  // فلتر المستفيد: الكل / أنا (بلا فرد عائلة) / فرد محدد — الفرد يجب أن يكون من عائلة هذا الحساب.
+  const beneficiaryWhere =
+    beneficiary === "all" ? {} : beneficiary === "self" ? { familyMemberId: null } : { familyMemberId: beneficiary };
+  const rows = await prisma.appointment.findMany({
+    where: { patientId, ...beneficiaryWhere },
     select: {
       id: true,
       date: true,
@@ -153,6 +157,14 @@ export async function listMyAppointments(userId: string) {
       status: true,
       type: true,
       createdAt: true,
+      // موعد عودة برمجه الطبيب (للوسم في الواجهة) + المستفيد (الاسم وصلة القرابة فقط).
+      createdBy: true,
+      parentAppointmentId: true,
+      familyMemberId: true,
+      guestFirstName: true,
+      guestLastName: true,
+      familyMember: { select: FAMILY_MEMBER_PUBLIC_SELECT },
+      patient: { select: { firstName: true, lastName: true } },
       doctor: {
         select: {
           id: true,
@@ -170,7 +182,15 @@ export async function listMyAppointments(userId: string) {
     orderBy: [{ date: "desc" }, { startTime: "desc" }],
     take: 200,
   });
+  // لا نعيد guestFirstName/guestLastName ولا كائن familyMember الخام: المستفيد المحسوب يكفي للعرض.
+  return rows.map(({ guestFirstName, guestLastName, familyMember, patient, ...a }) => ({
+    ...a,
+    beneficiary: beneficiaryOf({ familyMemberId: a.familyMemberId, familyMember, guestFirstName, guestLastName, patient }),
+  }));
 }
+
+/** "all" | "self" | معرّف فرد عائلة (UUID). */
+export type BeneficiaryFilter = "all" | "self" | string;
 
 /** يعيد معرّف ملف المريض إن كان صاحب التوكن مريضًا فعلًا — يُستعمل لربط الحجز بالحساب. */
 export async function findPatientIdForUser(userId: string): Promise<string | null> {

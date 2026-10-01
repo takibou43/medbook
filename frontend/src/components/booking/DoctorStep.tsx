@@ -20,6 +20,8 @@ interface Props {
   onRetry: () => void;
   onSelect: (doctor: Doctor) => void;
   onBack: () => void;
+  /** يُبلَّغ به عدّاد الحجوزات عند اختيار المريض ولاية ("" = كل الولايات). */
+  onWilayaChange?: (wilayaId: string) => void;
 }
 
 // معاينة "أقرب دور" لأول عدد محدود من الأطباء فقط — لا نُغرق الخادم المجاني بطلبات متوازية
@@ -37,7 +39,7 @@ function DoctorAvatar({ doctor }: { doctor: Doctor }) {
   );
 }
 
-export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, doctors, loading, error, errorMessage, onRetry, onSelect, onBack }, ref) => {
+export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, doctors, loading, error, errorMessage, onRetry, onSelect, onBack, onWilayaChange }, ref) => {
   const { showToast } = useToast();
   const [wilayaFilter, setWilayaFilter] = useState<string>("");
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
@@ -134,7 +136,10 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
                 <button
                   type="button"
                   key={w.id || "all"}
-                  onClick={() => setWilayaFilter(w.id)}
+                  onClick={() => {
+                    setWilayaFilter(w.id);
+                    onWilayaChange?.(w.id);
+                  }}
                   aria-pressed={wilayaFilter === w.id}
                   className={`min-h-[40px] rounded-full border px-3.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                     wilayaFilter === w.id ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-primary-400"

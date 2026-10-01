@@ -12,6 +12,10 @@ import { latePenaltyFor, pickNext, projectQueueOrder } from "../../lib/queueOrde
 import { assertPatientCanBook, evaluateAutoBlockSafe } from "../patientBlocks/patientBlocks.service";
 import { SLOT_OCCUPYING_WHERE, RELEASE_SLOT_DATA } from "../../lib/slotOccupancy";
 import { appointmentNotificationTag } from "../../lib/appointmentExpiry";
+import { beneficiaryOf, FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
+import { syncDentalFollowUps, syncDentalFollowUpsSafe } from "../../lib/dentalFollowUpSync";
+import { resolveBookableFamilyMember } from "../family/family.service";
+import { writeAudit } from "../../lib/audit";
 
 
 function addMinutes(hhmm: string, minutes: number): string {
@@ -35,6 +39,8 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
   const patient = await prisma.patient.findUnique({ where: { userId: patientUserId } });
   if (!patient) throw ApiError.notFound("لم يتم العثور على ملف مريض مرتبط بهذا الحساب.");
   await assertPatientCanBook(patient.id);
+  // حجز لفرد من العائلة: الملكية تُفحص في الخادم (المعرّف + صاحب الجلسة + غير مؤرشف).
+  const familyMember = input.familyMemberId ? await resolveBookableFamilyMember(patient.id, input.familyMemberId) : null;
 
   const doctor = await prisma.doctor.findUnique({ where: { id: input.doctorId }, include: { schedules: true, user: { select: { isActive: true } } } });
   if (!doctor) throw ApiError.notFound("الطبيب غير موجود.");
@@ -77,6 +83,10 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
             type: input.type,
             status: AppointmentStatus.PENDING,
             notes: input.notes,
+            familyMemberId: familyMember?.id ?? null,
+            ...(familyMember ? { guestFirstName: familyMember.firstName, guestLastName: familyMember.lastName } : {}),
+            createdBy: "PATIENT",
+            createdByUserId: patientUserId,
             services: input.serviceIds
               ? { create: input.serviceIds.map((serviceId) => ({ serviceId })) }
               : undefined,
@@ -101,7 +111,7 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
       doctor.userId,
       "APPOINTMENT_CREATED",
       "طلب حجز موعد جديد",
-      `لديك طلب حجز جديد من ${appointment.patient!.firstName} ${appointment.patient!.lastName} بتاريخ ${input.date} الساعة ${appointment.startTime}.`,
+      `لديك طلب حجز جديد من ${familyMember ? `${familyMember.firstName} ${familyMember.lastName}` : `${appointment.patient!.firstName} ${appointment.patient!.lastName}`} بتاريخ ${input.date} الساعة ${appointment.startTime}.`,
       undefined,
       undefined,
       { id: appointment.id, date: appointment.date }
@@ -117,13 +127,14 @@ export async function listForPatient(patientUserId: string, status?: Appointment
   const patient = await prisma.patient.findUnique({ where: { userId: patientUserId } });
   if (!patient) throw ApiError.notFound("لم يتم العثور على ملف مريض مرتبط بهذا الحساب.");
 
-  return prisma.appointment.findMany({
+  const rows = await prisma.appointment.findMany({
     where: { patientId: patient.id, ...(status ? { status } : {}) },
-    include: { doctor: { include: { specialty: true, clinic: true } }, review: true },
+    include: { doctor: { include: { specialty: true, clinic: true } }, review: true, familyMember: { select: FAMILY_MEMBER_PUBLIC_SELECT } },
     // الترتيب حسب التاريخ فقط غير كافٍ — عدة مواعيد بنفس اليوم كانت تظهر بترتيب عشوائي
     // (ترتيب الإدخال في قاعدة البيانات) بدل ترتيبها الزمني الفعلي. نضيف startTime كمعيار ترتيب ثانٍ.
     orderBy: [{ date: "desc" }, { startTime: "desc" }],
   });
+  return rows.map((a) => ({ ...a, beneficiary: beneficiaryOf(a) }));
 }
 
 /**
@@ -190,10 +201,12 @@ export async function autoExpireStaleAppointments(doctorId: string) {
 
   if (seen.length > 0) {
     await prisma.appointment.updateMany({ where: { id: { in: seen } }, data: { status: AppointmentStatus.COMPLETED } });
+    await syncDentalFollowUpsSafe(seen, "COMPLETED");
   }
 
   if (missed.length > 0) {
     await prisma.appointment.updateMany({ where: { id: { in: missed } }, data: { status: AppointmentStatus.NO_SHOW } });
+    await syncDentalFollowUpsSafe(missed, "NO_SHOW");
     // غياب نهائي جديد → إعادة تقييم الحظر التلقائي (3 غيابات خلال 7 أيام) لكل مريض حساب معني.
     const missedSet = new Set(missed);
     const patientIds = new Set(due.filter((a) => missedSet.has(a.id) && a.patientId).map((a) => a.patientId as string));
@@ -247,7 +260,11 @@ export async function listForDoctor(doctorUserId: string, role: Role, status?: A
 
   const appointments = await prisma.appointment.findMany({
     where: { doctorId, ...(status ? { status } : {}), ...(dateFilter ? { date: dateFilter } : {}) },
-    include: { patient: { include: { user: { select: { email: true, phone: true } } } } },
+    include: {
+      patient: { include: { user: { select: { email: true, phone: true } } } },
+      // المستفيد إن كان الحجز لفرد من العائلة: الاسم وصلة القرابة فقط (لا تاريخ ميلاد ولا جنس).
+      familyMember: { select: FAMILY_MEMBER_PUBLIC_SELECT },
+    },
     // الترتيب حسب التاريخ فقط غير كافٍ — عدة مواعيد بنفس اليوم كانت تظهر بترتيب عشوائي
     // (ترتيب الإدخال في قاعدة البيانات) بدل ترتيبها الزمني الفعلي، فيرى الطبيب موعد
     // الساعة 14:00 قبل موعد الساعة 09:00 مثلاً. نضيف startTime كمعيار ترتيب ثانٍ.
@@ -282,6 +299,7 @@ export async function listForDoctor(doctorUserId: string, role: Role, status?: A
 
   return appointments.map((a) => ({
     ...a,
+    beneficiary: beneficiaryOf(a),
     patientNoShowCount: a.patientId ? patientNoShowMap.get(a.patientId) ?? 0 : a.guestPhone ? guestNoShowMap.get(a.guestPhone) ?? 0 : 0,
   }));
 }
@@ -388,33 +406,50 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
   // واحد فقط ويأخذ الآخر 409 دون أي أثر جانبي.
   let updated;
   try {
-    const writeStatus = (db: Prisma.TransactionClient) => db.appointment.update({
-      where: { id: appointmentId, status: appointment.status },
-      data: { status: newStatus, ...extraData },
-      include: { doctor: true, patient: { include: { user: { select: { phone: true } } } } },
-    });
-    // شاشة المواعيد (ومنها الحضور بعد تسجيل الغياب) تستطيع إدخال المريض عبر PATCH.
-    // تشارك قفل المناداة مع queue/next و :id/call كي لا يدخل مريضان معًا عند عمل
-    // الطبيب والمساعد بالتزامن، حتى عندما يعدّلان موعدَين مختلفَين.
-    updated = newStatus === AppointmentStatus.IN_PROGRESS
-      ? await prisma.$transaction(async (tx) => {
-          await lockDoctorCalls(tx, appointment.doctorId);
-          const inProgress = await tx.appointment.findFirst({
-            where: { doctorId: appointment.doctorId, date: appointment.date, status: AppointmentStatus.IN_PROGRESS },
-            select: { id: true },
-          });
-          if (inProgress) {
-            if (inProgress.id === appointmentId) throw ApiError.conflict("تغيّرت حالة الموعد للتو. حدّث الصفحة وأعد المحاولة.");
-            throw ApiError.badRequest("هناك مريض بالداخل الآن. أنهِ موعده أو سجّله متأخرًا قبل مناداة غيره.");
-          }
-          return writeStatus(tx);
-        }, { maxWait: 10000, timeout: 15000 })
-      : await writeStatus(prisma);
+    // تغيير الحالة + مزامنة متابعة خطة الأسنان المرتبطة (إن وُجدت) في معاملة واحدة: إلغاء موعد العودة
+    // يعيد المتابعة إلى DUE، واكتماله يجعلها COMPLETED — لا حالة وسيطة غير متسقة.
+    updated = await prisma.$transaction(async (tx) => {
+      if (newStatus === AppointmentStatus.IN_PROGRESS) {
+        await lockDoctorCalls(tx, appointment.doctorId);
+        const inProgress = await tx.appointment.findFirst({
+          where: { doctorId: appointment.doctorId, date: appointment.date, status: AppointmentStatus.IN_PROGRESS },
+          select: { id: true },
+        });
+        if (inProgress) {
+          if (inProgress.id === appointmentId) throw ApiError.conflict("تغيّرت حالة الموعد للتو. حدّث الصفحة وأعد المحاولة.");
+          throw ApiError.badRequest("هناك مريض بالداخل الآن. أنهِ موعده أو سجّله متأخرًا قبل مناداة غيره.");
+        }
+      }
+      const row = await tx.appointment.update({
+        where: { id: appointmentId, status: appointment.status },
+        data: { status: newStatus, ...extraData },
+        include: { doctor: true, patient: { include: { user: { select: { phone: true } } } } },
+      });
+      if (newStatus === AppointmentStatus.CANCELLED || newStatus === AppointmentStatus.NO_SHOW || newStatus === AppointmentStatus.COMPLETED) {
+        await syncDentalFollowUps([row.id], newStatus, tx);
+      }
+      return row;
+    }, { maxWait: 10000, timeout: 15000 });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
       throw ApiError.conflict("تغيّرت حالة الموعد للتو. حدّث الصفحة وأعد المحاولة.");
     }
     throw err;
+  }
+
+  // موعد عودة برمجه الطبيب: إلغاؤه من طرف الطبيب/المساعد/الإدارة يُسجَّل في AuditLog (بلا بيانات طبية).
+  if (newStatus === AppointmentStatus.CANCELLED && appointment.createdBy === "DOCTOR" && role !== Role.PATIENT) {
+    try {
+      await writeAudit({
+        userId,
+        action: "FOLLOW_UP_APPOINTMENT_CANCELLED",
+        entity: "Appointment",
+        entityId: appointment.id,
+        meta: { date: appointment.date.toISOString().slice(0, 10), startTime: appointment.startTime, byRole: role },
+      });
+    } catch (err) {
+      console.error("تعذّر تسجيل إلغاء موعد العودة في سجل التدقيق:", (err as Error)?.message);
+    }
   }
 
   // الحظر التلقائي: بعد تثبيت NO_SHOW (commit) نعيد عدّ غيابات المريض خلال آخر 7 أيام.
@@ -511,6 +546,7 @@ export async function cancelByPatient(patientUserId: string, appointmentId: stri
 
 const QUEUE_INCLUDE = {
   patient: { include: { user: { select: { phone: true } } } },
+  familyMember: { select: FAMILY_MEMBER_PUBLIC_SELECT },
 } as const;
 
 function todayRangeUTC() {

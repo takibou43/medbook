@@ -7,9 +7,11 @@ import { RegisterDoctorInput, RegisterPatientInput, RegisterAssistantInput } fro
 import { hashToken, issueTokens } from "../../lib/tokens";
 import { acceptInvite } from "../assistants/assistants.service";
 import { ASSISTANT_SAFE_SELECT } from "../../lib/assistantView";
+import { resolveReferrerForRegistration, createReferralTx } from "../referrals/referrals.service";
 
 export async function registerPatient(input: RegisterPatientInput) {
-  const existing = await prisma.user.findFirst({ where: { OR: [{ email: input.email }, { phone: input.phone ?? undefined }] } });
+  // بلا هاتف: لا نضيف شرط الهاتف إطلاقًا ({ phone: undefined } يطابق كل المستخدمين فيرفض أي تسجيل بلا هاتف بـ409).
+  const existing = await prisma.user.findFirst({ where: { OR: [{ email: input.email }, ...(input.phone ? [{ phone: input.phone }] : [])] } });
   if (existing) throw ApiError.conflict("البريد الإلكتروني أو رقم الهاتف مستخدم مسبقًا.");
 
   const passwordHash = await hashPassword(input.password);
@@ -39,12 +41,19 @@ export async function registerPatient(input: RegisterPatientInput) {
 
 export async function registerDoctor(input: RegisterDoctorInput) {
   if (input.clinicId) throw ApiError.forbidden("الانضمام إلى العيادة يتطلب دعوة من صاحبها.");
-  const existing = await prisma.user.findFirst({ where: { OR: [{ email: input.email }, { phone: input.phone ?? undefined }] } });
+  // بلا هاتف: لا نضيف شرط الهاتف إطلاقًا ({ phone: undefined } يطابق كل المستخدمين فيرفض أي تسجيل بلا هاتف بـ409).
+  const existing = await prisma.user.findFirst({ where: { OR: [{ email: input.email }, ...(input.phone ? [{ phone: input.phone }] : [])] } });
   if (existing) throw ApiError.conflict("البريد الإلكتروني أو رقم الهاتف مستخدم مسبقًا.");
+
+  // كود الإحالة يُفحص قبل أي إنشاء: كود غير صحيح → 400 على الحقل referralCode ولا يُنشأ الحساب.
+  const referrer = await resolveReferrerForRegistration(input.referralCode);
 
   const passwordHash = await hashPassword(input.password);
 
-  const user = await prisma.user.create({
+  // الحساب + ملف الطبيب + سجل الإحالة (PENDING) في معاملة واحدة. لا مكافأة عند التسجيل: تُمنح للمُحيل
+  // عند توثيق هذا الطبيب فعليًا (referrals.service). المُحيل لا يتغيّر بعد الإنشاء (لا مسار لذلك).
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({
     data: {
       email: input.email,
       phone: input.phone,
@@ -68,6 +77,9 @@ export async function registerDoctor(input: RegisterDoctorInput) {
       },
     },
     include: { doctor: true },
+    });
+    if (referrer && created.doctor) await createReferralTx(tx, referrer, created.doctor.id);
+    return created;
   });
 
   const tokens = await issueTokens(user.id, user.role);

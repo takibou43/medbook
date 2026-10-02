@@ -5,7 +5,7 @@ import { api, apiErrorMessage } from "../../lib/api";
 import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
-import { Input } from "../../components/ui/Input";
+import { Input, Select } from "../../components/ui/Input";
 
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
@@ -21,6 +21,16 @@ export default function DoctorSchedule() {
     queryKey: ["doctor-schedule"],
     queryFn: async () => (await api.get("/doctor/schedule")).data.data,
   });
+  const profile = useQuery({ queryKey: ["me-doctor-profile"], queryFn: async () => (await api.get("/auth/me")).data.data });
+  const [duration, setDuration] = useState(7);
+  const [savingDuration, setSavingDuration] = useState(false);
+  useEffect(() => { if (profile.data?.doctor) setDuration(profile.data.doctor.slotDurationMin ?? 7); }, [profile.data]);
+  async function saveDuration() {
+    setSavingDuration(true);
+    try { await api.patch("/doctor/profile", { slotDurationMin: duration }); await profile.refetch(); showToast("تم حفظ مدة الموعد للحجوزات الجديدة.", "success"); }
+    catch (err) { showToast(apiErrorMessage(err), "error"); }
+    finally { setSavingDuration(false); }
+  }
   const { showToast } = useToast();
   const qc = useQueryClient();
 
@@ -119,6 +129,15 @@ export default function DoctorSchedule() {
     <div className="space-y-6">
       <h1 className="text-2xl font-extrabold text-slate-900">أوقات العمل</h1>
 
+      <section className="card space-y-3 p-5" aria-label="مدة الموعد">
+        <h2 className="font-bold">مدة الموعد</h2>
+        <Select label="مدة الموعد للحجوزات الجديدة" value={duration} onChange={e => setDuration(Number(e.target.value))} disabled={profile.isPending || profile.isError}>
+          {[5, 7, 10, 15, 20, 30, 45, 60].map(m => <option key={m} value={m}>{m} دقيقة</option>)}
+        </Select>
+        <p className="text-sm text-slate-600">تُستخدم لتوزيع الحجوزات الجديدة. تبقى المواعيد المحجوزة بأوقاتها الحالية.</p>
+        {profile.isError && <p role="alert">تعذر تحميل مدة الموعد. <button onClick={() => void profile.refetch()}>إعادة المحاولة</button></p>}
+        <Button onClick={saveDuration} loading={savingDuration} disabled={profile.isPending || profile.isError}>حفظ مدة الموعد</Button>
+      </section>
       <div className="card p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-bold text-slate-900">الجدول الأسبوعي</h2>
@@ -131,17 +150,17 @@ export default function DoctorSchedule() {
         <div className="space-y-3">
           {blocks.map((b, i) => (
             <div key={i} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 p-3">
-              <select className="input !w-auto" value={b.dayOfWeek} onChange={(e) => updateBlock(i, { dayOfWeek: Number(e.target.value) })}>
+              <select aria-label="يوم العمل" className="input !w-auto" value={b.dayOfWeek} onChange={(e) => updateBlock(i, { dayOfWeek: Number(e.target.value) })}>
                 {DAYS.map((d, idx) => (
                   <option key={idx} value={idx}>
                     {d}
                   </option>
                 ))}
               </select>
-              <input type="time" className="input !w-auto" value={b.startTime} onChange={(e) => updateBlock(i, { startTime: e.target.value })} />
+              <input aria-label="بداية فترة العمل" type="time" className="input !w-auto" value={b.startTime} onChange={(e) => updateBlock(i, { startTime: e.target.value })} />
               <span className="text-slate-400">إلى</span>
-              <input type="time" className="input !w-auto" value={b.endTime} onChange={(e) => updateBlock(i, { endTime: e.target.value })} />
-              <button onClick={() => removeBlock(i)} className="mr-auto rounded-lg p-2 text-red-500 hover:bg-red-50">
+              <input aria-label="نهاية فترة العمل" type="time" className="input !w-auto" value={b.endTime} onChange={(e) => updateBlock(i, { endTime: e.target.value })} />
+              <button aria-label="حذف فترة العمل" onClick={() => removeBlock(i)} className="mr-auto rounded-lg p-2 text-red-500 hover:bg-red-50">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -177,6 +196,7 @@ export default function DoctorSchedule() {
                     await api.delete(`/doctor/schedule/${ex.id}`);
                     qc.invalidateQueries({ queryKey: ["doctor-schedule"] });
                   }}
+                  aria-label="حذف الإجازة أو اليوم الاستثنائي"
                   className="text-red-500 hover:text-red-700"
                 >
                   <Trash2 className="h-4 w-4" />

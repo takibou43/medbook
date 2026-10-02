@@ -41,7 +41,7 @@ export function ReferralCard() {
   return (
     <section className="card space-y-3 p-5" aria-labelledby="referral-title">
       <h2 id="referral-title" className="flex items-center gap-2 text-lg font-bold text-slate-900">
-        <Gift className="h-5 w-5 text-primary-600" /> ادعُ طبيبًا
+        <Gift className="h-5 w-5 text-primary-600" /> دعوة زميل — مكافأة الإحالة
       </h2>
       <p className="text-sm text-slate-600">
         شارك رابطك مع زميل. عند توثيق حسابه تحصل على {q.data.rewardDays} يومًا لاشتراكك، أو خصم تكلفة طبيب واحد للمدة نفسها إذا كنت ضمن عيادة — مرة واحدة لكل طبيب.

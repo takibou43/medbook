@@ -7,7 +7,8 @@ import { resolveActingDoctorId } from "../../lib/actingDoctor";
 import { isWithinWorkingHours, ScheduleBlock } from "../../lib/slots";
 import { createNotification } from "../notifications/notifications.service";
 import { syncDentalFollowUpsSafe } from "../../lib/dentalFollowUpSync";
-import { beneficiaryOf, FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
+import { FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
+import { queryPatients, summarizePatients, type PatientQuery } from "../../lib/doctorPatients";
 
 const SCHEDULE_ACTIVE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
 
@@ -244,6 +245,7 @@ export async function getDashboardStats(userId: string, role: Role) {
     allForPatientsCount,
     completedTodayCount,
     completedMonthCount,
+    rescheduleRequiredCount,
   ] = await Promise.all([
     prisma.appointment.count({ where: { doctorId: doctor.id, date: { gte: startOfDay, lte: endOfDay } } }),
     prisma.appointment.count({
@@ -252,7 +254,9 @@ export async function getDashboardStats(userId: string, role: Role) {
     prisma.appointment.count({ where: { doctorId: doctor.id, status: AppointmentStatus.COMPLETED } }),
     prisma.appointment.count({ where: { doctorId: doctor.id, status: AppointmentStatus.CANCELLED } }),
     prisma.appointment.count({ where: { doctorId: doctor.id, status: AppointmentStatus.NO_SHOW } }),
-    prisma.appointment.count({ where: { doctorId: doctor.id, date: { gte: monthStart, lte: endOfDay } } }),
+    // «مواعيد هذا الشهر» = كل مواعيد الشهر الميلادي الحالي (من أوله إلى آخره، بكل الحالات) — نفس
+    // النطاق الذي يفتحه رابط البطاقة في صفحة المواعيد (from/to)، فيتطابق العدد مع النتائج.
+    prisma.appointment.count({ where: { doctorId: doctor.id, date: { gte: monthStart, lte: monthEnd } } }),
     // لا يمكن الاعتماد على distinct:["patientId"] وحده لأن الحجوزات كضيف تحمل patientId فارغًا (null)
     // وستُحسب كلها كـ "مريض واحد" فقط؛ لذا نجلب المعرّفات ونحسب التفرّد يدويًا (مريض حقيقي أو رقم هاتف ضيف).
     prisma.appointment.findMany({ where: { doctorId: doctor.id }, select: { patientId: true, guestPhone: true, id: true } }),
@@ -264,6 +268,10 @@ export async function getDashboardStats(userId: string, role: Role) {
     }),
     prisma.appointment.count({
       where: { doctorId: doctor.id, status: AppointmentStatus.COMPLETED, date: { gte: monthStart, lte: monthEnd } },
+    }),
+    // تنبيه «تحتاج إعادة جدولة» في الصفحة الرئيسية: مواعيد اليوم وما بعده فقط (القديمة لا إجراء عليها).
+    prisma.appointment.count({
+      where: { doctorId: doctor.id, status: AppointmentStatus.RESCHEDULE_REQUIRED, date: { gte: startOfDay } },
     }),
   ]);
 
@@ -289,6 +297,9 @@ export async function getDashboardStats(userId: string, role: Role) {
     noShowAppointments: noShowCount,
     noShowRate,
     monthlyAppointments: monthlyCount,
+    // حدود الشهر المستعملة في العدّ أعلاه (YYYY-MM-DD) — يبني منها رابط البطاقة نفس النطاق.
+    monthRange: { from: monthStart.toISOString().slice(0, 10), to: monthEnd.toISOString().slice(0, 10) },
+    rescheduleRequired: rescheduleRequiredCount,
     estimatedRevenue,
     estimatedRevenueToday,
     estimatedRevenueMonth,
@@ -314,6 +325,7 @@ export async function getDashboardStats(userId: string, role: Role) {
     todayAppointments: fullStats.todayAppointments,
     upcomingAppointments: fullStats.upcomingAppointments,
     completedToday: fullStats.completedToday,
+    rescheduleRequired: fullStats.rescheduleRequired,
     estimatedRevenueToday: fullStats.estimatedRevenueToday,
     avgRating: fullStats.avgRating,
     reviewsCount: fullStats.reviewsCount,
@@ -321,46 +333,25 @@ export async function getDashboardStats(userId: string, role: Role) {
   };
 }
 
-export async function getOwnPatients(userId: string) {
+/**
+ * «مرضاي»: كل مستفيد (مريض بحساب، فرد من عائلته، أو حجز ضيف قديم) مرة واحدة مع آخر زيارة مكتملة
+ * وأقرب موعد قادم — انظر lib/doctorPatients.ts للتعريفات. بلا `query.page` تُرجَع المصفوفة كاملة كما
+ * كانت (توافق مع نسخة الواجهة السابقة أثناء النشر)، ومعه تُرجَع صفحة واحدة مع العدد الإجمالي.
+ */
+export async function getOwnPatients(userId: string, query?: PatientQuery & { paged?: boolean }) {
   const doctor = await getDoctorByUserId(userId);
   const appointments = await prisma.appointment.findMany({
     where: { doctorId: doctor.id },
-    include: {
-      patient: { include: { user: { select: { email: true, phone: true } } } },
+    select: {
+      id: true, date: true, startTime: true, status: true, patientId: true, familyMemberId: true,
+      guestFirstName: true, guestLastName: true, guestPhone: true,
+      patient: { select: { firstName: true, lastName: true, user: { select: { email: true, phone: true } } } },
       familyMember: { select: FAMILY_MEMBER_PUBLIC_SELECT },
     },
     orderBy: [{ date: "desc" }, { startTime: "desc" }],
   });
-
-  const map = new Map<string, any>();
-  for (const a of appointments) {
-    // الحجوزات كضيف (بدون حساب) لا تملك patientId — نستخدم رقم الهاتف كمفتاح تفرّد بديل،
-    // وإن لم يتوفر فكل حجز يُعامل كسجل مستقل. أفراد العائلة يظهرون كمرضى مستقلين (صاحب الحساب + الفرد).
-    const key = a.patientId ? `${a.patientId}:${a.familyMemberId ?? "self"}` : `guest:${a.guestPhone ?? a.id}`;
-    const beneficiary = beneficiaryOf(a);
-    if (!map.has(key)) {
-      map.set(key, {
-        patientId: a.patientId,
-        familyMemberId: a.familyMemberId,
-        isGuest: !a.patientId,
-        firstName: a.familyMember ? a.familyMember.firstName : a.patient ? a.patient.firstName : a.guestFirstName,
-        lastName: a.familyMember ? a.familyMember.lastName : a.patient ? a.patient.lastName : a.guestLastName,
-        beneficiary,
-        // صاحب الحساب حين يكون المريض فردًا من عائلته (للتواصل فقط).
-        accountHolderName: a.familyMember && a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : null,
-        email: a.patient ? a.patient.user.email : null,
-        phone: a.patient?.user.phone ?? a.guestPhone,
-        lastVisit: a.date,
-        totalAppointments: 1,
-        // آخر موعد غير ملغى لمريض صاحب حساب — مرجع «برمجة موعد عودة» من ملف المريض.
-        lastAppointmentId: a.patientId && a.status !== AppointmentStatus.CANCELLED ? a.id : null,
-      });
-    } else {
-      const row = map.get(key);
-      row.totalAppointments += 1;
-      if (!row.lastAppointmentId && a.patientId && a.status !== AppointmentStatus.CANCELLED) row.lastAppointmentId = a.id;
-    }
-  }
-  return Array.from(map.values());
+  const all = summarizePatients(appointments, Date.now());
+  if (!query?.paged) return all;
+  return queryPatients(all, query);
 }
 

@@ -17,6 +17,7 @@ import { beneficiaryOf, FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiar
 import { syncDentalFollowUps, syncDentalFollowUpsSafe } from "../../lib/dentalFollowUpSync";
 import { resolveBookableFamilyMember } from "../family/family.service";
 import { writeAudit } from "../../lib/audit";
+import { statusTimingError } from "../../lib/appointmentTiming";
 
 
 function addMinutes(hhmm: string, minutes: number): string {
@@ -243,13 +244,20 @@ export async function sweepStaleAppointmentsForAllDoctors() {
   }
 }
 
-export async function listForDoctor(doctorUserId: string, role: Role, status?: AppointmentStatus, dateStr?: string) {
+export async function listForDoctor(
+  doctorUserId: string,
+  role: Role,
+  status?: AppointmentStatus,
+  dateStr?: string,
+  range?: { from?: string; to?: string }
+) {
   // يعمل لحساب الطبيب نفسه أو لحساب مساعده — resolveActingDoctorId تتحقق من الدور
   // والملكية والتفعيل (isActive) قبل إرجاع doctorId، فلا مواعيد طبيب آخر تصل أبدًا هنا.
   const doctorId = await resolveActingDoctorId(doctorUserId, role);
 
   await autoExpireStaleAppointments(doctorId);
 
+  // يوم واحد (date) أو فترة (from/to، شاملتان) — التاريخ مخزَّن عند 00:00 UTC كتاريخ تقويمي جزائري.
   const dateFilter = dateStr
     ? (() => {
         const d = new Date(dateStr + "T00:00:00Z");
@@ -257,6 +265,11 @@ export async function listForDoctor(doctorUserId: string, role: Role, status?: A
         end.setUTCHours(23, 59, 59, 999);
         return { gte: d, lte: end };
       })()
+    : range?.from || range?.to
+    ? {
+        ...(range.from ? { gte: new Date(range.from + "T00:00:00Z") } : {}),
+        ...(range.to ? { lte: new Date(range.to + "T23:59:59.999Z") } : {}),
+      }
     : undefined;
 
   const appointments = await prisma.appointment.findMany({
@@ -377,6 +390,11 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
   }
   if (!canTransition(role, appointment.status, newStatus)) {
     throw ApiError.badRequest(`لا يمكن تغيير حالة الموعد من ${appointment.status} إلى ${newStatus}.`);
+  }
+  // قيود التوقيت (lib/appointmentTiming): لا «لم يحضر» قبل وقت الموعد، ولا إنهاء/إدخال لموعد يومه لم يأتِ.
+  if (role !== Role.PATIENT) {
+    const timingError = statusTimingError(appointment, newStatus, Date.now());
+    if (timingError) throw ApiError.badRequest(timingError);
   }
 
   // «متأخر» عبر PATCH العام يمرّ بنفس منطق زر «متأخر» في الطابور (عقوبة المراكز، منع التكرار،
@@ -565,7 +583,11 @@ const SMART_DURATION_SAMPLE_SIZE = 10;
 const SMART_DURATION_MIN_VALID_MINUTES = 2;
 const SMART_DURATION_MAX_VALID_MINUTES = 90;
 
-export async function estimateSessionMinutes(doctorId: string): Promise<number> {
+/**
+ * متوسط مدة الجلسة مع مصدره: `isFallback=true` يعني أن البيانات غير كافية (أقل من
+ * SMART_DURATION_MIN_SAMPLES جلسات صالحة) فالقيمة افتراضية ثابتة لا تقدير محسوب.
+ */
+export async function estimateSessionDetails(doctorId: string): Promise<{ minutes: number; samples: number; isFallback: boolean }> {
   const recent = await prisma.appointment.findMany({
     where: { doctorId, status: AppointmentStatus.COMPLETED, durationMinutes: { not: null } },
     orderBy: { endedAt: "desc" },
@@ -578,10 +600,16 @@ export async function estimateSessionMinutes(doctorId: string): Promise<number> 
     .filter((d) => d >= SMART_DURATION_MIN_VALID_MINUTES && d <= SMART_DURATION_MAX_VALID_MINUTES)
     .slice(0, SMART_DURATION_SAMPLE_SIZE);
 
-  if (valid.length < SMART_DURATION_MIN_SAMPLES) return SMART_DURATION_FALLBACK_MINUTES;
+  if (valid.length < SMART_DURATION_MIN_SAMPLES) {
+    return { minutes: SMART_DURATION_FALLBACK_MINUTES, samples: valid.length, isFallback: true };
+  }
 
   const avg = valid.reduce((sum, d) => sum + d, 0) / valid.length;
-  return Math.round(avg);
+  return { minutes: Math.round(avg), samples: valid.length, isFallback: false };
+}
+
+export async function estimateSessionMinutes(doctorId: string): Promise<number> {
+  return (await estimateSessionDetails(doctorId)).minutes;
 }
 
 // doctorUserId هنا هو userId للحساب الحالي (طبيب أو مساعد) — resolveActingDoctorId يحل
@@ -600,18 +628,30 @@ export async function getQueueForDoctor(doctorUserId: string, role: Role) {
   const doctor = await requireDoctor(doctorUserId, role);
   await autoExpireStaleAppointments(doctor.id);
 
-  const [appointments, estimatedDurationMinutes] = await Promise.all([
+  const today = todayRangeUTC();
+  const [appointments, sessionEstimate, todayByStatus] = await Promise.all([
     prisma.appointment.findMany({
       where: {
         doctorId: doctor.id,
-        date: todayRangeUTC(),
+        date: today,
         status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS] },
       },
       include: QUEUE_INCLUDE,
       orderBy: [{ startTime: "asc" }],
     }),
-    estimateSessionMinutes(doctor.id),
+    estimateSessionDetails(doctor.id),
+    // ملخص مواعيد اليوم حسب الحالة — لتمييز الحالة الفارغة: لا مواعيد اليوم / لا منتظرين / اكتملت المواعيد.
+    prisma.appointment.groupBy({ by: ["status"], where: { doctorId: doctor.id, date: today }, _count: { _all: true } }),
   ]);
+  const countOf = (st: AppointmentStatus) => todayByStatus.find((r) => r.status === st)?._count._all ?? 0;
+  const todaySummary = {
+    total: todayByStatus.reduce((n, r) => n + r._count._all, 0),
+    completed: countOf(AppointmentStatus.COMPLETED),
+    noShow: countOf(AppointmentStatus.NO_SHOW),
+    cancelled: countOf(AppointmentStatus.CANCELLED),
+    pending: countOf(AppointmentStatus.PENDING),
+    rescheduleRequired: countOf(AppointmentStatus.RESCHEDULE_REQUIRED),
+  };
 
   // ordered: الترتيب الفعلي المتوقع للمناداة (المنتظرون والمتأخرون معًا) بنفس قواعد callNextPatient —
   // حقل إضافي، والحقول السابقة (waiting/late) باقية كما هي لأي واجهة قديمة.
@@ -625,7 +665,12 @@ export async function getQueueForDoctor(doctorUserId: string, role: Role) {
     waiting: appointments.filter((a) => a.status === AppointmentStatus.CONFIRMED),
     late: appointments.filter((a) => a.status === AppointmentStatus.LATE),
     ordered,
-    estimatedDurationMinutes,
+    // متوسط مدة الجلسة (من calledAt إلى endedAt لآخر الجلسات المكتملة)، وليس وقت انتظار مريض بعينه.
+    // estimatedDurationIsFallback=true: قيمة افتراضية لعدم كفاية البيانات — لا تُعرض كتقدير محسوب.
+    estimatedDurationMinutes: sessionEstimate.minutes,
+    estimatedDurationIsFallback: sessionEstimate.isFallback,
+    estimatedDurationSamples: sessionEstimate.samples,
+    todaySummary,
   };
 }
 

@@ -22,11 +22,21 @@ router.get(
 );
 
 // "مرضاي" — طبيب فقط (غير متاحة للمساعد، حسب الصلاحيات المتفق عليها).
+// بحث/فرز/تقسيم صفحات من الخادم. بلا page تُرجَع المصفوفة كاملة كما سابقًا (توافق مع الواجهة القديمة).
+const patientsQuerySchema = z.object({
+  q: z.string().trim().max(100).optional(),
+  sort: z.enum(["recent", "next", "name"]).optional(),
+  page: z.coerce.number().int().min(1).max(10000).optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 router.get(
   "/patients",
   authorize(Role.DOCTOR),
+  validate({ query: patientsQuerySchema }),
   asyncHandler(async (req, res) => {
-    res.json({ success: true, data: await service.getOwnPatients(req.user!.id) });
+    const query = req.query as z.infer<typeof patientsQuerySchema>;
+    res.json({ success: true, data: await service.getOwnPatients(req.user!.id, { ...query, paged: query.page !== undefined }) });
   })
 );
 

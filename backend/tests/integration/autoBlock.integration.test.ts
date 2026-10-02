@@ -93,9 +93,12 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
   /** موعد مؤكَّد (الحالة التي يُضغط عليها «لم يحضر») بتاريخ نسبي لليوم. */
   async function mkAppt(patientId: string, offset: number, status: any = "CONFIRMED", doctorId = docA) {
     // HTTP booking also allocates times in the evening; avoid its live slots.
-    let startTime = nextSlot();
+    const nowMinutes = Math.floor((Date.now() + 3600000) % 86400000 / 60000);
+    const pastSlot = () => hhmm(Math.max(0, nowMinutes - 240) + (slotSeq++ % Math.max(1, Math.min(200, nowMinutes))));
+    const allocate = offset === 0 ? pastSlot : nextSlot;
+    let startTime = allocate();
     while (await db.appointment.findFirst({ where: { doctorId, date: day(offset), startTime, activeSlot: true }, select: { id: true } })) {
-      startTime = nextSlot();
+      startTime = allocate();
     }
     const a = await db.appointment.create({
       data: { patientId, doctorId, date: day(offset), startTime, endTime: endOf(startTime), status },

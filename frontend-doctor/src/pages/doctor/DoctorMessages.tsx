@@ -7,7 +7,7 @@ export default function DoctorMessages() {
   const focusUnread = params.get("focus") === "unread";
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-extrabold text-slate-900">الرسائل</h1>
+      <h1 className="text-2xl font-extrabold text-slate-900">مراسلة الإدارة</h1>
       <div className="card flex h-[70vh] min-h-[420px] flex-col overflow-hidden p-0">
         <div className="border-b border-slate-200 px-4 py-3">
           <p className="font-bold text-slate-800">إدارة MadBook</p>

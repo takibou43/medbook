@@ -1,11 +1,12 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
-import { AlertTriangle, Bell, BellRing, CalendarDays, CalendarPlus, Clock3, MessageCircle, Phone, Search, UserCheck, X } from "lucide-react";
+import { AlertTriangle, Bell, BellRing, CalendarPlus, CheckCircle2, Clock3, Info, MessageCircle, Phone, Search, UserCheck, X } from "lucide-react";
 import { useMyAppointments, useUpdateAppointmentStatus } from "../../hooks/useAppointments";
 import { useNewAppointmentAlert, requestNotificationPermission } from "../../hooks/useNewAppointmentAlert";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
-import { Spinner, EmptyState } from "../../components/ui/States";
+import { EmptyState, ErrorState, SkeletonRows } from "../../components/ui/States";
+import { DateField } from "../../components/ui/DateField";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
@@ -15,14 +16,25 @@ import DoctorQueue from "./DoctorQueue";
 import { useAuth } from "../../context/AuthContext";
 import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
 import { canScheduleFollowUp, RELATIONSHIP_LABELS } from "../../lib/features";
+import {
+  activePreset, appointmentActions, formatDayAr, parseAppointmentFilters, presetRange, serializeAppointmentFilters,
+  type AppointmentFilters, type DatePreset, type StatusFilter,
+} from "../../lib/doctorUi";
 
-const FILTERS: { label: string; value?: AppointmentStatus }[] = [
-  { label: "الكل", value: undefined },
-  { label: "قادمة", value: "CONFIRMED" },
+// «مكتملة» (COMPLETED) بدل «حضروا»: الحالة تعني أن الاستشارة اكتملت، لا مجرد الوصول.
+const FILTERS: { label: string; value: StatusFilter }[] = [
+  { label: "الكل", value: "ALL" },
+  { label: "مؤكدة", value: "CONFIRMED" },
   { label: "تحتاج إعادة جدولة", value: "RESCHEDULE_REQUIRED" },
-  { label: "حضروا", value: "COMPLETED" },
+  { label: "مكتملة", value: "COMPLETED" },
   { label: "لم يحضروا", value: "NO_SHOW" },
   { label: "ملغاة", value: "CANCELLED" },
+];
+
+const PRESETS: { key: DatePreset; label: string }[] = [
+  { key: "today", label: "اليوم" },
+  { key: "week", label: "هذا الأسبوع" },
+  { key: "month", label: "هذا الشهر" },
 ];
 
 // عتبتا التحذير من تكرار الغياب: تنبيه عادي (أصفر) ثم تحذير حاد (أحمر).
@@ -104,20 +116,6 @@ function toWhatsAppNumber(phone?: string | null) {
   return null;
 }
 
-/**
- * التصفية الابتدائية من رابط الصفحة (تأتي من بطاقات لوحة التحكم، مثل
- * /appointments?status=COMPLETED أو ?date=2026-09-05). "status=ALL" يعني بلا تصفية حالة،
- * وبلا أي معامل نُبقي السلوك الافتراضي: عرض المواعيد القادمة.
- */
-function readInitialFilters(searchParams: URLSearchParams): { status?: AppointmentStatus; date?: string } {
-  const statusParam = searchParams.get("status");
-  const dateParam = searchParams.get("date") ?? undefined;
-  if (statusParam === "ALL") return { status: undefined, date: dateParam };
-  if (statusParam) return { status: statusParam as AppointmentStatus, date: dateParam };
-  if (dateParam) return { status: undefined, date: dateParam };
-  return { status: "CONFIRMED", date: undefined };
-}
-
 /** مؤشر نبض صغير يُغني عن شرح "تتحدّث الصفحة كل 15 ثانية". */
 function LiveIndicator({ isFetching, updatedAt }: { isFetching: boolean; updatedAt?: number }) {
   return (
@@ -155,21 +153,26 @@ function NoShowWarningBadge({ count }: { count: number }) {
 
 interface CardProps {
   appointment: any;
-  /** غير مُمرَّر = لا يظهر زر «حضر» (المساعد: إنهاء الموعد للطبيب وحده). */
-  onComplete?: () => void;
+  /** «اكتمل الموعد» (COMPLETED) — تظهر فقط حين تسمح بها الحالة والتوقيت والدور (appointmentActions). */
+  onComplete: () => void;
   onNoShow: () => void;
   /** وصل المريض بعد تسجيل غيابه: يُدخله الآن (IN_PROGRESS) دون أي رسالة. */
   onArrivedLate: () => void;
   /** طلب تحديث جارٍ — نُعطّل الإجراءات لمنع النقر المتكرر وطلبات PATCH زائدة. */
   busy?: boolean;
+  /** هذا الموعد تحديدًا هو قيد التحديث — يظهر مؤشر التحميل على أزراره. */
+  pending?: boolean;
   /** «برمجة موعد عودة» (الطبيب وحده، لمريض بحساب). */
   onFollowUp?: () => void;
+  role?: "DOCTOR" | "ASSISTANT";
 }
 
-function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy, onFollowUp }: CardProps) {
+function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy, pending, onFollowUp, role }: CardProps) {
   const phone = patientPhone(a);
   const wa = toWhatsAppNumber(phone);
   const isOpen = a.status === "CONFIRMED" || a.status === "PENDING";
+  const actions = appointmentActions(a, role);
+  const noShowReasonId = `noshow-reason-${a.id}`;
 
   const reminderHref = wa
     ? `https://wa.me/${wa}?text=${encodeURIComponent(
@@ -192,14 +195,12 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
             {formatWhen(a.date, a.startTime)}
           </span>
           {phone ? (
-            <a href={`tel:${phone}`} className="inline-flex min-w-0 items-center gap-1.5 text-slate-500 transition hover:text-primary-600">
-              <Phone className="h-4 w-4 shrink-0 text-slate-400" />
-              <span className="truncate" dir="ltr">
-                {phone}
-              </span>
+            <a href={`tel:${phone}`} className="inline-flex min-w-0 items-center gap-1.5 text-slate-600 transition hover:text-primary-700" aria-label={`اتصال بالرقم ${phone}`}>
+              <Phone className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+              <span className="ltr-nums truncate">{phone}</span>
             </a>
           ) : (
-            <span className="text-slate-400">لا يوجد رقم هاتف</span>
+            <span className="text-slate-500">لا يوجد رقم هاتف</span>
           )}
         </div>
 
@@ -225,7 +226,17 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
           </div>
         )}
 
-        {a.notes && <p className="mt-2 line-clamp-2 break-words text-xs text-slate-400">ملاحظات: {a.notes}</p>}
+        {a.notes && <p className="mt-2 line-clamp-2 break-words text-xs text-slate-600">ملاحظات: {a.notes}</p>}
+        {actions.note && (
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
+            <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {actions.note}
+          </p>
+        )}
+        {actions.noShow.visible && !actions.noShow.enabled && actions.noShow.reason && (
+          <p id={noShowReasonId} className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
+            <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {actions.noShow.reason}
+          </p>
+        )}
       </div>
 
       {/* الإجراءات — مفصولة بصريًا عن الوسوم لتُقرأ كعناصر قابلة للنقر */}
@@ -243,15 +254,23 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
                 <MessageCircle className="h-4 w-4" /> تذكير
               </a>
             )}
-            {onComplete && (
-              <Button onClick={onComplete} disabled={busy}>
-                حضر
-              </Button>
-            )}
-            <Button variant="outline" onClick={onNoShow} disabled={busy}>
-              لم يحضر
-            </Button>
           </>
+        )}
+        {actions.complete.visible && (
+          <Button onClick={onComplete} disabled={busy} loading={pending} title="المريض حضر وأنهى استشارته">
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> اكتمل الموعد
+          </Button>
+        )}
+        {actions.noShow.visible && (
+          <Button
+            variant="outline"
+            onClick={onNoShow}
+            disabled={busy || !actions.noShow.enabled}
+            aria-describedby={!actions.noShow.enabled ? noShowReasonId : undefined}
+            title={actions.noShow.reason}
+          >
+            لم يحضر
+          </Button>
         )}
         {onFollowUp && canScheduleFollowUp(a) && a.status !== "NO_SHOW" && (
           <Button variant="outline" onClick={onFollowUp} disabled={busy} title="إنشاء موعد عودة فعلي لهذا المريض">
@@ -260,7 +279,7 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
         )}
         {a.status === "NO_SHOW" && (
           <>
-            <Button onClick={onArrivedLate} disabled={busy} title="وصل بعد فوات موعده — أدخله الآن">
+            <Button onClick={onArrivedLate} disabled={busy} loading={pending} title="وصل بعد فوات موعده — أدخله الآن">
               <UserCheck className="h-4 w-4" /> حضر متأخرًا
             </Button>
             <Button variant="outline" onClick={onNoShow} disabled={busy} title="إعادة فتح رسالة الإشعار">
@@ -273,18 +292,28 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
   );
 }
 
-function AppointmentsListSection() {
+function AppointmentsListSection({ filters, onFiltersChange }: { filters: AppointmentFilters; onFiltersChange: (f: AppointmentFilters) => void }) {
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
-  const [searchParams] = useSearchParams();
-  const initial = readInitialFilters(searchParams);
-  const [filter, setFilter] = useState<AppointmentStatus | undefined>(initial.status);
-  const [dateFilter, setDateFilter] = useState<string | undefined>(initial.date);
-  const [query, setQuery] = useState("");
+  const { status: filter, from, to } = filters;
+  // البحث يُكتب محليًا فورًا ويُحفظ في الرابط بعد توقف الكتابة قليلًا (يبقى عند الرجوع/التنقل).
+  const [query, setQuery] = useState(filters.q);
+  useEffect(() => setQuery(filters.q), [filters.q]);
+  useEffect(() => {
+    if (query === filters.q) return;
+    const t = setTimeout(() => onFiltersChange({ ...filters, q: query }), 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+  const setFilter = (value: StatusFilter) => onFiltersChange({ ...filters, status: value });
+  const setRange = (next: { from?: string; to?: string }) => onFiltersChange({ ...filters, ...next });
+  const preset = activePreset(from, to);
+  const hasFilters = filter !== "ALL" || Boolean(from || to || query);
   const [noShowTarget, setNoShowTarget] = useState<NoShowTarget | null>(null);
-  // «برمجة موعد عودة»: النافذة + اقتراح بعد تسجيل «حضر» مباشرة.
+  // «برمجة موعد عودة»: النافذة + اقتراح بعد تسجيل «اكتمل الموعد» مباشرة.
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
   const [justCompleted, setJustCompleted] = useState<any | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const openFollowUp = (a: any) =>
     setFollowUpCtx({
       parentAppointmentId: a.id,
@@ -293,7 +322,10 @@ function AppointmentsListSection() {
       accountHolderName: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : null,
     });
 
-  const { data: appointments, isLoading, isFetching, dataUpdatedAt } = useMyAppointments(filter, dateFilter);
+  const { data: appointments, isLoading, isFetching, isError, error, refetch, dataUpdatedAt } = useMyAppointments(
+    filter === "ALL" ? undefined : filter,
+    { from, to }
+  );
   const updateStatus = useUpdateAppointmentStatus();
   const { showToast } = useToast();
   const [notifOn, setNotifOn] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
@@ -334,12 +366,16 @@ function AppointmentsListSection() {
   }
 
   async function changeStatus(id: string, status: AppointmentStatus, appointment?: any) {
+    if (updateStatus.isPending) return; // منع الإرسال المتكرر
+    setPendingId(id);
     try {
       await updateStatus.mutateAsync({ id, status });
-      showToast("تم تحديث حالة الموعد.", "success");
+      showToast(status === "COMPLETED" ? "سُجّل الموعد مكتملًا." : "تم تحديث حالة الموعد.", "success");
       if (status === "COMPLETED" && appointment && canScheduleFollowUp(appointment) && !isAssistant) setJustCompleted(appointment);
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
+    } finally {
+      setPendingId(null);
     }
   }
 
@@ -361,16 +397,20 @@ function AppointmentsListSection() {
    */
   async function markArrivedLate(id: string) {
     if (updateStatus.isPending) return;
+    setPendingId(id);
     try {
       await updateStatus.mutateAsync({ id, status: "IN_PROGRESS" });
       showToast("تم تسجيل حضوره المتأخر — هو الآن المريض الحالي.", "success");
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
+    } finally {
+      setPendingId(null);
     }
   }
 
   /** مثل changeStatus لكنه يُعيد رمي الخطأ حتى لا تفتح النافذة الرسائل عند فشل الطلب. */
   async function recordNoShow(id: string) {
+    setPendingId(id);
     try {
       const res = await updateStatus.mutateAsync({ id, status: "NO_SHOW" });
       showToast("تم تسجيل المريض كـ «لم يحضر».", "success");
@@ -378,6 +418,8 @@ function AppointmentsListSection() {
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
       throw err;
+    } finally {
+      setPendingId(null);
     }
   }
 
@@ -405,59 +447,92 @@ function AppointmentsListSection() {
         </button>
       </header>
 
-      {/* شريط الأدوات: بحث + تاريخ */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute top-1/2 right-3.5 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      {/* شريط الأدوات: بحث + فترة زمنية */}
+      <div className="card space-y-3 p-3 sm:p-4">
+        <div className="relative">
+          <label htmlFor="appt-search" className="sr-only">
+            بحث في المواعيد
+          </label>
+          <Search className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
           <input
+            id="appt-search"
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="ابحث باسم المريض أو رقم الهاتف..."
             className="input pr-10"
-            aria-label="بحث في المواعيد"
           />
         </div>
-        <div className="relative shrink-0 sm:w-52">
-          <CalendarDays className="pointer-events-none absolute top-1/2 right-3.5 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <input
-            type="date"
-            value={dateFilter ?? ""}
-            onChange={(e) => setDateFilter(e.target.value || undefined)}
-            className="input pr-10"
-            aria-label="تصفية بالتاريخ"
-          />
+
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="اختصارات التاريخ">
+          {PRESETS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              aria-pressed={preset === p.key}
+              onClick={() => setRange(preset === p.key ? { from: undefined, to: undefined } : presetRange(p.key))}
+              className={clsx(
+                "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                preset === p.key ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-primary-400"
+              )}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <DateField label="من تاريخ" value={from} max={to} onChange={(v) => setRange({ from: v, to })} />
+          <DateField label="إلى تاريخ" value={to} min={from} onChange={(v) => setRange({ from, to: v })} />
         </div>
       </div>
 
-      {/* شرائح التصفية: سطر واحد قابل للتمرير الأفقي على الشاشات الصغيرة */}
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* شرائح الحالة: سطر واحد قابل للتمرير الأفقي داخل حاويته فقط */}
+      <div
+        role="group"
+        aria-label="تصفية حسب الحالة"
+        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {FILTERS.map((f) => (
           <button
             key={f.label}
             type="button"
+            aria-pressed={filter === f.value}
             onClick={() => setFilter(f.value)}
             className={clsx(
               "shrink-0 whitespace-nowrap rounded-full px-4 py-1.5 text-sm font-semibold transition",
-              filter === f.value ? "bg-primary-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              filter === f.value ? "bg-primary-600 text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
             )}
           >
             {f.label}
           </button>
         ))}
-        {(query || dateFilter) && (
+      </div>
+
+      {/* ملخص الفلاتر المفعّلة + مسحها */}
+      {hasFilters && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700" aria-live="polite">
+          <span className="font-semibold">الفلاتر:</span>
+          {filter !== "ALL" && <span className="badge bg-slate-100">{FILTERS.find((f) => f.value === filter)?.label}</span>}
+          {(from || to) && (
+            <span className="badge bg-slate-100">
+              {from && to && from === to ? formatDayAr(from) : `${from ? formatDayAr(from, { weekday: false }) : "…"} ← ${to ? formatDayAr(to, { weekday: false }) : "…"}`}
+            </span>
+          )}
+          {query && <span className="badge bg-slate-100">بحث: {query}</span>}
           <button
             type="button"
             onClick={() => {
               setQuery("");
-              setDateFilter(undefined);
+              onFiltersChange({ ...filters, status: "ALL", from: undefined, to: undefined, q: "" });
             }}
-            className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-200"
+            className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700 hover:bg-slate-200"
           >
-            <X className="h-3.5 w-3.5" /> مسح البحث والتاريخ
+            <X className="h-3.5 w-3.5" aria-hidden="true" /> مسح الفلاتر
           </button>
-        )}
-      </div>
+          {visible && <span className="text-slate-600">· {visible.length} نتيجة</span>}
+        </div>
+      )}
 
       {justCompleted && (
         <div className="card flex flex-col gap-2 border-primary-200 bg-primary-50 p-3 text-sm sm:flex-row sm:items-center sm:justify-between" role="status">
@@ -475,24 +550,31 @@ function AppointmentsListSection() {
 
       <FollowUpModal open={Boolean(followUpCtx)} ctx={followUpCtx} onClose={() => setFollowUpCtx(null)} />
 
-      {isLoading ? (
-        <Spinner />
+      {isLoading && !appointments ? (
+        <SkeletonRows label="جارٍ تحميل المواعيد..." />
+      ) : isError && !appointments ? (
+        <ErrorState message={apiErrorMessage(error, "تعذّر تحميل المواعيد.")} onRetry={() => void refetch()} />
       ) : visible && visible.length > 0 ? (
-        <div className="space-y-3">
+        <div className={clsx("space-y-3 transition-opacity", isFetching && "opacity-80")} aria-busy={isFetching}>
           {visible.map((a: any) => (
             <AppointmentCard
               key={a.id}
               appointment={a}
-              onComplete={isAssistant ? undefined : () => changeStatus(a.id, "COMPLETED", a)}
+              role={user?.role === "ASSISTANT" ? "ASSISTANT" : "DOCTOR"}
+              onComplete={() => changeStatus(a.id, "COMPLETED", a)}
               onNoShow={() => openNoShow(a)}
               onArrivedLate={() => markArrivedLate(a.id)}
               busy={updateStatus.isPending}
+              pending={pendingId === a.id}
               onFollowUp={isAssistant ? undefined : () => openFollowUp(a)}
             />
           ))}
         </div>
       ) : (
-        <EmptyState title={query ? "لا نتائج مطابقة للبحث" : "لا توجد مواعيد"} />
+        <EmptyState
+          title={query ? "لا نتائج مطابقة للبحث" : hasFilters ? "لا توجد مواعيد مطابقة للفلاتر" : "لا توجد مواعيد"}
+          description={hasFilters ? "جرّب مسح الفلاتر أو تغيير الفترة." : undefined}
+        />
       )}
     </div>
   );
@@ -510,19 +592,26 @@ const APPOINTMENTS_TABS: { key: "queue" | "list"; label: string }[] = [
  * التحديث الدوري (refetchInterval) للقسم غير الظاهر تلقائيًا، بلا أي استقطاب مضاعف للخادم.
  */
 export default function DoctorAppointments() {
-  const [tab, setTab] = useState<"queue" | "list">("queue");
+  // التبويب والفلاتر محفوظة في الرابط: الدخول الطبيعي = طابور اليوم و«الكل»، وبطاقات الإحصاءات
+  // تفتح «كل المواعيد» بالفلتر الصريح نفسه، ويبقى كل شيء عند التحديث أو الرجوع.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => parseAppointmentFilters(searchParams), [searchParams]);
+  const update = (next: AppointmentFilters) => setSearchParams(serializeAppointmentFilters(next), { replace: true });
+  const tab = filters.tab;
 
   return (
     <div className="space-y-4">
-      <div className="flex w-fit gap-1 rounded-full bg-slate-100 p-1">
+      <div role="tablist" aria-label="أقسام المواعيد" className="flex w-fit gap-1 rounded-full bg-slate-100 p-1">
         {APPOINTMENTS_TABS.map((t) => (
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => update({ ...filters, tab: t.key })}
             className={clsx(
               "rounded-full px-4 py-1.5 text-sm font-semibold transition",
-              tab === t.key ? "bg-white text-primary-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              tab === t.key ? "bg-white text-primary-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
             )}
           >
             {t.label}
@@ -530,7 +619,7 @@ export default function DoctorAppointments() {
         ))}
       </div>
 
-      {tab === "queue" ? <DoctorQueue /> : <AppointmentsListSection />}
+      {tab === "queue" ? <DoctorQueue /> : <AppointmentsListSection filters={filters} onFiltersChange={update} />}
     </div>
   );
 }

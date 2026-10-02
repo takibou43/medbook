@@ -206,7 +206,10 @@ export default function DoctorQueue() {
   const current = data?.current ?? null;
   const waiting = data?.waiting ?? [];
   const late = data?.late ?? [];
-  const estimatedDurationMinutes = data?.estimatedDurationMinutes ?? null;
+  // متوسط مدة الجلسة — يُعرض فقط إن كان محسوبًا من جلسات حقيقية (لا القيمة الافتراضية)، وبتسميته الدقيقة.
+  const avgSessionMinutes =
+    data && data.estimatedDurationIsFallback === false ? data.estimatedDurationMinutes : null;
+  const summary = data?.todaySummary;
   // الطابور الموحّد بترتيب المناداة الفعلي من الخادم (المتأخر يظهر في مركزه الجديد مع شارة «متأخر»).
   // مع خادم قديم بلا هذا الحقل نعود للعرض السابق: المنتظرون ثم قائمة المتأخرين منفصلة.
   const ordered = data?.ordered;
@@ -218,13 +221,14 @@ export default function DoctorQueue() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-slate-900">طابور اليوم</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-600" aria-live="polite">
             {waiting.length} في الانتظار · {late.length} متأخرون
+            {summary ? ` · ${summary.completed} مكتملة من ${summary.total}` : ""}
             {isFetching ? " · جارٍ التحديث..." : ""}
           </p>
-          {estimatedDurationMinutes !== null && (
-            <p className="mt-0.5 text-xs text-slate-400">
-              الوقت المتوقع للجلسة القادمة: ~{estimatedDurationMinutes} دقيقة (مدة ذكية اعتمادًا على آخر الجلسات)
+          {avgSessionMinutes !== null && (
+            <p className="mt-0.5 text-xs text-slate-600">
+              متوسط مدة الجلسة: ~{avgSessionMinutes} دقيقة (من آخر {data?.estimatedDurationSamples ?? ""} جلسات مكتملة)
             </p>
           )}
         </div>
@@ -261,7 +265,7 @@ export default function DoctorQueue() {
           </div>
           <button
             type="button"
-            aria-label="إخفاء"
+            aria-label="إخفاء تنبيه النداء"
             onClick={() => setCallBanner(null)}
             className="rounded-lg p-1 text-slate-500 hover:bg-amber-100"
           >
@@ -277,7 +281,7 @@ export default function DoctorQueue() {
           <p className="mt-1 text-2xl font-extrabold text-slate-900">{patientName(current)}</p>
           <p className="text-sm text-slate-600">
             موعده {current.startTime}
-            {patientPhone(current) ? " · " + patientPhone(current) : ""}
+            {patientPhone(current) ? <> · <span className="ltr-nums">{patientPhone(current)}</span></> : null}
           </p>
 
           <div className="mt-4 grid grid-cols-2 gap-2">
@@ -346,7 +350,7 @@ export default function DoctorQueue() {
         </Card>
       ) : (
         <Card className="text-center">
-          <p className="text-sm text-slate-500">لا يوجد مريض بالداخل الآن.</p>
+          <p className="text-sm text-slate-600">لا يوجد مريض بالداخل الآن.</p>
           <Button
             className="mt-3 w-full"
             loading={callNext.isPending}
@@ -364,7 +368,16 @@ export default function DoctorQueue() {
           <Users className="h-4 w-4" /> في الانتظار ({queueList.length})
         </p>
         {queueList.length === 0 ? (
-          <EmptyState title="لا أحد في الانتظار" description="كل مواعيد اليوم عولجت أو لم يحن وقتها بعد." />
+          summary && summary.total === 0 ? (
+            <EmptyState title="لا توجد مواعيد اليوم" />
+          ) : summary && !current && summary.completed + summary.noShow + summary.cancelled === summary.total ? (
+            <EmptyState
+              title="اكتملت مواعيد اليوم"
+              description={`${summary.completed} مكتملة${summary.noShow ? ` · ${summary.noShow} لم يحضروا` : ""}${summary.cancelled ? ` · ${summary.cancelled} ملغاة` : ""}`}
+            />
+          ) : (
+            <EmptyState title="لا يوجد منتظرون الآن" description={summary?.pending ? `${summary.pending} بانتظار التأكيد.` : undefined} />
+          )
         ) : (
           <div className="space-y-2">
             {queueList.map((a, i) => {
@@ -407,6 +420,7 @@ export default function DoctorQueue() {
                       type="button"
                       disabled={busy}
                       title="تسجيل وصول المريض إلى العيادة"
+                      aria-label={`تسجيل وصول ${patientName(a)}`}
                       onClick={() => run(markArrived.mutateAsync(a.id), "تم تسجيل وصوله.", "تعذّر تسجيل وصوله.")}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-40"
                     >
@@ -426,6 +440,7 @@ export default function DoctorQueue() {
                       type="button"
                       disabled={busy}
                       title="لم يستجب — إشعاره برسالة دون تسجيل غياب نهائي"
+                      aria-label={`إشعار ${patientName(a)} برسالة`}
                       onClick={() => openNoShow(a)}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-white disabled:opacity-40"
                     >
@@ -471,6 +486,7 @@ export default function DoctorQueue() {
                       type="button"
                       disabled={busy}
                       title="لم يستجب — إشعاره برسالة دون تسجيل غياب نهائي"
+                      aria-label={`إشعار ${patientName(a)} برسالة`}
                       onClick={() => openNoShow(a)}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-white disabled:opacity-40"
                     >

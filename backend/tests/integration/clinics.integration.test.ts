@@ -1,6 +1,5 @@
 import { beforeAll, beforeEach, afterAll, describe, expect, it } from "vitest";
 import request from "supertest";
-import { ipKeyGenerator } from "express-rate-limit";
 import { PrismaClient } from "@prisma/client";
 const url = process.env.TEST_DATABASE_URL;
 const tag = `clinic-test-${Date.now()}`;
@@ -45,7 +44,7 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
     // Each scenario gets an independent auth budget; production limits remain unchanged.
     const { authLimiter } = await import("../../src/middleware/rateLimiter");
     for (const address of ["127.0.0.1", "::ffff:127.0.0.1", "::1"]) {
-      authLimiter.resetKey(ipKeyGenerator(address));
+      authLimiter.resetKey(address);
     }
   });
   afterAll(async () => {

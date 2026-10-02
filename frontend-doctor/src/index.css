@@ -8,12 +8,40 @@ html {
 
 body {
   font-family: "Cairo", Tahoma, system-ui, sans-serif;
+  /* سطر أعلى قليلًا: الحروف العربية بنقاطها وتشكيلها تحتاج مسافة أكبر من اللاتينية. */
+  line-height: 1.65;
   background-color: #f7faf9;
   color: #0f2523;
 }
 
 * {
   scrollbar-width: thin;
+}
+
+/* تركيز مرئي موحّد للتنقل بلوحة المفاتيح (لا يظهر عند النقر بالفأرة). */
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #187f77;
+  outline-offset: 2px;
+  border-radius: 0.75rem;
+}
+
+summary {
+  cursor: pointer;
+  list-style: none;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+
+/* أرقام الهاتف والبريد والمبالغ داخل نص عربي: اتجاه ثابت من اليسار لليمين دون قلب الترتيب. */
+.ltr-nums {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
 }
 
 .container-app {

@@ -53,16 +53,16 @@ import { useAdminUnread, useDoctorUnread, useUnreadToast } from "./hooks/useMess
 
 // الروابط المشتركة بين الطبيب والمساعد (الصفحات التي يُسمح للمساعد برؤيتها فقط).
 const sharedNav = [
-  { to: "/", label: "الرئيسية", icon: LayoutDashboard, end: true },
+  { to: "/", label: "اليوم", icon: LayoutDashboard, end: true },
   { to: "/appointments", label: "المواعيد", icon: CalendarClock },
 ];
 
 // روابط إضافية للطبيب وحده — لا تظهر أبدًا في قائمة المساعد.
 const doctorOnlyNav = [
   { to: "/clinic", label: "إدارة العيادة", icon: Building2 },
-  { to: "/messages", label: "الرسائل", icon: MessageSquare },
+  { to: "/messages", label: "مراسلة الإدارة", icon: MessageSquare },
   { to: "/schedule", label: "أوقات العمل", icon: Clock },
-  { to: "/patients", label: "مرضاي", icon: UsersIcon },
+  { to: "/patients", label: "المرضى", icon: UsersIcon },
   { to: "/reviews", label: "التقييمات", icon: Star },
   { to: "/assistants", label: "المساعدون", icon: UserCog },
   { to: "/profile", label: "ملفي المهني", icon: Settings },
@@ -84,7 +84,9 @@ function DoctorAreaLayout() {
   // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
   const unread = useDoctorUnread(!isAssistant && !!user);
   useUnreadToast(unread.data?.unread, () => "رسالة جديدة من الإدارة", "/messages?focus=unread");
-  const doctorNav = [...sharedNav, ...(isDentalSpecialty(user?.doctor?.specialty) ? [treatmentNavItem] : []), ...doctorOnlyNav];
+  const daily = doctorOnlyNav.filter(i => ["/patients", "/messages"].includes(i.to));
+  const settings = doctorOnlyNav.filter(i => !["/patients", "/messages", "/clinic"].includes(i.to));
+  const doctorNav = [...sharedNav, ...daily, ...settings, ...(isDentalSpecialty(user?.doctor?.specialty) ? [treatmentNavItem] : [])];
   const items = isAssistant ? sharedNav : doctorNav.map((i) => (i.to === "/messages" ? { ...i, to: unread.data?.unread ? "/messages?focus=unread" : i.to, badge: unread.data?.unread } : i));
 
   return (
@@ -92,6 +94,9 @@ function DoctorAreaLayout() {
       title={isAssistant ? "لوحة المساعد" : "لوحة الطبيب"}
       subtitle={isAssistant && doctorName ? `مساعد لدى د. ${doctorName}` : undefined}
       items={items}
+      dailyNavigation
+      settingsStart={isAssistant ? undefined : 4}
+      clinicMode={!isAssistant}
     />
   );
 }

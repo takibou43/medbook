@@ -32,16 +32,16 @@ export function ReferralCard() {
     }
   }
   async function share() {
-    const text = `انضم إلى MedBook لإدارة مواعيد عيادتك. سجّل عبر هذا الرابط: ${link}`;
+    const text = `انضم إلى مادبوك / MadBook لإدارة مواعيد عيادتك. سجّل عبر هذا الرابط: ${link}`;
     if (navigator.share) {
-      try { await navigator.share({ title: "MedBook", text }); } catch { /* أُلغيت المشاركة */ }
+      try { await navigator.share({ title: "MadBook", text }); } catch { /* أُلغيت المشاركة */ }
     } else copy(text, "رسالة الدعوة");
   }
 
   return (
     <section className="card space-y-3 p-5" aria-labelledby="referral-title">
       <h2 id="referral-title" className="flex items-center gap-2 text-lg font-bold text-slate-900">
-        <Gift className="h-5 w-5 text-primary-600" /> ادعُ طبيبًا
+        <Gift className="h-5 w-5 text-primary-600" /> دعوة زميل — مكافأة الإحالة
       </h2>
       <p className="text-sm text-slate-600">
         شارك رابطك مع زميل. عند توثيق حسابه تحصل على {q.data.rewardDays} يومًا لاشتراكك، أو خصم تكلفة طبيب واحد للمدة نفسها إذا كنت ضمن عيادة — مرة واحدة لكل طبيب.

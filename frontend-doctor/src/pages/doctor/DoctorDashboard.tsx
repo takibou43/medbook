@@ -1,3 +1,6 @@
+import { Link } from "react-router-dom";
+import { useQueue } from "../../hooks/useQueue";
+import { algeriaToday, appointmentsLink, appointmentsCountAr, formatDayAr } from "../../lib/doctorUi";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -78,13 +81,19 @@ function RevenueCard({ today, month, fee }: { today: number; month?: number; fee
   );
 }
 
+function patientName(a: import("../../types").Appointment): string {
+  if (a.familyMember) return a.familyMember.firstName + " " + a.familyMember.lastName;
+  if (a.patient) return a.patient.firstName + " " + a.patient.lastName;
+  return [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ") || "مريض";
+}
 export default function DoctorDashboard() {
   const { user } = useAuth();
+  const queue = useQueue();
   const { showToast } = useToast();
   // الصيغة الجاري تحميلها حاليًا — لمنع النقر المتكرر وإظهار حالة الزر.
   const [qrDownloading, setQrDownloading] = useState<"png" | "svg" | null>(null);
 
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, isError, refetch } = useQuery({
     queryKey: ["doctor-dashboard"],
     queryFn: async () => (await api.get("/doctor/dashboard")).data.data,
     // تحديث تلقائي للأرقام دون إعادة تحميل الصفحة (يتوقف عندما يكون التبويب في الخلفية).
@@ -94,6 +103,7 @@ export default function DoctorDashboard() {
   });
 
   if (isLoading) return <Spinner />;
+  if (isError) return <div role="alert">تعذر تحميل ملخص اليوم. <button onClick={() => void refetch()}>إعادة المحاولة</button></div>;
 
   const isAssistant = user?.role === "ASSISTANT";
   // الطبيب: بياناته في user.doctor مباشرة. المساعد: نفس البيانات (نسخة مختصرة آمنة، بلا
@@ -162,7 +172,7 @@ export default function DoctorDashboard() {
       ".brand{margin-top:32px;font-size:12px;color:#999;}" +
       "@media print{body{padding:0;}}" +
       "</style></head><body>" +
-      "<h1>MedBook" + (doctorName ? " — " + doctorName : "") + "</h1>" +
+      "<h1>مادبوك / MadBook" + (doctorName ? " — " + doctorName : "") + "</h1>" +
       "<p class='sub'>امسح الرمز لحجز موعد</p>" +
       "<img src='" + qrImageUrl + "' alt='QR' />" +
       "<p class='instructions'>لحجز موعد، امسح الرمز بكاميرا هاتفك.</p>" +
@@ -199,10 +209,11 @@ export default function DoctorDashboard() {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-extrabold text-slate-900">{isAssistant ? "لوحة التحكم" : "لوحة تحكم الطبيب"}</h1>
+        <h1 className="text-2xl font-extrabold text-slate-900">{effectiveDoctor ? `د. ${effectiveDoctor.firstName} ${effectiveDoctor.lastName}` : "اليوم"}</h1>
         {stats && <VerificationBadge status={stats.verificationStatus} />}
       </div>
 
+      <p className="text-slate-600">{formatDayAr(algeriaToday(), { weekday: true, year: true })}</p>
       {stats?.verificationStatus === "PENDING" && (
         <div className="card border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           {isAssistant
@@ -213,15 +224,20 @@ export default function DoctorDashboard() {
 
       {/* month/fee بلا "?? 0": يجب أن تبقيا undefined فعليًا حين لا يُرسلهما الخادم (حالة
           المساعد) حتى يُخفي RevenueCard عمود "هذا الشهر" تلقائيًا بدل عرض 0 مضلِّل. */}
-      <RevenueCard
-        today={stats?.estimatedRevenueToday ?? 0}
-        month={stats?.estimatedRevenueMonth}
-        fee={stats?.consultationFee}
-      />
+      <section className="card space-y-4 p-5" aria-label="ملخص اليوم">
+        <div className="flex items-center justify-between"><h2 className="text-lg font-bold">اليوم في العيادة</h2><Link className="text-primary-700" to="/appointments?tab=queue">فتح الطابور</Link></div>
+        {queue.isPending ? <Spinner /> : queue.isError ? <p role="alert">تعذر تحميل الطابور. <button onClick={() => void queue.refetch()}>إعادة المحاولة</button></p> : <>
+          <div className="grid grid-cols-3 gap-2"><div className="rounded-xl bg-primary-50 p-3"><p className="text-xs">المنتظرون</p><p className="text-2xl font-bold">{queue.data?.waiting.length ?? 0}</p></div><div className="rounded-xl bg-amber-50 p-3"><p className="text-xs">المتأخرون</p><p className="text-2xl font-bold">{queue.data?.late.length ?? 0}</p></div><div className="rounded-xl bg-green-50 p-3"><p className="text-xs">مكتملة اليوم</p><p className="text-2xl font-bold">{queue.data?.todaySummary?.completed ?? stats?.completedToday ?? 0}</p></div></div>
+          <p className="rounded-xl bg-slate-50 p-3">المريض الحالي: {queue.data?.current ? patientName(queue.data.current) : "لا يوجد مريض بالداخل الآن"}</p>
+          <h3 className="font-semibold">المواعيد التالية في الطابور</h3>
+          {(queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])]).slice(0, 3).map(a => <div key={a.id} className="flex justify-between gap-3 border-t pt-2"><span>{patientName(a)}</span><span className="ltr-nums">{a.startTime}</span></div>)}
+          {!queue.data?.waiting.length && !queue.data?.late.length && <p className="text-sm text-slate-500">لا يوجد منتظرون الآن.</p>}
+        </>}
+      </section>
+      {stats?.rescheduleRequired > 0 && <Link className="block rounded-xl bg-amber-50 p-4 text-amber-800" to={appointmentsLink({status: "RESCHEDULE_REQUIRED"})}>{appointmentsCountAr(stats.rescheduleRequired)} بحاجة إلى إعادة جدولة — مراجعة المواعيد</Link>}
 
       <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
-        <StatCard label="مواعيد اليوم" value={stats?.todayAppointments ?? 0} icon={CalendarClock} to={`/appointments?status=ALL&date=${algeriaTodayIso()}`} />
-        <StatCard label="المواعيد القادمة" value={stats?.upcomingAppointments ?? 0} icon={CalendarCheck} to="/appointments?status=CONFIRMED" />
+        <StatCard label="مواعيد اليوم" value={stats?.todayAppointments ?? 0} icon={CalendarClock} to={appointmentsLink({from: algeriaTodayIso(), to: algeriaTodayIso()})} />
 
         {/* الإحصاءات التالية إما لا تُرسَل للمساعد أصلًا من الخادم (totalPatients،
             completedAppointments الإجمالي، cancelledAppointments، monthlyAppointments،
@@ -253,7 +269,7 @@ export default function DoctorDashboard() {
 
         {!isAssistant && (
           <>
-            <StatCard label="مواعيد هذا الشهر" value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} to="/appointments?status=ALL" />
+            <StatCard label="مواعيد هذا الشهر" value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} to={appointmentsLink(stats?.monthRange)} />
             <StatCard
               label="نسبة الغياب"
               value={`${stats?.noShowRate ?? 0}%`}
@@ -266,6 +282,8 @@ export default function DoctorDashboard() {
         )}
       </div>
 
+      <RevenueCard today={stats?.estimatedRevenueToday ?? 0} month={stats?.estimatedRevenueMonth} fee={stats?.consultationFee} />
+      <details className="space-y-4"><summary className="cursor-pointer font-bold">رمز الحجز ودعوة زميل</summary>
       {qrImageUrl && bookingUrl && (
         <section className="card p-4 sm:p-6" aria-label="رمز الحجز QR">
           <h2 className="flex items-center gap-1.5 font-bold text-slate-800">
@@ -339,6 +357,7 @@ export default function DoctorDashboard() {
 
       {/* «ادعُ طبيبًا» — للطبيب وحده (المساعد لا يرى الإحالات ولا الاشتراك). */}
       {!isAssistant && <ReferralCard />}
+      </details>
     </div>
   );
 }

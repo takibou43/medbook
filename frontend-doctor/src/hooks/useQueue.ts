@@ -14,9 +14,13 @@ export interface QueueState {
   // الترتيب الفعلي المتوقع للمناداة (المنتظرون والمتأخرون معًا)، محسوبًا في الخادم بنفس قاعدة «نادِ التالي».
   // اختياري حتى تبقى الواجهة تعمل مع خادم قديم لم يُحدَّث بعد.
   ordered?: (Appointment & { position: number })[];
-  // المدة الذكية: تقدير مدة الجلسة القادمة اعتمادًا على متوسط آخر جلسات مكتملة صالحة
-  // لهذا الطبيب (وليس المدة المجدولة للموعد).
+  // متوسط مدة الجلسة لهذا الطبيب (من المناداة إلى الإنهاء، آخر الجلسات المكتملة الصالحة) —
+  // ليس وقت انتظار مريض بعينه. isFallback=true: بيانات غير كافية فالقيمة افتراضية لا تُعرض كتقدير.
   estimatedDurationMinutes: number;
+  estimatedDurationIsFallback?: boolean;
+  estimatedDurationSamples?: number;
+  // ملخص مواعيد اليوم حسب الحالة (اختياري مع خادم قديم).
+  todaySummary?: { total: number; completed: number; noShow: number; cancelled: number; pending: number; rescheduleRequired: number };
 }
 
 // المساعد يحتاج أن يرى المريض الذي نادى عليه الطبيب في ثوانٍ، فنُسرّع التحديث عنده فقط.
@@ -41,6 +45,7 @@ function useQueueMutation<TVars>(fn: (vars: TVars) => Promise<unknown>) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["queue"] });
       qc.invalidateQueries({ queryKey: ["appointments"] });
+      qc.invalidateQueries({ queryKey: ["doctor-dashboard"] });
     },
   });
 }

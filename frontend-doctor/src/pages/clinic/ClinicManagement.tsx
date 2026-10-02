@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { Input, Select } from "../../components/ui/Input";
 import { ClinicProfile, ClinicProfileFields, profileFromForm } from "./ClinicForms";
 import ClinicTransferRequests from "./ClinicTransferRequests";
+import { doctorsCountAr, formatDayAr, formatDzd } from "../../lib/doctorUi";
 interface ManagedClinic extends ClinicProfile {
   id: string; referralDiscountUntil: string | null; pendingReferralDays: number; verificationStatus: string; subscriptionStatus: string; subscriptionExpiresAt: string | null;
   billing: { billedDoctorCount: number; discountedDoctorCount: number; doctorCount: number; monthlyTotal: number; monthlyPerDoctor: number; paidDoctorCount: number };
@@ -59,12 +60,11 @@ export default function ClinicManagement() {
       <div className="card space-y-3 p-5">
         <div className="flex flex-wrap justify-between gap-3"><h2 className="text-lg font-bold">اشتراك العيادة</h2><Button variant="outline" onClick={() => setEditing(!editing)}>تعديل بيانات العيادة</Button></div>
         <p>المراجعة: {stateLabels[clinic.verificationStatus]} · الاشتراك: {clinic.subscriptionExpiresAt && new Date(clinic.subscriptionExpiresAt) <= new Date() ? "منتهي" : stateLabels[clinic.subscriptionStatus]}</p>
-        <p className="text-2xl font-bold text-primary-700">{clinic.billing.monthlyTotal.toLocaleString("ar-DZ")} دج / شهر</p>
-        <p>{clinic.billing.billedDoctorCount} أطباء محتسبون × {clinic.billing.monthlyPerDoctor.toLocaleString("ar-DZ")} دج. العدد الفعلي: {clinic.billing.doctorCount}. السعة المدفوعة: {clinic.billing.paidDoctorCount} أطباء.</p>
+        <p className="text-sm text-slate-600">التكلفة الشهرية التقديرية حسب الأطباء المحتسبين حاليًا</p><p className="text-2xl font-bold text-primary-700">{formatDzd(clinic.billing.monthlyTotal)} / شهر</p>
+        <dl className="grid gap-3 sm:grid-cols-2"><div><dt className="text-slate-500">الأطباء الحاليون</dt><dd>{doctorsCountAr(clinic.billing.doctorCount)}</dd></div><div><dt className="text-slate-500">السعة المدفوعة</dt><dd>{doctorsCountAr(clinic.billing.paidDoctorCount)}</dd></div><div><dt className="text-slate-500">الأطباء المحتسبون في التكلفة</dt><dd>{doctorsCountAr(clinic.billing.billedDoctorCount)} × {formatDzd(clinic.billing.monthlyPerDoctor)}</dd></div><div><dt className="text-slate-500">تاريخ الانتهاء</dt><dd>{clinic.subscriptionExpiresAt ? formatDayAr(clinic.subscriptionExpiresAt.slice(0, 10)) : "غير محدد"}</dd></div></dl>
         <p className="text-sm text-slate-600">حسابات المساعدين مشمولة. صاحب العيادة يُحتسب مرة واحدة إذا كان طبيبًا. تفعيل الاشتراك أو زيادة السعة يتم عبر إدارة مادبوك.</p>
-        {clinic.billing.discountedDoctorCount > 0 && <p className="text-emerald-700">مكافأة الإحالة: تُحسب تكلفة {clinic.billing.billedDoctorCount} أطباء بدل {clinic.billing.doctorCount} حتى {clinic.referralDiscountUntil?.slice(0, 10)}. جميع الأطباء مشمولون بالخدمة.</p>}
+        {clinic.billing.discountedDoctorCount > 0 && <p className="text-emerald-700">مكافأة الإحالة: تُحسب تكلفة {doctorsCountAr(clinic.billing.billedDoctorCount)} بدل {doctorsCountAr(clinic.billing.doctorCount)} حتى {clinic.referralDiscountUntil?.slice(0, 10)}. جميع الأطباء مشمولون بالخدمة.</p>}
         {clinic.pendingReferralDays > 0 && <p>خصم محفوظ لمدة {clinic.pendingReferralDays} يومًا، يبدأ عند تفعيل الاشتراك.</p>}
-        {clinic.subscriptionExpiresAt && <p>ينتهي في: {new Date(clinic.subscriptionExpiresAt).toLocaleDateString("ar-DZ")}</p>}
       </div>
       <div className="card p-5"><h2 className="mb-3 text-lg font-bold">دعوة طبيب إلى العيادة</h2>
         <form onSubmit={e => invite(e)} className="flex flex-wrap items-end gap-3"><Input name="email" type="email" label="بريد الطبيب" required /><Button type="submit" loading={busy}>إنشاء رابط دعوة</Button></form>
@@ -84,4 +84,3 @@ export default function ClinicManagement() {
     </>}
   </section>;
 }
-

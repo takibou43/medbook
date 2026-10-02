@@ -19,7 +19,7 @@ const VARIANT_CLASS: Record<Variant, string> = {
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   ({ variant = "primary", loading, className, children, disabled, ...rest }, ref) => {
     return (
-      <button ref={ref} className={clsx(VARIANT_CLASS[variant], className)} disabled={disabled || loading} {...rest}>
+      <button ref={ref} className={clsx(VARIANT_CLASS[variant], className)} disabled={disabled || loading} aria-busy={loading || undefined} {...rest}>
         {loading && <Loader2 className="h-4 w-4 animate-spin" />}
         {children}
       </button>

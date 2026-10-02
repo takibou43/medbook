@@ -7,6 +7,7 @@ import { useNewAppointmentAlert, requestNotificationPermission } from "../../hoo
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorState, SkeletonRows } from "../../components/ui/States";
 import { DateField } from "../../components/ui/DateField";
+import { Pagination } from "../../components/ui/Pagination";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
@@ -17,7 +18,7 @@ import { useAuth } from "../../context/AuthContext";
 import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
 import { canScheduleFollowUp, RELATIONSHIP_LABELS } from "../../lib/features";
 import {
-  activePreset, appointmentActions, formatDayAr, parseAppointmentFilters, presetRange, serializeAppointmentFilters,
+  canArriveLate, matchesAppointmentView, activePreset, appointmentActions, formatDayAr, parseAppointmentFilters, presetRange, serializeAppointmentFilters,
   type AppointmentFilters, type DatePreset, type StatusFilter,
 } from "../../lib/doctorUi";
 
@@ -139,7 +140,7 @@ function NoShowWarningBadge({ count }: { count: number }) {
   const critical = count >= NO_SHOW_CRITICAL_THRESHOLD;
   return (
     <span
-      title={`تكرر غيابه ${count} مرات سابقًا`}
+      title={`سُجل غياب هذا المستفيد ${count} مرات عند هذا الطبيب`}
       className={clsx(
         "badge shrink-0 gap-1 border",
         critical ? "border-red-200 bg-red-100 text-red-700" : "border-amber-200 bg-amber-100 text-amber-700"
@@ -153,8 +154,11 @@ function NoShowWarningBadge({ count }: { count: number }) {
 
 interface CardProps {
   appointment: any;
+  compact?: boolean;
   /** «اكتمل الموعد» (COMPLETED) — تظهر فقط حين تسمح بها الحالة والتوقيت والدور (appointmentActions). */
   onComplete: () => void;
+  onConfirm?: () => void;
+  onCancel?: () => void;
   onNoShow: () => void;
   /** وصل المريض بعد تسجيل غيابه: يُدخله الآن (IN_PROGRESS) دون أي رسالة. */
   onArrivedLate: () => void;
@@ -167,12 +171,12 @@ interface CardProps {
   role?: "DOCTOR" | "ASSISTANT";
 }
 
-function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy, pending, onFollowUp, role }: CardProps) {
+function AppointmentCard({ compact = false, appointment: a, onComplete, onConfirm, onCancel, onNoShow, onArrivedLate, busy, pending, onFollowUp, role }: CardProps) {
   const phone = patientPhone(a);
   const wa = toWhatsAppNumber(phone);
   const isOpen = a.status === "CONFIRMED" || a.status === "PENDING";
   const actions = appointmentActions(a, role);
-  const noShowReasonId = `noshow-reason-${a.id}`;
+  const noShowReasonId = `noshow-reason-${a.id}-${compact ? "table" : "card"}`;
 
   const reminderHref = wa
     ? `https://wa.me/${wa}?text=${encodeURIComponent(
@@ -181,11 +185,11 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
     : null;
 
   return (
-    <article className="card flex flex-col gap-3 p-4 transition hover:border-slate-300 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+    <article className={compact ? "flex flex-wrap gap-2" : "card flex flex-col gap-3 p-4 transition hover:border-slate-300 sm:flex-row sm:items-start sm:justify-between sm:gap-4"}>
       {/* البيانات — اسم المريض هو العنصر الأبرز */}
-      <div className="min-w-0 flex-1">
+      <div className={compact ? "hidden" : "min-w-0 flex-1"}>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h3 className="min-w-0 truncate text-lg font-extrabold leading-tight text-slate-900">{patientFullName(a)}</h3>
+          <h3 className="min-w-0 truncate text-lg font-extrabold leading-tight text-slate-900"><bdi>{patientFullName(a)}</bdi></h3>
           <AppointmentStatusBadge status={a.status} />
         </div>
 
@@ -227,11 +231,6 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
         )}
 
         {a.notes && <p className="mt-2 line-clamp-2 break-words text-xs text-slate-600">ملاحظات: {a.notes}</p>}
-        {actions.note && (
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
-            <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {actions.note}
-          </p>
-        )}
         {actions.noShow.visible && !actions.noShow.enabled && actions.noShow.reason && (
           <p id={noShowReasonId} className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {actions.noShow.reason}
@@ -241,6 +240,8 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
 
       {/* الإجراءات — مفصولة بصريًا عن الوسوم لتُقرأ كعناصر قابلة للنقر */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-slate-100 pt-3 sm:border-0 sm:pt-0">
+        {a.status === "PENDING" && <><Button onClick={onConfirm} disabled={busy} loading={pending}>تأكيد الموعد</Button><Button variant="outline" onClick={onCancel} disabled={busy}>إلغاء الموعد</Button></>}
+        {a.status === "RESCHEDULE_REQUIRED" && <span className="text-sm text-amber-800">يحتاج حجز وقت بديل؛ لا تسجل حضورًا قبل إعادة الحجز.</span>}
         {isOpen && (
           <>
             {reminderHref && (
@@ -277,7 +278,8 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
             <CalendarPlus className="h-4 w-4" /> برمجة موعد عودة
           </Button>
         )}
-        {a.status === "NO_SHOW" && (
+        {a.status === "NO_SHOW" && !canArriveLate(a) && <span className="text-xs text-slate-600">سجل سابق؛ الحضور المتأخر متاح يوم الموعد فقط.</span>}
+        {canArriveLate(a) && (
           <>
             <Button onClick={onArrivedLate} disabled={busy} loading={pending} title="وصل بعد فوات موعده — أدخله الآن">
               <UserCheck className="h-4 w-4" /> حضر متأخرًا
@@ -296,6 +298,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
   const { status: filter, from, to } = filters;
+  const view = filters.view ?? "all";
   // البحث يُكتب محليًا فورًا ويُحفظ في الرابط بعد توقف الكتابة قليلًا (يبقى عند الرجوع/التنقل).
   const [query, setQuery] = useState(filters.q);
   useEffect(() => setQuery(filters.q), [filters.q]);
@@ -349,9 +352,14 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
       return qDigits.length > 0 && (patientPhone(a) ?? "").replace(/\D/g, "").includes(qDigits);
     };
     return appointments
-      .filter(matches)
-      .sort((a: any, b: any) => Number(hasTimePassed(a.date, a.startTime)) - Number(hasTimePassed(b.date, b.startTime)));
-  }, [appointments, query]);
+      .filter(a => matches(a) && matchesAppointmentView(a, view))
+      .sort((a: any, b: any) => `${dayKey(a.date)}T${a.startTime}`.localeCompare(`${dayKey(b.date)}T${b.startTime}`));
+  }, [appointments, query, view]);
+  const totalPages = Math.max(1, Math.ceil((visible?.length ?? 0) / 20));
+  const page = Math.min(filters.page ?? 1, totalPages);
+  const paged = visible?.slice((page - 1) * 20, page * 20) ?? [];
+  const groups = [...new Set(paged.map(a => dayKey(a.date)))];
+  const renderCard = (a: any, compact = false) => <AppointmentCard key={a.id} compact={compact} appointment={a} role={isAssistant ? "ASSISTANT" : "DOCTOR"} onComplete={() => changeStatus(a.id, "COMPLETED", a)} onConfirm={() => changeStatus(a.id, "CONFIRMED")} onCancel={() => { if(window.confirm("إلغاء هذا الموعد؟ سيصبح الوقت متاحًا لحجز جديد.")) void changeStatus(a.id, "CANCELLED"); }} onNoShow={() => openNoShow(a)} onArrivedLate={() => markArrivedLate(a.id)} busy={updateStatus.isPending} pending={pendingId === a.id} onFollowUp={isAssistant ? undefined : () => openFollowUp(a)} />;
 
   async function enableNotifications() {
     const res = await requestNotificationPermission();
@@ -447,6 +455,11 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
         </button>
       </header>
 
+      <div className="flex flex-wrap gap-2" role="group" aria-label="أقسام سجل المواعيد">
+        {([['all','الكل'],['upcoming','القادمة'],['action','تحتاج إجراءً'],['past','السابقة']] as const).map(([value,label]) => <Button key={value} variant={view === value ? 'primary' : 'outline'} aria-pressed={view === value} onClick={() => onFiltersChange({...filters,view:value,page:1})}>{label}</Button>)}
+      </div>
+      {isError && appointments && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-amber-800">تعذر التحديث؛ المعروض آخر بيانات متاحة. <button onClick={() => void refetch()}>إعادة المحاولة</button></p>}
+      <p className="text-xs text-slate-600">الحضور المتأخر متاح لمواعيد اليوم فقط، والغياب بعد وقت الموعد. مواعيد الأيام القادمة تظهر للحجز والمتابعة.</p>
       {/* شريط الأدوات: بحث + فترة زمنية */}
       <div className="card space-y-3 p-3 sm:p-4">
         <div className="relative">
@@ -556,19 +569,16 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
         <ErrorState message={apiErrorMessage(error, "تعذّر تحميل المواعيد.")} onRetry={() => void refetch()} />
       ) : visible && visible.length > 0 ? (
         <div className={clsx("space-y-3 transition-opacity", isFetching && "opacity-80")} aria-busy={isFetching}>
-          {visible.map((a: any) => (
-            <AppointmentCard
-              key={a.id}
-              appointment={a}
-              role={user?.role === "ASSISTANT" ? "ASSISTANT" : "DOCTOR"}
-              onComplete={() => changeStatus(a.id, "COMPLETED", a)}
-              onNoShow={() => openNoShow(a)}
-              onArrivedLate={() => markArrivedLate(a.id)}
-              busy={updateStatus.isPending}
-              pending={pendingId === a.id}
-              onFollowUp={isAssistant ? undefined : () => openFollowUp(a)}
-            />
-          ))}
+          <p className="text-sm text-slate-600" aria-live="polite">{visible.length} نتيجة · الصفحة {page} من {totalPages}</p>
+          {groups.map(day => <section key={day} className="space-y-2" aria-label={formatDayAr(day)}>
+            <h2 className="rounded-xl bg-slate-100 px-3 py-2 font-bold">{formatDayAr(day)}</h2>
+            <div className="space-y-2 lg:hidden">{paged.filter(a => dayKey(a.date) === day).map(a => renderCard(a))}</div>
+            <div className="card hidden overflow-x-auto lg:block"><table className="w-full text-right text-sm"><caption className="sr-only">مواعيد {formatDayAr(day)}</caption>
+              <thead className="bg-slate-50"><tr><th scope="col" className="p-3">المستفيد</th><th scope="col" className="p-3">الوقت</th><th scope="col" className="p-3">الحالة</th><th scope="col" className="p-3">الإجراءات</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">{paged.filter(a => dayKey(a.date) === day).map(a => <tr key={a.id}><th scope="row" className="p-3 font-semibold"><bdi>{patientFullName(a)}</bdi><div className="ltr-nums text-xs font-normal text-slate-600">{patientPhone(a)}</div>{!a.patientId && <span className="text-xs font-normal text-slate-500">حجز دون حساب · الهوية غير مثبتة</span>}<NoShowWarningBadge count={a.patientNoShowCount ?? 0} /></th><td className="p-3"><span className="ltr-nums">{a.startTime}</span></td><td className="p-3"><AppointmentStatusBadge status={a.status}/></td><td className="p-3">{renderCard(a,true)}{a.status === 'NO_SHOW' && !canArriveLate(a) && <span className="text-xs text-slate-600">سجل سابق؛ الحضور المتأخر متاح يوم الموعد فقط.</span>}</td></tr>)}</tbody>
+            </table></div>
+          </section>)}
+          <Pagination page={page} totalPages={totalPages} onChange={n => onFiltersChange({...filters,page:n})}/>
         </div>
       ) : (
         <EmptyState
@@ -596,7 +606,10 @@ export default function DoctorAppointments() {
   // تفتح «كل المواعيد» بالفلتر الصريح نفسه، ويبقى كل شيء عند التحديث أو الرجوع.
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => parseAppointmentFilters(searchParams), [searchParams]);
-  const update = (next: AppointmentFilters) => setSearchParams(serializeAppointmentFilters(next), { replace: true });
+  const update = (next: AppointmentFilters) => {
+    const changed = next.q !== filters.q || next.status !== filters.status || next.from !== filters.from || next.to !== filters.to || next.view !== filters.view;
+    setSearchParams(serializeAppointmentFilters({...next, page: changed ? 1 : next.page}), { replace: true });
+  };
   const tab = filters.tab;
 
   return (

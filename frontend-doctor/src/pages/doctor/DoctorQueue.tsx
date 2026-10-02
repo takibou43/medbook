@@ -80,7 +80,7 @@ export default function DoctorQueue() {
   const { showToast } = useToast();
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
-  const { data, isLoading, isFetching } = useQueue(isAssistant ? ASSISTANT_QUEUE_POLL_MS : QUEUE_POLL_MS);
+  const { data, isLoading, isFetching, isError, refetch } = useQueue(isAssistant ? ASSISTANT_QUEUE_POLL_MS : QUEUE_POLL_MS);
 
   // شريط «الطبيب نادى على: فلان» الذي يظهر عند المساعد تلقائيًا.
   const [callBanner, setCallBanner] = useState<{ id: string; name: string; time: string } | null>(null);
@@ -203,6 +203,8 @@ export default function DoctorQueue() {
 
   if (isLoading && !data) return <Spinner label="جارٍ تحميل طابور اليوم..." />;
 
+  if (isError && !data) return <div role="alert" className="card p-4">تعذر تحميل طابور اليوم. <Button onClick={() => void refetch()}>إعادة المحاولة</Button></div>;
+
   const current = data?.current ?? null;
   const waiting = data?.waiting ?? [];
   const late = data?.late ?? [];
@@ -217,10 +219,11 @@ export default function DoctorQueue() {
 
   return (
     <div className="space-y-5">
+      {isError && data && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-amber-800">تعذر تحديث الطابور؛ المعروض آخر بيانات متاحة. <button onClick={() => void refetch()}>إعادة المحاولة</button></p>}
       <NoShowSmsDialog target={noShowTarget} mode="call" onConfirm={deferAndNotify} onClose={() => setNoShowTarget(null)} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-900">طابور اليوم</h1>
+          <h1 className="text-xl font-extrabold text-slate-900">إدارة طابور اليوم</h1>
           <p className="text-sm text-slate-600" aria-live="polite">
             {waiting.length} في الانتظار · {late.length} متأخرون
             {summary ? ` · ${summary.completed} مكتملة من ${summary.total}` : ""}
@@ -278,7 +281,7 @@ export default function DoctorQueue() {
       {current ? (
         <Card className="border-primary-200 bg-primary-50">
           <p className="text-xs font-semibold text-primary-700">المريض الحالي</p>
-          <p className="mt-1 text-2xl font-extrabold text-slate-900">{patientName(current)}</p>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900"><bdi>{patientName(current)}</bdi></p>
           <p className="text-sm text-slate-600">
             موعده {current.startTime}
             {patientPhone(current) ? <> · <span className="ltr-nums">{patientPhone(current)}</span></> : null}
@@ -362,6 +365,11 @@ export default function DoctorQueue() {
         </Card>
       )}
 
+      <Card className="border-slate-200 bg-white">
+        <p className="text-xs font-semibold text-primary-700">المريض القادم حسب ترتيب الطابور</p>
+        <p className="mt-1 text-lg font-bold"><bdi>{queueList[0] ? patientName(queueList[0]) : "لا يوجد مريض منتظر"}</bdi></p>
+        {queueList[0] && <p className="ltr-nums text-sm text-slate-600">{queueList[0].startTime}</p>}
+      </Card>
       {/* قائمة الانتظار بالترتيب */}
       <div>
         <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-slate-700">

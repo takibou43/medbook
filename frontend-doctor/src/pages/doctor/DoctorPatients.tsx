@@ -134,12 +134,13 @@ export default function DoctorPatients() {
         <h1 className="text-2xl font-extrabold text-slate-900">المرضى</h1>
         {data && (
           <p className="text-sm text-slate-600" aria-live="polite">
-            {data.total} {q ? "نتيجة" : "مريضًا"}
+            {data.total} {q ? "نتيجة" : "سجل مستفيد"}
             {isFetching ? " · جارٍ التحديث..." : ""}
           </p>
         )}
       </header>
 
+      <p className="text-sm text-slate-600">كل صاحب حساب وفرد أسرة سجل مستقل. حجوزات دون حساب غير مثبتة الهوية وتُعرض منفردة؛ الهاتف المشترك لا يثبت أن المستفيد واحد.</p>
       <FollowUpModal open={Boolean(followUpCtx)} ctx={followUpCtx} onClose={() => setFollowUpCtx(null)} />
 
       <div className="card grid gap-3 p-3 sm:grid-cols-[1fr_auto] sm:p-4">
@@ -184,7 +185,7 @@ export default function DoctorPatients() {
             {items.map((p, i) => (
               <li key={rowKey(p, i)} className="card p-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <h2 className="min-w-0 truncate text-base font-bold text-slate-900">{fullName(p)}</h2>
+                  <h2 className="min-w-0 truncate text-base font-bold text-slate-900"><bdi>{fullName(p)}</bdi></h2>
                   <Tags p={p} />
                 </div>
                 {p.phone && (
@@ -223,7 +224,7 @@ export default function DoctorPatients() {
                         <CalendarPlus className="h-4 w-4" aria-hidden="true" /> برمجة موعد عودة
                       </Button>
                     ) : (
-                      <p className="text-xs text-slate-600">برمجة موعد عودة متاحة للمرضى أصحاب الحسابات فقط.</p>
+                      <p className="text-xs text-slate-600">{p.isGuest ? "موعد العودة يتطلب حسابًا للمستفيد؛ حجوزات الضيوف القديمة لا تدعم هذا المسار." : "لا يوجد موعد أصل غير ملغى لبرمجة موعد العودة."}</p>
                     )}
                   </div>
                 </details>
@@ -252,7 +253,7 @@ export default function DoctorPatients() {
                   <tr key={rowKey(p, i)}>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1.5 font-semibold text-slate-800">
-                        {fullName(p)}
+                        <bdi>{fullName(p)}</bdi>
                         <Tags p={p} />
                       </div>
                       {p.email && <div className="ltr-nums mt-0.5 text-xs text-slate-600">{p.email}</div>}
@@ -266,6 +267,7 @@ export default function DoctorPatients() {
                     </td>
                     <td className="px-4 py-3 text-slate-700">{p.totalAppointments}</td>
                     <td className="px-4 py-3">
+                      {!p.lastAppointmentId && <span className="text-xs text-slate-600">{p.isGuest ? "موعد العودة يتطلب حسابًا للمستفيد؛ حجوزات الضيوف القديمة لا تدعم هذا المسار." : "لا يوجد موعد أصل غير ملغى لبرمجة موعد العودة."}</span>}
                       {p.lastAppointmentId && (
                         <Button variant="outline" className="whitespace-nowrap" onClick={() => followUp(p)}>
                           <CalendarPlus className="h-4 w-4" aria-hidden="true" /> برمجة موعد عودة

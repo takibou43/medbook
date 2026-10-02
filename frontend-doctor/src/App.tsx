@@ -84,18 +84,18 @@ function DoctorAreaLayout() {
   // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
   const unread = useDoctorUnread(!isAssistant && !!user);
   useUnreadToast(unread.data?.unread, () => "رسالة جديدة من الإدارة", "/messages?focus=unread");
-  const daily = doctorOnlyNav.filter(i => ["/patients", "/messages"].includes(i.to));
-  const settings = doctorOnlyNav.filter(i => !["/patients", "/messages", "/clinic"].includes(i.to));
-  const doctorNav = [...sharedNav, ...daily, ...settings, ...(isDentalSpecialty(user?.doctor?.specialty) ? [treatmentNavItem] : [])];
+  const daily = [...doctorOnlyNav.filter(i => i.to === "/patients"), ...(isDentalSpecialty(user?.doctor?.specialty) ? [treatmentNavItem] : [])];
+  const settings = doctorOnlyNav.filter(i => !["/patients", "/clinic"].includes(i.to));
+  const doctorNav = [...sharedNav, ...daily, ...settings];
   const items = isAssistant ? sharedNav : doctorNav.map((i) => (i.to === "/messages" ? { ...i, to: unread.data?.unread ? "/messages?focus=unread" : i.to, badge: unread.data?.unread } : i));
 
   return (
     <DashboardLayout
       title={isAssistant ? "لوحة المساعد" : "لوحة الطبيب"}
-      subtitle={isAssistant && doctorName ? `مساعد لدى د. ${doctorName}` : undefined}
+      subtitle={isAssistant && doctorName ? `مساعد لدى د. ${doctorName}` : user?.doctor ? `د. ${user.doctor.firstName} ${user.doctor.lastName}` : undefined}
       items={items}
       dailyNavigation
-      settingsStart={isAssistant ? undefined : 4}
+      settingsStart={isAssistant ? undefined : sharedNav.length + daily.length}
       clinicMode={!isAssistant}
     />
   );

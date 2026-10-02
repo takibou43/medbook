@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useQueue } from "../../hooks/useQueue";
+import DoctorQueue from "./DoctorQueue";
 import { algeriaToday, appointmentsLink, appointmentsCountAr, formatDayAr } from "../../lib/doctorUi";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -88,7 +88,7 @@ function patientName(a: import("../../types").Appointment): string {
 }
 export default function DoctorDashboard() {
   const { user } = useAuth();
-  const queue = useQueue();
+
   const { showToast } = useToast();
   // الصيغة الجاري تحميلها حاليًا — لمنع النقر المتكرر وإظهار حالة الزر.
   const [qrDownloading, setQrDownloading] = useState<"png" | "svg" | null>(null);
@@ -102,8 +102,6 @@ export default function DoctorDashboard() {
     refetchOnWindowFocus: true,
   });
 
-  if (isLoading) return <Spinner />;
-  if (isError) return <div role="alert">تعذر تحميل ملخص اليوم. <button onClick={() => void refetch()}>إعادة المحاولة</button></div>;
 
   const isAssistant = user?.role === "ASSISTANT";
   // الطبيب: بياناته في user.doctor مباشرة. المساعد: نفس البيانات (نسخة مختصرة آمنة، بلا
@@ -202,7 +200,7 @@ export default function DoctorDashboard() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="leading-relaxed">
             {daysLeft > 0
-              ? "اشتراكك المجاني ينتهي يوم " + validEnd.toLocaleDateString("ar-DZ", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) + " — متبقٍ " + daysLeft + (daysLeft === 1 ? " يوم" : " يومًا") + ". بعده يتوقف ظهورك للمرضى حتى تجديد الاشتراك."
+              ? "اشتراكك المجاني ينتهي يوم " + validEnd.toLocaleDateString("ar-DZ", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) + " — متبقٍ " + daysLeft + (daysLeft === 1 ? " يوم" : " يومًا") + (daysLeft <= 7 ? ". يرجى تجديد الاشتراك لاستمرار ظهورك للمرضى." : "")
               : "انتهت مدة اشتراكك المجاني. تواصل مع إدارة المنصة لتجديد الاشتراك والعودة إلى الظهور للمرضى."}
           </p>
         </div>
@@ -224,19 +222,12 @@ export default function DoctorDashboard() {
 
       {/* month/fee بلا "?? 0": يجب أن تبقيا undefined فعليًا حين لا يُرسلهما الخادم (حالة
           المساعد) حتى يُخفي RevenueCard عمود "هذا الشهر" تلقائيًا بدل عرض 0 مضلِّل. */}
-      <section className="card space-y-4 p-5" aria-label="ملخص اليوم">
-        <div className="flex items-center justify-between"><h2 className="text-lg font-bold">اليوم في العيادة</h2><Link className="text-primary-700" to="/appointments?tab=queue">فتح الطابور</Link></div>
-        {queue.isPending ? <Spinner /> : queue.isError ? <p role="alert">تعذر تحميل الطابور. <button onClick={() => void queue.refetch()}>إعادة المحاولة</button></p> : <>
-          <div className="grid grid-cols-3 gap-2"><div className="rounded-xl bg-primary-50 p-3"><p className="text-xs">المنتظرون</p><p className="text-2xl font-bold">{queue.data?.waiting.length ?? 0}</p></div><div className="rounded-xl bg-amber-50 p-3"><p className="text-xs">المتأخرون</p><p className="text-2xl font-bold">{queue.data?.late.length ?? 0}</p></div><div className="rounded-xl bg-green-50 p-3"><p className="text-xs">مكتملة اليوم</p><p className="text-2xl font-bold">{queue.data?.todaySummary?.completed ?? stats?.completedToday ?? 0}</p></div></div>
-          <p className="rounded-xl bg-slate-50 p-3">المريض الحالي: {queue.data?.current ? patientName(queue.data.current) : "لا يوجد مريض بالداخل الآن"}</p>
-          <h3 className="font-semibold">المواعيد التالية في الطابور</h3>
-          {(queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])]).slice(0, 3).map(a => <div key={a.id} className="flex justify-between gap-3 border-t pt-2"><span>{patientName(a)}</span><span className="ltr-nums">{a.startTime}</span></div>)}
-          {!queue.data?.waiting.length && !queue.data?.late.length && <p className="text-sm text-slate-500">لا يوجد منتظرون الآن.</p>}
-        </>}
-      </section>
+      <DoctorQueue />
+      {isLoading && !stats && <Spinner label="جارٍ تحميل الإحصاءات..." />}
+      {isError && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{stats ? "تعذر تحديث الإحصاءات؛ المعروض آخر ملخص متاح." : "تعذر تحميل الإحصاءات. يمكنك مواصلة إدارة الطابور."} <button onClick={() => void refetch()}>إعادة المحاولة</button></p>}
       {stats?.rescheduleRequired > 0 && <Link className="block rounded-xl bg-amber-50 p-4 text-amber-800" to={appointmentsLink({status: "RESCHEDULE_REQUIRED"})}>{appointmentsCountAr(stats.rescheduleRequired)} بحاجة إلى إعادة جدولة — مراجعة المواعيد</Link>}
 
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
+      {stats && <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
         <StatCard label="مواعيد اليوم" value={stats?.todayAppointments ?? 0} icon={CalendarClock} to={appointmentsLink({from: algeriaTodayIso(), to: algeriaTodayIso()})} />
 
         {/* الإحصاءات التالية إما لا تُرسَل للمساعد أصلًا من الخادم (totalPatients،
@@ -252,7 +243,7 @@ export default function DoctorDashboard() {
           />
         ) : (
           <>
-            <StatCard label="إجمالي المرضى" value={stats?.totalPatients ?? 0} sub="مرضى مختلفون" icon={Users} to="/patients" />
+            <StatCard label="سجلات المستفيدين" value={stats?.totalPatients ?? 0} sub="أصحاب الحسابات وأفراد الأسرة وحجوزات الضيوف" icon={Users} to="/patients" />
             <StatCard label="المواعيد المكتملة" value={stats?.completedAppointments ?? 0} icon={CheckCircle2} tone="green" to="/appointments?status=COMPLETED" />
             <StatCard label="المواعيد الملغاة" value={stats?.cancelledAppointments ?? 0} icon={XCircle} tone="red" to="/appointments?status=CANCELLED" />
           </>
@@ -280,9 +271,9 @@ export default function DoctorDashboard() {
             />
           </>
         )}
-      </div>
+      </div>}
 
-      <RevenueCard today={stats?.estimatedRevenueToday ?? 0} month={stats?.estimatedRevenueMonth} fee={stats?.consultationFee} />
+      {stats && <RevenueCard today={stats?.estimatedRevenueToday ?? 0} month={stats?.estimatedRevenueMonth} fee={stats?.consultationFee} />}
       <details className="space-y-4"><summary className="cursor-pointer font-bold">رمز الحجز ودعوة زميل</summary>
       {qrImageUrl && bookingUrl && (
         <section className="card p-4 sm:p-6" aria-label="رمز الحجز QR">

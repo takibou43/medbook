@@ -7,8 +7,8 @@ import { Input, Select } from "../../components/ui/Input";
 import { ClinicProfile, ClinicProfileFields, profileFromForm } from "./ClinicForms";
 import ClinicTransferRequests from "./ClinicTransferRequests";
 interface ManagedClinic extends ClinicProfile {
-  id: string; verificationStatus: string; subscriptionStatus: string; subscriptionExpiresAt: string | null;
-  billing: { doctorCount: number; monthlyTotal: number; monthlyPerDoctor: number; paidDoctorCount: number };
+  id: string; referralDiscountUntil: string | null; pendingReferralDays: number; verificationStatus: string; subscriptionStatus: string; subscriptionExpiresAt: string | null;
+  billing: { billedDoctorCount: number; discountedDoctorCount: number; doctorCount: number; monthlyTotal: number; monthlyPerDoctor: number; paidDoctorCount: number };
   doctors: { id: string; firstName: string; lastName: string; specialty: { nameAr: string }; verificationStatus: string;
     user: { email: string; isActive: boolean }; assistants: { id: string; firstName: string; lastName: string; isActive: boolean; user: { email: string } }[] }[];
   invites: { id: string; email: string; expiresAt: string }[];
@@ -60,8 +60,10 @@ export default function ClinicManagement() {
         <div className="flex flex-wrap justify-between gap-3"><h2 className="text-lg font-bold">اشتراك العيادة</h2><Button variant="outline" onClick={() => setEditing(!editing)}>تعديل بيانات العيادة</Button></div>
         <p>المراجعة: {stateLabels[clinic.verificationStatus]} · الاشتراك: {clinic.subscriptionExpiresAt && new Date(clinic.subscriptionExpiresAt) <= new Date() ? "منتهي" : stateLabels[clinic.subscriptionStatus]}</p>
         <p className="text-2xl font-bold text-primary-700">{clinic.billing.monthlyTotal.toLocaleString("ar-DZ")} دج / شهر</p>
-        <p>{clinic.billing.doctorCount} أطباء × {clinic.billing.monthlyPerDoctor.toLocaleString("ar-DZ")} دج. السعة المدفوعة: {clinic.billing.paidDoctorCount} أطباء.</p>
+        <p>{clinic.billing.billedDoctorCount} أطباء محتسبون × {clinic.billing.monthlyPerDoctor.toLocaleString("ar-DZ")} دج. العدد الفعلي: {clinic.billing.doctorCount}. السعة المدفوعة: {clinic.billing.paidDoctorCount} أطباء.</p>
         <p className="text-sm text-slate-600">حسابات المساعدين مشمولة. صاحب العيادة يُحتسب مرة واحدة إذا كان طبيبًا. تفعيل الاشتراك أو زيادة السعة يتم عبر إدارة مادبوك.</p>
+        {clinic.billing.discountedDoctorCount > 0 && <p className="text-emerald-700">مكافأة الإحالة: تُحسب تكلفة {clinic.billing.billedDoctorCount} أطباء بدل {clinic.billing.doctorCount} حتى {clinic.referralDiscountUntil?.slice(0, 10)}. جميع الأطباء مشمولون بالخدمة.</p>}
+        {clinic.pendingReferralDays > 0 && <p>خصم محفوظ لمدة {clinic.pendingReferralDays} يومًا، يبدأ عند تفعيل الاشتراك.</p>}
         {clinic.subscriptionExpiresAt && <p>ينتهي في: {new Date(clinic.subscriptionExpiresAt).toLocaleDateString("ar-DZ")}</p>}
       </div>
       <div className="card p-5"><h2 className="mb-3 text-lg font-bold">دعوة طبيب إلى العيادة</h2>
@@ -82,3 +84,4 @@ export default function ClinicManagement() {
     </>}
   </section>;
 }
+

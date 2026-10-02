@@ -1,7 +1,7 @@
 # فحص تلقائي لكل دفع إلى main ولكل طلب دمج: تثبيت نظيف من lockfile، TypeScript،
-# الاختبارات غير التكاملية، والبناء للمشروعات الثلاثة. مجاني (المستودع عام)، بلا أسرار،
-# ولا يمسّ قاعدة البيانات ولا Render ولا Vercel. اختبارات التكامل تبقى متخطاة لأنها
-# تحتاج قاعدة اختبار منفصلة (مهمة لاحقة).
+# كل اختبارات الخادم (بما فيها التكامل على PostgreSQL مؤقت داخل الـrunner)، والبناء للمشروعات
+# الثلاثة. مجاني (المستودع عام)، بلا أسرار، ولا يمسّ Neon ولا Render ولا Vercel.
+# بيانات اعتماد PostgreSQL أدناه اختبارية فقط وتختفي مع انتهاء الـrunner.
 name: CI
 
 on:
@@ -24,7 +24,24 @@ env:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: medbook_ci
+          POSTGRES_PASSWORD: medbook_ci_only
+          POSTGRES_DB: medbook_security_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medbook_ci -d medbook_security_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_security_test?schema=public
+      DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_security_test?schema=public
     defaults:
       run:
         working-directory: backend
@@ -38,7 +55,20 @@ jobs:
       - run: npm ci --include=dev
       - run: npx prisma generate --schema ../prisma/schema.prisma
       - run: npx tsc --noEmit -p tsconfig.json
-      - run: npx vitest run
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            pg_isready -h localhost -p 5432 -U medbook_ci -d medbook_security_test && exit 0
+            sleep 2
+          done
+          echo "PostgreSQL لم يصبح جاهزًا خلال 60 ثانية" >&2
+          exit 1
+      - name: Prepare test database (db push + SQL guards)
+        run: bash scripts/ci-prepare-test-db.sh
+      - name: Run all backend tests (unit + integration)
+        run: npx vitest run --reporter=default --reporter=json --outputFile.json=vitest-report.json
+      - name: Fail if any integration file was skipped
+        run: node scripts/assert-integration-ran.mjs vitest-report.json
       - run: npm run build
 
   frontend:
@@ -74,3 +104,4 @@ jobs:
       - run: npm ci --include=dev
       - run: npm test
       - run: npm run build
+

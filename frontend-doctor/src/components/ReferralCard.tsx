@@ -44,7 +44,7 @@ export function ReferralCard() {
         <Gift className="h-5 w-5 text-primary-600" /> ادعُ طبيبًا
       </h2>
       <p className="text-sm text-slate-600">
-        شارك رابطك مع زميل. عندما توثّق الإدارة حسابه تُضاف {q.data.rewardDays} يومًا إلى اشتراكك — مرة واحدة لكل طبيب.
+        شارك رابطك مع زميل. عند توثيق حسابه تحصل على {q.data.rewardDays} يومًا لاشتراكك، أو خصم تكلفة طبيب واحد للمدة نفسها إذا كنت ضمن عيادة — مرة واحدة لكل طبيب.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <code className="flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-slate-100 px-3 font-bold tracking-wider text-slate-800" dir="ltr">{q.data.code}</code>
@@ -57,12 +57,14 @@ export function ReferralCard() {
           {q.data.referrals.map((r) => (
             <li key={r.id} className="flex items-center justify-between py-2">
               <span className="text-slate-700">{r.referredName}</span>
-              <span className={r.status === "REWARDED" ? "font-semibold text-emerald-700" : "text-slate-500"}>{REFERRAL_STATUS_LABELS[r.status]}</span>
+              <span className={r.status === "REWARDED" ? "font-semibold text-emerald-700" : "text-slate-500"}>{r.status === "REWARDED" && r.rewardClinicId ? "خصم لاشتراك العيادة" : REFERRAL_STATUS_LABELS[r.status]}</span>
             </li>
           ))}
         </ul>
       )}
       {q.data.totals.rewardedDays > 0 && <p className="text-xs text-emerald-700">مجموع ما أُضيف لاشتراكك: {q.data.totals.rewardedDays} يومًا.</p>}
+      {(q.data.totals.clinicDiscountDays ?? 0) > 0 && <p className="text-xs text-emerald-700">مجموع مكافآت العيادة: خصم تكلفة طبيب واحد لمدة {q.data.totals.clinicDiscountDays} يومًا.</p>}
     </section>
   );
 }
+

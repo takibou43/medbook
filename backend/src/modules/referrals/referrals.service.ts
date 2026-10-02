@@ -1,3 +1,4 @@
+import { addClinicReferralReward } from "../../lib/clinicReferralReward";
 import { safeErrorCode } from "../../lib/safeError";
 import { Prisma, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
@@ -70,6 +71,7 @@ export async function getMyReferrals(userId: string) {
       qualifiedAt: true,
       rewardedAt: true,
       rewardDays: true,
+      rewardClinicId: true,
       // الطبيب المُحال: الاسم الأول والحرف الأول من اللقب فقط (قد لا يكون ملفه منشورًا بعد).
       referred: { select: { firstName: true, lastName: true } },
     },
@@ -85,7 +87,8 @@ export async function getMyReferrals(userId: string) {
     totals: {
       pending: referrals.filter((r) => r.status === "PENDING" || r.status === "REJECTED").length,
       rewarded: referrals.filter((r) => r.status === "REWARDED").length,
-      rewardedDays: referrals.filter((r) => r.status === "REWARDED").reduce((s, r) => s + r.rewardDays, 0),
+      rewardedDays: referrals.filter((r) => r.status === "REWARDED").reduce((s, r) => s + (r.rewardClinicId ? 0 : r.rewardDays), 0),
+      clinicDiscountDays: referrals.filter((r) => r.status === "REWARDED" && r.rewardClinicId).reduce((s, r) => s + r.rewardDays, 0),
     },
   };
 }
@@ -134,6 +137,7 @@ export interface GrantedReward {
   referrerUserId: string;
   previousExpiresAt: Date | null;
   newExpiresAt: Date;
+  clinicReward?: { clinicId: string; nameAr: string; discountUntil: Date | null; pendingDays: number };
 }
 
 /**
@@ -160,9 +164,28 @@ export async function grantReferralRewardTx(
 
   const referrer = await tx.doctor.findUnique({
     where: { id: referral.referrerDoctorId },
-    select: { id: true, userId: true, subscriptionStatus: true, subscriptionExpiresAt: true },
+    select: { id: true, userId: true, subscriptionStatus: true, subscriptionExpiresAt: true, clinicId: true },
   });
   if (!referrer) throw ApiError.notFound("الطبيب المُحيل غير موجود.");
+
+  if (referrer.clinicId) {
+    // Lock the billing account too: two different referrers in the same clinic
+    // must extend the discount serially, in the reward transaction.
+    await tx.$queryRaw`SELECT id FROM "clinics" WHERE id = ${referrer.clinicId} FOR UPDATE`;
+    const clinic = await tx.clinic.findUnique({ where: { id: referrer.clinicId } });
+    if (clinic?.ownerId) {
+      const updated = await tx.clinic.update({
+        where: { id: clinic.id }, data: addClinicReferralReward(clinic, referral.rewardDays, now),
+      });
+      await tx.doctorReferral.update({ where: { id: referral.id }, data: { rewardClinicId: clinic.id } });
+      await writeAudit({ userId: actorUserId, action: "REFERRAL_REWARDED", entity: "DoctorReferral", entityId: referral.id,
+        meta: { referrerDoctorId: referrer.id, referredDoctorId, rewardClinicId: clinic.id, rewardDays: referral.rewardDays,
+          discountUntil: updated.referralDiscountUntil?.toISOString() ?? null, pendingDays: updated.pendingReferralDays } }, tx);
+      return { referralId: referral.id, referrerDoctorId: referrer.id, referrerUserId: referrer.userId,
+        previousExpiresAt: referrer.subscriptionExpiresAt, newExpiresAt: referrer.subscriptionExpiresAt ?? now,
+        clinicReward: { clinicId: clinic.id, nameAr: clinic.nameAr, discountUntil: updated.referralDiscountUntil, pendingDays: updated.pendingReferralDays } };
+    }
+  }
 
   const newExpiresAt = computeReferralExtension(referrer, now, trialEndsAt(), referral.rewardDays);
   await tx.doctor.update({
@@ -241,8 +264,12 @@ export async function notifyReferrerRewarded(reward: GrantedReward) {
     await createNotification(
       reward.referrerUserId,
       "REFERRAL_REWARDED",
-      "تمت إضافة 30 يومًا لاشتراكك",
-      `شكرًا على دعوة زميلك إلى MedBook! تم توثيق حسابه، وأُضيف ${REFERRAL_REWARD_DAYS} يومًا إلى اشتراكك حتى ${reward.newExpiresAt.toISOString().slice(0, 10)}.`
+      reward.clinicReward ? "مكافأة إحالة لعيادتك" : "تمت إضافة 30 يومًا لاشتراكك",
+      reward.clinicReward
+        ? reward.clinicReward.pendingDays > 0
+          ? `تم توثيق زميلك. حُفظ خصم تكلفة طبيب واحد لمدة ${REFERRAL_REWARD_DAYS} يومًا لعيادة ${reward.clinicReward.nameAr}، ويبدأ عند تفعيل اشتراكها.`
+          : `تم توثيق زميلك. تُحسب عيادة ${reward.clinicReward.nameAr} بتكلفة طبيب أقل حتى ${reward.clinicReward.discountUntil!.toISOString().slice(0, 10)}، مع بقاء جميع الأطباء مشمولين بالخدمة.`
+        : `شكرًا على دعوة زميلك إلى MedBook! تم توثيق حسابه، وأُضيف ${REFERRAL_REWARD_DAYS} يومًا إلى اشتراكك حتى ${reward.newExpiresAt.toISOString().slice(0, 10)}.`
     );
   } catch (err) {
     console.error("تعذّر إشعار الطبيب المُحيل (المكافأة محفوظة):", safeErrorCode(err));
@@ -262,6 +289,7 @@ export async function listReferralsAdmin(params: { status?: string; page?: numbe
         status: true,
         referralCodeUsed: true,
         rewardDays: true,
+      rewardClinicId: true,
         createdAt: true,
         qualifiedAt: true,
         rewardedAt: true,
@@ -276,3 +304,4 @@ export async function listReferralsAdmin(params: { status?: string; page?: numbe
   ]);
   return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
 }
+

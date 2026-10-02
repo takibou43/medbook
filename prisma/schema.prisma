@@ -241,6 +241,9 @@ model Clinic {
   subscriptionStatus SubscriptionStatus @default(UNPAID)
   subscriptionExpiresAt DateTime?
   paidDoctorCount Int @default(0)
+  referralDiscountUntil DateTime?
+  pendingReferralDays Int @default(0)
+  referralRewards DoctorReferral[] @relation("ClinicReferralRewards")
   createdAt DateTime @default(now())
   doctorInvites ClinicDoctorInvite[]
   transferRequests ClinicTransferRequest[]
@@ -917,9 +920,13 @@ model DoctorReferral {
   qualifiedAt      DateTime?
   rewardedAt       DateTime?
   rewardDays       Int                  @default(30)
+  rewardClinicId   String?
+  rewardClinic     Clinic? @relation("ClinicReferralRewards", fields: [rewardClinicId], references: [id], onDelete: Restrict)
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 
+  @@index([rewardClinicId])
   @@index([referrerDoctorId])
   @@map("doctor_referrals")
 }
+

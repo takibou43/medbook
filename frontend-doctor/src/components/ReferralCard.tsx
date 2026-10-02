@@ -32,9 +32,9 @@ export function ReferralCard() {
     }
   }
   async function share() {
-    const text = `انضم إلى MedBook لإدارة مواعيد عيادتك. سجّل عبر هذا الرابط: ${link}`;
+    const text = `انضم إلى مادبوك / MadBook لإدارة مواعيد عيادتك. سجّل عبر هذا الرابط: ${link}`;
     if (navigator.share) {
-      try { await navigator.share({ title: "MedBook", text }); } catch { /* أُلغيت المشاركة */ }
+      try { await navigator.share({ title: "MadBook", text }); } catch { /* أُلغيت المشاركة */ }
     } else copy(text, "رسالة الدعوة");
   }
 

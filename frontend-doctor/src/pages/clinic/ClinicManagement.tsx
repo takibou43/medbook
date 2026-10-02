@@ -65,7 +65,6 @@ export default function ClinicManagement() {
         <p className="text-sm text-slate-600">حسابات المساعدين مشمولة. صاحب العيادة يُحتسب مرة واحدة إذا كان طبيبًا. تفعيل الاشتراك أو زيادة السعة يتم عبر إدارة مادبوك.</p>
         {clinic.billing.discountedDoctorCount > 0 && <p className="text-emerald-700">مكافأة الإحالة: تُحسب تكلفة {doctorsCountAr(clinic.billing.billedDoctorCount)} بدل {doctorsCountAr(clinic.billing.doctorCount)} حتى {clinic.referralDiscountUntil?.slice(0, 10)}. جميع الأطباء مشمولون بالخدمة.</p>}
         {clinic.pendingReferralDays > 0 && <p>خصم محفوظ لمدة {clinic.pendingReferralDays} يومًا، يبدأ عند تفعيل الاشتراك.</p>}
-        {clinic.subscriptionExpiresAt && <p>ينتهي في: {new Date(clinic.subscriptionExpiresAt).toLocaleDateString("ar-DZ")}</p>}
       </div>
       <div className="card p-5"><h2 className="mb-3 text-lg font-bold">دعوة طبيب إلى العيادة</h2>
         <form onSubmit={e => invite(e)} className="flex flex-wrap items-end gap-3"><Input name="email" type="email" label="بريد الطبيب" required /><Button type="submit" loading={busy}>إنشاء رابط دعوة</Button></form>
@@ -85,4 +84,3 @@ export default function ClinicManagement() {
     </>}
   </section>;
 }
-

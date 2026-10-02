@@ -6,6 +6,8 @@ import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
 import { Input, Select } from "../../components/ui/Input";
+import { DateField } from "../../components/ui/DateField";
+import { formatDayAr } from "../../lib/doctorUi";
 
 const DAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
@@ -176,7 +178,7 @@ export default function DoctorSchedule() {
       <div className="card p-5">
         <h2 className="mb-4 font-bold text-slate-900">إجازات وأيام استثنائية</h2>
         <div className="flex flex-wrap items-end gap-3">
-          <Input label="التاريخ" type="date" value={exceptionDate} onChange={(e) => setExceptionDate(e.target.value)} />
+          <DateField label="التاريخ" value={exceptionDate} onChange={(value) => setExceptionDate(value ?? "")} />
           <label className="flex items-center gap-2 pb-2.5 text-sm text-slate-600">
             <input type="checkbox" checked={exceptionOff} onChange={(e) => setExceptionOff(e.target.checked)} />
             يوم عطلة كامل
@@ -189,7 +191,7 @@ export default function DoctorSchedule() {
             {exceptions.map((ex: any) => (
               <div key={ex.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2 text-sm">
                 <span>
-                  {new Date(ex.exceptionDate).toLocaleDateString("ar-DZ")} — {ex.isOff ? "عطلة" : `${ex.startTime} - ${ex.endTime}`}
+                  {formatDayAr(ex.exceptionDate.slice(0, 10))} — {ex.isOff ? "عطلة" : `${ex.startTime} - ${ex.endTime}`}
                 </span>
                 <button
                   onClick={async () => {

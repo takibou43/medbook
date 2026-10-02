@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQueue } from "../../hooks/useQueue";
-import { algeriaToday, appointmentsLink, formatDayAr } from "../../lib/doctorUi";
+import { algeriaToday, appointmentsLink, appointmentsCountAr, formatDayAr } from "../../lib/doctorUi";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -234,7 +234,7 @@ export default function DoctorDashboard() {
           {!queue.data?.waiting.length && !queue.data?.late.length && <p className="text-sm text-slate-500">لا يوجد منتظرون الآن.</p>}
         </>}
       </section>
-      {stats?.rescheduleRequired > 0 && <Link className="block rounded-xl bg-amber-50 p-4 text-amber-800" to={appointmentsLink({status: "RESCHEDULE_REQUIRED"})}>{stats.rescheduleRequired} موعدًا بحاجة إلى إعادة جدولة — مراجعة المواعيد</Link>}
+      {stats?.rescheduleRequired > 0 && <Link className="block rounded-xl bg-amber-50 p-4 text-amber-800" to={appointmentsLink({status: "RESCHEDULE_REQUIRED"})}>{appointmentsCountAr(stats.rescheduleRequired)} بحاجة إلى إعادة جدولة — مراجعة المواعيد</Link>}
 
       <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
         <StatCard label="مواعيد اليوم" value={stats?.todayAppointments ?? 0} icon={CalendarClock} to={appointmentsLink({from: algeriaTodayIso(), to: algeriaTodayIso()})} />

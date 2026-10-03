@@ -28,6 +28,12 @@ export default function Login() {
     setLoading(true);
     try {
       const user = await login(values.email, values.password);
+      // مريض يسجّل دخوله هنا: يبقى بجلسته ويرى صفحة «قدّم كطبيب» لإضافة ملف الطبيب إلى حسابه نفسه.
+      if (user.role === "PATIENT") {
+        showToast("تم تسجيل الدخول. أكمل بيانات الطبيب لتقديم طلبك.", "success");
+        navigate("/apply");
+        return;
+      }
       if (user.role !== "DOCTOR" && user.role !== "ADMIN" && user.role !== "ASSISTANT" && user.role !== "CLINIC_OWNER") {
         showToast("هذا الموقع مخصص لحسابات الأطباء والمساعدين والإدارة فقط.", "error");
         await logout();
@@ -64,6 +70,9 @@ export default function Login() {
           <a href="/register" className="font-semibold text-primary-700 hover:underline">
             انضم كطبيب
           </a>
+        </p>
+        <p className="mt-2 text-center text-xs leading-5 text-slate-500">
+          لديك حساب مريض في مادبوك؟ سجّل الدخول هنا بنفس البريد وكلمة المرور، ثم قدّم طلبك كطبيب من داخل حسابك دون إنشاء حساب آخر.
         </p>
         <p className="mt-2 text-center text-sm text-slate-600"><a href="/register/clinic" className="font-semibold text-primary-700 hover:underline">إنشاء حساب صاحب عيادة</a></p>
       </div>

@@ -1,5 +1,7 @@
 export type AnnouncedDoctor = {
   id: string;
+  // حساب الطبيب نفسه: يُستثنى من إعلان «طبيب جديد في ولايتك» إن كان يحمل ملف مريض أيضًا.
+  userId?: string;
   firstName: string;
   lastName: string;
   wilayaId: string;

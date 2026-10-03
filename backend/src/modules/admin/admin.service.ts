@@ -19,8 +19,9 @@ export async function getStats() {
     endOfDay.setUTCHours(23, 59, 59, 999);
 
   const [patients, doctors, clinics, appointments, todayAppointments, completed, cancelled, pendingVerification] = await Promise.all([
-        prisma.user.count({ where: { role: Role.PATIENT } }),
-        prisma.user.count({ where: { role: Role.DOCTOR } }),
+        // يُحتسب كل حساب يحمل ملف مريض (حساب الملفين مرة في كل عدّاد).
+        prisma.patient.count(),
+        prisma.user.count({ where: { OR: [{ role: Role.DOCTOR }, { doctor: { isNot: null } }] } }),
         prisma.clinic.count(),
         prisma.appointment.count(),
         prisma.appointment.count({ where: { date: { gte: startOfDay, lte: endOfDay } } }),
@@ -38,12 +39,16 @@ export async function listUsers(params: { role?: Role; q?: string; page?: number
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 20));
 
-  const where: Prisma.UserWhereInput = {
-        ...(params.role ? { role: params.role } : {}),
-        ...(params.q
-                  ? { OR: [{ email: { contains: params.q, mode: "insensitive" } }, { phone: { contains: params.q } }] }
-                  : {}),
-  };
+  // شرطان مستقلان داخل AND حتى لا يطغى OR البحث على OR الدور (كلاهما يستعمل المفتاح نفسه).
+  const roleFilter: Prisma.UserWhereInput =
+    params.role === Role.PATIENT ? { OR: [{ role: Role.PATIENT }, { patient: { isNot: null } }] }
+    : params.role === Role.DOCTOR ? { OR: [{ role: Role.DOCTOR }, { doctor: { isNot: null } }] }
+    : params.role ? { role: params.role } : {};
+  const searchFilter: Prisma.UserWhereInput = params.q
+    ? { OR: [{ email: { contains: params.q, mode: "insensitive" } }, { phone: { contains: params.q } }] }
+    : {};
+  const where: Prisma.UserWhereInput = { AND: [roleFilter, searchFilter] };
+
 
   const [items, total] = await Promise.all([
         prisma.user.findMany({

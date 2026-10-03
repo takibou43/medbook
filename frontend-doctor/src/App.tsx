@@ -23,6 +23,7 @@ import { useAuth } from "./context/AuthContext";
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ApplyDoctor from "./pages/ApplyDoctor";
 import AssistantAcceptInvite from "./pages/AssistantAcceptInvite";
 import DoctorDashboard from "./pages/doctor/DoctorDashboard";
 import DoctorAppointments from "./pages/doctor/DoctorAppointments";
@@ -129,6 +130,10 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/register/clinic" element={<ClinicRegister />} />
+      {/* حساب مريض يضيف ملف طبيب إلى حسابه نفسه */}
+      <Route element={<ProtectedRoute allow={["PATIENT"]} />}>
+        <Route path="/apply" element={<ApplyDoctor />} />
+      </Route>
       <Route path="/clinic/doctor/accept/:token" element={<ClinicDoctorInvite />} />
       <Route path="/assistant/accept/:token" element={<AssistantAcceptInvite />} />
       <Route element={<ProtectedRoute allow={["CLINIC_OWNER", "DOCTOR"]} />}>

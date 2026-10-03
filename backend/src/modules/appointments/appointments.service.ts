@@ -1,3 +1,4 @@
+import { assertNotOwnDoctor } from "../../lib/accountProfiles";
 import { safeErrorCode } from "../../lib/safeError";
 import { AppointmentStatus, Prisma, Role, SubscriptionStatus, SmsStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
@@ -39,6 +40,7 @@ function addMinutes(hhmm: string, minutes: number): string {
  * 4) القيد الفريد [doctorId, date, startTime, activeSlot] خط دفاع أخير، و P2002 يُعاد معه الحساب.
  */
 export async function createAppointment(patientUserId: string, input: CreateAppointmentInput) {
+  await assertNotOwnDoctor(patientUserId, input.doctorId);
   const patient = await prisma.patient.findUnique({ where: { userId: patientUserId } });
   if (!patient) throw ApiError.notFound("لم يتم العثور على ملف مريض مرتبط بهذا الحساب.");
   await assertPatientCanBook(patient.id);

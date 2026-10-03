@@ -3,6 +3,7 @@ import { Role } from "@prisma/client";
 import { verifyAccessToken } from "../utils/jwt";
 import { ApiError } from "../utils/ApiError";
 import { prisma } from "../lib/prisma";
+import { holdsContext } from "../lib/accountProfiles";
 
 export interface AuthUser {
   id: string;
@@ -29,10 +30,14 @@ export function authenticate(req: Request, _res: Response, next: NextFunction) {
     const payload = verifyAccessToken(token);
     // JWT validity alone does not reflect account deactivation or a changed role.
     return prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, isActive: true } })
-      .then((user) => {
+      .then(async (user) => {
         if (!user || !user.isActive) return next(ApiError.unauthorized());
-        if (user.role !== payload.role) return next(ApiError.forbidden());
-        req.user = { id: user.id, role: user.role };
+        // الدور داخل التوكن هو «سياق الجلسة». يطابق دور الحساب الأصلي عادةً؛ وللحساب ذي الملفين
+        // (طبيب يملك ملف مريض أو العكس) يُقبل السياق الآخر فقط إن كان الملف موجودًا فعلًا الآن.
+        // أي سياق آخر (مثل ADMIN لحساب مريض) يُرفض كما كان.
+        const ok = user.role === payload.role || (await holdsContext(user.id, user.role, payload.role));
+        if (!ok) return next(ApiError.forbidden());
+        req.user = { id: user.id, role: payload.role };
         return next();
       }).catch(next);
   } catch {
@@ -47,8 +52,10 @@ export function optionalAuthenticate(req: Request, _res: Response, next: NextFun
     try {
       const payload = verifyAccessToken(header.slice("Bearer ".length));
       return prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, isActive: true } })
-        .then((user) => {
-          if (user?.isActive && user.role === payload.role) req.user = { id: user.id, role: user.role };
+        .then(async (user) => {
+          if (user?.isActive && (user.role === payload.role || (await holdsContext(user.id, user.role, payload.role)))) {
+            req.user = { id: user.id, role: payload.role };
+          }
           next();
         }).catch(next);
     } catch {

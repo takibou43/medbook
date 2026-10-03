@@ -206,7 +206,16 @@ export interface Notification {
   expiresAt?: string | null;
 }
 
+/** ملخص ملفات الحساب (مريض/طبيب) كما يحدده الخادم. الواجهة تعرضه فقط؛ الصلاحيات الفعلية في الخادم. */
+export interface AccountProfiles {
+  patient: boolean;
+  doctor: { status: "PENDING" | "VERIFIED" | "REJECTED" } | null;
+  canAddPatientProfile: boolean;
+  canApplyAsDoctor: boolean;
+}
+
 export interface User {
+  profiles?: AccountProfiles;
   id: string;
   email: string;
   phone?: string | null;

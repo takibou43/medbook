@@ -1,3 +1,4 @@
+import { Prisma, Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { sendPushToUser } from "../../lib/push";
 import { appointmentDayEndsAt } from "../../lib/appointmentExpiry";
@@ -97,9 +98,25 @@ function notExpired(now: Date) {
   return { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] };
 }
 
-export async function listForUser(userId: string, onlyUnread = false, now: Date = new Date()) {
+// إشعارات عامة تخص المريض وحده (لا موعد مرتبطًا بها). غيرها من العامة (توثيق الحساب، الرسائل، الإحالات) للطبيب.
+const PATIENT_GENERAL_TYPES = ["NEW_DOCTOR_IN_AREA"];
+
+/**
+ * حساب بملفين: كل واجهة ترى إشعاراتها فقط. إشعار الموعد يُنسب بملكية الموعد نفسه (مريضه أو طبيبه)،
+ * والعام بالنوع. حساب بملف واحد لا يُطبَّق عليه أي فلتر (سلوكه كما كان تمامًا).
+ */
+async function audienceFilter(userId: string, role?: Role): Promise<Prisma.NotificationWhereInput> {
+  if (role !== Role.PATIENT && role !== Role.DOCTOR) return {};
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { patient: { select: { id: true } }, doctor: { select: { id: true } } } });
+  if (!u?.patient || !u?.doctor) return {};
+  return role === Role.PATIENT
+    ? { OR: [{ appointmentId: null, type: { in: PATIENT_GENERAL_TYPES } }, { appointment: { patientId: u.patient.id } }] }
+    : { OR: [{ appointmentId: null, type: { notIn: PATIENT_GENERAL_TYPES } }, { appointment: { doctorId: u.doctor.id } }] };
+}
+
+export async function listForUser(userId: string, onlyUnread = false, now: Date = new Date(), role?: Role) {
   return prisma.notification.findMany({
-    where: { userId, ...(onlyUnread ? { isRead: false } : {}), ...notExpired(now) },
+    where: { AND: [{ userId, ...(onlyUnread ? { isRead: false } : {}) }, notExpired(now), await audienceFilter(userId, role)] },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
@@ -109,8 +126,8 @@ export async function markAsRead(userId: string, id: string) {
   return prisma.notification.updateMany({ where: { id, userId }, data: { isRead: true } });
 }
 
-export async function markAllAsRead(userId: string) {
-  return prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true } });
+export async function markAllAsRead(userId: string, role?: Role) {
+  return prisma.notification.updateMany({ where: { AND: [{ userId, isRead: false }, await audienceFilter(userId, role)] }, data: { isRead: true } });
 }
 
 /**

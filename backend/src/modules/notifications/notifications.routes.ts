@@ -10,7 +10,7 @@ router.get(
   "/",
   asyncHandler(async (req, res) => {
     const onlyUnread = req.query.unread === "true";
-    res.json({ success: true, data: await service.listForUser(req.user!.id, onlyUnread) });
+    res.json({ success: true, data: await service.listForUser(req.user!.id, onlyUnread, new Date(), req.user!.role) });
   })
 );
 
@@ -25,7 +25,7 @@ router.patch(
 router.patch(
   "/read-all",
   asyncHandler(async (req, res) => {
-    await service.markAllAsRead(req.user!.id);
+    await service.markAllAsRead(req.user!.id, req.user!.role);
     res.json({ success: true });
   })
 );

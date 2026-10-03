@@ -8,11 +8,13 @@ import { hashToken, issueTokens } from "../../lib/tokens";
 import { acceptInvite } from "../assistants/assistants.service";
 import { ASSISTANT_SAFE_SELECT } from "../../lib/assistantView";
 import { resolveReferrerForRegistration, createReferralTx } from "../referrals/referrals.service";
+import { doctorPortalRole, summarizeProfiles, PROFILE_PROBE, accountExistsError } from "../../lib/accountProfiles";
+
 
 export async function registerPatient(input: RegisterPatientInput) {
   // بلا هاتف: لا نضيف شرط الهاتف إطلاقًا ({ phone: undefined } يطابق كل المستخدمين فيرفض أي تسجيل بلا هاتف بـ409).
   const existing = await prisma.user.findFirst({ where: { OR: [{ email: input.email }, ...(input.phone ? [{ phone: input.phone }] : [])] } });
-  if (existing) throw ApiError.conflict("البريد الإلكتروني أو رقم الهاتف مستخدم مسبقًا.");
+  if (existing) throw accountExistsError();
 
   const passwordHash = await hashPassword(input.password);
 
@@ -43,7 +45,7 @@ export async function registerDoctor(input: RegisterDoctorInput) {
   if (input.clinicId) throw ApiError.forbidden("الانضمام إلى العيادة يتطلب دعوة من صاحبها.");
   // بلا هاتف: لا نضيف شرط الهاتف إطلاقًا ({ phone: undefined } يطابق كل المستخدمين فيرفض أي تسجيل بلا هاتف بـ409).
   const existing = await prisma.user.findFirst({ where: { OR: [{ email: input.email }, ...(input.phone ? [{ phone: input.phone }] : [])] } });
-  if (existing) throw ApiError.conflict("البريد الإلكتروني أو رقم الهاتف مستخدم مسبقًا.");
+  if (existing) throw accountExistsError();
 
   // كود الإحالة يُفحص قبل أي إنشاء: كود غير صحيح → 400 على الحقل referralCode ولا يُنشأ الحساب.
   const referrer = await resolveReferrerForRegistration(input.referralCode);
@@ -115,8 +117,10 @@ export async function login(email: string, password: string) {
   if (!user || !valid) throw ApiError.unauthorized("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
   if (!user.isActive) throw ApiError.forbidden("هذا الحساب معطّل. تواصل مع الإدارة.");
 
-  const tokens = await issueTokens(user.id, user.role);
-  return { user, ...tokens };
+  // سياق واجهة الأطباء: مريض يملك ملف طبيب يدخل كطبيب؛ وغيره بدوره الأصلي كما كان.
+  const context = doctorPortalRole(user);
+  const tokens = await issueTokens(user.id, context);
+  return { user: { ...user, role: context, profiles: summarizeProfiles(user) }, ...tokens };
 }
 
 /**
@@ -186,7 +190,7 @@ export async function refresh(refreshToken: string) {
     throw ApiError.unauthorized("جلسة منتهية. الرجاء تسجيل الدخول من جديد.");
   }
 
-  const user = await prisma.user.findUnique({ where: { id: decoded.sub } });
+  const user = await prisma.user.findUnique({ where: { id: decoded.sub }, include: PROFILE_PROBE });
   if (!user || !user.isActive) throw ApiError.unauthorized();
 
   // rotate: revoke old, issue new
@@ -195,19 +199,31 @@ export async function refresh(refreshToken: string) {
     data: { revoked: true },
   });
   if (consumed.count !== 1) throw ApiError.unauthorized("جلسة منتهية. الرجاء تسجيل الدخول من جديد.");
-  const tokens = await issueTokens(user.id, user.role);
-  return { user, ...tokens };
+  const context = doctorPortalRole(user);
+  const tokens = await issueTokens(user.id, context);
+  const { patient: _p, doctor: _d, ...rest } = user;
+  void _p; void _d;
+  return { user: { ...rest, role: context, profiles: summarizeProfiles(user) }, ...tokens };
 }
 
-export async function logout(refreshToken: string | undefined) {
+/**
+ * allSessions: إبطال كل جلسات التجديد للحساب (واجهة المرضى والأطباء معًا) — يُستعمل لحساب الملفين
+ * حتى لا تبقى جلسة الواجهة الأخرى مفتوحة بعد الخروج. لا يُنفَّذ إلا إن طابق الكوكي المُرسَل جلسة قائمة فعلًا.
+ */
+export async function logout(refreshToken: string | undefined, allSessions = false) {
   if (!refreshToken) return;
-  await prisma.refreshToken.updateMany({
-    where: { tokenHash: hashToken(refreshToken) },
-    data: { revoked: true },
-  });
+  const tokenHash = hashToken(refreshToken);
+  if (allSessions) {
+    const row = await prisma.refreshToken.findFirst({ where: { tokenHash }, select: { userId: true } });
+    if (row) {
+      await prisma.refreshToken.updateMany({ where: { userId: row.userId, revoked: false }, data: { revoked: true } });
+      return;
+    }
+  }
+  await prisma.refreshToken.updateMany({ where: { tokenHash }, data: { revoked: true } });
 }
 
-export async function getMe(userId: string) {
+export async function getMe(userId: string, context?: Role) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     include: {
@@ -222,5 +238,6 @@ export async function getMe(userId: string) {
     },
   });
   if (!user) throw ApiError.notFound("المستخدم غير موجود.");
-  return user;
+  // role = سياق الجلسة الحالية (الواجهة التي دخل منها)؛ دور الحساب الأصلي لا يُكشف ولا يتغيّر في القاعدة.
+  return { ...user, role: context ?? user.role, profiles: summarizeProfiles(user) };
 }

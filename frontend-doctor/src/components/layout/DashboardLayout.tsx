@@ -4,6 +4,7 @@ import { LucideIcon, LogOut, Menu, X } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../../context/AuthContext";
 import { Logo } from "../ui/Logo";
+import { SwitchToPatientButton } from "../ProfilesCard";
 
 export interface DashboardNavItem {
   to: string;
@@ -79,6 +80,7 @@ export function DashboardLayout({
           ))}
         </nav>
         <div className="border-t border-slate-200 p-3">
+          <SwitchToPatientButton />
           <button onClick={handleLogout} className="btn-ghost w-full justify-start">
             <LogOut className="h-4 w-4" />
             تسجيل الخروج
@@ -124,6 +126,7 @@ export function DashboardLayout({
               </NavLink>
             ))}
             {clinicMode && <NavLink to="/clinic" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl p-3 text-primary-700">إدارة العيادة</NavLink>}
+            <SwitchToPatientButton className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 hover:bg-slate-100" onDone={() => setMobileMenuOpen(false)} />
             <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">
               <LogOut className="h-4 w-4" />
               تسجيل الخروج

@@ -288,7 +288,18 @@ export interface Notification {
   createdAt: string;
 }
 
+/** ملخص ملفات الحساب (مريض/طبيب) كما يحدده الخادم. الواجهة تعرضه فقط؛ الصلاحيات الفعلية في الخادم. */
+export interface AccountProfiles {
+  patient: boolean;
+  doctor: { status: VerificationStatus } | null;
+  canAddPatientProfile: boolean;
+  canApplyAsDoctor: boolean;
+}
+
 export interface User {
+  profiles?: AccountProfiles;
+  /** ملف المريض (إن وُجد) — للاسم الافتراضي في نموذج طلب الطبيب. */
+  patient?: { id: string; firstName: string; lastName: string } | null;
   ownedClinic?: Clinic | null;
   id: string;
   email: string;

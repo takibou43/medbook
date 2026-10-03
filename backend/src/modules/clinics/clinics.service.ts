@@ -1,3 +1,4 @@
+import { isDoctorAccount } from "../../lib/accountProfiles";
 import { isDoctorProfilePublic } from "../../lib/doctorVisibility";
 import { queueNewDoctorAreaNotifications, pushNewDoctorAreaNotification } from "../notifications/newDoctorArea.service";
 import { activatePendingClinicRewards, clinicReferralBilling } from "../../lib/clinicReferralReward";
@@ -102,7 +103,7 @@ export async function createOwnClinic(userId: string, input: ClinicProfileInput)
   await validateLocation(input);
   return prisma.$transaction(async tx => {
     const user = await tx.user.findUnique({ where: { id: userId }, include: { doctor: true, ownedClinic: true } });
-    if (!user?.isActive || (user.role !== Role.DOCTOR && user.role !== Role.CLINIC_OWNER)) throw ApiError.forbidden();
+    if (!user?.isActive || (!isDoctorAccount(user) && user.role !== Role.CLINIC_OWNER)) throw ApiError.forbidden();
     if (user.ownedClinic || user.doctor?.clinicId) throw ApiError.conflict("حسابك مرتبط بعيادة بالفعل.");
     const clinic = await tx.clinic.create({ data: { ...input, ownerId: userId } });
     if (user.doctor) {
@@ -146,7 +147,7 @@ export async function inviteDoctor(userId: string, email: string, terms: { appoi
   return prisma.$transaction(async tx => {
     await lockClinic(tx, clinic.id);
     const user = await tx.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, include: { doctor: true } });
-    if (user && (user.role !== Role.DOCTOR || !user.isActive || user.doctor?.clinicId)) throw ApiError.conflict("البريد مرتبط بحساب غير متاح للانضمام إلى العيادة.");
+    if (user && (!isDoctorAccount(user) || !user.isActive || user.doctor?.clinicId)) throw ApiError.conflict("البريد مرتبط بحساب غير متاح للانضمام إلى العيادة.");
     await tx.clinicDoctorInvite.updateMany({ where: { clinicId: clinic.id, email, status: InviteStatus.PENDING }, data: { status: InviteStatus.REVOKED } });
     const invite = await tx.clinicDoctorInvite.create({ data: { clinicId: clinic.id, email, tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 7 * 86400000), termsPriceDzd: terms.appointmentPriceDzd ?? null, termsDoctorSharePercent: terms.doctorSharePercent ?? null }, select: inviteSelect });
     return { invite, rawToken };
@@ -200,7 +201,7 @@ export async function acceptExistingDoctor(userId: string, token: string) {
     const clinic = await tx.clinic.findUniqueOrThrow({ where: { id: invite!.clinicId }, include: { owner: { select: { isActive: true } } } });
     if (!clinic.owner?.isActive) throw ApiError.forbidden();
     const user = await tx.user.findUnique({ where: { id: userId }, include: { doctor: true } });
-    if (!user?.isActive || user.role !== Role.DOCTOR || !user.doctor || user.email.toLowerCase() !== invite!.email.toLowerCase()) throw ApiError.forbidden("الدعوة مخصصة لبريد طبيب آخر.");
+    if (!user?.isActive || !isDoctorAccount(user) || !user.doctor || user.email.toLowerCase() !== invite!.email.toLowerCase()) throw ApiError.forbidden("الدعوة مخصصة لبريد طبيب آخر.");
     if (user.doctor.clinicId) throw ApiError.conflict("الطبيب مرتبط بعيادة بالفعل.");
     const claimed = await tx.clinicDoctorInvite.updateMany({ where: { id: invite!.id, status: InviteStatus.PENDING, expiresAt: { gt: new Date() } }, data: { status: InviteStatus.ACCEPTED, acceptedAt: new Date() } });
     if (!claimed.count) throw ApiError.conflict("تم استعمال الدعوة أو إلغاؤها.");

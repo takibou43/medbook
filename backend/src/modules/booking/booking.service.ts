@@ -537,7 +537,8 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
   }
 
   // احتياطي (توافقًا مع نداءات قديمة بدون doctorId): تعيين تلقائي لأول طبيب موثّق متاح.
-  const doctors = await findCandidateDoctors(input.wilayaId, input.specialtyId);
+  // حساب الملفين لا يُعيَّن له ملفه المهني في التعيين التلقائي.
+  const doctors = (await findCandidateDoctors(input.wilayaId, input.specialtyId)).filter((d) => !meta.createdByUserId || d.userId !== meta.createdByUserId);
   if (doctors.length === 0) {
     throw ApiError.notFound("لا يوجد طبيب متاح بهذا التخصص في هذه الولاية حاليًا.");
   }

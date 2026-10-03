@@ -8,6 +8,7 @@ import { Button } from "../components/ui/Button";
 import { Spinner } from "../components/ui/States";
 import { useToast } from "../components/ui/Toast";
 import { useAuth } from "../context/AuthContext";
+import { ProfilesCard } from "../components/ProfilesCard";
 
 interface FormValues {
   currentPassword: string;
@@ -68,6 +69,8 @@ export default function AccountSettings() {
           غيّر بريدك الإلكتروني أو كلمة مرورك. كلمة المرور الحالية مطلوبة لتأكيد هويتك.
         </p>
       </div>
+
+      <ProfilesCard />
 
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
         <div>

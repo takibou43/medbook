@@ -26,7 +26,8 @@ vi.mock("web-push", () => ({ default: { setVapidDetails: vi.fn(), sendNotificati
 import pushRoutes from "../src/modules/push/push.routes";
 import { errorHandler } from "../src/middleware/errorHandler";
 import { signAccessToken, signRefreshToken } from "../src/utils/jwt";
-import { refresh } from "../src/modules/auth/auth.service";
+import { refresh, login } from "../src/modules/auth/auth.service";
+import * as passwordUtils from "../src/utils/password";
 import { refreshPatientSession } from "../src/modules/patientAuth/patientAuth.service";
 import { pushSubscriptionSchema } from "../src/modules/patientAuth/patientAuth.schema";
 import { sendPushToUser } from "../src/lib/push";
@@ -38,6 +39,32 @@ const keys = { p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg
 beforeEach(() => { vi.clearAllMocks(); h.reset(); });
 
 describe("security audit regression", () => {
+  it("performs a password comparison for unknown professional accounts", async () => {
+    h.db.user.findUnique.mockResolvedValueOnce(null as any);
+    const compare = vi.spyOn(passwordUtils, "comparePassword").mockResolvedValueOnce(false);
+    try {
+      await expect(login("missing@example.test", "Wrong@123")).rejects.toMatchObject({ statusCode: 401 });
+      expect(compare).toHaveBeenCalledTimes(1);
+      expect(compare.mock.calls[0][1]).toMatch(/^\$2/);
+    } finally { compare.mockRestore(); }
+  });
+  it("does not disclose disabled accounts to someone with the wrong password", async () => {
+    h.db.user.findUnique.mockResolvedValueOnce({ id: "disabled", isActive: false, passwordHash: "synthetic" } as any);
+    const compare = vi.spyOn(passwordUtils, "comparePassword").mockResolvedValueOnce(false);
+    try {
+      await expect(login("disabled@example.test", "Wrong@123")).rejects.toMatchObject({ statusCode: 401 });
+      expect(compare).toHaveBeenCalledTimes(1);
+    } finally { compare.mockRestore(); }
+  });
+  it("prevents HTTP caching of session responses and unauthenticated errors", async () => {
+    const server = (await import("../src/app")).createApp();
+    const logout = await request(server).post("/api/auth/logout");
+    expect(logout.status).toBe(200);
+    expect(logout.headers["cache-control"]).toBe("no-store");
+    const protectedResponse = await request(server).get("/api/auth/me");
+    expect(protectedResponse.status).toBe(401);
+    expect(protectedResponse.headers["cache-control"]).toBe("no-store");
+  });
   it.each(["http://127.0.0.1:5432/internal", "https://127.0.0.1/internal", "https://attacker.example/push", "https://fcm.googleapis.com.attacker.example/x", "https://user:pass@fcm.googleapis.com/x", "https://fcm.googleapis.com:8443/x"])("rejects arbitrary push destination %s on both registration paths", async endpoint => {
     expect(pushSubscriptionSchema.safeParse({ endpoint, keys }).success).toBe(false);
     const r = await request(app).post("/subscribe").set("Authorization", "Bearer " + signAccessToken({ sub: "patient-user", role: "PATIENT" })).send({ endpoint, keys });
@@ -82,7 +109,9 @@ describe("security audit regression", () => {
   it("untrusted browser origins cannot mutate cookie-authenticated sessions", async () => {
     const server = (await import("../src/app")).createApp();
     const r = await request(server).post("/api/auth/logout").set("Origin", "https://attacker.example").set("Cookie", "medbook_refresh=synthetic-token");
-    expect(r.status).toBeGreaterThanOrEqual(400);
+    expect(r.status).toBe(403);
+    expect(r.headers["access-control-allow-origin"]).toBeUndefined();
+    expect(r.headers["cache-control"]).toBe("no-store");
     expect(h.db.refreshToken.updateMany).not.toHaveBeenCalled();
   });
 });

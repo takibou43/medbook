@@ -1,6 +1,6 @@
 import { Role, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { hashPassword, comparePassword } from "../../utils/password";
+import { hashPassword, comparePassword, getDummyPasswordHash } from "../../utils/password";
 import { verifyRefreshToken } from "../../utils/jwt";
 import { ApiError } from "../../utils/ApiError";
 import { RegisterDoctorInput, RegisterPatientInput, RegisterAssistantInput } from "./auth.schema";
@@ -111,11 +111,9 @@ export async function login(email: string, password: string) {
     where: { email },
     include: { patient: true, doctor: { include: { clinic: true } }, assistant: ASSISTANT_SAFE_SELECT, ownedClinic: true },
   });
-  if (!user) throw ApiError.unauthorized("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
+  const valid = await comparePassword(password, user?.passwordHash ?? await getDummyPasswordHash());
+  if (!user || !valid) throw ApiError.unauthorized("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
   if (!user.isActive) throw ApiError.forbidden("هذا الحساب معطّل. تواصل مع الإدارة.");
-
-  const valid = await comparePassword(password, user.passwordHash);
-  if (!valid) throw ApiError.unauthorized("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
 
   const tokens = await issueTokens(user.id, user.role);
   return { user, ...tokens };

@@ -119,6 +119,10 @@ describe.skipIf(!TEST_URL)("حساب المريض + التذكيرات (PostgreS
     // 3) حجز وهو مسجّل الدخول → مرتبط بالحساب
     const booked = await call("POST", "/api/booking", bookBody(), token);
     expect(booked.status).toBe(201);
+    // Keep both simulated reminder cycles on the appointment's clinic day. A real
+    // late-night booking may start at midnight tomorrow, when the -5 minute cycle
+    // belongs to the previous day's queue and correctly skips the timed reminder.
+    await db.appointment.update({ where: { id: booked.data.id }, data: { startTime: "12:00", endTime: "12:15" } });
     const appt = await db.appointment.findUnique({ where: { id: booked.data.id }, include: { patient: true } });
     expect(appt!.patient!.userId).toBe(reg.data.user.id);
     expect(appt!.guestFirstName).toBe("سارة"); // حقول الاسم محفوظة كما كانت للوحة الطبيب

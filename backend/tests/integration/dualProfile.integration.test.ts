@@ -10,7 +10,7 @@
  *
  * تشغيل: TEST_DATABASE_URL="postgresql://postgres:test@127.0.0.1:54330/medbook_dual_test?schema=public" npx vitest run dualProfile
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import http from "http";
 import type { AddressInfo } from "net";
 import { PrismaClient } from "@prisma/client";
@@ -108,6 +108,12 @@ describe.skipIf(!TEST_URL)("حساب بملفين مريض + طبيب (PostgreSQ
   });
   const book = (token: string, doctorId: string, phone = "0551234567") =>
     call("POST", "/api/booking", { firstName: "سارة", lastName: "بن يوسف", phone, wilayaId: ids.wilaya, specialtyId: ids.specialty, doctorId }, token);
+
+  beforeEach(async () => {
+    // Each scenario has its own auth budget; keep the real production limiter enabled.
+    const { authLimiter } = await import("../../src/middleware/rateLimiter");
+    for (const address of ["127.0.0.1", "::ffff:127.0.0.1", "::1"]) authLimiter.resetKey(address);
+  });
 
   beforeAll(async () => {
     assertSafeTestDb(TEST_URL!);

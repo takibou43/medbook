@@ -257,7 +257,12 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
           </>
         )}
         {actions.complete.visible && (
-          <Button onClick={onComplete} disabled={busy} loading={pending} title="المريض حضر وأنهى استشارته">
+          <Button
+            onClick={onComplete}
+            disabled={busy || !actions.complete.enabled}
+            loading={pending}
+            title={actions.complete.reason ?? "المريض حضر وأنهى استشارته"}
+          >
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> اكتمل الموعد
           </Button>
         )}

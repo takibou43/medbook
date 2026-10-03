@@ -11,7 +11,8 @@ import { ALGERIA_OFFSET_MINUTES } from "./slots";
  *
  * القيود (الحد الأدنى الضروري، تُطبَّق في الخادم ولا تكتفي الواجهة بتعطيل الزر):
  *  1) لا «لم يحضر» قبل حلول وقت الموعد — إلا لمريض نودي عليه فعلًا اليوم (IN_PROGRESS/LATE).
- *  2) لا «اكتمل الموعد» لموعد في يوم لاحق (لم يأتِ يومه بعد).
+ *  2) لا «اكتمل الموعد» لموعد في يوم لاحق (لم يأتِ يومه بعد)، ولا لموعد مؤكد اليوم قبل حلول ساعته —
+ *     إلا لمريض نودي عليه فعلًا اليوم (IN_PROGRESS/LATE) فيجوز إكماله حتى لو كان وقته الأصلي لاحقًا.
  *  3) لا «بالداخل الآن» (IN_PROGRESS) إلا يوم الموعد نفسه — نفس منطق الطابور اليومي.
  * الإلغاء والتأكيد غير مقيّدين بالتوقيت.
  */
@@ -42,6 +43,12 @@ export function statusTimingError(
   }
   if (newStatus === AppointmentStatus.COMPLETED && isFutureDay) {
     return "لا يمكن إنهاء موعد لم يحن يومه بعد.";
+  }
+  if (newStatus === AppointmentStatus.COMPLETED && day === today) {
+    const calledToday = appointment.status === AppointmentStatus.IN_PROGRESS || appointment.status === AppointmentStatus.LATE;
+    if (!calledToday && appointmentStartUtcMs(appointment.date, appointment.startTime) > nowMs) {
+      return `لا يمكن إنهاء الموعد قبل حلول وقته (${appointment.startTime}) ما لم يُستدعَ المريض فعليًا.`;
+    }
   }
   if (newStatus === AppointmentStatus.IN_PROGRESS && day !== today) {
     return isFutureDay ? "لا يمكن إدخال مريض موعده في يوم لاحق." : "لا يمكن إدخال مريض موعده في يوم سابق.";

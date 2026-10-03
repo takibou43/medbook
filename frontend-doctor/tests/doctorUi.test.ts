@@ -67,15 +67,18 @@ test("no «حضر»/«لم يحضر» for tomorrow's appointments — a note ins
   assert.match(a.note ?? "", /يوم الموعد/);
 });
 
-test("today before start: complete allowed, no-show disabled with a reason", () => {
+test("today before start: complete and no-show both disabled with a reason", () => {
   const a = appointmentActions({ status: "CONFIRMED", date: iso("2026-10-02"), startTime: "15:30" }, "DOCTOR", NOW);
-  assert.deepEqual([a.complete.visible, a.complete.enabled], [true, true]);
+  assert.deepEqual([a.complete.visible, a.complete.enabled], [true, false]);
+  assert.match(a.complete.reason ?? "", /15:30/);
   assert.deepEqual([a.noShow.visible, a.noShow.enabled], [true, false]);
   assert.match(a.noShow.reason ?? "", /15:30/);
   const after = appointmentActions({ status: "CONFIRMED", date: iso("2026-10-02"), startTime: "12:30" }, "DOCTOR", NOW);
   assert.equal(after.noShow.enabled, true);
+  assert.equal(after.complete.enabled, true);
   const called = appointmentActions({ status: "LATE", date: iso("2026-10-02"), startTime: "16:00" }, "DOCTOR", NOW);
   assert.equal(called.noShow.enabled, true);
+  assert.equal(called.complete.enabled, true);
 });
 
 test("assistant never sees complete; final/pending statuses have no actions", () => {

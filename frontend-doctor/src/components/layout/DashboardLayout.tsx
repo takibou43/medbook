@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { LucideIcon, LogOut, Menu, X } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../../context/AuthContext";
@@ -14,6 +14,8 @@ export interface DashboardNavItem {
   end?: boolean;
   /** عدّاد صغير بجانب الرابط (مثل الرسائل غير المقروءة). لا يظهر إن كان 0 أو غير معرّف. */
   badge?: number;
+  /** مسارات تابعة تُبقي هذا العنصر مضيئًا عند زيارتها (مثل صفحات «الإعدادات»). */
+  activeFor?: string[];
 }
 
 export function DashboardLayout({
@@ -34,6 +36,10 @@ export function DashboardLayout({
 }) {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // العنصر نشط إن طابق مساره (NavLink) أو كان المسار الحالي من صفحاته التابعة (activeFor).
+  const isItemActive = (item: DashboardNavItem, isActive: boolean) =>
+    isActive || (item.activeFor ?? []).some((p) => pathname === p || pathname.startsWith(p + "/"));
   // روابط التنقّل (مثل "المواعيد") كانت موجودة فقط داخل الشريط الجانبي المخفي على الهاتف
   // (hidden md:flex)، فلم يكن هناك أي وسيلة للوصول إليها على الشاشات الصغيرة. أضفنا قائمة
   // منسدلة تُفتح بزر همبرغر في الترويسة على الهاتف وتحتوي نفس الروابط.
@@ -70,7 +76,7 @@ export function DashboardLayout({
               className={({ isActive }) =>
                 clsx(
                   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
-                  isActive ? "bg-primary-50 text-primary-700" : "text-slate-600 hover:bg-slate-100"
+                  isItemActive(item, isActive) ? "bg-primary-50 text-primary-700" : "text-slate-600 hover:bg-slate-100"
                 )
               }
             >
@@ -117,7 +123,7 @@ export function DashboardLayout({
                 className={({ isActive }) =>
                   clsx(
                     "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
-                    isActive ? "bg-primary-50 text-primary-700" : "text-slate-600 hover:bg-slate-100"
+                    isItemActive(item, isActive) ? "bg-primary-50 text-primary-700" : "text-slate-600 hover:bg-slate-100"
                   )
                 }
               >
@@ -143,7 +149,7 @@ export function DashboardLayout({
           <Outlet />
         </main>
         {dailyNavigation && <nav aria-label="التنقل اليومي" className="fixed inset-x-0 bottom-0 z-40 flex border-t bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
-          {items.slice(0, settingsStart ?? 2).map(item => <NavLink key={item.to} to={item.to} end={item.end} onClick={() => setMobileMenuOpen(false)} className={({isActive}) => clsx("relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-3 text-[11px]", isActive ? "text-primary-700 bg-primary-50" : "text-slate-600")}><item.icon className="h-5 w-5"/><span>{item.label}</span>{item.badge ? <span className="absolute top-1 rounded-full bg-red-500 px-1 text-white">{item.badge}</span> : null}</NavLink>)}
+          {items.slice(0, settingsStart ?? 2).map(item => <NavLink key={item.to} to={item.to} end={item.end} onClick={() => setMobileMenuOpen(false)} className={({isActive}) => clsx("relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-3 text-[11px]", isItemActive(item, isActive) ? "text-primary-700 bg-primary-50" : "text-slate-600")}><item.icon className="h-5 w-5"/><span>{item.label}</span>{item.badge ? <span className="absolute top-1 rounded-full bg-red-500 px-1 text-white">{item.badge}</span> : null}</NavLink>)}
           <button aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(v => !v)} className="flex flex-1 flex-col items-center gap-1 py-3 text-[11px]"><Menu className="h-5 w-5"/>المزيد</button>
         </nav>}
       </div>

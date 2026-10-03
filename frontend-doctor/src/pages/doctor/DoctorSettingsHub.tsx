@@ -19,6 +19,13 @@ interface HubItem {
 export default function DoctorSettingsHub() {
   const { user } = useAuth();
   const unread = useDoctorUnread(Boolean(user));
+  // نص بطاقة العيادة حسب الحالة الفعلية: مدير عيادة / طبيب ضمن عيادة / بلا عيادة (الصفحة نفسها لم تتغيّر).
+  const clinic = user?.doctor?.clinic ?? null;
+  const clinicHint = !clinic
+    ? "إنشاء عيادة (يتطلب موافقة الإدارة)"
+    : clinic.ownerId === user?.id
+    ? `إدارة «${clinic.nameAr}» وأطبائها ومساعديها`
+    : `أنت ضمن «${clinic.nameAr}»؛ إدارتها لمديرها`;
 
   const items: HubItem[] = [
     { to: "/overview", title: "نظرة عامة", hint: "الإحصاءات، الدخل والمستحقات، رمز الحجز QR، ودعوة زميل", icon: BarChart3 },
@@ -34,7 +41,7 @@ export default function DoctorSettingsHub() {
       icon: MessageSquare,
       badge: unread.data?.unread,
     },
-    { to: "/clinic", title: "إدارة العيادة", hint: "العيادة والأطباء المرتبطون بها", icon: Building2 },
+    { to: "/clinic", title: "إدارة العيادة", hint: clinicHint, icon: Building2 },
     ...(isDentalSpecialty(user?.doctor?.specialty)
       ? [{ to: "/treatment-plans", title: "خطط العلاج", hint: "خطط علاج الأسنان والمتابعات", icon: ClipboardList } as HubItem]
       : []),

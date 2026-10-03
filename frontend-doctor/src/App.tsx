@@ -62,7 +62,13 @@ const doctorMainNav = [
   { to: "/", label: "لوحة التحكم", icon: LayoutDashboard, end: true },
   { to: "/appointments", label: "المواعيد", icon: CalendarClock },
   { to: "/patients", label: "المرضى", icon: UsersIcon },
-  { to: "/settings", label: "الإعدادات", icon: Settings },
+  {
+    to: "/settings",
+    label: "الإعدادات",
+    icon: Settings,
+    // الصفحات التابعة لـ«الإعدادات» تُبقي العنصر مضيئًا (القائمة تبقى أربعة عناصر).
+    activeFor: ["/overview", "/schedule", "/reviews", "/assistants", "/profile", "/account", "/messages", "/treatment-plans"],
+  },
 ];
 
 /** الرئيسية: لوحة التحكم الجديدة للطبيب؛ المساعد يبقى على الرئيسية الحالية حتى المرحلة ج. */

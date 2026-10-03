@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -47,6 +47,119 @@ const LATE_ALLOWED = ["CONFIRMED", "IN_PROGRESS", "LATE"];
 /** الحالات التي يسمح الخادم فيها بمناداة موعد بعينه (callSpecificPatient). */
 const CALL_ALLOWED = ["CONFIRMED", "LATE"];
 
+interface RowMenuItem {
+  key: string;
+  label: string;
+  onSelect: () => void;
+  /** معطّل بقرار من قواعد الخادم: يبقى قابلًا للتركيز ليُقرأ سببه، لكنه لا يُنفَّذ. */
+  disabled?: boolean;
+  hint?: string;
+  danger?: boolean;
+}
+
+/**
+ * قائمة «…» لإجراءات صف واحد بنمط menu button: Enter/Space/السهم لفتحها، الأسهم وHome/End للتنقل،
+ * Escape يغلقها ويعيد التركيز إلى زرّها، وTab يغلقها ويكمل التنقل الطبيعي.
+ */
+function RowActionsMenu({
+  label, open, onOpenChange, disabled, openUpward, triggerRef, items,
+}: {
+  label: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  disabled?: boolean;
+  openUpward?: boolean;
+  triggerRef: (el: HTMLButtonElement | null) => void;
+  items: RowMenuItem[];
+}) {
+  const menuId = useId();
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  const menuItems = () => Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+  const focusItem = (index: number) => {
+    const els = menuItems();
+    if (els.length) els[(index + els.length) % els.length].focus();
+  };
+
+  useEffect(() => {
+    if (open) focusItem(0);
+  }, [open]);
+
+  function close(returnFocus: boolean) {
+    onOpenChange(false);
+    if (returnFocus) requestAnimationFrame(() => buttonRef.current?.focus());
+  }
+
+  function onMenuKeyDown(e: React.KeyboardEvent) {
+    const els = menuItems();
+    const index = els.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === "ArrowDown") { e.preventDefault(); focusItem(index + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); focusItem(index - 1); }
+    else if (e.key === "Home") { e.preventDefault(); focusItem(0); }
+    else if (e.key === "End") { e.preventDefault(); focusItem(els.length - 1); }
+    else if (e.key === "Escape") { e.preventDefault(); close(true); }
+    else if (e.key === "Tab") close(false);
+  }
+
+  return (
+    <div className="relative">
+      <button
+        ref={(el) => { buttonRef.current = el; triggerRef(el); }}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        aria-label={label}
+        disabled={disabled}
+        onClick={() => onOpenChange(!open)}
+        onKeyDown={(e) => {
+          if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); onOpenChange(true); }
+        }}
+        className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:border-primary-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 disabled:opacity-50"
+      >
+        <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+      </button>
+      {open && (
+        <>
+          <div aria-hidden="true" className="fixed inset-0 z-30" onClick={() => close(false)} />
+          <div
+            id={menuId}
+            ref={menuRef}
+            role="menu"
+            aria-label={label}
+            onKeyDown={onMenuKeyDown}
+            className={clsx("absolute left-0 z-40 w-52 rounded-xl border border-slate-200 bg-white p-1 shadow-lg", openUpward ? "bottom-full mb-1" : "mt-1")}
+          >
+            {items.map((item) => (
+              <button
+                key={item.key}
+                role="menuitem"
+                type="button"
+                tabIndex={-1}
+                aria-disabled={item.disabled || undefined}
+                onClick={() => {
+                  if (item.disabled) return;
+                  onOpenChange(false);
+                  item.onSelect();
+                }}
+                className={clsx(
+                  "block w-full rounded-lg px-3 py-2 text-right text-sm outline-none focus:bg-slate-100",
+                  item.danger ? "text-red-700 hover:bg-red-50" : "hover:bg-slate-50",
+                  item.disabled && "cursor-not-allowed opacity-60"
+                )}
+              >
+                {item.label}
+                {item.disabled && item.hint && <span className="block text-[11px] font-normal text-slate-500">{item.hint}</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function DoctorHome() {
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -73,9 +186,28 @@ export default function DoctorHome() {
   const [menuId, setMenuId] = useState<string | null>(null);
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
   const [noShowTarget, setNoShowTarget] = useState<NoShowTarget | null>(null);
+  // إعادة التركيز إلى زر الصف بعد إغلاق القائمة أو نافذة التأكيد أو انتهاء الإجراء.
+  const triggerEls = useRef(new Map<string, HTMLElement>());
+  const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
+  const registerTrigger = (id: string) => (el: HTMLElement | null) => {
+    if (el) triggerEls.current.set(id, el);
+    else triggerEls.current.delete(id);
+  };
 
   const doctor = user?.doctor;
   const busy = finish.isPending || callNext.isPending || callPatient.isPending || markLate.isPending || updateStatus.isPending;
+
+  // يُنفَّذ بعد انتهاء أي طلب (الأزرار تعود مفعّلة) حتى لا يضيع التركيز على زر معطّل.
+  useEffect(() => {
+    if (!pendingFocusId || busy || noShowTarget || followUpCtx) return;
+    const id = pendingFocusId;
+    const frame = requestAnimationFrame(() => {
+      const el = triggerEls.current.get(id);
+      if (el?.isConnected) el.focus();
+      setPendingFocusId(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pendingFocusId, busy, noShowTarget, followUpCtx]);
 
   // المواعيد المعروضة اليوم: بلا الملغاة. رقم الدور يُحسب قبل البحث فلا يتغير بتصفية القائمة.
   const todays = useMemo<Appointment[]>(() => (appointments.data ?? []).filter((a) => a.status !== "CANCELLED"), [appointments.data]);
@@ -102,7 +234,7 @@ export default function DoctorHome() {
     void qc.invalidateQueries({ queryKey: ["doctor-dashboard"] });
   }
 
-  async function run(action: () => Promise<unknown>, okMessage: string) {
+  async function run(action: () => Promise<unknown>, okMessage: string, focusId?: string) {
     if (busy) return;
     setMenuId(null);
     try {
@@ -110,11 +242,14 @@ export default function DoctorHome() {
       showToast(okMessage, "success");
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
+    } finally {
+      if (focusId) setPendingFocusId(focusId);
     }
   }
 
   function openFollowUp(a: Appointment) {
     setMenuId(null);
+    setPendingFocusId(a.id);
     setFollowUpCtx({
       parentAppointmentId: a.id,
       beneficiaryName: beneficiaryName(a),
@@ -126,6 +261,7 @@ export default function DoctorHome() {
 
   function openNoShow(a: Appointment) {
     setMenuId(null);
+    setPendingFocusId(a.id);
     setNoShowTarget({
       id: a.id,
       patientName: beneficiaryName(a),
@@ -155,8 +291,10 @@ export default function DoctorHome() {
   const validEnd = endsAt && !isNaN(endsAt.getTime()) ? endsAt : null;
   const daysLeft = validEnd ? Math.max(0, Math.ceil((validEnd.getTime() - Date.now()) / 86400000)) : null;
 
-  const waitingCount = queue.data?.waiting.length ?? 0;
-  const completedCount = queue.data?.todaySummary?.completed ?? stats.data?.completedToday ?? 0;
+  // عند فشل التحميل نعرض «—» بدل 0 حتى لا يُفهم أن العيادة فارغة.
+  const waitingCount: number | string = queue.isError ? "—" : queue.data?.waiting.length ?? 0;
+  const completedCount: number | string = queue.isError ? "—" : queue.data?.todaySummary?.completed ?? stats.data?.completedToday ?? 0;
+  const todayCount: number | string = stats.isError && appointments.isError ? "—" : stats.data?.todayAppointments ?? todays.length;
 
   return (
     <div className="space-y-5">
@@ -201,7 +339,7 @@ export default function DoctorHome() {
 
       {/* بطاقات */}
       <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
-        <StatCard label="مواعيد اليوم" value={stats.data?.todayAppointments ?? todays.length} icon={CalendarClock} to={appointmentsLink({ from: today, to: today })} />
+        <StatCard label="مواعيد اليوم" value={todayCount} icon={CalendarClock} to={appointmentsLink({ from: today, to: today })} />
         <StatCard label="في الانتظار" value={waitingCount} icon={Hourglass} tone="amber" to="/appointments?tab=queue" />
         <StatCard label="مكتملة" value={completedCount} icon={CheckCircle2} tone="green" to={`/appointments?status=COMPLETED&date=${today}`} />
       </div>
@@ -219,7 +357,8 @@ export default function DoctorHome() {
               <div className="py-6"><Spinner /></div>
             ) : queue.isError ? (
               <p role="alert" className="mt-3 text-sm text-red-700">
-                تعذر تحميل الطابور. <button type="button" className="font-semibold underline" onClick={() => void queue.refetch()}>إعادة المحاولة</button>
+                {apiErrorMessage(queue.error, "تعذر تحميل الطابور.")}{" "}
+                <button type="button" className="font-semibold underline" onClick={() => void queue.refetch()}>إعادة المحاولة</button>
               </p>
             ) : current ? (
               <div className="mt-3 flex items-center gap-4">
@@ -240,27 +379,31 @@ export default function DoctorHome() {
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               {current && (
                 <Button
+                  ref={registerTrigger("finish")}
                   className="flex-1"
                   loading={finish.isPending}
                   disabled={busy}
-                  onClick={() => run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, "اكتمل الكشف.")}
+                  onClick={() => run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, "اكتمل الكشف.", "call-next")}
                 >
                   <Check className="h-4 w-4" aria-hidden="true" /> إنهاء الكشف
                 </Button>
               )}
               <Button
+                ref={registerTrigger("call-next")}
                 className="flex-1"
                 variant="outline"
                 loading={callNext.isPending}
                 disabled={busy || !canCallNext}
                 aria-describedby="call-next-hint"
-                onClick={() => run(async () => { await callNext.mutateAsync(); }, "تمت مناداة المريض التالي.")}
+                onClick={() => run(async () => { await callNext.mutateAsync(); }, "تمت مناداة المريض التالي.", "finish")}
               >
                 استدعاء التالي <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
             <p id="call-next-hint" className="mt-2 text-xs text-slate-500">
-              {current
+              {queue.isError
+                ? "الاستدعاء غير متاح حتى يُحمَّل الطابور."
+                : current
                 ? "أنهِ الكشف أولاً: لا يمكن مناداة مريض آخر وهناك مريض بالداخل."
                 : nextList.length === 0
                 ? "لا يوجد مريض في الانتظار."
@@ -289,7 +432,8 @@ export default function DoctorHome() {
               <div className="py-6"><Spinner /></div>
             ) : appointments.isError ? (
               <p role="alert" className="mt-3 text-sm text-red-700">
-                تعذر تحميل مواعيد اليوم. <button type="button" className="font-semibold underline" onClick={() => void appointments.refetch()}>إعادة المحاولة</button>
+                {apiErrorMessage(appointments.error, "تعذر تحميل مواعيد اليوم.")}{" "}
+                <button type="button" className="font-semibold underline" onClick={() => void appointments.refetch()}>إعادة المحاولة</button>
               </p>
             ) : todays.length === 0 ? (
               <p className="mt-4 rounded-xl bg-slate-50 p-4 text-center text-slate-600">لا توجد مواعيد اليوم.</p>
@@ -328,58 +472,25 @@ export default function DoctorHome() {
 
                         <div className="justify-self-end md:justify-self-start">
                           {showFollowUp ? (
-                            <Button variant="outline" disabled={busy} onClick={() => openFollowUp(a)} title="إنشاء موعد عودة لهذا المريض">
+                            <Button ref={registerTrigger(a.id)} variant="outline" disabled={busy} onClick={() => openFollowUp(a)} title="إنشاء موعد عودة لهذا المريض">
                               <CalendarPlus className="h-4 w-4" aria-hidden="true" /> جدولة عودة
                             </Button>
                           ) : hasMenu ? (
-                            <div className="relative">
-                              <button
-                                type="button"
-                                aria-haspopup="menu"
-                                aria-expanded={menuId === a.id}
-                                aria-label={`إجراءات ${name}`}
-                                disabled={busy}
-                                onClick={() => setMenuId(menuId === a.id ? null : a.id)}
-                                onKeyDown={(e) => { if (e.key === "Escape") setMenuId(null); }}
-                                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:border-primary-300 disabled:opacity-50"
-                              >
-                                <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
-                              </button>
-                              {menuId === a.id && (
-                                <>
-                                  <button type="button" aria-label="إغلاق القائمة" className="fixed inset-0 z-30 cursor-default" onClick={() => setMenuId(null)} />
-                                  <div
-                                    role="menu"
-                                    onKeyDown={(e) => { if (e.key === "Escape") setMenuId(null); }}
-                                    className={clsx("absolute z-40 mt-1 w-48 rounded-xl border border-slate-200 bg-white p-1 shadow-lg", i > filtered.length - 3 && filtered.length > 3 ? "bottom-full mb-1" : "", "left-0")}
-                                  >
-                                    {canCall && (
-                                      <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-right text-sm hover:bg-slate-50" onClick={() => run(async () => { await callPatient.mutateAsync(a.id); }, "تمت مناداة المريض.")}>
-                                        نادِ هذا المريض
-                                      </button>
-                                    )}
-                                    {canLate && (
-                                      <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-right text-sm hover:bg-slate-50" onClick={() => run(async () => { await markLate.mutateAsync(a.id); }, "سُجّل المريض متأخراً.")}>
-                                        متأخر
-                                      </button>
-                                    )}
-                                    {actions.noShow.visible && (
-                                      <button
-                                        role="menuitem"
-                                        type="button"
-                                        disabled={!actions.noShow.enabled}
-                                        title={actions.noShow.reason}
-                                        className="block w-full rounded-lg px-3 py-2 text-right text-sm text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                        onClick={() => openNoShow(a)}
-                                      >
-                                        لم يحضر
-                                        {!actions.noShow.enabled && actions.noShow.reason && <span className="block text-[11px] font-normal text-slate-500">{actions.noShow.reason}</span>}
-                                      </button>
-                                    )}
-                                  </div>
-                                </>
-                              )}
-                            </div>
+                            <RowActionsMenu
+                              label={`إجراءات ${name}`}
+                              open={menuId === a.id}
+                              onOpenChange={(o) => setMenuId(o ? a.id : null)}
+                              disabled={busy}
+                              openUpward={i > filtered.length - 3 && filtered.length > 3}
+                              triggerRef={registerTrigger(a.id)}
+                              items={[
+                                ...(canCall ? [{ key: "call", label: "نادِ هذا المريض", onSelect: () => run(async () => { await callPatient.mutateAsync(a.id); }, "تمت مناداة المريض.", a.id) }] : []),
+                                ...(canLate ? [{ key: "late", label: "متأخر", onSelect: () => run(async () => { await markLate.mutateAsync(a.id); }, "سُجّل المريض متأخراً.", a.id) }] : []),
+                                ...(actions.noShow.visible
+                                  ? [{ key: "noshow", label: "لم يحضر", danger: true, disabled: !actions.noShow.enabled, hint: actions.noShow.reason, onSelect: () => openNoShow(a) }]
+                                  : []),
+                              ]}
+                            />
                           ) : (
                             <span className="text-xs text-slate-400">—</span>
                           )}
@@ -398,6 +509,8 @@ export default function DoctorHome() {
           <h2 className="text-lg font-bold text-slate-900">الدور القادم</h2>
           {queue.isPending ? (
             <div className="py-6"><Spinner /></div>
+          ) : queue.isError ? (
+            <p role="alert" className="mt-3 text-sm text-red-700">تعذر تحميل ترتيب الطابور.</p>
           ) : nextList.length === 0 ? (
             <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-600">لا يوجد منتظرون الآن.</p>
           ) : (

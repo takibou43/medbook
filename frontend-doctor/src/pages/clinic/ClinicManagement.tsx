@@ -61,12 +61,12 @@ export default function ClinicManagement() {
   }
   if (query.isPending) return <p>جارٍ تحميل العيادة…</p>;
   return <section className="space-y-5" dir="rtl">
-    <header><h1 className="text-2xl font-extrabold">{clinic?.nameAr || "إنشاء عيادتك"}</h1><p className="mt-2 text-slate-600">كل طبيب له جدول وحجوزات مستقلة، والعيادة تدفع اشتراكًا واحدًا.</p></header>
+    <header><h1 className="text-2xl font-extrabold">{clinic?.nameAr || (missing && user?.doctor?.clinic?.nameAr) || "إنشاء عيادتك"}</h1><p className="mt-2 text-slate-600">كل طبيب له جدول وحجوزات مستقلة، والعيادة تدفع اشتراكًا واحدًا.</p></header>
     {user?.role === "DOCTOR" && !clinic && !user.doctor?.clinic && <details className="card p-5"><summary className="cursor-pointer font-bold">طلب الانضمام لعيادة دون دعوة</summary><div className="mt-4"><ClinicTransferRequests /></div></details>}
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}
     {message && <p role="status" className="rounded-xl bg-primary-50 p-3 text-primary-800">{message}</p>}
     {query.isError && !missing && <p role="alert">{apiErrorMessage(query.error, "تعذر تحميل العيادة.")} <button onClick={() => void query.refetch()}>إعادة المحاولة</button></p>}
-    {missing && user?.doctor?.clinic && <p>أنت مرتبط بعيادة. إنشاء عيادة أخرى يحتاج معالجة الارتباط الحالي من الإدارة.</p>}
+    {missing && user?.doctor?.clinic && <p role="status" className="card p-5 text-slate-700">أنت طبيب ضمن «{user.doctor.clinic.nameAr}». إدارة العيادة (الأطباء والأسعار والمساعدون) لمديرها وحده، وإنشاء عيادة أخرى يحتاج معالجة الارتباط الحالي من الإدارة.</p>}
     {((missing && !user?.doctor?.clinic) || editing) && <form onSubmit={save} className="card space-y-4 p-5"><ClinicProfileFields initial={clinic} />
       {missing && user?.role === "DOCTOR" && <p className="text-sm">إنشاء العيادة يرسل طلب انتقال ملفك الطبي إلى الإدارة، ويستمر اشتراكك الحالي إلى حين الموافقة.</p>}
       <Button type="submit" loading={busy}>{clinic ? "حفظ البيانات" : "إنشاء العيادة"}</Button>

@@ -1,0 +1,30 @@
+{
+  "checks": [
+    "desktop today rendered without horizontal overflow",
+    "desktop appointments rendered without horizontal overflow",
+    "desktop patients rendered without horizontal overflow",
+    "desktop schedule rendered without horizontal overflow",
+    "tablet today rendered without horizontal overflow",
+    "tablet appointments rendered without horizontal overflow",
+    "tablet patients rendered without horizontal overflow",
+    "tablet schedule rendered without horizontal overflow",
+    "mobile today rendered without horizontal overflow",
+    "mobile appointments rendered without horizontal overflow",
+    "mobile patients rendered without horizontal overflow",
+    "mobile schedule rendered without horizontal overflow",
+    "only today NO_SHOW has late-arrival action",
+    "search resets page and persists in URL",
+    "invalid weekly interval blocks save and marks unsaved draft",
+    "copy preserves multiple periods and save confirms draft",
+    "keyboard focus reaches interactive control",
+    "mobile menu opens with keyboard and closes with Escape",
+    "new section starts at top",
+    "back restores filters and list scroll position",
+    "double click sends only one status mutation",
+    "empty list state renders",
+    "API error provides retry"
+  ],
+  "errors": [],
+  "requests": 69,
+  "fixture": "fictional data; all API intercepted"
+}

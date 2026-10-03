@@ -67,9 +67,9 @@ export function algeriaTodayKey(nowMs: number): string {
   return new Date(nowMs + ALGERIA_OFFSET_MINUTES * 60000).toISOString().slice(0, 10);
 }
 
-/** مفتاح تفرّد المريض — نفس القاعدة القديمة تمامًا (لا دمج بالاسم أو الهاتف لأصحاب الحسابات). */
+/** هوية المستفيد المسجلة فقط. حجز الضيف سجل مستقل غير مثبت الهوية؛ لا دمج بالهاتف. */
 export function patientKey(a: Pick<PatientAppointmentRow, "id" | "patientId" | "familyMemberId" | "guestPhone">): string {
-  return a.patientId ? `${a.patientId}:${a.familyMemberId ?? "self"}` : `guest:${a.guestPhone ?? a.id}`;
+  return a.patientId ? `${a.patientId}:${a.familyMemberId ?? "self"}` : `guest-booking:${a.id}`;
 }
 
 export function summarizePatients(rows: PatientAppointmentRow[], nowMs: number): PatientSummary[] {

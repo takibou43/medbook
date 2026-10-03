@@ -1,6 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { summarizePatients, queryPatients, type PatientAppointmentRow } from "../src/lib/doctorPatients";
+import { patientKey, summarizePatients, queryPatients, type PatientAppointmentRow } from "../src/lib/doctorPatients";
 import { statusTimingError } from "../src/lib/appointmentTiming";
+import { weeklyScheduleError } from "../src/lib/scheduleValidation";
+
+describe("schedule validation before writes", () => {
+  it("rejects invalid, reversed and overlapping intervals; permits breaks and adjacent slots", () => {
+    const a={dayOfWeek:1,startTime:'08:00',endTime:'12:00'};
+    expect(weeklyScheduleError([a,{...a,startTime:'12:00',endTime:'13:00'}])).toBeNull();
+    expect(weeklyScheduleError([a,{...a,startTime:'11:59',endTime:'13:00'}])).not.toBeNull();
+    expect(weeklyScheduleError([{...a,startTime:'25:00'}])).not.toBeNull();
+    expect(weeklyScheduleError([{...a,endTime:'07:00'}])).not.toBeNull();
+    expect(weeklyScheduleError([a,{...a,dayOfWeek:2}])).toBeNull();
+  });
+});
 
 // «الآن» ثابت: 2 أكتوبر 2026 الساعة 13:00 بتوقيت الجزائر (= 12:00 UTC).
 const NOW = Date.UTC(2026, 9, 2, 12, 0, 0);
@@ -28,6 +40,13 @@ const desc = (rows: PatientAppointmentRow[]) =>
   [...rows].sort((a, b) => `${b.date.toISOString()}${b.startTime}`.localeCompare(`${a.date.toISOString()}${a.startTime}`));
 
 describe("مرضاي — آخر زيارة مكتملة والموعد القادم", () => {
+  it("shared guest phone never proves identity; dashboard and list share the same key", () => {
+    const rows = [row({id:'guest-1',patientId:null,patient:null,guestFirstName:'Sara',guestPhone:'0551234567'}),row({id:'guest-2',patientId:null,patient:null,guestFirstName:'Ali',guestPhone:'0551234567'}),row({}),row({familyMemberId:'child-1'})];
+    const list=summarizePatients(rows,NOW);
+    expect(list).toHaveLength(4);
+    expect(new Set(rows.map(patientKey)).size).toBe(list.length);
+    expect(list.filter(p => p.isGuest).map(p => p.totalAppointments)).toEqual([1,1]);
+  });
   it("موعد نوفمبر القادم لا يظهر كـ«آخر زيارة»؛ آخر زيارة = أحدث موعد COMPLETED فقط", () => {
     const [p] = summarizePatients(
       desc([

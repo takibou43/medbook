@@ -8,7 +8,8 @@ import { isWithinWorkingHours, ScheduleBlock } from "../../lib/slots";
 import { createNotification } from "../notifications/notifications.service";
 import { syncDentalFollowUpsSafe } from "../../lib/dentalFollowUpSync";
 import { FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
-import { queryPatients, summarizePatients, type PatientQuery } from "../../lib/doctorPatients";
+import { patientKey, queryPatients, summarizePatients, type PatientQuery } from "../../lib/doctorPatients";
+import { weeklyScheduleError } from "../../lib/scheduleValidation";
 
 const SCHEDULE_ACTIVE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
 
@@ -128,6 +129,8 @@ export async function replaceWeeklySchedule(
   blocks: { dayOfWeek: number; startTime: string; endTime: string }[],
   confirmAffected = false
 ) {
+  const validationError = weeklyScheduleError(blocks);
+  if (validationError) throw ApiError.badRequest(validationError);
   const doctor = await getDoctorByUserId(userId);
   const exceptions = await prisma.doctorSchedule.findMany({ where: { doctorId: doctor.id, isException: true } });
   const proposed: ScheduleBlock[] = [
@@ -257,9 +260,8 @@ export async function getDashboardStats(userId: string, role: Role) {
     // «مواعيد هذا الشهر» = كل مواعيد الشهر الميلادي الحالي (من أوله إلى آخره، بكل الحالات) — نفس
     // النطاق الذي يفتحه رابط البطاقة في صفحة المواعيد (from/to)، فيتطابق العدد مع النتائج.
     prisma.appointment.count({ where: { doctorId: doctor.id, date: { gte: monthStart, lte: monthEnd } } }),
-    // لا يمكن الاعتماد على distinct:["patientId"] وحده لأن الحجوزات كضيف تحمل patientId فارغًا (null)
-    // وستُحسب كلها كـ "مريض واحد" فقط؛ لذا نجلب المعرّفات ونحسب التفرّد يدويًا (مريض حقيقي أو رقم هاتف ضيف).
-    prisma.appointment.findMany({ where: { doctorId: doctor.id }, select: { patientId: true, guestPhone: true, id: true } }),
+    // نفس تعريف صفحة المرضى: المستفيد المسجل أو سجل حجز ضيف غير مثبت الهوية.
+    prisma.appointment.findMany({ where: { doctorId: doctor.id }, select: { patientId: true, familyMemberId: true, guestPhone: true, id: true } }),
     // الدخل التقديري يُحسب من المواعيد المكتملة (COMPLETED) وحدها — لا من المؤكّدة ولا
     // التي بالداخل الآن ولا الملغاة ولا "لم يحضر". النطاق الزمني بنفس اصطلاح حقل date
     // (تاريخ تقويمي مخزَّن عند 00:00 UTC محسوبًا بتوقيت الجزائر).
@@ -275,7 +277,7 @@ export async function getDashboardStats(userId: string, role: Role) {
     }),
   ]);
 
-  const uniquePatientKeys = new Set(allForPatientsCount.map((a) => a.patientId ?? `guest:${a.guestPhone ?? a.id}`));
+  const uniquePatientKeys = new Set(allForPatientsCount.map(patientKey));
 
   // نسبة الغياب تُحسب من مجموع المواعيد "المحسومة" (انتهت فعليًا: حضر/ألغى/لم يحضر) فقط،
   // دون المواعيد القادمة التي لم يُحسم أمرها بعد — وإلا كانت النسبة مضلِّلة لطبيب حديث الانضمام.

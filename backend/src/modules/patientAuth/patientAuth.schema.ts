@@ -12,7 +12,7 @@ const email = z
 
 export const patientRegisterSchema = z.object({
   email,
-  // حد أعلى 128: bcrypt يتجاهل ما بعد 72 بايتًا، والحد يمنع إرسال نصوص ضخمة لإرهاق الخادم.
+  // حد أعلى 128؛ utils/password يحمي كامل النص عندما يتجاوز 72 بايتًا في UTF-8.
   password: z
     .string({ required_error: "كلمة المرور مطلوبة" })
     .min(8, "كلمة المرور يجب أن تكون 8 خانات على الأقل")

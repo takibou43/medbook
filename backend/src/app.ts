@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env";
+import { ApiError } from "./utils/ApiError";
 import { apiLimiter } from "./middleware/rateLimiter";
 import { notFoundHandler, errorHandler } from "./middleware/errorHandler";
 
@@ -39,13 +40,18 @@ export function createApp() {
   if (env.trustProxyHops > 0) app.set("trust proxy", env.trustProxyHops);
 
   app.use(helmet());
+  // Session tokens and medical responses must not enter browser/proxy HTTP caches.
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
   app.use(
     cors({
       // يدعم أكثر من نطاق (موقع المرضى + موقع الأطباء المنفصل)؛ يسمح أيضًا بالطلبات
       // بدون origin (مثل صحة الخادم /health أو أدوات لا تُرسل Origin).
       origin(origin, callback) {
         if (!origin || env.clientUrls.includes(origin)) return callback(null, true);
-        callback(new Error("غير مسموح به بواسطة CORS"));
+        callback(ApiError.forbidden("غير مسموح به بواسطة CORS"));
       },
       credentials: true,
     })

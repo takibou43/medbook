@@ -324,7 +324,8 @@ describe.skipIf(!TEST_URL)("حساب بملفين مريض + طبيب (PostgreSQ
     });
 
     it("طلب ثانٍ → 409؛ و6 طلبات متزامنة لحساب آخر → ملف طبيب واحد", async () => {
-      const t = (await doctorPortalLogin(pat.email, {})).data.accessToken as string;
+      // The application route requires patient context even after a doctor profile exists.
+      const t = (await patientPortalLogin(pat.email, {})).data.accessToken as string;
       const dup = await call("POST", "/api/auth/profile/doctor", doctorForm(), t);
       expect(dup.status).toBe(409);
       expect(dup.details?.code).toBe("DOCTOR_PROFILE_EXISTS");

@@ -86,7 +86,7 @@ function patientName(a: import("../../types").Appointment): string {
   if (a.patient) return a.patient.firstName + " " + a.patient.lastName;
   return [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ") || "مريض";
 }
-export default function DoctorDashboard() {
+export default function DoctorOverview() {
   const { user } = useAuth();
   const queue = useQueue();
   const { showToast } = useToast();
@@ -210,7 +210,7 @@ export default function DoctorDashboard() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">{effectiveDoctor ? `د. ${effectiveDoctor.firstName} ${effectiveDoctor.lastName}` : "اليوم"}</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">{isAssistant ? (effectiveDoctor ? `د. ${effectiveDoctor.firstName} ${effectiveDoctor.lastName}` : "اليوم") : "نظرة عامة"}</h1>
           <p className="mt-0.5 text-sm text-slate-500">{formatDayAr(algeriaToday(), { weekday: true, year: true })}</p>
         </div>
         {stats && <VerificationBadge status={stats.verificationStatus} />}
@@ -226,6 +226,7 @@ export default function DoctorDashboard() {
 
       {/* month/fee بلا "?? 0": يجب أن تبقيا undefined فعليًا حين لا يُرسلهما الخادم (حالة
           المساعد) حتى يُخفي RevenueCard عمود "هذا الشهر" تلقائيًا بدل عرض 0 مضلِّل. */}
+      {isAssistant && (
       <section className="card space-y-4 p-5" aria-label="ملخص اليوم">
         <div className="flex items-center justify-between"><h2 className="text-lg font-bold">اليوم في العيادة</h2></div>
         {queue.isPending ? <Spinner /> : queue.isError ? <p role="alert">تعذر تحميل الطابور. <button onClick={() => void queue.refetch()}>إعادة المحاولة</button></p> : <>
@@ -237,6 +238,7 @@ export default function DoctorDashboard() {
           <Link to="/appointments?tab=queue" className="block rounded-xl bg-primary-600 px-4 py-3 text-center text-base font-bold text-white transition hover:bg-primary-700">فتح الطابور</Link>
         </>}
       </section>
+      )}
       {stats?.rescheduleRequired > 0 && <Link className="block rounded-xl bg-amber-50 p-4 text-amber-800" to={appointmentsLink({status: "RESCHEDULE_REQUIRED"})}>{appointmentsCountAr(stats.rescheduleRequired)} بحاجة إلى إعادة جدولة — مراجعة المواعيد</Link>}
 
       <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
@@ -263,7 +265,7 @@ export default function DoctorDashboard() {
 
       {/* إحصاءات إضافية: للطبيب فقط (لا يرسلها الخادم للمساعد أصلًا)، مطويّة افتراضيًا. */}
       {!isAssistant && (
-        <details className="card p-4 sm:p-5">
+        <details open className="card p-4 sm:p-5">
           <summary className="cursor-pointer font-bold text-slate-800">المزيد من الإحصاءات</summary>
           <div className="mt-3 grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
             <StatCard label="إجمالي المرضى" value={stats?.totalPatients ?? 0} sub="مرضى مختلفون" icon={Users} to="/patients" />
@@ -282,7 +284,7 @@ export default function DoctorDashboard() {
         </details>
       )}
 
-      <details className="space-y-4">
+      <details open={!isAssistant} className="space-y-4">
         <summary className="card flex cursor-pointer items-center justify-between gap-3 p-4 font-bold text-slate-800">
           <span>الدخل والمستحقات</span>
           <span className="text-sm font-semibold text-green-700">اليوم: {formatDzd(stats?.estimatedRevenueToday ?? 0)}</span>
@@ -309,7 +311,7 @@ export default function DoctorDashboard() {
         </section>
       )}
       </details>
-      <details className="space-y-4"><summary className="cursor-pointer font-bold">رمز الحجز ودعوة زميل</summary>
+      <details open={!isAssistant} className="space-y-4"><summary className="cursor-pointer font-bold">رمز الحجز ودعوة زميل</summary>
       {qrImageUrl && bookingUrl && (
         <section className="card p-4 sm:p-6" aria-label="رمز الحجز QR">
           <h2 className="flex items-center gap-1.5 font-bold text-slate-800">

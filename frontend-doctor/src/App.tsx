@@ -2,7 +2,6 @@ import { Routes, Route } from "react-router-dom";
 import {
   LayoutDashboard,
   CalendarClock,
-  Clock,
   Users as UsersIcon,
   Settings,
   Stethoscope,
@@ -10,10 +9,8 @@ import {
   ShieldCheck,
   Star,
   KeyRound,
-  UserCog,
   MessageSquare,
   UserX,
-  ClipboardList,
   Gift,
 } from "lucide-react";
 
@@ -25,7 +22,9 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ApplyDoctor from "./pages/ApplyDoctor";
 import AssistantAcceptInvite from "./pages/AssistantAcceptInvite";
-import DoctorDashboard from "./pages/doctor/DoctorDashboard";
+import DoctorHome from "./pages/doctor/DoctorHome";
+import DoctorOverview from "./pages/doctor/DoctorOverview";
+import DoctorSettingsHub from "./pages/doctor/DoctorSettingsHub";
 import DoctorAppointments from "./pages/doctor/DoctorAppointments";
 import DoctorSchedule from "./pages/doctor/DoctorSchedule";
 import DoctorPatients from "./pages/doctor/DoctorPatients";
@@ -44,7 +43,6 @@ import AdminMessages from "./pages/admin/AdminMessages";
 import DoctorMessages from "./pages/doctor/DoctorMessages";
 import DoctorTreatmentPlans from "./pages/doctor/DoctorTreatmentPlans";
 import AdminReferrals from "./pages/admin/AdminReferrals";
-import { isDentalSpecialty } from "./lib/features";
 import AccountSettings from "./pages/AccountSettings";
 import ClinicRegister from "./pages/clinic/ClinicRegister";
 import ClinicManagement from "./pages/clinic/ClinicManagement";
@@ -58,20 +56,20 @@ const sharedNav = [
   { to: "/appointments", label: "المواعيد", icon: CalendarClock },
 ];
 
-// روابط إضافية للطبيب وحده — لا تظهر أبدًا في قائمة المساعد.
-const doctorOnlyNav = [
-  { to: "/clinic", label: "إدارة العيادة", icon: Building2 },
-  { to: "/messages", label: "مراسلة الإدارة", icon: MessageSquare },
-  { to: "/schedule", label: "أوقات العمل", icon: Clock },
+// قائمة الطبيب: أربعة عناصر فقط. بقية الصفحات (أوقات العمل، التقييمات، المساعدون، الملف المهني،
+// الحساب، المراسلة، العيادة، خطط العلاج، نظرة عامة) تبقى متاحة بنقرة من «الإعدادات» (/settings).
+const doctorMainNav = [
+  { to: "/", label: "لوحة التحكم", icon: LayoutDashboard, end: true },
+  { to: "/appointments", label: "المواعيد", icon: CalendarClock },
   { to: "/patients", label: "المرضى", icon: UsersIcon },
-  { to: "/reviews", label: "التقييمات", icon: Star },
-  { to: "/assistants", label: "المساعدون", icon: UserCog },
-  { to: "/profile", label: "ملفي المهني", icon: Settings },
-  { to: "/account", label: "إعدادات الحساب", icon: KeyRound },
+  { to: "/settings", label: "الإعدادات", icon: Settings },
 ];
 
-// «خطط العلاج» تظهر لأطباء الأسنان فقط (الخادم يرفض غيرهم 403 على أي حال).
-const treatmentNavItem = { to: "/treatment-plans", label: "خطط العلاج", icon: ClipboardList };
+/** الرئيسية: لوحة التحكم الجديدة للطبيب؛ المساعد يبقى على الرئيسية الحالية حتى المرحلة ج. */
+function HomeRoute() {
+  const { user } = useAuth();
+  return user?.role === "ASSISTANT" ? <DoctorOverview /> : <DoctorHome />;
+}
 
 /**
  * الشريط الجانبي واحد لكل من الطبيب والمساعد، لكن العناصر والعنوان يختلفان حسب الدور —
@@ -85,10 +83,9 @@ function DoctorAreaLayout() {
   // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
   const unread = useDoctorUnread(!isAssistant && !!user);
   useUnreadToast(unread.data?.unread, () => "رسالة جديدة من الإدارة", "/messages?focus=unread");
-  const daily = doctorOnlyNav.filter(i => ["/patients", "/messages"].includes(i.to));
-  const settings = doctorOnlyNav.filter(i => !["/patients", "/messages", "/clinic"].includes(i.to));
-  const doctorNav = [...sharedNav, ...daily, ...settings, ...(isDentalSpecialty(user?.doctor?.specialty) ? [treatmentNavItem] : [])];
-  const items = isAssistant ? sharedNav : doctorNav.map((i) => (i.to === "/messages" ? { ...i, to: unread.data?.unread ? "/messages?focus=unread" : i.to, badge: unread.data?.unread } : i));
+  const items = isAssistant
+    ? sharedNav
+    : doctorMainNav.map((i) => (i.to === "/settings" ? { ...i, badge: unread.data?.unread } : i));
 
   return (
     <DashboardLayout
@@ -96,7 +93,7 @@ function DoctorAreaLayout() {
       subtitle={isAssistant ? "إدارة المواعيد والطابور لأطباء العيادة" : undefined}
       items={items}
       dailyNavigation
-      settingsStart={isAssistant ? undefined : 4}
+      settingsStart={isAssistant ? undefined : doctorMainNav.length}
       clinicMode={!isAssistant}
     />
   );
@@ -154,10 +151,12 @@ export default function App() {
           بالطبيب ترفض المساعد بـ403 بغض النظر عمّا تعرضه هذه الواجهة). */}
       <Route element={<ProtectedRoute allow={["DOCTOR", "ASSISTANT"]} />}>
         <Route element={<DoctorAreaLayout />}>
-          <Route path="/" element={<DoctorDashboard />} />
+          <Route path="/" element={<HomeRoute />} />
           <Route path="/appointments" element={<DoctorAppointments />} />
 
           <Route element={<ProtectedRoute allow={["DOCTOR"]} />}>
+            <Route path="/overview" element={<DoctorOverview />} />
+            <Route path="/settings" element={<DoctorSettingsHub />} />
             <Route path="/messages" element={<DoctorMessages />} />
             <Route path="/schedule" element={<DoctorSchedule />} />
             <Route path="/patients" element={<DoctorPatients />} />

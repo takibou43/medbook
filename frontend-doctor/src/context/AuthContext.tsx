@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { api, setAccessToken, getAccessToken, classifyApiError, ApiErrorKind } from "../lib/api";
 import { User } from "../types";
+import { logoutBody, wantsSessionBootstrap, withoutSwitchParam } from "../lib/portalSwitch";
 
 interface AuthContextValue {
   user: User | null;
@@ -17,6 +18,12 @@ interface AuthContextValue {
   registerAssistant: (data: { token: string; password: string; firstName: string; lastName: string }) => Promise<User>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
+  /** حساب مريض يقدّم طلب طبيب (يبقى قيد المراجعة). يستبدل سياق الجلسة بسياق الطبيب. */
+  applyAsDoctor: (data: Record<string, unknown>) => Promise<void>;
+  /** طبيب يفعّل ملف مريض في حسابه. */
+  addPatientProfile: (data: { password: string; cityId?: string }) => Promise<void>;
+  /** يجهّز جلسة واجهة المرضى (استدعاء مصادَق) ثم يُرجع نجاحه؛ التنقل نفسه يتولاه المستدعي. */
+  prepareSwitchToPatient: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -58,7 +65,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshMe();
+    // وصل المستخدم من الواجهة الأخرى (?switch=1): نحاول إنشاء الجلسة من كوكي التجديد الذي ضبطه الخادم
+    // قبل الانتقال، فيحل ذلك محل أي توكن قديم محفوظ. فشل ذلك يرجع إلى السلوك المعتاد (تسجيل الدخول).
+    async function boot() {
+      if (wantsSessionBootstrap(window.location.search)) {
+        try {
+          const res = await api.post("/auth/refresh");
+          setAccessToken(res.data?.data?.accessToken ?? null);
+        } catch {
+          /* لا جلسة: يتابع المسار المعتاد */
+        }
+        window.history.replaceState(null, "", window.location.pathname + withoutSwitchParam(window.location.search) + window.location.hash);
+      }
+      await refreshMe();
+    }
+    void boot();
   }, [refreshMe]);
 
   async function login(email: string, password: string) {
@@ -96,9 +117,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.data.data.user as User;
   }
 
+  async function applyAsDoctor(data: Record<string, unknown>) {
+    const res = await api.post("/auth/profile/doctor", data);
+    setAccessToken(res.data.data.accessToken);
+    await refreshMe();
+  }
+
+  async function addPatientProfile(data: { password: string; cityId?: string }) {
+    await api.post("/auth/profile/patient", data);
+    await refreshMe();
+  }
+
+  async function prepareSwitchToPatient() {
+    await api.post("/auth/switch/patient");
+  }
+
   async function logout() {
     try {
-      await api.post("/auth/logout");
+      await api.post("/auth/logout", logoutBody(user?.profiles));
     } finally {
       setAccessToken(null);
       setUser(null);
@@ -107,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, sessionError, sessionErrorKind, login, registerDoctor, registerClinic, registerClinicDoctor, registerAssistant, logout, refreshMe }}>
+    <AuthContext.Provider value={{ user, loading, sessionError, sessionErrorKind, login, registerDoctor, registerClinic, registerClinicDoctor, registerAssistant, logout, refreshMe, applyAsDoctor, addPatientProfile, prepareSwitchToPatient }}>
       {children}
     </AuthContext.Provider>
   );

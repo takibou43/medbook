@@ -4,6 +4,7 @@ import { User } from "../types";
 import { clearAppointmentCachesExcept } from "../lib/appointmentCache";
 import { clearOfflineUser, loadOfflineUser, saveOfflineUser } from "../lib/offlineSession";
 import { queryClient } from "../lib/queryClient";
+import { logoutBody, wantsSessionBootstrap, withoutSwitchParam } from "../lib/portalSwitch";
 
 // حساب المريض في موقع المرضى: كل الطلبات عبر /api/patient/auth (مقصورة على دور المريض، وجلسة
 // تجديد منفصلة عن جلسة الأطباء). إنشاء حجز يتطلب حساب مريض مسجّل الدخول (يُفرض في الخادم أيضًا).
@@ -23,6 +24,8 @@ interface AuthContextValue {
   registerDoctor: (data: Record<string, unknown>) => Promise<User>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
+  /** يجهّز جلسة لوحة الأطباء (استدعاء مصادَق بـBearer)؛ التنقل نفسه يتولاه المستدعي. */
+  prepareSwitchToDoctor: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -68,7 +71,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshMe();
+    // وصل المستخدم من لوحة الأطباء (?switch=1): ننشئ جلسة المرضى من كوكيها الذي ضبطه الخادم قبل الانتقال،
+    // فيحل محل أي توكن قديم. إن فشل ذلك يتابع المسار المعتاد (تسجيل الدخول).
+    async function boot() {
+      if (wantsSessionBootstrap(window.location.search)) {
+        try {
+          const res = await api.post("/patient/auth/refresh");
+          setAccessToken(res.data?.data?.accessToken ?? null);
+        } catch {
+          /* لا جلسة: يتابع المسار المعتاد */
+        }
+        window.history.replaceState(null, "", window.location.pathname + withoutSwitchParam(window.location.search) + window.location.hash);
+      }
+      await refreshMe();
+    }
+    void boot();
   }, [refreshMe]);
 
   // انتهاء الجلسة نهائيًا (فشل التجديد) من أي طلب في أي صفحة.
@@ -103,9 +120,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.data.data.user as User;
   }
 
+  async function prepareSwitchToDoctor() {
+    await api.post("/patient/auth/switch/doctor");
+  }
+
   async function logout() {
     try {
-      await api.post("/patient/auth/logout");
+      // حساب الملفين يخرج من الواجهتين معًا.
+      await api.post("/patient/auth/logout", logoutBody(user?.profiles));
     } finally {
       wipePatientData();
       setAccessToken(null);
@@ -114,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, registerPatient, registerDoctor, logout, refreshMe }}>
+    <AuthContext.Provider value={{ user, loading, login, registerPatient, registerDoctor, logout, refreshMe, prepareSwitchToDoctor }}>
       {children}
     </AuthContext.Provider>
   );

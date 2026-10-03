@@ -70,6 +70,13 @@ export default function AccountAuth() {
       showToast("تم إنشاء حسابك بنجاح.", "success");
       navigate(redirect, { replace: true });
     } catch (err) {
+      // بريد/هاتف مسجّل: لا حساب ثانٍ ولا ربط تلقائي. نوجّه إلى تسجيل الدخول ثم إضافة الملف من داخل الحساب.
+      if ((err as any)?.response?.data?.details?.code === "ACCOUNT_EXISTS") {
+        loginForm.setValue("email", v.email.trim());
+        setMode("login");
+        setError("هذا البريد الإلكتروني أو رقم الهاتف مسجّل بالفعل. سجّل الدخول إلى حسابك، وإن كنت طبيبًا فعّل ملف المريض من لوحة الأطباء (ملفاتي) ثم ادخل من هنا.");
+        return;
+      }
       setError(apiErrorMessage(err, "تعذّر إنشاء الحساب."));
     } finally {
       setSubmitting(false);

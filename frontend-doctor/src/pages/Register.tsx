@@ -33,6 +33,7 @@ export default function Register() {
   const { data: wilayas } = useWilayas();
   const [loading, setLoading] = useState(false);
   const [selectedWilaya, setSelectedWilaya] = useState("");
+  const [accountExists, setAccountExists] = useState(false);
 
   const location = useLocation();
   // رابط الدعوة (?ref=MB-XXXX) يملأ الحقل تلقائيًا؛ يبقى اختياريًا وقابلًا للتعديل أو الحذف.
@@ -67,6 +68,11 @@ export default function Register() {
         doctorForm.setError("referralCode", { message: apiErrorMessage(err) }, { shouldFocus: true });
         return;
       }
+      // بريد أو هاتف مسجّل: لا ننشئ حسابًا ثانيًا ولا نربط الموجود. نوجّه إلى الدخول ثم إضافة الملف من داخل الحساب.
+      if ((err as any)?.response?.data?.details?.code === "ACCOUNT_EXISTS") {
+        setAccountExists(true);
+        return;
+      }
       showToast(apiErrorMessage(err, "تعذّر إنشاء الحساب."), "error");
     } finally {
       setLoading(false);
@@ -88,6 +94,13 @@ export default function Register() {
           </p>
         </div>
 
+        {accountExists && (
+          <div role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+            هذا البريد الإلكتروني أو رقم الهاتف مسجّل بالفعل. لن ننشئ حسابًا ثانيًا.{" "}
+            <a href="/login" className="font-bold underline">سجّل الدخول إلى حسابك</a>
+            {" "}ثم أضف ملف الطبيب من داخله (إن كان حساب مريض) دون أي تغيير في كلمة مرورك.
+          </div>
+        )}
         <form onSubmit={doctorForm.handleSubmit(onSubmitDoctor)} className="card space-y-4 p-6">
           <div className="grid grid-cols-2 gap-3">
             <Input label="الاسم" error={doctorForm.formState.errors.firstName?.message} {...doctorForm.register("firstName", { required: "مطلوب" })} />

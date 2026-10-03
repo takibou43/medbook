@@ -56,6 +56,8 @@ export function ProtectedRoute({ allow }: { allow: Role[] }) {
   if (sessionError) return <SessionError kind={sessionErrorKind} onRetry={() => void refreshMe()} />;
   if (!user) return <Navigate to="/login" replace />;
   if (!allow.includes(user.role)) {
+    // حساب مريض بلا ملف طبيب: صفحة «قدّم كطبيب» (لا «/» وإلا تكررت إعادة التوجيه بلا نهاية).
+    if (user.role === "PATIENT") return <Navigate to="/apply" replace />;
     return <Navigate to={user.role === "ADMIN" ? "/admin" : user.role === "CLINIC_OWNER" ? "/clinic" : "/"} replace />;
   }
 

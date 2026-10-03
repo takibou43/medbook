@@ -4,6 +4,8 @@ import * as authService from "./auth.service";
 import * as clinicsService from "../clinics/clinics.service";
 import { issueTokens } from "../../lib/tokens";
 import { env } from "../../config/env";
+import * as profilesService from "./profiles.service";
+import { clearDoctorSession, clearPatientSession, setPatientSession } from "../../lib/sessionCookies";
 
 function sanitizeUser(user: any) {
   const { passwordHash, ...rest } = user;
@@ -73,13 +75,15 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
   const token = req.cookies?.[REFRESH_COOKIE];
-  await authService.logout(token);
+  const all = req.body?.allSessions === true;
+  await authService.logout(token, all);
   res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+  if (all) clearPatientSession(res);
   res.json({ success: true, message: "تم تسجيل الخروج." });
 });
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
-  const user = await authService.getMe(req.user!.id);
+  const user = await authService.getMe(req.user!.id, req.user!.role);
   res.json({ success: true, data: sanitizeUser(user) });
 });
 
@@ -93,4 +97,39 @@ export const updateAccount = asyncHandler(async (req: Request, res: Response) =>
     message: relogin ? "تم تحديث بيانات الحساب. الرجاء تسجيل الدخول من جديد." : "تم تحديث بيانات الحساب.",
     data: sanitizeUser(user),
   });
+});
+
+// تفعيل ملف مريض لحساب طبيب: يضبط كوكي جلسة المرضى (مسارها الخاص) ويعيد توكن سياق المريض — لا رموز في أي رابط.
+export const addPatientProfile = asyncHandler(async (req: Request, res: Response) => {
+  const result = await profilesService.addPatientProfile(req.user!.id, req.body);
+  setPatientSession(res, result.refreshToken);
+  const profiles = await profilesService.profilesFor(req.user!.id);
+  res.status(result.created ? 201 : 200).json({
+    success: true,
+    message: result.created ? "تم تفعيل ملف المريض في حسابك." : "ملف المريض مفعّل في حسابك بالفعل.",
+    data: { created: result.created, profiles, accessToken: result.accessToken },
+  });
+});
+
+// طلب تسجيل كطبيب من حساب مريض: يبقى قيد المراجعة. يضبط كوكي جلسة الأطباء ليسهل الانتقال إلى لوحتهم.
+export const applyDoctorProfile = asyncHandler(async (req: Request, res: Response) => {
+  const result = await profilesService.applyAsDoctor(req.user!.id, req.body);
+  res.cookie(REFRESH_COOKIE, result.refreshToken, cookieOptions);
+  const profiles = await profilesService.profilesFor(req.user!.id);
+  res.status(201).json({
+    success: true,
+    message: "تم استلام طلبك كطبيب. ملفك المهني قيد المراجعة من طرف الإدارة قبل الظهور للمرضى.",
+    data: { profiles, accessToken: result.accessToken },
+  });
+});
+
+// انتقال من لوحة الأطباء إلى واجهة المرضى: جلسة مرضى جديدة تُضبط كوكيها من هنا (استدعاء مصادَق بـBearer).
+export const switchToPatient = asyncHandler(async (req: Request, res: Response) => {
+  const tokens = await profilesService.issuePatientPortalSession(req.user!.id);
+  setPatientSession(res, tokens.refreshToken);
+  res.json({ success: true, data: { switched: true } });
+});
+
+export const profiles = asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: await profilesService.profilesFor(req.user!.id) });
 });

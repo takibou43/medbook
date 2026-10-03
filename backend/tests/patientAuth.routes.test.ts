@@ -35,11 +35,11 @@ const h = vi.hoisted(() => {
       findFirst: vi.fn(async ({ where, select }: any) => {
         const match = (u: any) => {
           if (where.OR) return where.OR.some((c: any) => (c.email ? emailEq(u.email, c.email) : u.phone === c.phone));
-          return emailEq(u.email, where.email) && (!where.role || u.role === where.role);
+          return emailEq(u.email, where.email) && (!where.role || (where.role.in ? where.role.in.includes(u.role) : u.role === where.role));
         };
         const u = s.users.find(match);
         if (!u) return null;
-        return select?.passwordHash ? { id: u.id, role: u.role, isActive: u.isActive, passwordHash: u.passwordHash } : { id: u.id };
+        return select?.passwordHash ? { ...withPatient(u), isActive: u.isActive, passwordHash: u.passwordHash } : { id: u.id };
       }),
       create: vi.fn(async ({ data }: any) => {
         if (s.users.some((u) => u.email === data.email)) {
@@ -61,6 +61,9 @@ const h = vi.hoisted(() => {
     },
     patient: {
       findUnique: vi.fn(async ({ where }: any) => s.patients.find((p) => p.userId === where.userId) ?? null),
+    },
+    doctor: {
+      findUnique: vi.fn(async () => null),
     },
     refreshToken: {
       create: vi.fn(async ({ data }: any) => (s.tokens.push({ id: id("rt"), revoked: false, ...data }), {})),

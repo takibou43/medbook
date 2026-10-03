@@ -7,8 +7,11 @@ import {
   registerAssistantSchema,
   loginSchema,
   updateAccountSchema,
+  addPatientProfileSchema,
+  applyDoctorProfileSchema,
 } from "./auth.schema";
-import { authenticate } from "../../middleware/auth";
+import { authenticate, authorize } from "../../middleware/auth";
+import { Role } from "@prisma/client";
 import { authLimiter } from "../../middleware/rateLimiter";
 import { registerClinicSchema, acceptClinicInviteSchema } from "../clinics/clinics.schema";
 
@@ -25,6 +28,12 @@ router.post("/login", authLimiter, validate({ body: loginSchema }), controller.l
 router.post("/refresh", controller.refresh);
 router.post("/logout", controller.logout);
 router.get("/me", authenticate, controller.me);
+// حساب بملفين (مريض + طبيب): ملخص الملفين، تفعيل ملف مريض لطبيب، طلب طبيب من مريض، والانتقال إلى واجهة المرضى.
+// كلها مقيّدة بسياق الجلسة في الخادم (لا اعتماد على الواجهة)، وتتطلب كلمة المرور من جديد عند إضافة ملف.
+router.get("/profiles", authenticate, controller.profiles);
+router.post("/profile/patient", authenticate, authorize(Role.DOCTOR), authLimiter, validate({ body: addPatientProfileSchema }), controller.addPatientProfile);
+router.post("/profile/doctor", authenticate, authorize(Role.PATIENT), authLimiter, validate({ body: applyDoctorProfileSchema }), controller.applyDoctorProfile);
+router.post("/switch/patient", authenticate, authorize(Role.DOCTOR), authLimiter, controller.switchToPatient);
 // تغيير البريد و/أو كلمة المرور للحساب الحالي — محمي بكلمة المرور الحالية + حدّ محاولات صارم.
 router.patch("/account", authenticate, authLimiter, validate({ body: updateAccountSchema }), controller.updateAccount);
 

@@ -8,6 +8,7 @@ import { hashToken, issueTokens } from "../../lib/tokens";
 import { sendPushToUser, isPushEnabled } from "../../lib/push";
 import { PatientRegisterInput, PushSubscriptionInput } from "./patientAuth.schema";
 import { isPatientBlocked } from "../patientBlocks/patientBlocks.service";
+import { patientPortalRole, accountExistsError, summarizeProfiles, PROFILE_PROBE } from "../../lib/accountProfiles";
 
 /**
  * حساب المريض — يعيد استعمال البنية الموجودة كما هي (لا نظام ثانٍ):
@@ -42,7 +43,7 @@ export async function registerPatientAccount(input: PatientRegisterInput) {
     },
     select: { id: true },
   });
-  if (existing) throw ApiError.conflict("البريد الإلكتروني أو رقم الهاتف مستخدم مسبقًا.");
+  if (existing) throw accountExistsError();
 
   if (input.cityId) {
     const city = await prisma.city.findUnique({ where: { id: input.cityId }, select: { id: true } });
@@ -66,7 +67,7 @@ export async function registerPatientAccount(input: PatientRegisterInput) {
 
   const tokens = await issueTokens(user.id, user.role);
   // حساب جديد لا يمكن أن يكون محظورًا.
-  return { user: { ...user, isBlocked: false }, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
+  return { user: { ...user, isBlocked: false, profiles: summarizeProfiles({ role: Role.PATIENT, patient: user.patient, doctor: null }) }, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
 }
 
 // تجزئة وهمية ثابتة تُقارَن عند عدم وجود الحساب، فيستغرق الرد نفس الوقت تقريبًا في الحالتين
@@ -78,17 +79,19 @@ function getDummyHash() {
 }
 
 export async function loginPatient(email: string, password: string) {
-  const user = await prisma.user.findFirst({
-    where: { email: { equals: email, mode: "insensitive" }, role: Role.PATIENT },
-    select: { id: true, role: true, isActive: true, passwordHash: true },
+  // يدخل واجهة المرضى: حساب مريض، أو طبيب فعّل ملف مريض في حسابه (patientPortalRole). غيرهما كان وبقي مرفوضًا.
+  const found = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" }, role: { in: [Role.PATIENT, Role.DOCTOR] } },
+    select: { id: true, role: true, isActive: true, passwordHash: true, patient: { select: { id: true } } },
   });
+  const user = found && patientPortalRole(found) ? found : null;
 
   const valid = await comparePassword(password, user?.passwordHash ?? (await getDummyHash()));
   // نفس الرسالة لبريد غير موجود/كلمة خاطئة/حساب ليس مريضًا — لا تعداد للحسابات.
   if (!user || !valid) throw ApiError.unauthorized("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
   if (!user.isActive) throw ApiError.forbidden("هذا الحساب معطّل. تواصل مع الإدارة.");
 
-  const tokens = await issueTokens(user.id, user.role);
+  const tokens = await issueTokens(user.id, Role.PATIENT);
   const me = await getPatientMe(user.id);
   return { user: me, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
 }
@@ -109,8 +112,8 @@ export async function refreshPatientSession(refreshToken: string | undefined) {
   });
   if (!stored || stored.expiresAt < new Date()) throw expired();
 
-  const user = await prisma.user.findUnique({ where: { id: decoded.sub }, select: { id: true, role: true, isActive: true } });
-  if (!user || !user.isActive || user.role !== Role.PATIENT) throw expired();
+  const user = await prisma.user.findUnique({ where: { id: decoded.sub }, select: { id: true, role: true, isActive: true, patient: { select: { id: true } } } });
+  if (!user || !user.isActive || !patientPortalRole(user)) throw expired();
 
   // تدوير: إبطال القديم وإصدار جديد (نفس سلوك /api/auth/refresh).
   const consumed = await prisma.refreshToken.updateMany({
@@ -118,22 +121,35 @@ export async function refreshPatientSession(refreshToken: string | undefined) {
     data: { revoked: true },
   });
   if (consumed.count !== 1) throw expired();
-  const tokens = await issueTokens(user.id, user.role);
+  const tokens = await issueTokens(user.id, Role.PATIENT);
   const me = await getPatientMe(user.id);
   return { user: me, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
 }
 
-export async function logoutPatient(refreshToken: string | undefined) {
+export async function logoutPatient(refreshToken: string | undefined, allSessions = false) {
   if (!refreshToken) return;
-  await prisma.refreshToken.updateMany({ where: { tokenHash: hashToken(refreshToken) }, data: { revoked: true } });
+  const tokenHash = hashToken(refreshToken);
+  if (allSessions) {
+    // حساب الملفين: الخروج يُبطل جلسات الواجهتين معًا (لا يُنفَّذ إلا إن طابق الكوكي جلسة قائمة فعلًا).
+    const row = await prisma.refreshToken.findFirst({ where: { tokenHash }, select: { userId: true } });
+    if (row) {
+      await prisma.refreshToken.updateMany({ where: { userId: row.userId, revoked: false }, data: { revoked: true } });
+      return;
+    }
+  }
+  await prisma.refreshToken.updateMany({ where: { tokenHash }, data: { revoked: true } });
 }
 
 export async function getPatientMe(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: PATIENT_ME_SELECT });
-  if (!user || user.role !== Role.PATIENT || !user.patient) throw ApiError.notFound("الحساب غير موجود.");
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { ...PATIENT_ME_SELECT, doctor: PROFILE_PROBE.doctor } });
+  if (!user || !patientPortalRole(user) || !user.patient) throw ApiError.notFound("الحساب غير موجود.");
   // المريض يرى فقط أنه محظور (لتظهر له رسالة واضحة عند الحجز) — لا السبب ولا من حظره.
   const isBlocked = await isPatientBlocked(user.patient.id);
-  return { ...user, isBlocked };
+  // role = سياق واجهة المرضى (PATIENT) حتى لطبيب فعّل ملف مريض؛ وبيانات الطبيب الداخلية لا تُكشف هنا،
+  // بل ملخص الملفين فقط (لإظهار زر الانتقال إلى لوحة الأطباء أو «سجّل كطبيب»).
+  const { doctor: _doctor, ...rest } = user;
+  void _doctor;
+  return { ...rest, role: Role.PATIENT, isBlocked, profiles: summarizeProfiles(user) };
 }
 
 async function requirePatientId(userId: string): Promise<string> {

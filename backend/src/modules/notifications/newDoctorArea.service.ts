@@ -12,7 +12,7 @@ export async function queueNewDoctorAreaNotifications(tx: Prisma.TransactionClie
   if (cities.length === 0) return [] as string[];
 
   const recipients = await tx.patient.findMany({
-    where: { cityId: { in: cities.map((city) => city.id) }, user: { isActive: true } },
+    where: { cityId: { in: cities.map((city) => city.id) }, user: { isActive: true }, ...(doctor.userId ? { userId: { not: doctor.userId } } : {}) },
     select: { userId: true },
   });
   if (recipients.length === 0) return [] as string[];

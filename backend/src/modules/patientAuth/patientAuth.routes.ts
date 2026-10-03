@@ -1,11 +1,12 @@
-import { Router, Request, Response, CookieOptions } from "express";
+import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { Role } from "@prisma/client";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
 import { authLimiter } from "../../middleware/rateLimiter";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { env } from "../../config/env";
+import { PATIENT_REFRESH_COOKIE, setPatientSession, setDoctorSession, clearPatientSession, clearDoctorSession } from "../../lib/sessionCookies";
+import { issueDoctorPortalSession } from "../auth/profiles.service";
 import { patientRegisterSchema, patientLoginSchema, pushSubscriptionSchema, unsubscribeSchema } from "./patientAuth.schema";
 import * as service from "./patientAuth.service";
 
@@ -19,19 +20,8 @@ import * as service from "./patientAuth.service";
  * (فكان سيرفض تسجيل الدخول نفسه بـ401).
  *
  * كوكي التجديد خاص بالمريض (اسم ومسار منفصلان عن كوكي الأطباء /api/auth)، فلا تداخل بين الجلستين
- * ولا تغيير في مصادقة الأطباء والمساعدين.
+ * ولا تغيير في مصادقة الأطباء والمساعدين. الطبيب الذي فعّل ملف مريض يدخل من هنا بجلسة بسياق مريض.
  */
-const PATIENT_REFRESH_COOKIE = "medbook_patient_refresh";
-const COOKIE_PATH = "/api/patient/auth";
-const cookieOptions: CookieOptions = {
-  httpOnly: true,
-  secure: env.isProd,
-  // الواجهة (Vercel) والخادم (Render) على نطاقين مختلفين: "none" + secure في الإنتاج، "lax" محليًا.
-  sameSite: env.isProd ? "none" : "lax",
-  path: COOKIE_PATH,
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-};
-
 export const patientAuthRouter = Router();
 
 patientAuthRouter.post(
@@ -40,7 +30,7 @@ patientAuthRouter.post(
   validate({ body: patientRegisterSchema }),
   asyncHandler(async (req: Request, res: Response) => {
     const result = await service.registerPatientAccount(req.body);
-    res.cookie(PATIENT_REFRESH_COOKIE, result.refreshToken, cookieOptions);
+    setPatientSession(res, result.refreshToken);
     res.status(201).json({ success: true, data: { user: result.user, accessToken: result.accessToken } });
   })
 );
@@ -51,7 +41,7 @@ patientAuthRouter.post(
   validate({ body: patientLoginSchema }),
   asyncHandler(async (req: Request, res: Response) => {
     const result = await service.loginPatient(req.body.email, req.body.password);
-    res.cookie(PATIENT_REFRESH_COOKIE, result.refreshToken, cookieOptions);
+    setPatientSession(res, result.refreshToken);
     res.json({ success: true, data: { user: result.user, accessToken: result.accessToken } });
   })
 );
@@ -60,7 +50,7 @@ patientAuthRouter.post(
   "/refresh",
   asyncHandler(async (req: Request, res: Response) => {
     const result = await service.refreshPatientSession(req.cookies?.[PATIENT_REFRESH_COOKIE]);
-    res.cookie(PATIENT_REFRESH_COOKIE, result.refreshToken, cookieOptions);
+    setPatientSession(res, result.refreshToken);
     res.json({ success: true, data: { user: result.user, accessToken: result.accessToken } });
   })
 );
@@ -68,9 +58,25 @@ patientAuthRouter.post(
 patientAuthRouter.post(
   "/logout",
   asyncHandler(async (req: Request, res: Response) => {
-    await service.logoutPatient(req.cookies?.[PATIENT_REFRESH_COOKIE]);
-    res.clearCookie(PATIENT_REFRESH_COOKIE, { path: COOKIE_PATH, httpOnly: true, secure: env.isProd, sameSite: cookieOptions.sameSite });
+    const all = req.body?.allSessions === true;
+    await service.logoutPatient(req.cookies?.[PATIENT_REFRESH_COOKIE], all);
+    clearPatientSession(res);
+    if (all) clearDoctorSession(res);
     res.json({ success: true, message: "تم تسجيل الخروج." });
+  })
+);
+
+// انتقال من واجهة المرضى إلى لوحة الأطباء لحساب يملك ملف طبيب: جلسة أطباء جديدة تُضبط كوكيها من هنا
+// (استدعاء مصادَق بـBearer) فلا يمرّ أي رمز في رابط URL. من دون ملف طبيب: 403.
+patientAuthRouter.post(
+  "/switch/doctor",
+  authLimiter,
+  authenticate,
+  authorize(Role.PATIENT),
+  asyncHandler(async (req: Request, res: Response) => {
+    const tokens = await issueDoctorPortalSession(req.user!.id);
+    setDoctorSession(res, tokens.refreshToken);
+    res.json({ success: true, data: { switched: true } });
   })
 );
 

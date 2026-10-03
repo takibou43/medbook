@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { api, apiErrorMessage } from "../../lib/api";
 import { disablePatientPush } from "../../lib/patientPush";
 import { ReminderCard } from "../../components/account/ReminderCard";
+import { ProfilesCard } from "../../components/account/ProfilesCard";
 import { RateDoctorForm, RatePrompt, StarsDisplay, canRate, readDismissed, saveDismissed } from "../../components/account/RateDoctor";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
 import { Spinner } from "../../components/ui/States";
@@ -309,6 +310,8 @@ export default function MyAccount() {
             }}
           />
         )}
+
+        <ProfilesCard />
 
         <section className="glass p-4">
           <h2 className="flex items-center gap-2 font-bold text-slate-900"><MapPin className="h-5 w-5 text-primary-600" /> منطقتي</h2>

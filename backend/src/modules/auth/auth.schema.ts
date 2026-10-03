@@ -55,6 +55,40 @@ export const updateAccountSchema = z
   })
   .strict("يحتوي الطلب على حقول غير مسموح بها.");
 
+// تفعيل ملف مريض لحساب طبيب قائم. كلمة المرور تُطلب من جديد (إثبات حضور) فلا تكفي جلسة مسروقة
+// لإضافة ملف. لا بريد ولا هاتف هنا إطلاقًا: الحساب هو نفسه ببريده وهاتفه.
+export const addPatientProfileSchema = z
+  .object({
+    password: z.string().min(1, "كلمة المرور مطلوبة").max(128),
+    firstName: z.string().trim().min(2, "الاسم قصير جدًا").max(60).optional(),
+    lastName: z.string().trim().min(2, "اللقب قصير جدًا").max(60).optional(),
+    cityId: z.string().uuid("البلدية غير صالحة").optional(),
+  })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+
+// طلب تسجيل كطبيب من حساب مريض قائم: بيانات الطبيب المهنية فقط + كلمة المرور الحالية.
+// لا بريد ولا هاتف ولا clinicId (الانضمام إلى العيادة بدعوة) ولا أي حقل اعتماد/اشتراك.
+export const applyDoctorProfileSchema = z
+  .object({
+    password: z.string().min(1, "كلمة المرور مطلوبة").max(128),
+    firstName: z.string().trim().min(2).max(60),
+    lastName: z.string().trim().min(2).max(60),
+    specialtyId: z.string().uuid("التخصص مطلوب"),
+    wilayaId: z.string().uuid("الولاية مطلوبة"),
+    cityId: z.string().uuid("المدينة مطلوبة"),
+    bio: z.string().max(2000).optional(),
+    yearsExperience: z.coerce.number().int().min(0).max(80).optional(),
+    languages: z.array(z.string().max(40)).max(10).optional(),
+    gender: z.enum(["MALE", "FEMALE"]).optional(),
+    consultationFee: z.coerce.number().int().min(0).optional(),
+    referralCode: z.string().trim().max(20, "كود الإحالة غير صحيح").optional(),
+  })
+  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+
+export const logoutSchema = z.object({ allSessions: z.boolean().optional() }).strict();
+
+export type AddPatientProfileInput = z.infer<typeof addPatientProfileSchema>;
+export type ApplyDoctorProfileInput = z.infer<typeof applyDoctorProfileSchema>;
 export type RegisterPatientInput = z.infer<typeof registerPatientSchema>;
 export type RegisterDoctorInput = z.infer<typeof registerDoctorSchema>;
 export type RegisterAssistantInput = z.infer<typeof registerAssistantSchema>;

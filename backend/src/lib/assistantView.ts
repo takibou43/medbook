@@ -14,6 +14,7 @@ export const ASSISTANT_SAFE_SELECT = {
   select: {
     id: true,
     isActive: true,
+    clinicId: true,
     doctor: {
       select: {
         id: true,

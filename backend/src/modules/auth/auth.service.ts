@@ -7,6 +7,7 @@ import { RegisterDoctorInput, RegisterPatientInput, RegisterAssistantInput } fro
 import { hashToken, issueTokens } from "../../lib/tokens";
 import { acceptInvite } from "../assistants/assistants.service";
 import { ASSISTANT_SAFE_SELECT } from "../../lib/assistantView";
+import { assistantDoctorContext } from "../../lib/assistantDoctorContext";
 import { resolveReferrerForRegistration, createReferralTx } from "../referrals/referrals.service";
 import { doctorPortalRole, summarizeProfiles, PROFILE_PROBE, accountExistsError } from "../../lib/accountProfiles";
 
@@ -239,5 +240,13 @@ export async function getMe(userId: string, context?: Role) {
   });
   if (!user) throw ApiError.notFound("المستخدم غير موجود.");
   // role = سياق الجلسة الحالية (الواجهة التي دخل منها)؛ دور الحساب الأصلي لا يُكشف ولا يتغيّر في القاعدة.
+  const selectedDoctor = assistantDoctorContext.getStore();
+  if (user.role === Role.ASSISTANT && user.assistant?.isActive && selectedDoctor) {
+    const doctor = await prisma.doctor.findFirst({
+      where: { id: selectedDoctor, ...(user.assistant.clinicId ? { clinicId: user.assistant.clinicId } : { id: user.assistant.doctor.id }), user: { isActive: true } },
+      select: ASSISTANT_SAFE_SELECT.select.doctor.select,
+    });
+    if (doctor) user.assistant.doctor = doctor;
+  }
   return { ...user, role: context ?? user.role, profiles: summarizeProfiles(user) };
 }

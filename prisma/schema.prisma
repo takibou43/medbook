@@ -247,6 +247,7 @@ model Clinic {
   createdAt DateTime @default(now())
   doctorInvites ClinicDoctorInvite[]
   transferRequests ClinicTransferRequest[]
+  assistants Assistant[]
   // شروط الأسعار والنسب لكل طبيب في هذه العيادة — يراها المدير وحده (انظر ClinicDoctorTerms).
   doctorTerms ClinicDoctorTerms[]
 
@@ -456,6 +457,8 @@ model Doctor {
 // الـ Backend مباشرة (انظر resolveActingDoctorId في backend/src/lib/actingDoctor.ts)،
 // وليس فقط إخفاءه في الواجهة.
 model Assistant {
+  clinicId String?
+  clinic Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
   id        String   @id @default(uuid())
   userId    String   @unique
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)

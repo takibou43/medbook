@@ -4,6 +4,7 @@ import { verifyAccessToken } from "../utils/jwt";
 import { ApiError } from "../utils/ApiError";
 import { prisma } from "../lib/prisma";
 import { holdsContext } from "../lib/accountProfiles";
+import { assistantDoctorContext } from "../lib/assistantDoctorContext";
 
 export interface AuthUser {
   id: string;
@@ -38,7 +39,9 @@ export function authenticate(req: Request, _res: Response, next: NextFunction) {
         const ok = user.role === payload.role || (await holdsContext(user.id, user.role, payload.role));
         if (!ok) return next(ApiError.forbidden());
         req.user = { id: user.id, role: payload.role };
-        return next();
+        const selectedDoctor = req.get("X-Assistant-Doctor-Id");
+        if (selectedDoctor && (selectedDoctor.length > 100 || !/^[a-zA-Z0-9-]+$/.test(selectedDoctor))) return next(ApiError.forbidden());
+        return assistantDoctorContext.run(payload.role === Role.ASSISTANT ? selectedDoctor : undefined, next);
       }).catch(next);
   } catch {
     return next(ApiError.unauthorized("جلسة منتهية أو غير صالحة. الرجاء تسجيل الدخول من جديد."));

@@ -148,6 +148,8 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
     if (existingUser) throw ApiError.conflict("هذا البريد الإلكتروني مسجّل بالفعل بحساب آخر.");
 
     const passwordHash = await hashPassword(data.password);
+    const invitingDoctor = await tx.doctor.findUnique({ where: { id: invite.doctorId }, select: { clinicId: true } });
+    if (!invitingDoctor) throw ApiError.notFound("الطبيب غير موجود.");
     const user = await tx.user.create({
       data: {
         email: invite.email,
@@ -156,6 +158,7 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
         assistant: {
           create: {
             doctorId: invite.doctorId,
+            clinicId: invitingDoctor.clinicId,
             firstName: data.firstName,
             lastName: data.lastName,
           },

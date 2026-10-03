@@ -23,6 +23,7 @@ import adminRoutes from "./modules/admin/admin.routes";
 import bookingRoutes from "./modules/booking/booking.routes";
 import pushRoutes from "./modules/push/push.routes";
 import assistantsRoutes from "./modules/assistants/assistants.routes";
+import assistantContextRoutes from "./modules/assistants/assistantContext.routes";
 import assistantsPublicRoutes from "./modules/assistants/assistants.public.routes";
 import { adminMessagesRouter, doctorMessagesRouter } from "./modules/messaging/messaging.routes";
 import { patientAuthRouter, patientAccountRouter, patientNotificationsRouter } from "./modules/patientAuth/patientAuth.routes";
@@ -65,6 +66,7 @@ export function createApp() {
   app.get("/health", (_req, res) => res.json({ success: true, message: "MedBook API يعمل بنجاح 🩺" }));
 
   app.use("/api/auth", authRoutes);
+  app.use("/api/assistant", assistantContextRoutes);
   app.use("/api/clinics", clinicsRoutes);
   app.use("/api/specialties", specialtiesRoutes);
   app.use("/api/wilayas", wilayasRoutes);

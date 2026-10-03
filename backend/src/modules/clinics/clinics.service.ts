@@ -20,6 +20,7 @@ export const PUBLIC_CLINIC_SELECT = {
   wilaya: { select: { id: true, nameAr: true } }, city: { select: { id: true, nameAr: true } },
 } satisfies Prisma.ClinicSelect;
 const inviteSelect = { id: true, email: true, status: true, expiresAt: true, createdAt: true, termsPriceDzd: true, termsDoctorSharePercent: true } as const;
+const clinicAssistantSelect = { id: true, firstName: true, lastName: true, isActive: true, user: { select: { email: true } } } as const;
 export async function lockClinic(tx: Prisma.TransactionClient, id: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"clinic-members:" + id}, 0))`;
 }
@@ -126,17 +127,18 @@ export async function updateOwnClinic(userId: string, input: ClinicProfileInput)
 }
 export async function getOwnClinic(userId: string) {
   const clinic = await ownedClinic(userId);
-  const [doctors, invites] = await Promise.all([
+  const [doctors, invites, sharedAssistants] = await Promise.all([
     prisma.doctor.findMany({ where: { clinicId: clinic.id }, select: {
       id: true, userId: true, firstName: true, lastName: true, verificationStatus: true, clinicId: true, consultationFee: true,
       clinicTerms: { select: { clinicId: true, appointmentPriceDzd: true, doctorSharePercent: true } },
       specialty: { select: { nameAr: true } }, user: { select: { email: true, isActive: true } },
-      assistants: { select: { id: true, firstName: true, lastName: true, isActive: true, user: { select: { email: true } } } },
+      assistants: { where: { OR: [{ clinicId: clinic.id }, { clinicId: null }] }, select: clinicAssistantSelect },
     }, orderBy: { firstName: "asc" } }),
     prisma.clinicDoctorInvite.findMany({ where: { clinicId: clinic.id, status: InviteStatus.PENDING }, select: inviteSelect }),
+    prisma.assistant.findMany({ where: { clinicId: clinic.id }, select: clinicAssistantSelect }),
   ]);
   const { owner: _owner, ...safeClinic } = clinic;
-  return { ...safeClinic, doctors: doctors.map(managerDoctorView), invites, billing: {
+  return { ...safeClinic, doctors: doctors.map(d => managerDoctorView({ ...d, assistants: [...new Map([...d.assistants, ...sharedAssistants].map(a => [a.id, a])).values()] })), invites, billing: {
     ...clinicReferralBilling(doctors.length, clinic.referralDiscountUntil), monthlyPerDoctor: CLINIC_DOCTOR_MONTHLY_DZD,
     paidDoctorCount: clinic.paidDoctorCount,
   } };
@@ -231,6 +233,24 @@ export async function clinicDoctor(userId: string, doctorId: string) {
   const doctor = await prisma.doctor.findFirst({ where: { id: doctorId, clinicId: clinic.id }, select: { id: true, userId: true } });
   if (!doctor) throw ApiError.notFound("الطبيب غير موجود في عيادتك.");
   return doctor;
+}
+export async function findOwnClinicAssistant(userId: string, email: string) {
+  const clinic = await ownedClinic(userId);
+  return prisma.assistant.findFirst({
+    where: { clinicId: clinic.id, user: { role: Role.ASSISTANT, email: { equals: email, mode: "insensitive" } } },
+    select: clinicAssistantSelect,
+  });
+}
+
+export async function setOwnClinicAssistantActive(userId: string, doctorId: string, assistantId: string, isActive: boolean) {
+  const doctor = await clinicDoctor(userId, doctorId);
+  const clinic = await ownedClinic(userId);
+  const changed = await prisma.assistant.updateMany({
+    where: { id: assistantId, OR: [{ clinicId: clinic.id }, { clinicId: null, doctorId: doctor.id }] },
+    data: { isActive },
+  });
+  if (!changed.count) throw ApiError.notFound("المساعد غير موجود في عيادتك.");
+  return prisma.assistant.findUnique({ where: { id: assistantId }, select: clinicAssistantSelect });
 }
 export async function searchClinics(query: { q?: string; wilayaId?: string; cityId?: string; page: number }) {
   const where: Prisma.ClinicWhereInput = { ...activeClinicWhere(), ...(query.q ? { nameAr: { contains: query.q, mode: "insensitive" } } : {}),

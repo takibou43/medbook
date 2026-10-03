@@ -303,6 +303,18 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
     const colleagueId = colleague.body.data.user.doctor.id;
     const assistantHeaders = bearer(accepted.body.data.accessToken);
     const selectionHeaders = { ...assistantHeaders, "X-Assistant-Doctor-Id": colleagueId };
+    const repeated = await request(app).post(`/api/clinics/mine/doctors/${colleagueId}/assistants`).set(bearer(o.token)).send({ email: accepted.body.data.user.email.toUpperCase() });
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.data.alreadyShared).toBe(true);
+    expect(repeated.body.data.assistant.id).toBe(assistantId);
+    expect(repeated.body.data.rawToken).toBeUndefined();
+    expect(await db.assistant.count({ where: { clinicId: o.clinicId } })).toBe(1);
+    const managed = await request(app).get("/api/clinics/mine").set(bearer(o.token));
+    expect(managed.status).toBe(200);
+    expect(managed.body.data.doctors.every((d: { assistants: { id: string }[] }) => d.assistants.some(a => a.id === assistantId))).toBe(true);
+    expect((await request(app).patch(`/api/clinics/mine/doctors/${colleagueId}/assistants/${assistantId}`).set(bearer(o.token)).send({ isActive: false })).status).toBe(200);
+    expect((await request(app).get("/api/appointments/queue").set(assistantHeaders)).status).toBe(403);
+    expect((await request(app).patch(`/api/clinics/mine/doctors/${colleagueId}/assistants/${assistantId}`).set(bearer(o.token)).send({ isActive: true })).status).toBe(200);
     const list = await request(app).get("/api/assistant/doctors").set(assistantHeaders);
     expect(list.status).toBe(200);
     expect(list.body.data.map((d: { id: string }) => d.id).sort()).toEqual([id, colleagueId].sort());

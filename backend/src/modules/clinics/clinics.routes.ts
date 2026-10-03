@@ -33,6 +33,8 @@ router.get("/mine/doctors/:id/assistants", ...owner, validate({ params: clinicId
 }));
 router.post("/mine/doctors/:id/assistants", ...owner, validate({ params: clinicIdParams, body: emailInviteSchema }), asyncHandler(async (req, res) => {
   const doctor = await service.clinicDoctor(req.user!.id, req.params.id);
+  const existing = await service.findOwnClinicAssistant(req.user!.id, req.body.email);
+  if (existing) return send(res, { assistant: existing, alreadyShared: true });
   const result = await assistants.createInvite(doctor.userId, req.body.email);
   const { tokenHash: _hash, ...invite } = result.invite;
   send(res, { invite, rawToken: result.rawToken });
@@ -41,8 +43,7 @@ router.patch("/mine/doctors/:id/assistants/:assistantId", ...owner, validate({
   params: z.object({ id: z.string().uuid(), assistantId: z.string().uuid() }).strict(),
   body: z.object({ isActive: z.boolean() }).strict(),
 }), asyncHandler(async (req, res) => {
-  const doctor = await service.clinicDoctor(req.user!.id, req.params.id);
-  send(res, await assistants.setAssistantActive(doctor.userId, req.params.assistantId, req.body.isActive));
+  send(res, await service.setOwnClinicAssistantActive(req.user!.id, req.params.id, req.params.assistantId, req.body.isActive));
 }));
 router.get("/admin/list", authenticate, authorize(Role.ADMIN), asyncHandler(async (_req, res) => send(res, await service.adminListClinics())));
 router.patch("/admin/:id", authenticate, authorize(Role.ADMIN), validate({ params: clinicIdParams, body: z.object({

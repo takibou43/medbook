@@ -174,7 +174,7 @@ const HIDDEN: ActionState = { visible: false, enabled: false };
 
 /**
  * الإجراءات المناسبة لحالة الموعد وتوقيته — مرآة لقيود الخادم:
- *  - «اكتمل الموعد» (COMPLETED، كانت «حضر»): للطبيب فقط، من CONFIRMED/IN_PROGRESS/LATE، وليس لموعد يومه لم يأتِ.
+ *  - «اكتمل الموعد» (COMPLETED، كانت «حضر»): للطبيب فقط، من CONFIRMED/IN_PROGRESS/LATE، وليس لموعد يومه لم يأتِ، ولا لموعد مؤكد اليوم قبل ساعته (إلا إذا استُدعي المريض: IN_PROGRESS/LATE).
  *  - «لم يحضر» (NO_SHOW): من CONFIRMED/IN_PROGRESS/LATE، وليس قبل حلول وقت الموعد.
  *  - PENDING: الخادم لا يسمح منها إلا بالتأكيد أو الإلغاء، فلا تظهر الزران.
  */
@@ -192,9 +192,14 @@ export function appointmentActions(
     return { complete: HIDDEN, noShow: HIDDEN, note: "تسجيل الحضور أو الغياب يتاح يوم الموعد." };
   }
 
-  const complete: ActionState = role === "DOCTOR" ? { visible: true, enabled: true } : HIDDEN;
   const calledToday = day === today && (a.status === "IN_PROGRESS" || a.status === "LATE");
   const started = appointmentStartMs(a.date, a.startTime) <= now;
+  const complete: ActionState =
+    role !== "DOCTOR"
+      ? HIDDEN
+      : started || calledToday
+        ? { visible: true, enabled: true }
+        : { visible: true, enabled: false, reason: `لا يمكن إنهاء الموعد قبل وقته (${a.startTime}) ما لم يُستدعَ المريض.` };
   const noShow: ActionState =
     started || calledToday
       ? { visible: true, enabled: true }

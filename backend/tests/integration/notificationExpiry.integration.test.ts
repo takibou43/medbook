@@ -126,7 +126,8 @@ describe.skipIf(!TEST_URL)("انتهاء إشعارات الموعد بانته�
   beforeEach(() => h.sendNotification.mockClear());
 
   it("1) إشعار موعد اليوم (تغيير حالة من الطبيب): مرتبط بالموعد، ظاهر في المركز، والـPush بوسم الموعد وTTL حتى نهاية اليوم", async () => {
-    const a = await mkAppt(0, "23:50");
+    // المريض نودي عليه (IN_PROGRESS): إنهاء موعد اليوم قبل ساعته مسموح فقط لمن استُدعي فعليًا.
+    const a = await mkAppt(0, "23:50", "IN_PROGRESS");
     const r = await call("PATCH", `/api/appointments/${a.id}`, { status: "COMPLETED" }, doctorToken);
     expect(r.status).toBe(200);
     const row = await db.notification.findFirst({ where: { userId: ids.patientUser, appointmentId: a.id } });

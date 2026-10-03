@@ -93,7 +93,7 @@ function DoctorAreaLayout() {
   return (
     <DashboardLayout
       title={isAssistant ? "لوحة المساعد" : "لوحة الطبيب"}
-      subtitle={isAssistant && doctorName ? `مساعد لدى د. ${doctorName}` : undefined}
+      subtitle={isAssistant ? "إدارة المواعيد والطابور لأطباء العيادة" : undefined}
       items={items}
       dailyNavigation
       settingsStart={isAssistant ? undefined : 4}

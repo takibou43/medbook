@@ -14,11 +14,14 @@ export const api = axios.create({
 });
 
 let accessToken: string | null = localStorage.getItem("medbook_doctor_access_token");
+const assistantSelectionKey = "medbook_assistant_selected_doctor";
+export const selectedAssistantDoctor = () => sessionStorage.getItem(assistantSelectionKey);
+export function selectAssistantDoctor(id: string) { sessionStorage.setItem(assistantSelectionKey, id); }
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
   if (token) localStorage.setItem("medbook_doctor_access_token", token);
-  else localStorage.removeItem("medbook_doctor_access_token");
+  else { localStorage.removeItem("medbook_doctor_access_token"); sessionStorage.removeItem(assistantSelectionKey); }
 }
 
 export function getAccessToken() {
@@ -28,6 +31,8 @@ export function getAccessToken() {
 api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
+    const selected = selectedAssistantDoctor();
+    if (selected) config.headers["X-Assistant-Doctor-Id"] = selected;
   }
   return config;
 });

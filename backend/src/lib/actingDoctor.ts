@@ -1,14 +1,15 @@
 import { Role } from "@prisma/client";
 import { prisma } from "./prisma";
 import { ApiError } from "../utils/ApiError";
+import { assistantDoctorContext } from "./assistantDoctorContext";
 
 /**
  * نقطة مركزية واحدة تحل "الطبيب الفعلي" الذي يعمل الحساب الحالي باسمه — سواء كان
- * طبيبًا (حسابه هو نفسه) أو مساعدًا (يعمل نيابة عن طبيب واحد مرتبط به). كل مكان في
+ * طبيبًا (حسابه هو نفسه) أو مساعدًا (يختار طبيبًا من عيادته). كل مكان في
  * الكود كان يفترض `doctor.userId === userId` مباشرة يجب أن يمرّ من هنا بدل ذلك.
  *
- * هذا هو خط الدفاع الوحيد ضد IDOR لحسابات المساعدين: لا doctorId يصل أبدًا من جسم
- * الطلب نفسه في أي من مسارات الطبيب/المساعد — يُشتق دائمًا من الجلسة (JWT) فقط.
+ * اختيار الطبيب في الترويسة غير موثوق: يُفحص مقابل عيادة المساعد المحفوظة في قاعدة
+ * البيانات عند كل طلب. المساعد المستقل يبقى مقيدًا بطبيبه الأصلي.
  *
  * لأي مساعد: يُرفض الوصول فورًا (403) إن كان وصوله معطّلاً (`Assistant.isActive=false`)
  * أو كان حساب الطبيب نفسه معطّلاً (`User.isActive=false`) — تعطيل فوري من الـ Backend،
@@ -29,7 +30,17 @@ export async function resolveActingDoctorId(userId: string, role: Role): Promise
     if (!assistant) throw ApiError.notFound("لم يتم العثور على ملف مساعد مرتبط بهذا الحساب.");
     if (!assistant.isActive) throw ApiError.forbidden("تم تعطيل وصولك من طرف الطبيب. تواصل معه لإعادة التفعيل.");
     if (!assistant.doctor.user.isActive) throw ApiError.forbidden();
-    return assistant.doctorId;
+    const selectedId = assistantDoctorContext.getStore();
+    if (!assistant.clinicId) {
+      if (selectedId && selectedId !== assistant.doctorId) throw ApiError.forbidden();
+      return assistant.doctorId;
+    }
+    const doctor = await prisma.doctor.findFirst({
+      where: { id: selectedId ?? assistant.doctorId, clinicId: assistant.clinicId, user: { isActive: true } },
+      select: { id: true },
+    });
+    if (!doctor) throw ApiError.forbidden("هذا الطبيب غير متاح ضمن عيادتك. اختر طبيبًا من القائمة.");
+    return doctor.id;
   }
 
   throw ApiError.forbidden();

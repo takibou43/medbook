@@ -247,6 +247,8 @@ model Clinic {
   createdAt DateTime @default(now())
   doctorInvites ClinicDoctorInvite[]
   transferRequests ClinicTransferRequest[]
+  // شروط الأسعار والنسب لكل طبيب في هذه العيادة — يراها المدير وحده (انظر ClinicDoctorTerms).
+  doctorTerms ClinicDoctorTerms[]
 
   doctors Doctor[]
 
@@ -288,6 +290,9 @@ model ClinicDoctorInvite {
   expiresAt DateTime
   createdAt DateTime @default(now())
   acceptedAt DateTime?
+  // شروط اختيارية يحددها المدير عند الدعوة، وتُطبَّق عند قبول الطبيب (سعر الموعد ونسبة الطبيب).
+  termsPriceDzd Int?
+  termsDoctorSharePercent Int?
   @@index([clinicId, status])
   @@map("clinic_doctor_invites")
 }
@@ -303,8 +308,31 @@ model ClinicTransferRequest {
   createdAt DateTime @default(now())
   reviewedAt DateTime?
   reviewedBy String?
+  // تنتقل من الدعوة إلى الطلب، وتُنشأ منها شروط الطبيب عند موافقة الإدارة.
+  termsPriceDzd Int?
+  termsDoctorSharePercent Int?
   @@index([clinicId, status])
   @@map("clinic_transfer_requests")
+}
+
+// شروط طبيب داخل عيادة: سعر الموعد ونسبة الطبيب من قيمته. تخص علاقة (طبيب، عيادة) فقط، فلا تغيّر
+// Doctor.consultationFee ولا أسعاره خارج العيادة. نسبة العيادة = 100 − doctorSharePercent وتُحسب ولا تُخزَّن.
+// يحددها مدير العيادة وحده؛ كل طبيب يرى سجله هو فقط، والمريض يرى السعر دون النسبة.
+// NULL في الحقلين = لم تُحدَّد بعد (الأطباء الحاليون): السعر يبقى consultationFee ولا تُحسب مستحقات.
+// هذه النسبة تخص إيراد الموعد وهي منفصلة تمامًا عن اشتراك مادبوك.
+model ClinicDoctorTerms {
+  id String @id @default(uuid())
+  clinicId String
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctorId String @unique
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  appointmentPriceDzd Int?
+  doctorSharePercent Int?
+  updatedByUserId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([clinicId])
+  @@map("clinic_doctor_terms")
 }
 // فرد عائلة يحجز له صاحب الحساب من حسابه نفسه — لا User ولا بيانات دخول ولا هاتف خاص به.
 // ownerPatientId لا يتغيّر بعد الإنشاء (لا مسار يسمح بذلك). الحذف = أرشفة (archivedAt) فقط:
@@ -359,6 +387,7 @@ model PatientBlock {
 }
 model Doctor {
   clinicTransferRequests ClinicTransferRequest[]
+  clinicTerms ClinicDoctorTerms?
   id          String    @id @default(uuid())
   userId      String    @unique
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -524,6 +553,8 @@ model Appointment {
   updatedAt DateTime @updatedAt
 
   services AppointmentService[]
+  // لقطة السعر والنسبة لحظة الحجز (جدول منفصل عمدًا كي لا تتسرب نسبة الطبيب إلى استجابات المرضى والمساعدين).
+  financial AppointmentFinancial?
   review   Review?
   // سجل محاولة إرسال SMS "لم يحضر" الخاص بهذا الموعد (إن وُجد) — انظر SmsLog.
   smsLog   SmsLog?
@@ -584,6 +615,22 @@ model AppointmentService {
   service       MedicalService @relation(fields: [serviceId], references: [id])
 
   @@map("appointment_services")
+}
+
+// لقطة مالية تُنشأ مع الموعد في المعاملة نفسها ولا يعدّلها أي مسار: السعر والنسبة المطبّقان وقتها،
+// فلا يغيّر تعديل شروط العيادة لاحقًا مستحقات المواعيد السابقة.
+// جدول منفصل عن appointments عمدًا: الاستجابات الحالية تُرجع أعمدة الموعد كلها، ونسبة الطبيب
+// لا يجوز أن تصل إلى المريض أو المساعد. لا تُحمَّل هذه العلاقة إلا في مسارات التقارير المقيَّدة بالدور.
+// priceDzd NULL = لا سعر معروف؛ doctorSharePercent NULL = طبيب مستقل أو نسبة غير محددة (لا مستحقات).
+model AppointmentFinancial {
+  appointmentId String @id
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  priceDzd Int?
+  doctorSharePercent Int?
+  clinicId String?
+  createdAt DateTime @default(now())
+  @@index([clinicId])
+  @@map("appointment_financials")
 }
 
 // سجل محاولات إرسال SMS (حاليًا فقط تنبيه "لم يحضر"). سجل واحد فقط لكل موعد بفضل القيد

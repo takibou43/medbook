@@ -1,6 +1,7 @@
 import { safeErrorCode } from "../../lib/safeError";
 import { AppointmentStatus, Prisma, VerificationStatus, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { applyAppointmentPrice, loadFinancialCreate, patientPriceFor, PUBLIC_TERMS_SELECT, withAppointmentPrice } from "../../lib/clinicFinance";
 import { ApiError } from "../../utils/ApiError";
 import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight } from "../../lib/slots";
 import { SLOT_OCCUPYING_WHERE, RELEASE_SLOT_DATA } from "../../lib/slotOccupancy";
@@ -290,6 +291,7 @@ async function createAutoAssignedAppointment(
       // تحميل بيانات الطبيب وعلاقاته (نحو 6 استعلامات) *قبل* فتح المعاملة والقفل: لا تتأثر بالتسابق، وتركها
       // داخل القفل كانت تُطيل الجزء المتسلسل الوحيد في النظام. الخانتان تسمحان بتداخلها مع كتابة الطلب السابق.
       const doctor = await loadBookableDoctor(doctorId);
+      const financial = await loadFinancialCreate(doctorId);
       return prisma.$transaction(
       async (tx) => {
         await lockDoctorQueue(tx, doctorId);
@@ -304,6 +306,7 @@ async function createAutoAssignedAppointment(
             date: slot.date,
             startTime: slot.startTime,
             endTime: slot.endTime,
+            financial,
             // كل الحجوزات مقبولة تلقائيًا — الطبيب لا يوافق، بل يسجّل لاحقًا: حضر / لم يحضر.
             status: AppointmentStatus.CONFIRMED,
             notes: input.notes,
@@ -313,7 +316,7 @@ async function createAutoAssignedAppointment(
         // نفس شكل الرد السابق (doctor + specialty/wilaya/city/clinic) لكن من الطبيب المحمَّل مسبقًا
         // بدل 5 استعلامات إضافية داخل القفل.
         const { schedules: _schedules, ...doctorWithRelations } = slot.doctor;
-        return { appointment: { ...created, doctor: doctorWithRelations }, slot };
+        return { appointment: applyAppointmentPrice({ ...created, doctor: doctorWithRelations }, financial.create.priceDzd), slot };
       },
       // الطلبات المتزامنة لنفس الطبيب تنتظر القفل بالدور؛ نرفع مهلة الاتصال/المعاملة لتحمّل الذروة.
       { maxWait: 20000, timeout: 30000 }
@@ -364,6 +367,7 @@ async function createChosenDayAppointment(
   const date = new Date(dateStr + "T00:00:00Z");
   if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");
   const doctor = await loadBookableDoctor(doctorId);
+  const financial = await loadFinancialCreate(doctorId);
   if (!withinHorizon(date)) throw ApiError.conflict(DAY_UNAVAILABLE_MESSAGE, { code: "DAY_UNAVAILABLE" });
 
   const create = (tx: Prisma.TransactionClient, slot: { startTime: string; endTime: string }) =>
@@ -377,6 +381,7 @@ async function createChosenDayAppointment(
         date,
         startTime: slot.startTime,
         endTime: slot.endTime,
+        financial,
         status: AppointmentStatus.CONFIRMED,
         notes: input.notes,
         ...bookingOriginData(patientId, meta),
@@ -418,7 +423,7 @@ async function createChosenDayAppointment(
   } catch (notifyErr) {
     console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", safeErrorCode(notifyErr));
   }
-  return appointment;
+  return applyAppointmentPrice(appointment, financial.create.priceDzd);
 }
 
 /**
@@ -467,6 +472,7 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
     ) {
       throw ApiError.notFound("الطبيب غير موجود أو غير موثّق.");
     }
+    const financial = await loadFinancialCreate(doctor.id);
     // مدة الموعد = مدة جلسة الطبيب (نفس قاعدة الحجز الآلي والطابور)، والوقت المطلوب يجب أن يقع داخل دوامه.
     const slotMinutes = slotMinutesFor(doctor);
     if (!isWithinWorkingHours(date, input.startTime, addMinutes(input.startTime, slotMinutes), doctor.schedules)) {
@@ -492,6 +498,7 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
               date,
               startTime: slot.startTime,
               endTime: slot.endTime,
+              financial,
               status: AppointmentStatus.CONFIRMED,
               notes: input.notes,
               ...bookingOriginData(patientId, meta),
@@ -526,7 +533,7 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
     }
 
     // requestedStartTime: ليعرف العميل أن الوقت نُقل تلقائيًا إن كان المطلوب قد حُجز.
-    return { ...appointment, requestedStartTime: input.startTime, shiftedFromRequested: reserved.shifted };
+    return { ...applyAppointmentPrice(appointment, financial.create.priceDzd), requestedStartTime: input.startTime, shiftedFromRequested: reserved.shifted };
   }
 
   // احتياطي (توافقًا مع نداءات قديمة بدون doctorId): تعيين تلقائي لأول طبيب موثّق متاح.
@@ -543,8 +550,10 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
     if (!availableSlots.includes(input.startTime)) continue;
 
     try {
+      const financial = await loadFinancialCreate(doctor.id);
       const appointment = await prisma.appointment.create({
         data: {
+          financial,
           patientId,
           guestFirstName: input.firstName,
           guestLastName: input.lastName,
@@ -570,7 +579,7 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
         { id: appointment.id, date: appointment.date }
       );
 
-      return appointment;
+      return applyAppointmentPrice(appointment, financial.create.priceDzd);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
         // تعارض لحظي مع هذا الطبيب تحديدًا — جرّب الطبيب التالي المطابق قبل الفشل الكامل
@@ -601,9 +610,13 @@ const GUEST_PUBLIC_SELECT = {
   endTime: true,
   status: true,
   guestPhone: true,
+  // السعر المحفوظ فقط (لا النسبة): يُدمج في priceDzd ثم يُحذف financial من الاستجابة.
+  financial: { select: { priceDzd: true } },
   doctor: {
     select: {
       id: true,
+      consultationFee: true,
+      clinicTerms: PUBLIC_TERMS_SELECT,
       firstName: true,
       lastName: true,
       address: true,
@@ -617,7 +630,11 @@ const GUEST_PUBLIC_SELECT = {
 type GuestPublicRow = Prisma.AppointmentGetPayload<{ select: typeof GUEST_PUBLIC_SELECT }>;
 
 function toGuestPublic({ guestPhone, ...rest }: GuestPublicRow) {
-  return { ...rest, phoneMasked: maskPhone(guestPhone) };
+  const priced = withAppointmentPrice(rest);
+  // السعر على مستوى الموعد فقط؛ حقول السعر الخام للطبيب لا تُرجَع في هذا المسار العام (قائمة بيضاء ضيقة).
+  const { consultationFee: _fee, ...doctor } = priced.doctor as typeof priced.doctor & { consultationFee?: unknown };
+  void _fee;
+  return { ...priced, doctor, phoneMasked: maskPhone(guestPhone) };
 }
 
 /**
@@ -709,6 +726,7 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
     slotMinutes,
     deferredCount: appointment.deferredCount,
     skipCredits: appointment.skipCredits,
+    priceDzd: await patientPriceFor(appointment.id, doctor.id),
     doctor: {
       firstName: doctor.firstName,
       lastName: doctor.lastName,

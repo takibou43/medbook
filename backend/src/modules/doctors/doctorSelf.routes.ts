@@ -21,6 +21,15 @@ router.get(
   })
 );
 
+// شروطي في العيادة (سعر موعدي ونسبتي) — طبيب فقط ولنفسه فقط؛ المساعد مستبعد. للقراءة: التعديل لمدير العيادة وحده.
+router.get(
+  "/clinic-terms",
+  authorize(Role.DOCTOR),
+  asyncHandler(async (req, res) => {
+    res.json({ success: true, data: await service.getOwnClinicTerms(req.user!.id) });
+  })
+);
+
 // "مرضاي" — طبيب فقط (غير متاحة للمساعد، حسب الصلاحيات المتفق عليها).
 // بحث/فرز/تقسيم صفحات من الخادم. بلا page تُرجَع المصفوفة كاملة كما سابقًا (توافق مع الواجهة القديمة).
 const patientsQuerySchema = z.object({

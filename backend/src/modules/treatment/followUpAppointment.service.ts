@@ -1,3 +1,4 @@
+import { loadFinancialCreate } from "../../lib/clinicFinance";
 import { safeErrorCode } from "../../lib/safeError";
 import { AppointmentStatus, Prisma, SubscriptionStatus, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
@@ -152,6 +153,7 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
   }
 
   const date = assertSlotInSchedule(doctor, input.date, input.startTime);
+  const financial = await loadFinancialCreate(doctor.id);
   const beneficiaryFirst = member ? member.firstName : parent.patient.firstName;
   const beneficiaryLast = member ? member.lastName : parent.patient.lastName;
 
@@ -165,6 +167,7 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
         create: async (tx, slot) => {
           const row = await tx.appointment.create({
             data: {
+              financial,
               doctorId: doctor.id,
               patientId: parent.patientId,
               familyMemberId,

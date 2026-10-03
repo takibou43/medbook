@@ -9,6 +9,7 @@ import { createNotification } from "../notifications/notifications.service";
 import { syncDentalFollowUpsSafe } from "../../lib/dentalFollowUpSync";
 import { FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
 import { queryPatients, summarizePatients, type PatientQuery } from "../../lib/doctorPatients";
+import { clinicSharePercent, effectiveAppointmentPrice, revenueFromGroups } from "../../lib/clinicFinance";
 
 const SCHEDULE_ACTIVE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
 
@@ -110,6 +111,14 @@ export async function updateOwnProfile(
 ) {
   const doctor = await getDoctorByUserId(userId);
   if (data.clinicId !== undefined) throw ApiError.forbidden("تغيير العيادة يتطلب دعوة من صاحبها.");
+  // طبيب في عيادة لها مدير: سعر الموعد يحدده مدير العيادة وحده. القيمة المطابقة للحالية تُتجاهل (واجهات قديمة تُرسلها دائمًا).
+  if (data.consultationFee !== undefined && doctor.clinicId) {
+    const clinic = await prisma.clinic.findUnique({ where: { id: doctor.clinicId }, select: { ownerId: true } });
+    if (clinic?.ownerId) {
+      if (data.consultationFee !== (doctor.consultationFee ?? 0)) throw ApiError.forbidden("سعر الموعد يحدده مدير العيادة.");
+      delete data.consultationFee;
+    }
+  }
   if (doctor.clinicId && (data.wilayaId !== undefined || data.cityId !== undefined || data.address !== undefined)) {
     const clinic = await prisma.clinic.findUnique({ where: { id: doctor.clinicId } });
     if (clinic?.ownerId && ((data.wilayaId && data.wilayaId !== clinic.wilayaId) || (data.cityId && data.cityId !== clinic.cityId) || (data.address !== undefined && data.address !== clinic.address)))
@@ -224,7 +233,7 @@ export async function removeScheduleBlock(userId: string, blockId: string) {
  */
 export async function getDashboardStats(userId: string, role: Role) {
   const doctorId = await resolveActingDoctorId(userId, role);
-  const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
+  const doctor = await prisma.doctor.findUnique({ where: { id: doctorId }, include: { clinicTerms: true } });
   if (!doctor) throw ApiError.notFound("لم يتم العثور على ملف طبيب مرتبط بهذا الحساب.");
   await autoExpireStaleAppointments(doctor.id);
   const startOfDay = algeriaTodayUTCMidnight();
@@ -282,12 +291,37 @@ export async function getDashboardStats(userId: string, role: Role) {
   const settledCount = completedCount + cancelledCount + noShowCount;
   const noShowRate = settledCount > 0 ? Math.round((noShowCount / settledCount) * 1000) / 10 : 0;
 
-  // تقدير الدخل: عدد المواعيد المكتملة × سعر الاستشارة الحالي للطبيب. تقدير تقريبي فقط
-  // (لا يعكس تغييرات سعر الاستشارة عبر الزمن ولا نأخذ به دفعات فعلية — لا بوابة دفع بعد).
-  const consultationFee = doctor.consultationFee ?? 0;
-  const estimatedRevenue = completedCount * consultationFee;
-  const estimatedRevenueToday = completedTodayCount * consultationFee;
-  const estimatedRevenueMonth = completedMonthCount * consultationFee;
+  // تقدير الدخل من اللقطة المحفوظة مع كل موعد وقت حجزه (السعر والنسبة)، فلا يغيّر تعديل السعر لاحقًا الأرقام السابقة.
+  // المواعيد السابقة للميزة (بلا لقطة) فقط تُسعَّر بالسعر الحالي كما كان. لا دفعات فعلية — لا بوابة دفع.
+  const currentPrice = effectiveAppointmentPrice(doctor);
+  const consultationFee = currentPrice ?? 0;
+  const completedWhere = (date?: { gte: Date; lte: Date }) => ({ doctorId: doctor.id, status: AppointmentStatus.COMPLETED, ...(date ? { date } : {}) });
+  const groupWindow = async (date: { gte: Date; lte: Date } | undefined, completed: number) => {
+    const rows = await prisma.appointmentFinancial.groupBy({
+      by: ["priceDzd", "doctorSharePercent"], _count: { _all: true }, where: { appointment: completedWhere(date) },
+    });
+    const groups = rows.map(r => ({ priceDzd: r.priceDzd, doctorSharePercent: r.doctorSharePercent, count: r._count._all }));
+    const snapshotCount = groups.reduce((n, g) => n + g.count, 0);
+    return revenueFromGroups(groups, completed - snapshotCount, currentPrice);
+  };
+  const [revToday, revMonth, revTotal] = await Promise.all([
+    groupWindow({ gte: startOfDay, lte: endOfDay }, completedTodayCount),
+    groupWindow({ gte: monthStart, lte: monthEnd }, completedMonthCount),
+    groupWindow(undefined, completedCount),
+  ]);
+  const estimatedRevenue = revTotal.grossDzd;
+  const estimatedRevenueToday = revToday.grossDzd;
+  const estimatedRevenueMonth = revMonth.grossDzd;
+  // مستحقاتي في العيادة: تخص هذا الطبيب وحده، وتُرسَل للطبيب فقط (يحذفها فرع المساعد أدناه).
+  const terms = doctor.clinicId && doctor.clinicTerms?.clinicId === doctor.clinicId ? doctor.clinicTerms : null;
+  const clinicEarnings = doctor.clinicId ? {
+    appointmentPriceDzd: currentPrice,
+    doctorSharePercent: terms?.doctorSharePercent ?? null,
+    clinicSharePercent: terms?.doctorSharePercent == null ? null : clinicSharePercent(terms.doctorSharePercent),
+    duesToday: revToday.doctorDuesDzd, duesMonth: revMonth.doctorDuesDzd, duesTotal: revTotal.doctorDuesDzd,
+    completedWithoutShareMonth: revMonth.completedWithoutShare,
+    completedWithoutShareTotal: revTotal.completedWithoutShare,
+  } : null;
 
   const fullStats = {
     todayAppointments: todayCount,
@@ -306,6 +340,7 @@ export async function getDashboardStats(userId: string, role: Role) {
     completedToday: completedTodayCount,
     completedThisMonth: completedMonthCount,
     consultationFee,
+    clinicEarnings,
     totalPatients: uniquePatientKeys.size,
     avgRating: doctor.avgRating,
     reviewsCount: doctor.reviewsCount,
@@ -355,3 +390,22 @@ export async function getOwnPatients(userId: string, query?: PatientQuery & { pa
   return queryPatients(all, query);
 }
 
+
+/**
+ * شروطي في العيادة — للطبيب نفسه فقط: سعر موعده ونسبته ونسبة العيادة من موعده هو. لا يوجد في أي استجابة طبيبٍ
+ * غيره. المساعد لا يصل إلى هذا المسار (الراوتر يقتصر على DOCTOR). للقراءة فقط: التعديل لمدير العيادة.
+ */
+export async function getOwnClinicTerms(userId: string) {
+  const doctor = await prisma.doctor.findUnique({
+    where: { userId }, select: { clinicId: true, consultationFee: true, clinicTerms: true, clinic: { select: { nameAr: true, ownerId: true } } },
+  });
+  if (!doctor) throw ApiError.notFound("لم يتم العثور على ملف طبيب مرتبط بهذا الحساب.");
+  if (!doctor.clinicId || !doctor.clinic?.ownerId) return { inClinic: false as const };
+  const t = doctor.clinicTerms?.clinicId === doctor.clinicId ? doctor.clinicTerms : null;
+  const share = t?.doctorSharePercent ?? null;
+  return {
+    inClinic: true as const, clinicName: doctor.clinic.nameAr,
+    appointmentPriceDzd: effectiveAppointmentPrice(doctor),
+    doctorSharePercent: share, clinicSharePercent: share == null ? null : clinicSharePercent(share),
+  };
+}

@@ -15,6 +15,7 @@ const h = vi.hoisted(() => {
     },
     user: { findUnique: vi.fn(async () => ({ id: "patient-user", role: "PATIENT", isActive: true, patient: { id: "p" } })) },
     patient: { findUnique: vi.fn(async () => ({ id: "p" })) },
+    appointmentFinancial: { findUnique: vi.fn(async () => ({ priceDzd: 1500 })) },
     patientBlock: { findUnique: vi.fn(async () => null) },
     pushSubscription: { upsert: vi.fn(async () => ({ id: "s" })), findMany: vi.fn(async () => []), delete: vi.fn() },
     appointment: { findUnique: vi.fn(async () => ({ id: "a", date: new Date("2099-01-01"), startTime: "08:00", status: "CONFIRMED", guestFirstName: "PRIVATE", guestLastName: "PATIENT", doctor: { slotDurationMin: 20 } })) },
@@ -92,6 +93,8 @@ describe("security audit regression", () => {
     expect(JSON.stringify(r)).not.toContain("PRIVATE");
     expect(r).not.toHaveProperty("patientName");
     expect(r).toHaveProperty("startTime", "08:00");
+    expect(r).toHaveProperty("priceDzd", 1500);
+    expect(JSON.stringify(r)).not.toMatch(/SharePercent|clinicTerms|financial/);
   });
   it("does not log request bodies from parser errors", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);

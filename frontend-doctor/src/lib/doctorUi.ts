@@ -226,3 +226,42 @@ export function appointmentsCountAr(n: number): string {
 export function formatDzd(value: number | null | undefined): string {
   return `${Math.round(value ?? 0).toLocaleString("fr-DZ").replace(/ | /g, " ")} دج`;
 }
+
+// ---------------- سعر الموعد ونسبة الطبيب في العيادة ----------------
+// نفس معادلة الخادم تمامًا (backend/src/lib/clinicFinance.ts): التقريب لأقرب دينار والباقي للعيادة.
+// للعرض والمعاينة فقط — الحساب الفعلي والتحقق في الخادم.
+
+export function splitDzd(priceDzd: number, doctorSharePercent: number): { doctorDzd: number; clinicDzd: number } {
+  const doctorDzd = Math.floor((priceDzd * doctorSharePercent + 50) / 100);
+  return { doctorDzd, clinicDzd: priceDzd - doctorDzd };
+}
+
+/** نسبة العيادة = المتبقي من نسبة الطبيب؛ null إن لم تُحدَّد نسبة الطبيب. */
+export function clinicSharePercentOf(doctorSharePercent: number | null | undefined): number | null {
+  return doctorSharePercent == null ? null : 100 - doctorSharePercent;
+}
+
+/** "80%" أو "غير محددة". */
+export function formatPercent(value: number | null | undefined): string {
+  return value == null ? "غير محددة" : `${value}%`;
+}
+
+/** مثال حي بالدينار: "من كل موعد: الطبيب 1 600 دج · العيادة 400 دج". */
+export function termsExampleAr(priceDzd: number | null | undefined, doctorSharePercent: number | null | undefined): string | null {
+  if (priceDzd == null || doctorSharePercent == null) return null;
+  const { doctorDzd, clinicDzd } = splitDzd(priceDzd, doctorSharePercent);
+  return `من كل موعد بسعر ${formatDzd(priceDzd)}: الطبيب ${formatDzd(doctorDzd)} · العيادة ${formatDzd(clinicDzd)}`;
+}
+
+export type TermsFormResult =
+  | { ok: true; value: { appointmentPriceDzd: number; doctorSharePercent: number } }
+  | { ok: false; error: string };
+
+/** تحقق الواجهة قبل الإرسال (الخادم يعيد التحقق دائمًا): سعر عدد صحيح موجب، ونسبة صحيحة بين 0 و100. */
+export function parseTermsForm(priceText: string, shareText: string): TermsFormResult {
+  const price = priceText.trim();
+  const share = shareText.trim();
+  if (!/^\d{1,8}$/.test(price) || Number(price) > 10_000_000) return { ok: false, error: "سعر الموعد يجب أن يكون عددًا صحيحًا موجبًا بالدينار." };
+  if (!/^\d{1,3}$/.test(share) || Number(share) > 100) return { ok: false, error: "نسبة الطبيب يجب أن تكون عددًا صحيحًا بين 0 و100." };
+  return { ok: true, value: { appointmentPriceDzd: Number(price), doctorSharePercent: Number(share) } };
+}

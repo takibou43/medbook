@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../../context/AuthContext";
 import { api, apiErrorMessage } from "../../lib/api";
 import { Button } from "../../components/ui/Button";
-import { Input, Select } from "../../components/ui/Input";
+import { Input } from "../../components/ui/Input";
 import { ClinicProfile, ClinicProfileFields, profileFromForm } from "./ClinicForms";
 import ClinicTransferRequests from "./ClinicTransferRequests";
 import ClinicDoctorTerms, { DoctorTerms } from "./ClinicDoctorTerms";
@@ -50,8 +50,13 @@ export default function ClinicManagement() {
     void run(async () => {
       const path = assistant ? `/clinics/mine/doctors/${form.get("doctorId")}/assistants` : "/clinics/mine/invites";
       const result = (await api.post(path, body)).data.data;
+      if (assistant && result.alreadyShared) {
+        setLink(""); element.reset();
+        setMessage(result.assistant.isActive ? "هذا المساعد يعمل مع جميع أطباء العيادة بالفعل. يمكنه اختيار الطبيب من لوحة المساعد." : "هذا المساعد مرتبط بجميع أطباء العيادة، لكن وصوله معطّل. فعّل وصوله من بطاقة أحد الأطباء.");
+        return;
+      }
       setLink(`${window.location.origin}/${assistant ? "assistant" : "clinic/doctor"}/accept/${result.rawToken}`);
-      element.reset(); setMessage("انسخ رابط الدعوة وأرسله لصاحب البريد المحدد. الرابط صالح لمدة 7 أيام.");
+      element.reset(); setMessage(assistant ? "انسخ رابط الدعوة وأرسله للمساعد. بعد قبولها يعمل مع جميع أطباء العيادة." : "انسخ رابط الدعوة وأرسله لصاحب البريد المحدد. الرابط صالح لمدة 7 أيام.");
     });
   }
   if (query.isPending) return <p>جارٍ تحميل العيادة…</p>;
@@ -87,15 +92,16 @@ export default function ClinicManagement() {
       </div>
       {clinic.doctors.length > 0 && <details className="card p-5"><summary className="cursor-pointer text-lg font-bold">إضافة مساعد</summary>
         <form onSubmit={e => invite(e, true)} className="grid items-end gap-3 sm:grid-cols-3">
-          <Select label="الطبيب الذي يعمل معه المساعد" name="doctorId" required><option value="">اختر الطبيب</option>{clinic.doctors.map(d => <option key={d.id} value={d.id}>د. {d.firstName} {d.lastName}</option>)}</Select>
+          <input type="hidden" name="doctorId" value={clinic.doctors[0].id} />
           <Input name="email" type="email" label="بريد المساعد" required /><Button type="submit" loading={busy}>دعوة مساعد</Button>
-        </form><p className="mt-2 text-sm text-slate-500">لكل مساعد حساب مستقل، ويصل إلى مواعيد الطبيب المحدد فقط.</p>
+        </form><p className="mt-2 text-sm text-slate-500">يكفي حساب مساعد واحد لجميع أطباء العيادة. المساعد الموجود يظهر مع كل طبيب ولا يحتاج دعوة أخرى.</p>
       </details>}
       {link && <div className="card space-y-2 p-5"><label htmlFor="invite-link" className="font-bold">رابط الدعوة الجديدة</label><input id="invite-link" value={link} readOnly dir="ltr" className="w-full rounded-lg border p-3" onFocus={e => e.target.select()} /><p className="text-sm text-slate-500">يظهر هذا الرابط بعد إنشائه فقط؛ احفظه قبل مغادرة الصفحة.</p><button onClick={() => setLink("")}>إخفاء الرابط</button></div>}
       {clinic.doctors.length > 0 && <details className="card p-5"><summary className="cursor-pointer text-lg font-bold">تقرير إيرادات العيادة</summary><div className="mt-4"><ClinicFinanceReport /></div></details>}
       <div className="grid gap-4 md:grid-cols-2">{clinic.doctors.map(d => <article key={d.id} className="card p-5"><h2 className="font-bold">د. {d.firstName} {d.lastName}</h2><p>{d.specialty.nameAr} · {stateLabels[d.verificationStatus]}</p><p className="text-sm" dir="ltr">{d.user.email}</p>
         <ClinicDoctorTerms doctorId={d.id} terms={d.terms} onSaved={async () => { await qc.invalidateQueries({ queryKey: ["my-clinic"] }); await qc.invalidateQueries({ queryKey: ["clinic-finance"] }); }} />
-        <h3 className="mt-4 font-semibold">المساعدون ({d.assistants.length})</h3>
+        <h3 className="mt-4 font-semibold">المساعدون المتاحون لهذا الطبيب ({d.assistants.length})</h3>
+        <p className="mt-1 text-xs text-slate-500">تعطيل مساعد العيادة يوقف وصوله لجميع أطبائها.</p>
         {d.assistants.map(a => <div key={a.id} className="mt-3 flex justify-between gap-3 border-t pt-3"><div>{a.firstName} {a.lastName}<p className="text-xs" dir="ltr">{a.user.email}</p></div><button disabled={busy} className={a.isActive ? "text-red-600" : "text-primary-700"} onClick={() => void run(async () => { await api.patch(`/clinics/mine/doctors/${d.id}/assistants/${a.id}`, { isActive: !a.isActive }); })}>{a.isActive ? "تعطيل الوصول" : "تفعيل الوصول"}</button></div>)}
       </article>)}</div>
     </>}

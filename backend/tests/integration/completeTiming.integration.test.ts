@@ -9,7 +9,7 @@
  *
  * تشغيل: TEST_DATABASE_URL="postgresql://postgres:test@127.0.0.1:54330/medbook_feature_test?schema=public" npx vitest run completeTiming
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
 import http from "http";
 import type { AddressInfo } from "net";
 import { PrismaClient } from "@prisma/client";
@@ -130,11 +130,17 @@ describe.skipIf(!TEST_URL)("لا «اكتمل الموعد» قبل وقته (Po
     await prisma.$disconnect();
   });
 
-  beforeEach(() => h.sendNotification.mockClear());
+  beforeEach(() => {
+    h.sendNotification.mockClear();
+    // Pin only Date; HTTP, PostgreSQL and timers stay real. Every scenario needs
+    // both earlier and later appointment times on the same clinic day.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(today.getTime() + 11 * 60 * 60 * 1000)); // noon in Algeria
+  });
+  afterEach(() => vi.useRealTimers());
 
-  it("CONFIRMED اليوم قبل وقته ⇒ 400 برسالة مفهومة، ولا أي أثر جانبي", async (ctx) => {
+  it("CONFIRMED اليوم قبل وقته ⇒ 400 برسالة مفهومة، ولا أي أثر جانبي", async () => {
     const now = algeriaNowMinutes();
-    if (now > 23 * 60 + 50) ctx.skip(); // لا يبقى وقت لاحق اليوم
     const a = await mkAppt(0, Math.min(now + 30, 23 * 60 + 59));
     const before = await completedCount();
 
@@ -153,9 +159,8 @@ describe.skipIf(!TEST_URL)("لا «اكتمل الموعد» قبل وقته (Po
     expect(h.sendNotification).not.toHaveBeenCalled();
   });
 
-  it("CONFIRMED اليوم بعد حلول وقته ⇒ 200 وCOMPLETED مع endedAt وإشعار للمريض", async (ctx) => {
+  it("CONFIRMED اليوم بعد حلول وقته ⇒ 200 وCOMPLETED مع endedAt وإشعار للمريض", async () => {
     const now = algeriaNowMinutes();
-    if (now < 2) ctx.skip(); // أول دقيقة من اليوم: لا وقت سابق اليوم
     const a = await mkAppt(0, Math.max(0, now - 30));
     const r = await complete(a.id);
     expect(r.status).toBe(200);
@@ -165,9 +170,8 @@ describe.skipIf(!TEST_URL)("لا «اكتمل الموعد» قبل وقته (Po
     expect(await db.notification.count({ where: { appointmentId: a.id, userId: ids.patientUser } })).toBe(1);
   });
 
-  it("IN_PROGRESS أو LATE اليوم قبل الوقت الأصلي ⇒ 200 (المريض استُدعي فعليًا)", async (ctx) => {
+  it("IN_PROGRESS أو LATE اليوم قبل الوقت الأصلي ⇒ 200 (المريض استُدعي فعليًا)", async () => {
     const now = algeriaNowMinutes();
-    if (now > 23 * 60 + 50) ctx.skip();
     const inside = await mkAppt(0, Math.min(now + 40, 23 * 60 + 59), "IN_PROGRESS");
     expect((await complete(inside.id)).status).toBe(200);
     const late = await mkAppt(0, Math.min(now + 45, 23 * 60 + 59), "LATE");
@@ -187,9 +191,8 @@ describe.skipIf(!TEST_URL)("لا «اكتمل الموعد» قبل وقته (Po
     expect((await complete(yesterday.id)).status).toBe(200);
   });
 
-  it("المساعد ما زال ممنوعًا من COMPLETED حتى بعد حلول الوقت", async (ctx) => {
+  it("المساعد ما زال ممنوعًا من COMPLETED حتى بعد حلول الوقت", async () => {
     const now = algeriaNowMinutes();
-    if (now < 2) ctx.skip();
     const a = await mkAppt(0, Math.max(0, now - 20));
     const r = await complete(a.id, assistantToken);
     expect(r.status).toBe(400);

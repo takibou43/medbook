@@ -242,6 +242,8 @@ export default function DoctorHome() {
       showToast(okMessage, "success");
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
+      // الخطأ غالبًا يعني أن الحالة تغيّرت من جهاز آخر (409): نحدّث فورًا بدل انتظار الاستطلاع الدوري.
+      refreshAll();
     } finally {
       if (focusId) setPendingFocusId(focusId);
     }
@@ -280,6 +282,7 @@ export default function DoctorHome() {
       return res;
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
+      refreshAll();
       throw err;
     }
   }
@@ -347,7 +350,9 @@ export default function DoctorHome() {
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           {/* المريض الحالي */}
-          <section className="card p-4 sm:p-5" aria-label="المريض الحالي">
+          {/* بعد «إنهاء الكشف»/«استدعاء التالي» يعود التركيز إلى البطاقة نفسها لا إلى زر إجراء آخر:
+              ضغطة Enter مكررة يجب ألا تُنهي كشفًا وتنادي مريضًا ثم تُنهيه بالتتابع. */}
+          <section ref={registerTrigger("current-card")} tabIndex={-1} className="card p-4 outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:p-5" aria-label="المريض الحالي">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-900">المريض الحالي</h2>
               {current && <span className="badge bg-sky-100 text-sky-700">قيد الكشف</span>}
@@ -379,23 +384,21 @@ export default function DoctorHome() {
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               {current && (
                 <Button
-                  ref={registerTrigger("finish")}
                   className="flex-1"
                   loading={finish.isPending}
                   disabled={busy}
-                  onClick={() => run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, "اكتمل الكشف.", "call-next")}
+                  onClick={() => run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, "اكتمل الكشف.", "current-card")}
                 >
                   <Check className="h-4 w-4" aria-hidden="true" /> إنهاء الكشف
                 </Button>
               )}
               <Button
-                ref={registerTrigger("call-next")}
                 className="flex-1"
                 variant="outline"
                 loading={callNext.isPending}
                 disabled={busy || !canCallNext}
                 aria-describedby="call-next-hint"
-                onClick={() => run(async () => { await callNext.mutateAsync(); }, "تمت مناداة المريض التالي.", "finish")}
+                onClick={() => run(async () => { await callNext.mutateAsync(); }, "تمت مناداة المريض التالي.", "current-card")}
               >
                 استدعاء التالي <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </Button>

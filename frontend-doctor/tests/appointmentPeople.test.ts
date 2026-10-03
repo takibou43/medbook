@@ -32,3 +32,8 @@ test("اسم المستفيد: فرد العائلة ثم صاحب الحساب 
   assert.equal(beneficiaryName(appt("3", "09:00", { guestFirstName: "زائر", guestLastName: "تجريبي" })), "زائر تجريبي");
   assert.equal(beneficiaryName(appt("4", "09:00")), "مريض بدون اسم");
 });
+
+test("اسم المستفيد من بيانات الطابور (familyMember بلا beneficiary) لا يعرض صاحب الحساب", () => {
+  const fromQueue = appt("q", "09:00", { patientId: "p", patient: { firstName: "أحمد", lastName: "التجريبي" }, familyMemberId: "f", familyMember: { id: "f", firstName: "يوسف", lastName: "التجريبي", relationship: "CHILD" } });
+  assert.equal(beneficiaryName(fromQueue), "يوسف التجريبي");
+});

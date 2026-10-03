@@ -1,8 +1,12 @@
 import type { Appointment } from "../types";
 
-/** اسم المستفيد الفعلي: فرد العائلة إن وُجد، ثم صاحب الحساب، ثم الضيف. */
+/**
+ * اسم المستفيد الفعلي: فرد العائلة إن وُجد، ثم صاحب الحساب، ثم الضيف.
+ * قائمة المواعيد ترسل `beneficiary` جاهزًا، أما نقطة الطابور فترسل `familyMember` فقط — نقرأ الاثنين.
+ */
 export function beneficiaryName(a: Appointment): string {
   if (a.beneficiary?.type === "FAMILY_MEMBER") return a.beneficiary.name;
+  if (a.familyMember) return `${a.familyMember.firstName} ${a.familyMember.lastName}`.trim();
   if (a.patient) return `${a.patient.firstName} ${a.patient.lastName}`.trim();
   return [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ").trim() || "مريض بدون اسم";
 }

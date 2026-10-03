@@ -62,7 +62,7 @@ export async function reviewTransfer(adminId: string, id: string, approve: boole
       if (count >= clinic.paidDoctorCount) throw ApiError.conflict("زِد السعة المدفوعة قبل الموافقة على انتقال الطبيب.");
       const joined = await tx.doctor.updateMany({ where: { id: request.doctorId, clinicId: null, user: { isActive: true } }, data: { clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } });
       if (!joined.count) throw ApiError.conflict("الطبيب غير متاح للانتقال أو مرتبط بعيادة بالفعل.");
-      // الشروط التي حددها المدير في الدعوة تُطبَّق الآن فقط، بعد موافقة الإدارة وانضمام الطبيب فعلًا.
+      // الطلبات القديمة التي حملت شروط دعوة تُطبّق عند اعتماد طلب الانتقال.
       if (request.termsPriceDzd != null || request.termsDoctorSharePercent != null) {
         const data = { appointmentPriceDzd: request.termsPriceDzd, doctorSharePercent: request.termsDoctorSharePercent, clinicId: clinic.id, updatedByUserId: clinic.ownerId };
         await tx.clinicDoctorTerms.upsert({ where: { doctorId: request.doctorId }, create: { doctorId: request.doctorId, ...data }, update: data });
@@ -165,7 +165,9 @@ export async function previewInvite(token: string) {
   const invite = await prisma.clinicDoctorInvite.findUnique({ where: { tokenHash: hashToken(token) }, include: { clinic: { select: { nameAr: true, owner: { select: { isActive: true } } } } } });
   assertInvite(invite);
   if (!invite!.clinic.owner?.isActive) throw ApiError.forbidden();
-  return { email: invite!.email, clinicName: invite!.clinic.nameAr };
+  const account = await prisma.user.findFirst({ where: { email: { equals: invite!.email, mode: "insensitive" } }, select: { id: true } });
+  return { email: invite!.email, clinicName: invite!.clinic.nameAr, existingAccount: !!account,
+    appointmentPriceDzd: invite!.termsPriceDzd, doctorSharePercent: invite!.termsDoctorSharePercent };
 }
 async function consumeInvite(tx: Prisma.TransactionClient, token: string) {
   const invite = await tx.clinicDoctorInvite.findUnique({ where: { tokenHash: hashToken(token) } });
@@ -202,10 +204,26 @@ export async function acceptExistingDoctor(userId: string, token: string) {
     if (!clinic.owner?.isActive) throw ApiError.forbidden();
     const user = await tx.user.findUnique({ where: { id: userId }, include: { doctor: true } });
     if (!user?.isActive || !isDoctorAccount(user) || !user.doctor || user.email.toLowerCase() !== invite!.email.toLowerCase()) throw ApiError.forbidden("الدعوة مخصصة لبريد طبيب آخر.");
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"clinic-transfer:" + user.doctor.id}, 0))`;
     if (user.doctor.clinicId) throw ApiError.conflict("الطبيب مرتبط بعيادة بالفعل.");
-    const claimed = await tx.clinicDoctorInvite.updateMany({ where: { id: invite!.id, status: InviteStatus.PENDING, expiresAt: { gt: new Date() } }, data: { status: InviteStatus.ACCEPTED, acceptedAt: new Date() } });
-    if (!claimed.count) throw ApiError.conflict("تم استعمال الدعوة أو إلغاؤها.");
-    return requestTransfer(tx, user.doctor.id, clinic.id, { termsPriceDzd: invite!.termsPriceDzd, termsDoctorSharePercent: invite!.termsDoctorSharePercent });
+    // A clinic invitation already carries the owner's consent; only the invited doctor must accept.
+    // Reuse the single-use invite and paid-capacity checks used for new doctors.
+    await consumeInvite(tx, token);
+    const joined = await tx.doctor.updateMany({ where: { id: user.doctor.id, clinicId: null, user: { isActive: true } },
+      data: { clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } });
+    if (!joined.count) throw ApiError.conflict("الطبيب مرتبط بعيادة بالفعل أو حسابه غير متاح.");
+    if (invite!.termsPriceDzd != null || invite!.termsDoctorSharePercent != null) {
+      const data = { clinicId: clinic.id, appointmentPriceDzd: invite!.termsPriceDzd, doctorSharePercent: invite!.termsDoctorSharePercent, updatedByUserId: clinic.ownerId };
+      await tx.clinicDoctorTerms.upsert({ where: { doctorId: user.doctor.id }, create: { doctorId: user.doctor.id, ...data }, update: data });
+    } else {
+      await tx.clinicDoctorTerms.deleteMany({ where: { doctorId: user.doctor.id } });
+    }
+    // An older pending request must not be approved later and move the doctor again.
+    await tx.clinicTransferRequest.updateMany({ where: { doctorId: user.doctor.id, status: InviteStatus.PENDING },
+      data: { status: InviteStatus.REVOKED, pendingDoctorId: null, reviewedAt: new Date(), reviewedBy: userId } });
+    await writeAudit({ userId, action: "CLINIC_INVITE_ACCEPTED", entity: "Doctor", entityId: user.doctor.id,
+      meta: { clinicId: clinic.id, inviteId: invite!.id } }, tx);
+    return { clinicId: clinic.id, clinicName: clinic.nameAr };
   });
 }
 export async function clinicDoctor(userId: string, doctorId: string) {

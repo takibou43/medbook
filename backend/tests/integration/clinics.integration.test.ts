@@ -49,6 +49,7 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
   });
   afterAll(async () => {
     if (!db || !location) return;
+    await db.auditLog.deleteMany({ where: { user: { email: { endsWith: `.${tag}@example.test` } } } });
     await db.doctorReferral.deleteMany({ where: { rewardClinic: { ownerId: { in: owners } } } });
     await db.clinic.deleteMany({ where: { ownerId: { in: owners } } });
     await db.appointment.deleteMany({ where: { doctor: { user: { email: { endsWith: `.${tag}@example.test` } } } } });
@@ -214,23 +215,50 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
     expect(await db.doctor.count({ where: { clinicId: o.clinicId } })).toBe(2);
     expect(await db.clinicDoctorInvite.count({ where: { clinicId: o.clinicId, status: "PENDING" } })).toBe(1);
   });
-  it("queues one transfer for an existing doctor and requires admin approval even when invitations race", async () => {
+  it("joins an existing doctor directly once even when invitations from two clinics race", async () => {
     const a = await owner(false); const b = await owner(false); const targetEmail = email();
     const u = await db.user.create({ data: { email: targetEmail, passwordHash: "unused-test-only", role: "DOCTOR", doctor: { create: { ...doctorProfile(), ...location } } }, include: { doctor: true } });
     const tokens = [await invite(a.token, targetEmail), await invite(b.token, targetEmail)];
     const doctorToken = sign({ sub: u.id, role: "DOCTOR" });
     const responses = await Promise.all(tokens.map(token => request(app).post("/api/clinics/invites/accept").set(bearer(doctorToken)).send({ token })));
     expect(responses.map(r => r.status).sort()).toEqual([200, 409]);
-    expect(await db.doctor.count({ where: { clinicId: { in: [a.clinicId, b.clinicId] } } })).toBe(0);
-    const pending = responses.find(r => r.status === 200)!.body.data;
-    expect(pending.status).toBe("PENDING");
-    expect((await request(app).patch(`/api/clinics/admin/transfers/${pending.id}`).set(bearer(doctorToken)).send({ approve: true })).status).toBe(403);
-    expect((await request(app).patch(`/api/clinics/admin/transfers/${pending.id}`).set(bearer(adminToken)).send({ approve: true })).status).toBe(400);
-    expect((await request(app).patch(`/api/clinics/admin/${pending.clinicId}`).set(bearer(adminToken)).send({ verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE", paidDoctorCount: 1, subscriptionExpiresAt: new Date(Date.now() + 86400000) })).status).toBe(200);
-    const approved = await request(app).patch(`/api/clinics/admin/transfers/${pending.id}`).set(bearer(adminToken)).send({ approve: true });
-    expect(approved.status).toBe(200); expect(approved.body.data.status).toBe("ACCEPTED");
+    const joined = responses.find(r => r.status === 200)!.body.data;
+    expect([a.clinicId, b.clinicId]).toContain(joined.clinicId);
+    expect(joined.status).toBeUndefined();
+    expect(await db.clinicTransferRequest.count({ where: { doctorId: u.doctor!.id } })).toBe(0);
     expect(await db.doctor.count({ where: { clinicId: { in: [a.clinicId, b.clinicId] } } })).toBe(1);
-    expect((await request(app).patch(`/api/clinics/admin/transfers/${pending.id}`).set(bearer(adminToken)).send({ approve: true })).status).toBe(409);
+    expect(await db.clinicDoctorInvite.count({ where: { clinicId: { in: [a.clinicId, b.clinicId] }, status: "ACCEPTED" } })).toBe(1);
+    expect(await db.auditLog.count({ where: { entityId: u.doctor!.id, action: "CLINIC_INVITE_ACCEPTED" } })).toBe(1);
+    expect((await request(app).post("/api/clinics/invites/accept").set(bearer(doctorToken)).send({ token: tokens[responses.findIndex(r => r.status === 200)] })).status).toBe(400);
+  });
+  it("existing doctors cannot exceed paid capacity and the losing invitation remains usable", async () => {
+    const o = await owner();
+    await db.clinic.update({ where: { id: o.clinicId }, data: { subscriptionStatus: "ACTIVE", subscriptionExpiresAt: new Date(Date.now() + 86400000), paidDoctorCount: 2 } });
+    const doctors = await Promise.all([0, 1].map(() => db.user.create({ data: { email: email(), passwordHash: "unchanged", role: "DOCTOR", doctor: { create: { ...doctorProfile(), ...location } } }, include: { doctor: true } })));
+    const tokens = await Promise.all(doctors.map(d => invite(o.token, d.email)));
+    const responses = await Promise.all(doctors.map((d, i) => request(app).post("/api/clinics/invites/accept").set(bearer(sign({ sub: d.id, role: "DOCTOR" }))).send({ token: tokens[i] })));
+    expect(responses.map(r => r.status).sort()).toEqual([200, 409]);
+    expect(await db.doctor.count({ where: { clinicId: o.clinicId } })).toBe(2);
+    expect(await db.clinicDoctorInvite.count({ where: { clinicId: o.clinicId, status: "PENDING" } })).toBe(1);
+    const loser = responses.findIndex(r => r.status === 409);
+    expect(await db.doctor.findUnique({ where: { id: doctors[loser].doctor!.id } })).toMatchObject({ clinicId: null });
+    await db.clinic.update({ where: { id: o.clinicId }, data: { paidDoctorCount: 3 } });
+    expect((await request(app).post("/api/clinics/invites/accept").set(bearer(sign({ sub: doctors[loser].id, role: "DOCTOR" }))).send({ token: tokens[loser] })).status).toBe(200);
+  });
+  it("rejects a wrong account, expired and revoked invitations, and allows a dual-profile doctor", async () => {
+    const o = await owner(false);
+    const u = await db.user.create({ data: { email: email(), passwordHash: "unchanged", role: "PATIENT", patient: { create: { firstName: "مريض", lastName: "اختبار" } }, doctor: { create: { ...doctorProfile(), ...location } } }, include: { doctor: true } });
+    const token = await invite(o.token, u.email);
+    expect((await request(app).post("/api/clinics/invites/accept").set(bearer(o.token)).send({ token })).status).toBe(403);
+    const auth = bearer(sign({ sub: u.id, role: "DOCTOR" }));
+    await db.clinicDoctorInvite.updateMany({ where: { clinicId: o.clinicId, email: u.email }, data: { expiresAt: new Date(Date.now() - 1000) } });
+    expect((await request(app).post("/api/clinics/invites/accept").set(auth).send({ token })).status).toBe(400);
+    await db.clinicDoctorInvite.updateMany({ where: { clinicId: o.clinicId, email: u.email }, data: { expiresAt: new Date(Date.now() + 86400000), status: "REVOKED" } });
+    expect((await request(app).post("/api/clinics/invites/accept").set(auth).send({ token })).status).toBe(400);
+    const fresh = await invite(o.token, u.email);
+    expect((await request(app).post("/api/clinics/invites/accept").set(auth).send({ token: fresh })).status).toBe(200);
+    expect(await db.user.findUnique({ where: { id: u.id } })).toMatchObject({ role: "PATIENT", passwordHash: "unchanged" });
+    expect(await db.patient.count({ where: { userId: u.id } })).toBe(1);
   });
   it("creating an owned clinic preserves an existing doctor's subscription until approval and rejection", async () => {
     const u = await db.user.create({ data: { email: email(), passwordHash: "unused-test-only", role: "DOCTOR", doctor: { create: { ...doctorProfile(), ...location, subscriptionStatus: "ACTIVE", subscriptionExpiresAt: new Date(Date.now() + 86400000) } } }, include: { doctor: true } });

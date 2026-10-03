@@ -57,7 +57,7 @@ export default function ClinicManagement() {
   if (query.isPending) return <p>جارٍ تحميل العيادة…</p>;
   return <section className="space-y-5" dir="rtl">
     <header><h1 className="text-2xl font-extrabold">{clinic?.nameAr || "إنشاء عيادتك"}</h1><p className="mt-2 text-slate-600">كل طبيب له جدول وحجوزات مستقلة، والعيادة تدفع اشتراكًا واحدًا.</p></header>
-    {user?.role === "DOCTOR" && <ClinicTransferRequests />}
+    {user?.role === "DOCTOR" && !clinic && !user.doctor?.clinic && <details className="card p-5"><summary className="cursor-pointer font-bold">طلب الانضمام لعيادة دون دعوة</summary><div className="mt-4"><ClinicTransferRequests /></div></details>}
     {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p>}
     {message && <p role="status" className="rounded-xl bg-primary-50 p-3 text-primary-800">{message}</p>}
     {query.isError && !missing && <p role="alert">{apiErrorMessage(query.error, "تعذر تحميل العيادة.")} <button onClick={() => void query.refetch()}>إعادة المحاولة</button></p>}
@@ -68,7 +68,8 @@ export default function ClinicManagement() {
       {editing && <button type="button" className="mr-3" onClick={() => setEditing(false)}>إلغاء</button>}
     </form>}
     {clinic && <>
-      <div className="card space-y-3 p-5">
+      <details className="card space-y-3 p-5">
+        <summary className="cursor-pointer text-lg font-bold">بيانات العيادة والاشتراك — {doctorsCountAr(clinic.billing.doctorCount)}</summary>
         <div className="flex flex-wrap justify-between gap-3"><h2 className="text-lg font-bold">اشتراك العيادة</h2><Button variant="outline" onClick={() => setEditing(!editing)}>تعديل بيانات العيادة</Button></div>
         <p>المراجعة: {stateLabels[clinic.verificationStatus]} · الاشتراك: {clinic.subscriptionExpiresAt && new Date(clinic.subscriptionExpiresAt) <= new Date() ? "منتهي" : stateLabels[clinic.subscriptionStatus]}</p>
         <p className="text-sm text-slate-600">التكلفة الشهرية التقديرية حسب الأطباء المحتسبين حاليًا</p><p className="text-2xl font-bold text-primary-700">{formatDzd(clinic.billing.monthlyTotal)} / شهر</p>
@@ -76,21 +77,22 @@ export default function ClinicManagement() {
         <p className="text-sm text-slate-600">حسابات المساعدين مشمولة. صاحب العيادة يُحتسب مرة واحدة إذا كان طبيبًا. تفعيل الاشتراك أو زيادة السعة يتم عبر إدارة مادبوك.</p>
         {clinic.billing.discountedDoctorCount > 0 && <p className="text-emerald-700">مكافأة الإحالة: تُحسب تكلفة {doctorsCountAr(clinic.billing.billedDoctorCount)} بدل {doctorsCountAr(clinic.billing.doctorCount)} حتى {clinic.referralDiscountUntil?.slice(0, 10)}. جميع الأطباء مشمولون بالخدمة.</p>}
         {clinic.pendingReferralDays > 0 && <p>خصم محفوظ لمدة {clinic.pendingReferralDays} يومًا، يبدأ عند تفعيل الاشتراك.</p>}
-      </div>
+      </details>
       <div className="card p-5"><h2 className="mb-3 text-lg font-bold">دعوة طبيب إلى العيادة</h2>
-        <form onSubmit={e => invite(e)} className="flex flex-wrap items-end gap-3"><Input name="email" type="email" label="بريد الطبيب" required />
-          <Input name="appointmentPriceDzd" inputMode="numeric" label="سعر الموعد (دج) — اختياري" /><Input name="doctorSharePercent" inputMode="numeric" label="نسبة الطبيب (%) — اختياري" /><Button type="submit" loading={busy}>إنشاء رابط دعوة</Button></form>
-        <p className="mt-2 text-sm text-slate-500">الطبيب الجديد ينشئ حسابًا عبر الدعوة. الطبيب المسجّل يرسل طلب انتقال لموافقة الإدارة. السعر والنسبة اختياريان هنا، ويمكنك ضبطهما أو تعديلهما لاحقًا من بطاقة الطبيب؛ نسبة العيادة تُحسب تلقائيًا.</p>
+        <p className="mb-4 text-sm text-slate-600">أدخل بريد الطبيب، ثم أرسل له الرابط. ينضم عند قبول الدعوة دون انتظار موافقة الإدارة.</p>
+        <form onSubmit={e => invite(e)} className="space-y-4"><Input name="email" type="email" label="بريد الطبيب" required />
+          <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-semibold">تحديد سعر الكشف ونسبة الطبيب (اختياري)</summary><div className="mt-3 grid gap-3 sm:grid-cols-2"><Input name="appointmentPriceDzd" inputMode="numeric" label="سعر الكشف (دج)" /><Input name="doctorSharePercent" inputMode="numeric" label="نصيب الطبيب (%)" /></div><p className="mt-2 text-sm text-slate-500">يمكن تحديدهما بعد انضمام الطبيب. نصيب العيادة يُحسب تلقائيًا.</p></details>
+          <Button type="submit" loading={busy} className="min-h-[48px]">إنشاء رابط الدعوة</Button></form>
         {clinic.invites.map(i => <div key={i.id} className="mt-3 flex flex-wrap justify-between gap-2 border-t pt-3"><span dir="ltr">{i.email}</span><span>{new Date(i.expiresAt) <= new Date() ? "منتهية" : "بانتظار القبول"}</span><button disabled={busy} className="text-red-600" onClick={() => void run(async () => { await api.delete(`/clinics/mine/invites/${i.id}`); })}>إلغاء الدعوة</button></div>)}
       </div>
-      {clinic.doctors.length > 0 && <div className="card p-5"><h2 className="mb-3 text-lg font-bold">إضافة مساعد</h2>
+      {clinic.doctors.length > 0 && <details className="card p-5"><summary className="cursor-pointer text-lg font-bold">إضافة مساعد</summary>
         <form onSubmit={e => invite(e, true)} className="grid items-end gap-3 sm:grid-cols-3">
           <Select label="الطبيب الذي يعمل معه المساعد" name="doctorId" required><option value="">اختر الطبيب</option>{clinic.doctors.map(d => <option key={d.id} value={d.id}>د. {d.firstName} {d.lastName}</option>)}</Select>
           <Input name="email" type="email" label="بريد المساعد" required /><Button type="submit" loading={busy}>دعوة مساعد</Button>
         </form><p className="mt-2 text-sm text-slate-500">لكل مساعد حساب مستقل، ويصل إلى مواعيد الطبيب المحدد فقط.</p>
-      </div>}
+      </details>}
       {link && <div className="card space-y-2 p-5"><label htmlFor="invite-link" className="font-bold">رابط الدعوة الجديدة</label><input id="invite-link" value={link} readOnly dir="ltr" className="w-full rounded-lg border p-3" onFocus={e => e.target.select()} /><p className="text-sm text-slate-500">يظهر هذا الرابط بعد إنشائه فقط؛ احفظه قبل مغادرة الصفحة.</p><button onClick={() => setLink("")}>إخفاء الرابط</button></div>}
-      {clinic.doctors.length > 0 && <ClinicFinanceReport />}
+      {clinic.doctors.length > 0 && <details className="card p-5"><summary className="cursor-pointer text-lg font-bold">تقرير إيرادات العيادة</summary><div className="mt-4"><ClinicFinanceReport /></div></details>}
       <div className="grid gap-4 md:grid-cols-2">{clinic.doctors.map(d => <article key={d.id} className="card p-5"><h2 className="font-bold">د. {d.firstName} {d.lastName}</h2><p>{d.specialty.nameAr} · {stateLabels[d.verificationStatus]}</p><p className="text-sm" dir="ltr">{d.user.email}</p>
         <ClinicDoctorTerms doctorId={d.id} terms={d.terms} onSaved={async () => { await qc.invalidateQueries({ queryKey: ["my-clinic"] }); await qc.invalidateQueries({ queryKey: ["clinic-finance"] }); }} />
         <h3 className="mt-4 font-semibold">المساعدون ({d.assistants.length})</h3>

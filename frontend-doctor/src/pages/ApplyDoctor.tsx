@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../context/AuthContext";
 import { useSpecialties, useWilayas } from "../hooks/useCatalog";
@@ -9,6 +9,7 @@ import { useToast } from "../components/ui/Toast";
 import { Logo } from "../components/ui/Logo";
 import { apiErrorMessage } from "../lib/api";
 import { portalUrl } from "../lib/portalSwitch";
+import { clinicInviteReturnPath } from "../lib/clinicInvite";
 
 interface ApplyForm {
   firstName: string;
@@ -31,6 +32,7 @@ export default function ApplyDoctor() {
   const { user, applyAsDoctor, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: specialties } = useSpecialties();
   const { data: wilayas } = useWilayas();
   const [loading, setLoading] = useState(false);
@@ -55,7 +57,7 @@ export default function ApplyDoctor() {
         ...(referralCode ? { referralCode } : {}),
       });
       showToast("تم استلام طلبك كطبيب. ملفك قيد المراجعة من الإدارة قبل الظهور للمرضى.", "success");
-      navigate("/");
+      navigate(clinicInviteReturnPath(location.state?.returnTo) ?? "/");
     } catch (err) {
       if ((err as any)?.response?.data?.details?.field === "referralCode") {
         form.setError("referralCode", { message: apiErrorMessage(err) }, { shouldFocus: true });

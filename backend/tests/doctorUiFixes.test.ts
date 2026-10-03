@@ -143,9 +143,13 @@ describe("قيود توقيت حالات الموعد", () => {
     expect(statusTimingError(appt("2026-10-02", "16:00", "IN_PROGRESS"), "NO_SHOW", NOW)).toBeNull();
   });
 
-  it("لا إنهاء ولا إدخال لموعد يومه لم يأتِ؛ إنهاء موعد اليوم قبل وقته مسموح (دخل مبكرًا)", () => {
+  it("لا إنهاء ولا إدخال لموعد يومه لم يأتِ؛ ولا إنهاء لموعد مؤكد اليوم قبل ساعته", () => {
     expect(statusTimingError(appt("2026-10-03", "09:00"), "COMPLETED", NOW)).toMatch(/لم يحن يومه/);
-    expect(statusTimingError(appt("2026-10-02", "16:00"), "COMPLETED", NOW)).toBeNull();
+    expect(statusTimingError(appt("2026-10-02", "16:00"), "COMPLETED", NOW)).toMatch(/16:00/);
+    expect(statusTimingError(appt("2026-10-02", "12:30"), "COMPLETED", NOW)).toBeNull();
+    expect(statusTimingError(appt("2026-10-02", "16:00", "LATE"), "COMPLETED", NOW)).toBeNull();
+    expect(statusTimingError(appt("2026-10-02", "16:00", "IN_PROGRESS"), "COMPLETED", NOW)).toBeNull();
+    expect(statusTimingError(appt("2026-09-30", "16:00"), "COMPLETED", NOW)).toBeNull();
     expect(statusTimingError(appt("2026-10-03", "09:00"), "IN_PROGRESS", NOW)).toMatch(/يوم لاحق/);
     expect(statusTimingError(appt("2026-09-28", "09:00", "NO_SHOW"), "IN_PROGRESS", NOW)).toMatch(/يوم سابق/);
     expect(statusTimingError(appt("2026-10-02", "09:00", "NO_SHOW"), "IN_PROGRESS", NOW)).toBeNull();

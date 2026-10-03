@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useQueue } from "../../hooks/useQueue";
-import { algeriaToday, appointmentsLink, appointmentsCountAr, formatDayAr } from "../../lib/doctorUi";
+import { algeriaToday, appointmentsLink, appointmentsCountAr, formatDayAr, formatDzd as fmtDzd, formatPercent } from "../../lib/doctorUi";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -75,7 +75,7 @@ function RevenueCard({ today, month, fee }: { today: number; month?: number; fee
         )}
       </div>
 
-      <p className="mt-2.5 text-[11px] leading-4 text-slate-500">يُحسب حسب المواعيد المكتملة وسعر الاستشارة الحالي.</p>
+      <p className="mt-2.5 text-[11px] leading-4 text-slate-500">يُحسب من المواعيد المكتملة بالسعر المحفوظ وقت حجز كل موعد، فلا يتغير بتعديل السعر لاحقًا.</p>
       {fee === 0 && <p className="mt-1 text-[11px] leading-4 text-amber-700">أضف سعر الاستشارة في إعدادات ملفك لحساب الدخل.</p>}
     </section>
   );
@@ -283,6 +283,26 @@ export default function DoctorDashboard() {
       </div>
 
       <RevenueCard today={stats?.estimatedRevenueToday ?? 0} month={stats?.estimatedRevenueMonth} fee={stats?.consultationFee} />
+      {/* مستحقاتي في العيادة: يرسلها الخادم للطبيب وحده ولنفسه فقط (غائبة عن المساعد والطبيب المستقل). */}
+      {stats?.clinicEarnings && !isAssistant && (
+        <section className="card p-4 sm:p-5" aria-label="مستحقاتي في العيادة">
+          <h2 className="text-base font-bold text-slate-800">مستحقاتي في العيادة</h2>
+          {stats.clinicEarnings.doctorSharePercent == null ? (
+            <p className="mt-2 text-sm text-amber-700">لم يحدد مدير العيادة نسبتك بعد، لذلك لا تُحسب مستحقاتك حاليًا.</p>
+          ) : (
+            <>
+              <p className="mt-1 text-sm text-slate-600">نسبتك {formatPercent(stats.clinicEarnings.doctorSharePercent)} · نسبة العيادة {formatPercent(stats.clinicEarnings.clinicSharePercent)} · سعر الموعد {fmtDzd(stats.clinicEarnings.appointmentPriceDzd)}</p>
+              <div className="mt-3 grid grid-cols-3 gap-2.5">
+                <div className="rounded-xl bg-green-50 p-3"><p className="text-xs font-semibold text-green-800">اليوم</p><p className="mt-0.5 truncate text-base font-extrabold tabular-nums sm:text-xl">{fmtDzd(stats.clinicEarnings.duesToday)}</p></div>
+                <div className="rounded-xl bg-green-50 p-3"><p className="text-xs font-semibold text-green-800">هذا الشهر</p><p className="mt-0.5 truncate text-base font-extrabold tabular-nums sm:text-xl">{fmtDzd(stats.clinicEarnings.duesMonth)}</p></div>
+                <div className="rounded-xl bg-green-50 p-3"><p className="text-xs font-semibold text-green-800">الإجمالي</p><p className="mt-0.5 truncate text-base font-extrabold tabular-nums sm:text-xl">{fmtDzd(stats.clinicEarnings.duesTotal)}</p></div>
+              </div>
+            </>
+          )}
+          {stats.clinicEarnings.completedWithoutShareTotal > 0 && <p role="status" className="mt-2.5 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-900">{stats.clinicEarnings.completedWithoutShareTotal} موعدًا مكتملًا لم تُحسب مستحقاته لعدم تحديد النسبة وقت حجزه.</p>}
+          <p className="mt-2.5 text-[11px] leading-4 text-slate-500">مبالغ تقديرية للمواعيد المكتملة فقط بالسعر والنسبة وقت حجز كل موعد، وليست إثباتًا بأنها دُفعت أو حُصِّلت. الملغاة ولم يحضر لا تدخل. حساب فقط، لا دفع عبر النظام، ومنفصل عن اشتراك مادبوك.</p>
+        </section>
+      )}
       <details className="space-y-4"><summary className="cursor-pointer font-bold">رمز الحجز ودعوة زميل</summary>
       {qrImageUrl && bookingUrl && (
         <section className="card p-4 sm:p-6" aria-label="رمز الحجز QR">

@@ -1,3 +1,4 @@
+import { PUBLIC_TERMS_SELECT, withPublicFee } from "../../lib/clinicFinance";
 import { Prisma, VerificationStatus, SubscriptionStatus, AppointmentStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -49,6 +50,8 @@ export const PUBLIC_DOCTOR_SELECT = {
   phone: true,
   address: true,
   consultationFee: true,
+  // سعر العيادة فقط (لا النسبة) — يُدمج في consultationFee ثم يُحذف قبل الاستجابة (withPublicFee).
+  clinicTerms: PUBLIC_TERMS_SELECT,
   photoUrl: true,
   latitude: true,
   longitude: true,
@@ -107,16 +110,16 @@ export async function searchDoctors(filters: DoctorSearchFilters) {
       prisma.doctor.count({ where }),
     ]);
 
-    return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+    return { items: items.map(withPublicFee), total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
   }
 
   // مع موقع المريض: نجلب كل المطابقين (بحد أعلى أمان) ونحسب المسافة ونرتّب/نصفح يدويًا،
   // لأن الفرز بالمسافة (Haversine) لا يمكن تفويضه لـ SQL هنا دون امتداد جغرافي إضافي.
-  const all = await prisma.doctor.findMany({
+  const all = (await prisma.doctor.findMany({
     where,
     select: PUBLIC_DOCTOR_SELECT,
     take: HAS_GEO_CAP,
-  });
+  })).map(withPublicFee);
 
   const withDistance = all.map((d) => ({
     ...d,
@@ -163,7 +166,7 @@ export async function getDoctorById(id: string) {
   });
   if (!doctor) throw ApiError.notFound("الطبيب غير موجود.");
   return {
-    ...doctor,
+    ...withPublicFee(doctor),
     reviews: doctor.reviews.map((r) => ({ ...r, patient: { firstName: r.patient.firstName, lastName: maskLastName(r.patient.lastName) } })),
   };
 }

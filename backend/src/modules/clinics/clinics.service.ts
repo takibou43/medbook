@@ -1,6 +1,8 @@
 import { isDoctorProfilePublic } from "../../lib/doctorVisibility";
 import { queueNewDoctorAreaNotifications, pushNewDoctorAreaNotification } from "../notifications/newDoctorArea.service";
 import { activatePendingClinicRewards, clinicReferralBilling } from "../../lib/clinicReferralReward";
+import { withPublicFee, clinicDoctorTermsSchema, clinicSharePercent, effectiveAppointmentPrice, summarizeFinance } from "../../lib/clinicFinance";
+import { writeAudit } from "../../lib/audit";
 import crypto from "crypto";
 import { Prisma, Role, InviteStatus, SubscriptionStatus, VerificationStatus } from "@prisma/client";
 import { z } from "zod";
@@ -16,16 +18,17 @@ export const PUBLIC_CLINIC_SELECT = {
   id: true, nameAr: true, address: true, phone: true, description: true, photoUrl: true,
   wilaya: { select: { id: true, nameAr: true } }, city: { select: { id: true, nameAr: true } },
 } satisfies Prisma.ClinicSelect;
-const inviteSelect = { id: true, email: true, status: true, expiresAt: true, createdAt: true } as const;
+const inviteSelect = { id: true, email: true, status: true, expiresAt: true, createdAt: true, termsPriceDzd: true, termsDoctorSharePercent: true } as const;
 export async function lockClinic(tx: Prisma.TransactionClient, id: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"clinic-members:" + id}, 0))`;
 }
-async function requestTransfer(tx: Prisma.TransactionClient, doctorId: string, clinicId: string) {
+type InviteTerms = { termsPriceDzd?: number | null; termsDoctorSharePercent?: number | null };
+async function requestTransfer(tx: Prisma.TransactionClient, doctorId: string, clinicId: string, terms: InviteTerms = {}) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"clinic-transfer:" + doctorId}, 0))`;
   const doctor = await tx.doctor.findUniqueOrThrow({ where: { id: doctorId } });
   if (doctor.clinicId) throw ApiError.conflict("الطبيب مرتبط بعيادة بالفعل.");
   if (await tx.clinicTransferRequest.findUnique({ where: { pendingDoctorId: doctorId } })) throw ApiError.conflict("لديك طلب انتقال بانتظار مراجعة الإدارة.");
-  return tx.clinicTransferRequest.create({ data: { doctorId, clinicId, pendingDoctorId: doctorId } });
+  return tx.clinicTransferRequest.create({ data: { doctorId, clinicId, pendingDoctorId: doctorId, termsPriceDzd: terms.termsPriceDzd ?? null, termsDoctorSharePercent: terms.termsDoctorSharePercent ?? null } });
 }
 export async function requestClinicTransfer(userId: string, clinicId: string) {
   return prisma.$transaction(async tx => {
@@ -58,6 +61,14 @@ export async function reviewTransfer(adminId: string, id: string, approve: boole
       if (count >= clinic.paidDoctorCount) throw ApiError.conflict("زِد السعة المدفوعة قبل الموافقة على انتقال الطبيب.");
       const joined = await tx.doctor.updateMany({ where: { id: request.doctorId, clinicId: null, user: { isActive: true } }, data: { clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } });
       if (!joined.count) throw ApiError.conflict("الطبيب غير متاح للانتقال أو مرتبط بعيادة بالفعل.");
+      // الشروط التي حددها المدير في الدعوة تُطبَّق الآن فقط، بعد موافقة الإدارة وانضمام الطبيب فعلًا.
+      if (request.termsPriceDzd != null || request.termsDoctorSharePercent != null) {
+        const data = { appointmentPriceDzd: request.termsPriceDzd, doctorSharePercent: request.termsDoctorSharePercent, clinicId: clinic.id, updatedByUserId: clinic.ownerId };
+        await tx.clinicDoctorTerms.upsert({ where: { doctorId: request.doctorId }, create: { doctorId: request.doctorId, ...data }, update: data });
+      } else {
+        // انتقال بلا شروط: لا يبقى للطبيب شروط من عيادة سابقة.
+        await tx.clinicDoctorTerms.deleteMany({ where: { doctorId: request.doctorId, clinicId: { not: clinic.id } } });
+      }
     }
     return tx.clinicTransferRequest.findUniqueOrThrow({ where: { id } });
   });
@@ -116,19 +127,20 @@ export async function getOwnClinic(userId: string) {
   const clinic = await ownedClinic(userId);
   const [doctors, invites] = await Promise.all([
     prisma.doctor.findMany({ where: { clinicId: clinic.id }, select: {
-      id: true, userId: true, firstName: true, lastName: true, verificationStatus: true,
+      id: true, userId: true, firstName: true, lastName: true, verificationStatus: true, clinicId: true, consultationFee: true,
+      clinicTerms: { select: { clinicId: true, appointmentPriceDzd: true, doctorSharePercent: true } },
       specialty: { select: { nameAr: true } }, user: { select: { email: true, isActive: true } },
       assistants: { select: { id: true, firstName: true, lastName: true, isActive: true, user: { select: { email: true } } } },
     }, orderBy: { firstName: "asc" } }),
     prisma.clinicDoctorInvite.findMany({ where: { clinicId: clinic.id, status: InviteStatus.PENDING }, select: inviteSelect }),
   ]);
   const { owner: _owner, ...safeClinic } = clinic;
-  return { ...safeClinic, doctors, invites, billing: {
+  return { ...safeClinic, doctors: doctors.map(managerDoctorView), invites, billing: {
     ...clinicReferralBilling(doctors.length, clinic.referralDiscountUntil), monthlyPerDoctor: CLINIC_DOCTOR_MONTHLY_DZD,
     paidDoctorCount: clinic.paidDoctorCount,
   } };
 }
-export async function inviteDoctor(userId: string, email: string) {
+export async function inviteDoctor(userId: string, email: string, terms: { appointmentPriceDzd?: number; doctorSharePercent?: number } = {}) {
   const clinic = await ownedClinic(userId);
   const rawToken = crypto.randomBytes(32).toString("hex");
   return prisma.$transaction(async tx => {
@@ -136,7 +148,7 @@ export async function inviteDoctor(userId: string, email: string) {
     const user = await tx.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, include: { doctor: true } });
     if (user && (user.role !== Role.DOCTOR || !user.isActive || user.doctor?.clinicId)) throw ApiError.conflict("البريد مرتبط بحساب غير متاح للانضمام إلى العيادة.");
     await tx.clinicDoctorInvite.updateMany({ where: { clinicId: clinic.id, email, status: InviteStatus.PENDING }, data: { status: InviteStatus.REVOKED } });
-    const invite = await tx.clinicDoctorInvite.create({ data: { clinicId: clinic.id, email, tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 7 * 86400000) }, select: inviteSelect });
+    const invite = await tx.clinicDoctorInvite.create({ data: { clinicId: clinic.id, email, tokenHash: hashToken(rawToken), expiresAt: new Date(Date.now() + 7 * 86400000), termsPriceDzd: terms.appointmentPriceDzd ?? null, termsDoctorSharePercent: terms.doctorSharePercent ?? null }, select: inviteSelect });
     return { invite, rawToken };
   });
 }
@@ -174,7 +186,9 @@ export async function acceptNewDoctor(input: z.infer<typeof acceptClinicInviteSc
     const { invite, clinic } = await consumeInvite(tx, input.token);
     if (await tx.user.findFirst({ where: { email: { equals: invite.email, mode: "insensitive" } } })) throw ApiError.conflict("الحساب موجود. سجّل الدخول لقبول الدعوة.");
     return tx.user.create({ data: { email: invite.email, passwordHash, role: Role.DOCTOR,
-      doctor: { create: { ...input.doctor, clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } },
+      doctor: { create: { ...input.doctor, clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address,
+        ...(invite.termsPriceDzd != null || invite.termsDoctorSharePercent != null
+          ? { clinicTerms: { create: { clinicId: clinic.id, appointmentPriceDzd: invite.termsPriceDzd, doctorSharePercent: invite.termsDoctorSharePercent, updatedByUserId: clinic.ownerId } } } : {}) } },
     }, include: { doctor: true } });
   });
 }
@@ -190,7 +204,7 @@ export async function acceptExistingDoctor(userId: string, token: string) {
     if (user.doctor.clinicId) throw ApiError.conflict("الطبيب مرتبط بعيادة بالفعل.");
     const claimed = await tx.clinicDoctorInvite.updateMany({ where: { id: invite!.id, status: InviteStatus.PENDING, expiresAt: { gt: new Date() } }, data: { status: InviteStatus.ACCEPTED, acceptedAt: new Date() } });
     if (!claimed.count) throw ApiError.conflict("تم استعمال الدعوة أو إلغاؤها.");
-    return requestTransfer(tx, user.doctor.id, clinic.id);
+    return requestTransfer(tx, user.doctor.id, clinic.id, { termsPriceDzd: invite!.termsPriceDzd, termsDoctorSharePercent: invite!.termsDoctorSharePercent });
   });
 }
 export async function clinicDoctor(userId: string, doctorId: string) {
@@ -212,7 +226,7 @@ export async function publicClinic(id: string) {
     ...PUBLIC_CLINIC_SELECT, doctors: { where: { verificationStatus: VerificationStatus.VERIFIED, user: { isActive: true } }, select: PUBLIC_DOCTOR_SELECT, orderBy: { firstName: "asc" } },
   } });
   if (!clinic) throw ApiError.notFound("العيادة غير موجودة أو غير متاحة للحجز.");
-  return clinic;
+  return { ...clinic, doctors: clinic.doctors.map(withPublicFee) };
 }
 export async function adminListClinics() {
   const clinics = await prisma.clinic.findMany({ where: { ownerId: { not: null } }, include: { owner: { select: { email: true } }, _count: { select: { doctors: true } } }, orderBy: { createdAt: "desc" }, take: 100 });
@@ -256,3 +270,89 @@ export async function adminUpdateClinic(id: string, data: {
   return result.clinic;
 }
 
+
+/* ---------------- أسعار الأطباء ونسبهم (مدير العيادة وحده) ---------------- */
+
+type TermsRow = { clinicId: string; appointmentPriceDzd: number | null; doctorSharePercent: number | null } | null;
+
+/** عرض المدير: السعر الفعلي ومصدره، ونسبة الطبيب، ونسبة العيادة محسوبة (NULL إن لم تُحدَّد نسبة الطبيب). */
+/** يظهر حرفيًا في التقرير: المبالغ تقديرية وليست إثبات تحصيل. */
+export const FINANCE_ESTIMATE_NOTE =
+  "المبالغ تقديرية: تُحسب للمواعيد المكتملة فقط بالسعر والنسبة المحفوظين وقت الحجز، وليست إثباتًا بأن المبلغ دُفع أو حُصِّل. المواعيد المكتملة التي لم تُحدَّد لها نسبة لا تدخل في المستحقات وتظهر في عدّاد «بلا نسبة». هذه النسبة منفصلة عن اشتراك مادبوك ولا يتم أي دفع أو تحويل عبر النظام.";
+
+export function termsView(doctor: { clinicId: string | null; consultationFee: number | null; clinicTerms: TermsRow }) {
+  const t = doctor.clinicTerms && doctor.clinicId === doctor.clinicTerms.clinicId ? doctor.clinicTerms : null;
+  const share = t?.doctorSharePercent ?? null;
+  return {
+    appointmentPriceDzd: effectiveAppointmentPrice({ clinicId: doctor.clinicId, consultationFee: doctor.consultationFee, clinicTerms: doctor.clinicTerms }),
+    priceSource: t?.appointmentPriceDzd != null ? ("CLINIC" as const) : ("DOCTOR_DEFAULT" as const),
+    doctorSharePercent: share,
+    clinicSharePercent: share == null ? null : clinicSharePercent(share),
+  };
+}
+function managerDoctorView<T extends { clinicId: string | null; consultationFee: number | null; clinicTerms: TermsRow }>(doctor: T) {
+  const { clinicTerms: _t, consultationFee: _f, clinicId: _c, ...rest } = doctor;
+  return { ...rest, terms: termsView(doctor) };
+}
+
+// المدير يحدد/يعدّل سعر موعد طبيب تابع لعيادته ونسبته. التحقق في الخادم: ملكية العيادة، تبعية الطبيب لها،
+// السعر عدد صحيح ≥ 0، النسبة 0..100، ونسبة العيادة لا تُقبل (تُحسب). يسري على المواعيد الجديدة فقط.
+export async function setDoctorTerms(userId: string, doctorId: string, body: unknown) {
+  const parsed = clinicDoctorTermsSchema.safeParse(body);
+  if (!parsed.success) throw ApiError.badRequest("قيم السعر أو النسبة غير صالحة. السعر عدد صحيح موجب والنسبة بين 0 و100.");
+  const input = parsed.data;
+  const clinic = await ownedClinic(userId);
+  return prisma.$transaction(async tx => {
+    await lockClinic(tx, clinic.id);
+    const doctor = await tx.doctor.findFirst({ where: { id: doctorId, clinicId: clinic.id }, select: { id: true, clinicId: true, consultationFee: true, clinicTerms: true } });
+    if (!doctor) throw ApiError.notFound("الطبيب غير موجود في عيادتك.");
+    // صف شروط يخص عيادة سابقة لا يُرثه المدير الجديد: يُعامل كأنه غير موجود، فلا تنتقل نسبة عيادة أخرى بصمت.
+    const before = doctor.clinicTerms && doctor.clinicTerms.clinicId === clinic.id ? doctor.clinicTerms : null;
+    const data = {
+      appointmentPriceDzd: input.appointmentPriceDzd !== undefined ? input.appointmentPriceDzd : before?.appointmentPriceDzd ?? null,
+      doctorSharePercent: input.doctorSharePercent !== undefined ? input.doctorSharePercent : before?.doctorSharePercent ?? null,
+      clinicId: clinic.id, updatedByUserId: userId,
+    };
+    const saved = await tx.clinicDoctorTerms.upsert({ where: { doctorId: doctor.id }, create: { doctorId: doctor.id, ...data }, update: data });
+    await writeAudit({ userId, action: "CLINIC_DOCTOR_TERMS_UPDATED", entity: "ClinicDoctorTerms", entityId: saved.id, meta: {
+      clinicId: clinic.id, doctorId: doctor.id,
+      priceBefore: before?.appointmentPriceDzd ?? null, priceAfter: saved.appointmentPriceDzd,
+      shareBefore: before?.doctorSharePercent ?? null, shareAfter: saved.doctorSharePercent,
+    } }, tx);
+    return termsView({ clinicId: clinic.id, consultationFee: doctor.consultationFee, clinicTerms: saved });
+  });
+}
+
+// تقرير العيادة المالي: لكل طبيب مستحقاته وحصة العيادة من المواعيد المكتملة وفق اللقطة المحفوظة وقت الحجز.
+// لا دفع ولا تحويل: عرض حسابي فقط. المواعيد الملغاة ولم يحضر والمعلقة تظهر عددًا ولا تدخل أي مبلغ.
+export async function clinicFinanceReport(userId: string, range: { from?: string; to?: string }) {
+  const clinic = await ownedClinic(userId);
+  const now = new Date();
+  const from = new Date((range.from ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)) + "T00:00:00Z");
+  const to = new Date((range.to ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)) + "T00:00:00Z");
+  if (isNaN(from.getTime()) || isNaN(to.getTime()) || from > to) throw ApiError.badRequest("نطاق التاريخ غير صالح.");
+  if (to.getTime() - from.getTime() > 400 * 86400000) throw ApiError.badRequest("النطاق الأقصى 400 يوم.");
+  const [doctors, rows] = await Promise.all([
+    prisma.doctor.findMany({ where: { clinicId: clinic.id }, select: { id: true, firstName: true, lastName: true, clinicId: true, consultationFee: true, clinicTerms: true }, orderBy: { firstName: "asc" } }),
+    // الانتماء للعيادة بحسب اللقطة وقت الحجز؛ ومواعيد ما قبل الميزة لأطباء العيادة الحاليين تُحسب بلا نسبة.
+    prisma.appointment.findMany({
+      where: { date: { gte: from, lte: to }, OR: [{ financial: { is: { clinicId: clinic.id } } }, { financial: { is: null }, doctor: { clinicId: clinic.id } }] },
+      select: { doctorId: true, status: true, financial: { select: { priceDzd: true, doctorSharePercent: true } } },
+      take: 200000,
+    }),
+  ]);
+  const byDoctor = new Map<string, { status: import("@prisma/client").AppointmentStatus; priceDzd: number | null; doctorSharePercent: number | null }[]>();
+  for (const r of rows) {
+    const list = byDoctor.get(r.doctorId) ?? [];
+    list.push({ status: r.status, priceDzd: r.financial?.priceDzd ?? null, doctorSharePercent: r.financial?.doctorSharePercent ?? null });
+    byDoctor.set(r.doctorId, list);
+  }
+  const perDoctor = doctors.map(d => ({
+    doctorId: d.id, name: `د. ${d.firstName} ${d.lastName}`, terms: termsView(d), summary: summarizeFinance(byDoctor.get(d.id) ?? []),
+  }));
+  const all = summarizeFinance([...byDoctor.values()].flat());
+  return {
+    from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10), perDoctor, totals: all,
+    notes: FINANCE_ESTIMATE_NOTE,
+  };
+}

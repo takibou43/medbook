@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
 import { useSpecialties, useWilayas } from "../../hooks/useCatalog";
+import { formatDzd, formatPercent } from "../../lib/doctorUi";
 
 interface FormValues {
   specialtyId: string;
@@ -28,6 +29,13 @@ export default function DoctorProfileSettings() {
     queryKey: ["me-doctor-profile"],
     queryFn: async () => (await api.get("/auth/me")).data.data,
   });
+  // طبيب في عيادة لها مدير: سعر الموعد والنسبة يحددهما المدير، فتُعرضان للقراءة فقط (شروطه هو وحده).
+  const { data: clinicTerms } = useQuery({
+    queryKey: ["my-clinic-terms"],
+    queryFn: async () => (await api.get<{ data: { inClinic: boolean; clinicName?: string; appointmentPriceDzd?: number | null; doctorSharePercent?: number | null; clinicSharePercent?: number | null } }>("/doctor/clinic-terms")).data.data,
+    retry: false,
+  });
+  const priceLocked = clinicTerms?.inClinic === true;
   const { data: specialties } = useSpecialties();
   const { data: wilayas } = useWilayas();
   const { showToast } = useToast();
@@ -92,10 +100,12 @@ export default function DoctorProfileSettings() {
   async function onSubmit(values: FormValues) {
     setSaving(true);
     try {
+      const { consultationFee, ...rest } = values;
       await api.patch("/doctor/profile", {
-        ...values,
+        ...rest,
         yearsExperience: Number(values.yearsExperience),
-        consultationFee: Number(values.consultationFee),
+        // داخل عيادة لها مدير لا نرسل السعر أبدًا (الخادم يرفض تغييره).
+        ...(priceLocked ? {} : { consultationFee: Number(consultationFee) }),
       });
       showToast("تم تحديث ملفك المهني.", "success");
       refetch();
@@ -143,8 +153,20 @@ export default function DoctorProfileSettings() {
         <Textarea label="نبذة تعريفية" {...register("bio")} />
         <div className="grid grid-cols-2 gap-3">
           <Input label="سنوات الخبرة" type="number" {...register("yearsExperience")} />
-          <Input label="سعر الاستشارة (دج)" type="number" {...register("consultationFee")} />
+          {priceLocked ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3" aria-label="سعر الموعد في العيادة">
+              <p className="label">سعر الموعد</p>
+              <p className="font-bold tabular-nums">{formatDzd(clinicTerms?.appointmentPriceDzd)}</p>
+            </div>
+          ) : (
+            <Input label="سعر الاستشارة (دج)" type="number" {...register("consultationFee")} />
+          )}
         </div>
+        {priceLocked && (
+          <p className="rounded-xl bg-primary-50 p-3 text-sm text-primary-900" role="note">
+            سعر الموعد ونسبتك يحددهما مدير {clinicTerms?.clinicName ? `عيادة «${clinicTerms.clinicName}»` : "العيادة"}، ولا يمكنك تعديلهما من هنا. نسبتك من قيمة الموعد: <strong>{formatPercent(clinicTerms?.doctorSharePercent)}</strong>، ونسبة العيادة: <strong>{formatPercent(clinicTerms?.clinicSharePercent)}</strong>. هذه النسبة خاصة بإيراد المواعيد ومنفصلة عن اشتراك مادبوك.
+          </p>
+        )}
         <Input label="رقم الهاتف" {...register("phone")} />
         <Input label="العنوان" {...register("address")} />
 

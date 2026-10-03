@@ -18,6 +18,7 @@ import { syncDentalFollowUps, syncDentalFollowUpsSafe } from "../../lib/dentalFo
 import { resolveBookableFamilyMember } from "../family/family.service";
 import { writeAudit } from "../../lib/audit";
 import { statusTimingError } from "../../lib/appointmentTiming";
+import { applyAppointmentPrice, loadFinancialCreate, patientPriceFor, PUBLIC_TERMS_SELECT, withAppointmentPrice } from "../../lib/clinicFinance";
 
 
 function addMinutes(hhmm: string, minutes: number): string {
@@ -53,6 +54,7 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
     throw ApiError.badRequest("لا يمكن حجز موعد مع هذا الطبيب حاليًا.");
   }
 
+  const financial = await loadFinancialCreate(doctor.id);
   const date = new Date(input.date + "T00:00:00Z");
   if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");
 
@@ -79,6 +81,7 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
           data: {
             patientId: patient.id,
             doctorId: doctor.id,
+            financial,
             date,
             startTime: slot.startTime,
             endTime: slot.endTime,
@@ -122,7 +125,7 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
     console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", safeErrorCode(notifyErr));
   }
 
-  return { ...appointment, requestedStartTime: input.startTime, shiftedFromRequested: reserved.shifted };
+  return { ...applyAppointmentPrice(appointment, financial.create.priceDzd), requestedStartTime: input.startTime, shiftedFromRequested: reserved.shifted };
 }
 
 export async function listForPatient(patientUserId: string, status?: AppointmentStatus) {
@@ -131,12 +134,17 @@ export async function listForPatient(patientUserId: string, status?: Appointment
 
   const rows = await prisma.appointment.findMany({
     where: { patientId: patient.id, ...(status ? { status } : {}) },
-    include: { doctor: { include: { specialty: true, clinic: true } }, review: true, familyMember: { select: FAMILY_MEMBER_PUBLIC_SELECT } },
+    include: {
+      doctor: { include: { specialty: true, clinic: true, clinicTerms: PUBLIC_TERMS_SELECT } },
+      review: true,
+      familyMember: { select: FAMILY_MEMBER_PUBLIC_SELECT },
+      financial: { select: { priceDzd: true } },
+    },
     // الترتيب حسب التاريخ فقط غير كافٍ — عدة مواعيد بنفس اليوم كانت تظهر بترتيب عشوائي
     // (ترتيب الإدخال في قاعدة البيانات) بدل ترتيبها الزمني الفعلي. نضيف startTime كمعيار ترتيب ثانٍ.
     orderBy: [{ date: "desc" }, { startTime: "desc" }],
   });
-  return rows.map((a) => ({ ...a, beneficiary: beneficiaryOf(a) }));
+  return rows.map((a) => ({ ...withAppointmentPrice(a), beneficiary: beneficiaryOf(a) }));
 }
 
 /**
@@ -553,7 +561,9 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
 }
 
 export async function cancelByPatient(patientUserId: string, appointmentId: string) {
-  return updateStatus(patientUserId, "PATIENT", appointmentId, AppointmentStatus.CANCELLED);
+  const updated = await updateStatus(patientUserId, "PATIENT", appointmentId, AppointmentStatus.CANCELLED);
+  // نفس سعر الموعد المعروض عند الحجز (اللقطة)، لا سعر الطبيب الخام.
+  return applyAppointmentPrice(updated, await patientPriceFor(updated.id, updated.doctorId));
 }
 
 // ============================================================

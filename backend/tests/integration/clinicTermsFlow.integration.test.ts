@@ -164,19 +164,24 @@ describe.skipIf(!TEST_URL)("شروط العيادة: المسارات الكام
     expect(await snap(ap.data.id)).toMatchObject({ priceDzd: 2200, doctorSharePercent: 85, clinicId: o.clinicId });
   });
 
-  it("طبيب مسجّل: الشروط تنتقل مع طلب الانتقال وتُطبَّق عند موافقة الإدارة فقط", async () => {
+  it("طبيب مسجّل: ينضم وتُطبّق الشروط عند قبول الدعوة دون موافقة الإدارة", async () => {
     const o = await registerOwner(false);
     const doc = await independentDoctor(1700);
     const inv = await call("POST", "/api/clinics/mine/invites", { email: doc.email, appointmentPriceDzd: 2600, doctorSharePercent: 75 }, o.token);
     expect(inv.status).toBe(201);
+    const before = await db.doctor.findUniqueOrThrow({ where: { id: doc.id } });
+    const pending = await call("POST", "/api/clinics/transfers", { clinicId: o.clinicId }, doc.token);
+    expect(pending.status).toBe(201);
+    const preview = await call("GET", `/api/clinics/invites/${inv.data.rawToken}`);
+    expect(preview.data).toMatchObject({ existingAccount: true, appointmentPriceDzd: 2600, doctorSharePercent: 75 });
     const acc = await call("POST", "/api/clinics/invites/accept", { token: inv.data.rawToken }, doc.token);
     expect(acc.status).toBe(200);
-    const request = await db.clinicTransferRequest.findFirstOrThrow({ where: { doctorId: doc.id } });
-    expect(request).toMatchObject({ status: "PENDING", termsPriceDzd: 2600, termsDoctorSharePercent: 75 });
-    expect(await db.clinicDoctorTerms.count({ where: { doctorId: doc.id } })).toBe(0); // لا تطبيق قبل الموافقة
-    expect((await call("PATCH", `/api/clinics/admin/transfers/${request.id}`, { approve: true }, adminToken)).status).toBe(200);
+    expect(acc.data.clinicId).toBe(o.clinicId);
+    expect(await db.clinicTransferRequest.findUnique({ where: { id: pending.data.id } })).toMatchObject({ status: "REVOKED", pendingDoctorId: null });
+    expect((await call("PATCH", `/api/clinics/admin/transfers/${pending.data.id}`, { approve: true }, adminToken)).status).toBe(409);
     expect(await db.clinicDoctorTerms.findUnique({ where: { doctorId: doc.id } })).toMatchObject({ clinicId: o.clinicId, appointmentPriceDzd: 2600, doctorSharePercent: 75 });
     expect((await db.doctor.findUniqueOrThrow({ where: { id: doc.id } })).consultationFee).toBe(1700); // خارج العيادة لا يتغير
+    expect(await db.doctor.findUnique({ where: { id: doc.id } })).toMatchObject({ subscriptionStatus: before.subscriptionStatus, subscriptionExpiresAt: before.subscriptionExpiresAt, verificationStatus: before.verificationStatus });
     const ap = await book(doc.id, dayStr(1));
     expect(await snap(ap.data.id)).toMatchObject({ priceDzd: 2600, doctorSharePercent: 75 });
   });
@@ -184,8 +189,7 @@ describe.skipIf(!TEST_URL)("شروط العيادة: المسارات الكام
   it("رفض الانتقال لا ينشئ شروطًا، وانتقال بلا شروط يزيل شروط العيادة السابقة ولا يرثها المدير الجديد", async () => {
     const a = await registerOwner(false); const b = await registerOwner(false);
     const doc = await independentDoctor(1600);
-    const inv = await call("POST", "/api/clinics/mine/invites", { email: doc.email, appointmentPriceDzd: 2000, doctorSharePercent: 90 }, a.token);
-    await call("POST", "/api/clinics/invites/accept", { token: inv.data.rawToken }, doc.token);
+    await call("POST", "/api/clinics/transfers", { clinicId: a.clinicId }, doc.token);
     const req1 = await db.clinicTransferRequest.findFirstOrThrow({ where: { doctorId: doc.id, status: "PENDING" } });
     expect((await call("PATCH", `/api/clinics/admin/transfers/${req1.id}`, { approve: false }, adminToken)).status).toBe(200);
     expect(await db.clinicDoctorTerms.count({ where: { doctorId: doc.id } })).toBe(0);
@@ -195,9 +199,8 @@ describe.skipIf(!TEST_URL)("شروط العيادة: المسارات الكام
     await call("PATCH", `/api/clinics/admin/transfers/${req2.id}`, { approve: true }, adminToken);
     expect((await setTerms(a.token, doc.id, { appointmentPriceDzd: 2000, doctorSharePercent: 90 })).status).toBe(200);
     await db.doctor.update({ where: { id: doc.id }, data: { clinicId: null } });
-    await call("POST", "/api/clinics/transfers", { clinicId: b.clinicId }, doc.token);
-    const req3 = await db.clinicTransferRequest.findFirstOrThrow({ where: { doctorId: doc.id, status: "PENDING" } });
-    expect((await call("PATCH", `/api/clinics/admin/transfers/${req3.id}`, { approve: true }, adminToken)).status).toBe(200);
+    const inv = await call("POST", "/api/clinics/mine/invites", { email: doc.email }, b.token);
+    expect((await call("POST", "/api/clinics/invites/accept", { token: inv.data.rawToken }, doc.token)).status).toBe(200);
     expect(await db.clinicDoctorTerms.count({ where: { doctorId: doc.id } })).toBe(0); // شروط A أُزيلت
     const ap = await book(doc.id, dayStr(1));
     expect(await snap(ap.data.id)).toMatchObject({ priceDzd: 1600, doctorSharePercent: null, clinicId: b.clinicId });

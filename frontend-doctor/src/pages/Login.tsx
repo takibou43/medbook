@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../context/AuthContext";
 import { Input } from "../components/ui/Input";
@@ -7,6 +7,7 @@ import { Button } from "../components/ui/Button";
 import { useToast } from "../components/ui/Toast";
 import { Logo } from "../components/ui/Logo";
 import { apiErrorMessage } from "../lib/api";
+import { clinicInviteReturnPath } from "../lib/clinicInvite";
 
 interface FormValues {
   email: string;
@@ -17,17 +18,23 @@ export default function Login() {
   const { login, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = clinicInviteReturnPath(location.state?.returnTo);
   const [loading, setLoading] = useState(false);
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormValues>();
+  } = useForm<FormValues>({ defaultValues: { email: typeof location.state?.email === "string" ? location.state.email : "" } });
 
   async function onSubmit(values: FormValues) {
     setLoading(true);
     try {
       const user = await login(values.email, values.password);
+      if (returnTo) {
+        navigate(returnTo, { replace: true });
+        return;
+      }
       // مريض يسجّل دخوله هنا: يبقى بجلسته ويرى صفحة «قدّم كطبيب» لإضافة ملف الطبيب إلى حسابه نفسه.
       if (user.role === "PATIENT") {
         showToast("تم تسجيل الدخول. أكمل بيانات الطبيب لتقديم طلبك.", "success");

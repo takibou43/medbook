@@ -150,6 +150,18 @@ describe("قيود توقيت حالات الموعد", () => {
     expect(statusTimingError(appt("2026-10-02", "16:00", "LATE"), "COMPLETED", NOW)).toBeNull();
     expect(statusTimingError(appt("2026-10-02", "16:00", "IN_PROGRESS"), "COMPLETED", NOW)).toBeNull();
     expect(statusTimingError(appt("2026-09-30", "16:00"), "COMPLETED", NOW)).toBeNull();
+    // الحدود: اللحظة المطابقة مسموحة، والدقيقة التالية مرفوضة (NOW = 13:00 بتوقيت الجزائر).
+    expect(statusTimingError(appt("2026-10-02", "13:00"), "COMPLETED", NOW)).toBeNull();
+    expect(statusTimingError(appt("2026-10-02", "13:01"), "COMPLETED", NOW)).toMatch(/13:01/);
+    expect(statusTimingError(appt("2026-10-02", "12:59"), "COMPLETED", NOW)).toBeNull();
+    // آخر دقيقة في اليوم: موعد 23:59 قبل حلوله بدقيقة (23:58 بتوقيت الجزائر = 22:58 UTC) مرفوض، وعند حلوله مسموح.
+    const lateEvening = Date.UTC(2026, 9, 2, 22, 58, 0);
+    expect(statusTimingError(appt("2026-10-02", "23:59"), "COMPLETED", lateEvening)).toMatch(/23:59/);
+    expect(statusTimingError(appt("2026-10-02", "23:59"), "COMPLETED", lateEvening + 60000)).toBeNull();
+    // بعد منتصف ليل الجزائر (23:00 UTC) صار موعد 2026-10-02 من «اليوم السابق»: مسموح بالقاعدة الحالية.
+    expect(statusTimingError(appt("2026-10-02", "23:59"), "COMPLETED", Date.UTC(2026, 9, 2, 23, 0, 0))).toBeNull();
+    // موعد الغد 00:00 قبل منتصف الليل بدقيقة: يوم لاحق، مرفوض.
+    expect(statusTimingError(appt("2026-10-03", "00:00"), "COMPLETED", Date.UTC(2026, 9, 2, 22, 59, 0))).toMatch(/لم يحن يومه/);
     expect(statusTimingError(appt("2026-10-03", "09:00"), "IN_PROGRESS", NOW)).toMatch(/يوم لاحق/);
     expect(statusTimingError(appt("2026-09-28", "09:00", "NO_SHOW"), "IN_PROGRESS", NOW)).toMatch(/يوم سابق/);
     expect(statusTimingError(appt("2026-10-02", "09:00", "NO_SHOW"), "IN_PROGRESS", NOW)).toBeNull();

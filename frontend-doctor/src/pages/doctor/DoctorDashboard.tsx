@@ -75,7 +75,7 @@ function RevenueCard({ today, month, fee }: { today: number; month?: number; fee
         )}
       </div>
 
-      <p className="mt-2.5 text-[11px] leading-4 text-slate-500">يُحسب من المواعيد المكتملة بالسعر المحفوظ وقت حجز كل موعد، فلا يتغير بتعديل السعر لاحقًا.</p>
+      <p className="mt-2.5 text-[11px] leading-4 text-slate-500">يُحسب من المواعيد المكتملة بسعر كل موعد وقت حجزه.</p>
       {fee === 0 && <p className="mt-1 text-[11px] leading-4 text-amber-700">أضف سعر الاستشارة في إعدادات ملفك لحساب الدخل.</p>}
     </section>
   );
@@ -202,18 +202,20 @@ export default function DoctorDashboard() {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <p className="leading-relaxed">
             {daysLeft > 0
-              ? "اشتراكك المجاني ينتهي يوم " + validEnd.toLocaleDateString("ar-DZ", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) + " — متبقٍ " + daysLeft + (daysLeft === 1 ? " يوم" : " يومًا") + ". بعده يتوقف ظهورك للمرضى حتى تجديد الاشتراك."
+              ? "اشتراكك المجاني ينتهي يوم " + validEnd.toLocaleDateString("ar-DZ", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) + " — متبقٍ " + daysLeft + (daysLeft === 1 ? " يوم" : " يومًا") + ". بعده يتوقف ظهورك للمرضى حتى التجديد."
               : "انتهت مدة اشتراكك المجاني. تواصل مع إدارة المنصة لتجديد الاشتراك والعودة إلى الظهور للمرضى."}
           </p>
         </div>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-extrabold text-slate-900">{effectiveDoctor ? `د. ${effectiveDoctor.firstName} ${effectiveDoctor.lastName}` : "اليوم"}</h1>
+        <div>
+          <h1 className="text-2xl font-extrabold text-slate-900">{effectiveDoctor ? `د. ${effectiveDoctor.firstName} ${effectiveDoctor.lastName}` : "اليوم"}</h1>
+          <p className="mt-0.5 text-sm text-slate-500">{formatDayAr(algeriaToday(), { weekday: true, year: true })}</p>
+        </div>
         {stats && <VerificationBadge status={stats.verificationStatus} />}
       </div>
 
-      <p className="text-slate-600">{formatDayAr(algeriaToday(), { weekday: true, year: true })}</p>
       {stats?.verificationStatus === "PENDING" && (
         <div className="card border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           {isAssistant
@@ -225,23 +227,20 @@ export default function DoctorDashboard() {
       {/* month/fee بلا "?? 0": يجب أن تبقيا undefined فعليًا حين لا يُرسلهما الخادم (حالة
           المساعد) حتى يُخفي RevenueCard عمود "هذا الشهر" تلقائيًا بدل عرض 0 مضلِّل. */}
       <section className="card space-y-4 p-5" aria-label="ملخص اليوم">
-        <div className="flex items-center justify-between"><h2 className="text-lg font-bold">اليوم في العيادة</h2><Link className="text-primary-700" to="/appointments?tab=queue">فتح الطابور</Link></div>
+        <div className="flex items-center justify-between"><h2 className="text-lg font-bold">اليوم في العيادة</h2></div>
         {queue.isPending ? <Spinner /> : queue.isError ? <p role="alert">تعذر تحميل الطابور. <button onClick={() => void queue.refetch()}>إعادة المحاولة</button></p> : <>
           <div className="grid grid-cols-3 gap-2"><div className="rounded-xl bg-primary-50 p-3"><p className="text-xs">المنتظرون</p><p className="text-2xl font-bold">{queue.data?.waiting.length ?? 0}</p></div><div className="rounded-xl bg-amber-50 p-3"><p className="text-xs">المتأخرون</p><p className="text-2xl font-bold">{queue.data?.late.length ?? 0}</p></div><div className="rounded-xl bg-green-50 p-3"><p className="text-xs">مكتملة اليوم</p><p className="text-2xl font-bold">{queue.data?.todaySummary?.completed ?? stats?.completedToday ?? 0}</p></div></div>
           <p className="rounded-xl bg-slate-50 p-3">المريض الحالي: {queue.data?.current ? patientName(queue.data.current) : "لا يوجد مريض بالداخل الآن"}</p>
           <h3 className="font-semibold">المواعيد التالية في الطابور</h3>
           {(queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])]).slice(0, 3).map(a => <div key={a.id} className="flex justify-between gap-3 border-t pt-2"><span>{patientName(a)}</span><span className="ltr-nums">{a.startTime}</span></div>)}
           {!queue.data?.waiting.length && !queue.data?.late.length && <p className="text-sm text-slate-500">لا يوجد منتظرون الآن.</p>}
+          <Link to="/appointments?tab=queue" className="block rounded-xl bg-primary-600 px-4 py-3 text-center text-base font-bold text-white transition hover:bg-primary-700">فتح الطابور</Link>
         </>}
       </section>
       {stats?.rescheduleRequired > 0 && <Link className="block rounded-xl bg-amber-50 p-4 text-amber-800" to={appointmentsLink({status: "RESCHEDULE_REQUIRED"})}>{appointmentsCountAr(stats.rescheduleRequired)} بحاجة إلى إعادة جدولة — مراجعة المواعيد</Link>}
 
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
         <StatCard label="مواعيد اليوم" value={stats?.todayAppointments ?? 0} icon={CalendarClock} to={appointmentsLink({from: algeriaTodayIso(), to: algeriaTodayIso()})} />
-
-        {/* الإحصاءات التالية إما لا تُرسَل للمساعد أصلًا من الخادم (totalPatients،
-            completedAppointments الإجمالي، cancelledAppointments، monthlyAppointments،
-            noShowRate)، أو أنها بديل خاص بالمساعد (completedToday) غير معروض للطبيب أصلًا. */}
         {isAssistant ? (
           <StatCard
             label="أُنجزت اليوم"
@@ -251,25 +250,26 @@ export default function DoctorDashboard() {
             to={`/appointments?status=COMPLETED&date=${algeriaTodayIso()}`}
           />
         ) : (
-          <>
+          <StatCard
+            label="متوسط التقييم"
+            value={`${(stats?.avgRating ?? 0).toFixed(1)} / 5`}
+            sub={(stats?.reviewsCount ?? 0) > 0 ? `من ${stats?.reviewsCount} تقييم` : "لا توجد تقييمات بعد"}
+            icon={Star}
+            tone="amber"
+            to="/reviews"
+          />
+        )}
+      </div>
+
+      {/* إحصاءات إضافية: للطبيب فقط (لا يرسلها الخادم للمساعد أصلًا)، مطويّة افتراضيًا. */}
+      {!isAssistant && (
+        <details className="card p-4 sm:p-5">
+          <summary className="cursor-pointer font-bold text-slate-800">المزيد من الإحصاءات</summary>
+          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
             <StatCard label="إجمالي المرضى" value={stats?.totalPatients ?? 0} sub="مرضى مختلفون" icon={Users} to="/patients" />
+            <StatCard label="مواعيد هذا الشهر" value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} to={appointmentsLink(stats?.monthRange)} />
             <StatCard label="المواعيد المكتملة" value={stats?.completedAppointments ?? 0} icon={CheckCircle2} tone="green" to="/appointments?status=COMPLETED" />
             <StatCard label="المواعيد الملغاة" value={stats?.cancelledAppointments ?? 0} icon={XCircle} tone="red" to="/appointments?status=CANCELLED" />
-          </>
-        )}
-
-        <StatCard
-          label="متوسط التقييم"
-          value={`${(stats?.avgRating ?? 0).toFixed(1)} / 5`}
-          sub={(stats?.reviewsCount ?? 0) > 0 ? `من أصل ${stats?.reviewsCount} تقييم` : "لا توجد تقييمات بعد"}
-          icon={Star}
-          tone="amber"
-          to={isAssistant ? undefined : "/reviews"}
-        />
-
-        {!isAssistant && (
-          <>
-            <StatCard label="مواعيد هذا الشهر" value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} to={appointmentsLink(stats?.monthRange)} />
             <StatCard
               label="نسبة الغياب"
               value={`${stats?.noShowRate ?? 0}%`}
@@ -278,10 +278,15 @@ export default function DoctorDashboard() {
               tone={((stats?.noShowRate ?? 0) > 20) ? "red" : "amber"}
               to="/appointments?status=NO_SHOW"
             />
-          </>
-        )}
-      </div>
+          </div>
+        </details>
+      )}
 
+      <details className="space-y-4">
+        <summary className="card flex cursor-pointer items-center justify-between gap-3 p-4 font-bold text-slate-800">
+          <span>الدخل والمستحقات</span>
+          <span className="text-sm font-semibold text-green-700">اليوم: {formatDzd(stats?.estimatedRevenueToday ?? 0)}</span>
+        </summary>
       <RevenueCard today={stats?.estimatedRevenueToday ?? 0} month={stats?.estimatedRevenueMonth} fee={stats?.consultationFee} />
       {/* مستحقاتي في العيادة: يرسلها الخادم للطبيب وحده ولنفسه فقط (غائبة عن المساعد والطبيب المستقل). */}
       {stats?.clinicEarnings && !isAssistant && (
@@ -300,9 +305,10 @@ export default function DoctorDashboard() {
             </>
           )}
           {stats.clinicEarnings.completedWithoutShareTotal > 0 && <p role="status" className="mt-2.5 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs font-semibold text-amber-900">{stats.clinicEarnings.completedWithoutShareTotal} موعدًا مكتملًا لم تُحسب مستحقاته لعدم تحديد النسبة وقت حجزه.</p>}
-          <p className="mt-2.5 text-[11px] leading-4 text-slate-500">مبالغ تقديرية للمواعيد المكتملة فقط بالسعر والنسبة وقت حجز كل موعد، وليست إثباتًا بأنها دُفعت أو حُصِّلت. الملغاة ولم يحضر لا تدخل. حساب فقط، لا دفع عبر النظام، ومنفصل عن اشتراك مادبوك.</p>
+          <p className="mt-2.5 text-[11px] leading-4 text-slate-500">مبالغ تقديرية للمواعيد المكتملة فقط، بالسعر والنسبة وقت الحجز. ليست إثباتًا للدفع أو التحصيل، ولا دفع عبر النظام.</p>
         </section>
       )}
+      </details>
       <details className="space-y-4"><summary className="cursor-pointer font-bold">رمز الحجز ودعوة زميل</summary>
       {qrImageUrl && bookingUrl && (
         <section className="card p-4 sm:p-6" aria-label="رمز الحجز QR">

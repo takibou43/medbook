@@ -53,7 +53,7 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} tabIndex={-1} className="relative z-10 max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl outline-none">
         <div className="mb-4 flex items-center justify-between">
           {title && <h3 id={titleId} className="text-lg font-bold text-slate-900">{title}</h3>}
-          <button type="button" aria-label="إغلاق" onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <button type="button" aria-label="إغلاق" onClick={onClose} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-primary-400">
             <X className="h-5 w-5" />
           </button>
         </div>

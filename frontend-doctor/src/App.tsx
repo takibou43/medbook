@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { useEffect } from "react";
 import { canManageClinic, canOpenClinic } from "./lib/clinicAccess";
 import {
   LayoutDashboard,
@@ -54,7 +55,7 @@ import { useAdminUnread, useDoctorUnread, useUnreadToast } from "./hooks/useMess
 
 // الروابط المشتركة بين الطبيب والمساعد (الصفحات التي يُسمح للمساعد برؤيتها فقط).
 const sharedNav = [
-  { to: "/", label: "اليوم", icon: LayoutDashboard, end: true },
+  { to: "/", label: "الطابور", icon: LayoutDashboard, end: true },
   { to: "/appointments", label: "المواعيد", icon: CalendarClock },
 ];
 
@@ -92,6 +93,9 @@ function AppointmentsRoute() {
 function DoctorAreaLayout() {
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
+  useEffect(() => {
+    document.title = isAssistant ? "مادبوك — لوحة المساعد" : "مادبوك — لوحة تحكم الطبيب";
+  }, [isAssistant]);
   const doctorName = user?.assistant?.doctor ? `${user.assistant.doctor.firstName} ${user.assistant.doctor.lastName}` : "";
   // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
   const unread = useDoctorUnread(!isAssistant && !!user);

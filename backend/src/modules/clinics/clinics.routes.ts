@@ -6,7 +6,7 @@ import { validate } from "../../middleware/validate";
 import { authLimiter } from "../../middleware/rateLimiter";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as service from "./clinics.service";
-import * as assistants from "../assistants/assistants.service";
+import { assistantScopeSchema, managerPermissionsSchema } from "../../lib/clinicPermissions";
 import { clinicProfileSchema, clinicIdParams, clinicSearchSchema, emailInviteSchema, tokenSchema, clinicInviteSchema, financeRangeSchema } from "./clinics.schema";
 const router = Router();
 const owner = [authenticate, authorize(Role.CLINIC_OWNER, Role.DOCTOR)];
@@ -15,6 +15,9 @@ router.get("/", validate({ query: clinicSearchSchema }), asyncHandler(async (req
 router.get("/invites/:token", authLimiter, validate({ params: tokenSchema }), asyncHandler(async (req, res) => send(res, await service.previewInvite(req.params.token))));
 router.post("/invites/accept", authenticate, authorize(Role.DOCTOR), validate({ body: tokenSchema }), asyncHandler(async (req, res) => send(res, await service.acceptExistingDoctor(req.user!.id, req.body.token))));
 router.get("/mine", ...owner, asyncHandler(async (req, res) => send(res, await service.getOwnClinic(req.user!.id))));
+router.post("/mine/assistants", ...owner, validate({ body: z.object({ email: emailInviteSchema.shape.email, ...assistantScopeSchema.shape }).strict() }), asyncHandler(async (req, res) => send(res, await service.inviteOwnClinicAssistant(req.user!.id, req.body.email, req.body))));
+router.patch("/mine/assistants/:id/scope", ...owner, validate({ params: clinicIdParams, body: assistantScopeSchema }), asyncHandler(async (req, res) => send(res, await service.setOwnClinicAssistantScope(req.user!.id, req.params.id, req.body))));
+router.patch("/mine/doctors/:id/manager", ...owner, validate({ params: clinicIdParams, body: managerPermissionsSchema }), asyncHandler(async (req, res) => send(res, await service.setClinicManager(req.user!.id, req.params.id, req.body))));
 router.get("/transfers/mine", authenticate, authorize(Role.DOCTOR), asyncHandler(async (req, res) => send(res, await service.listOwnTransfers(req.user!.id))));
 router.post("/transfers", authenticate, authorize(Role.DOCTOR), validate({ body: z.object({ clinicId: z.string().uuid() }).strict() }), asyncHandler(async (req, res) => { res.status(201); send(res, await service.requestClinicTransfer(req.user!.id, req.body.clinicId)); }));
 router.get("/admin/transfers", authenticate, authorize(Role.ADMIN), asyncHandler(async (_req, res) => send(res, await service.adminListTransfers())));
@@ -27,17 +30,15 @@ router.patch("/mine/doctors/:id/terms", ...owner, validate({ params: clinicIdPar
 router.get("/mine/finance", ...owner, validate({ query: financeRangeSchema }), asyncHandler(async (req, res) => send(res, await service.clinicFinanceReport(req.user!.id, req.query as { from?: string; to?: string }))));
 router.delete("/mine/invites/:id", ...owner, validate({ params: clinicIdParams }), asyncHandler(async (req, res) => { await service.revokeDoctorInvite(req.user!.id, req.params.id); send(res, null); }));
 router.get("/mine/doctors/:id/assistants", ...owner, validate({ params: clinicIdParams }), asyncHandler(async (req, res) => {
-  const doctor = await service.clinicDoctor(req.user!.id, req.params.id);
-  const result = await assistants.listAssistants(doctor.userId);
-  send(res, { ...result, invites: result.invites.map(({ tokenHash: _hash, ...invite }) => invite) });
+  await service.ownedClinic(req.user!.id, undefined, "OWNER");
+  await service.clinicDoctor(req.user!.id, req.params.id);
+  const clinic = await service.getOwnClinic(req.user!.id);
+  send(res, { assistants: clinic.doctors.find(d => d.id === req.params.id)?.assistants ?? [], invites: [] });
 }));
 router.post("/mine/doctors/:id/assistants", ...owner, validate({ params: clinicIdParams, body: emailInviteSchema }), asyncHandler(async (req, res) => {
-  const doctor = await service.clinicDoctor(req.user!.id, req.params.id);
-  const existing = await service.findOwnClinicAssistant(req.user!.id, req.body.email);
-  if (existing) return send(res, { assistant: existing, alreadyShared: true });
-  const result = await assistants.createInvite(doctor.userId, req.body.email);
-  const { tokenHash: _hash, ...invite } = result.invite;
-  send(res, { invite, rawToken: result.rawToken });
+  await service.ownedClinic(req.user!.id, undefined, "OWNER");
+  await service.clinicDoctor(req.user!.id, req.params.id);
+  send(res, await service.inviteOwnClinicAssistant(req.user!.id, req.body.email));
 }));
 router.patch("/mine/doctors/:id/assistants/:assistantId", ...owner, validate({
   params: z.object({ id: z.string().uuid(), assistantId: z.string().uuid() }).strict(),

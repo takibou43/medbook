@@ -2,6 +2,7 @@ import { Role } from "@prisma/client";
 import { prisma } from "./prisma";
 import { ApiError } from "../utils/ApiError";
 import { assistantDoctorContext } from "./assistantDoctorContext";
+import { assistantDoctorWhere } from "./assistantScope";
 
 /**
  * نقطة مركزية واحدة تحل "الطبيب الفعلي" الذي يعمل الحساب الحالي باسمه — سواء كان
@@ -29,15 +30,16 @@ export async function resolveActingDoctorId(userId: string, role: Role): Promise
     });
     if (!assistant) throw ApiError.notFound("لم يتم العثور على ملف مساعد مرتبط بهذا الحساب.");
     if (!assistant.isActive) throw ApiError.forbidden("تم تعطيل وصولك من طرف الطبيب. تواصل معه لإعادة التفعيل.");
-    if (!assistant.doctor.user.isActive) throw ApiError.forbidden();
+    if (!assistant.clinicId && !assistant.doctor.user.isActive) throw ApiError.forbidden();
     const selectedId = assistantDoctorContext.getStore();
     if (!assistant.clinicId) {
       if (selectedId && selectedId !== assistant.doctorId) throw ApiError.forbidden();
       return assistant.doctorId;
     }
     const doctor = await prisma.doctor.findFirst({
-      where: { id: selectedId ?? assistant.doctorId, clinicId: assistant.clinicId, user: { isActive: true } },
+      where: { AND: [assistantDoctorWhere(assistant), ...(selectedId ? [{ id: selectedId }] : [])] },
       select: { id: true },
+      orderBy: { id: "asc" },
     });
     if (!doctor) throw ApiError.forbidden("هذا الطبيب غير متاح ضمن عيادتك. اختر طبيبًا من القائمة.");
     return doctor.id;

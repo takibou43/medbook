@@ -8,6 +8,7 @@ import { hashToken, issueTokens } from "../../lib/tokens";
 import { acceptInvite } from "../assistants/assistants.service";
 import { ASSISTANT_SAFE_SELECT } from "../../lib/assistantView";
 import { assistantDoctorContext } from "../../lib/assistantDoctorContext";
+import { assistantDoctorWhere } from "../../lib/assistantScope";
 import { resolveReferrerForRegistration, createReferralTx } from "../referrals/referrals.service";
 import { doctorPortalRole, summarizeProfiles, PROFILE_PROBE, accountExistsError } from "../../lib/accountProfiles";
 
@@ -121,7 +122,7 @@ export async function login(email: string, password: string) {
   // سياق واجهة الأطباء: مريض يملك ملف طبيب يدخل كطبيب؛ وغيره بدوره الأصلي كما كان.
   const context = doctorPortalRole(user);
   const tokens = await issueTokens(user.id, context);
-  return { user: { ...user, role: context, profiles: summarizeProfiles(user) }, ...tokens };
+  return { user: user.role === Role.ASSISTANT ? await getMe(user.id, context) : { ...user, role: context, profiles: summarizeProfiles(user) }, ...tokens };
 }
 
 /**
@@ -241,10 +242,11 @@ export async function getMe(userId: string, context?: Role) {
   if (!user) throw ApiError.notFound("المستخدم غير موجود.");
   // role = سياق الجلسة الحالية (الواجهة التي دخل منها)؛ دور الحساب الأصلي لا يُكشف ولا يتغيّر في القاعدة.
   const selectedDoctor = assistantDoctorContext.getStore();
-  if (user.role === Role.ASSISTANT && user.assistant?.isActive && selectedDoctor) {
+  if (user.role === Role.ASSISTANT && user.assistant?.isActive) {
     const doctor = await prisma.doctor.findFirst({
-      where: { id: selectedDoctor, ...(user.assistant.clinicId ? { clinicId: user.assistant.clinicId } : { id: user.assistant.doctor.id }), user: { isActive: true } },
+      where: { AND: [assistantDoctorWhere(user.assistant), ...(selectedDoctor ? [{ id: selectedDoctor }] : [])] },
       select: ASSISTANT_SAFE_SELECT.select.doctor.select,
+      orderBy: { id: "asc" },
     });
     if (doctor) user.assistant.doctor = doctor;
   }

@@ -1,4 +1,5 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { canManageClinic, canOpenClinic } from "./lib/clinicAccess";
 import {
   LayoutDashboard,
   CalendarClock,
@@ -100,7 +101,7 @@ function DoctorAreaLayout() {
       items={items}
       dailyNavigation
       settingsStart={isAssistant ? undefined : doctorMainNav.length}
-      clinicMode={!isAssistant}
+      clinicMode={canManageClinic(user)}
     />
   );
 }
@@ -140,6 +141,7 @@ export default function App() {
       <Route path="/clinic/doctor/accept/:token" element={<ClinicDoctorInvite />} />
       <Route path="/assistant/accept/:token" element={<AssistantAcceptInvite />} />
       <Route element={<ProtectedRoute allow={["CLINIC_OWNER", "DOCTOR"]} />}>
+        <Route element={<ClinicAccessRoute />}>
         <Route element={<DashboardLayout title="إدارة العيادة" items={[
           { to: "/clinic", label: "العيادة والأطباء", icon: Building2, end: true },
           { to: "/clinic/account", label: "إعدادات الحساب", icon: KeyRound },
@@ -147,6 +149,7 @@ export default function App() {
         ]} />}>
           <Route path="/clinic" element={<ClinicManagement />} />
           <Route path="/clinic/account" element={<AccountSettings />} />
+        </Route>
         </Route>
       </Route>
 
@@ -168,7 +171,7 @@ export default function App() {
             <Route path="/patients" element={<DoctorPatients />} />
             <Route path="/treatment-plans" element={<DoctorTreatmentPlans />} />
             <Route path="/reviews" element={<DoctorReviews />} />
-            <Route path="/assistants" element={<AssistantManagement />} />
+            <Route path="/assistants" element={<AssistantManagementRoute />} />
             <Route path="/profile" element={<DoctorProfileSettings />} />
             <Route path="/account" element={<AccountSettings />} />
           </Route>
@@ -200,4 +203,14 @@ export default function App() {
 function useClinicDoctorNav() {
   const { user } = useAuth();
   return user?.role === "DOCTOR" ? [{ to: "/", label: "لوحتي كطبيب", icon: Stethoscope, end: true }] : [];
+}
+
+function ClinicAccessRoute() {
+  const { user } = useAuth();
+  return canOpenClinic(user) ? <Outlet /> : <Navigate to="/" replace />;
+}
+
+function AssistantManagementRoute() {
+  const { user } = useAuth();
+  return user?.doctor?.clinic ? <Navigate to={canManageClinic(user) ? "/clinic" : "/"} replace /> : <AssistantManagement />;
 }

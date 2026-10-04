@@ -3,6 +3,7 @@ import { BarChart3, Building2, ClipboardList, Clock, KeyRound, LucideIcon, Messa
 import { useAuth } from "../../context/AuthContext";
 import { useDoctorUnread } from "../../hooks/useMessaging";
 import { isDentalSpecialty } from "../../lib/features";
+import { canManageClinic, canOpenClinic } from "../../lib/clinicAccess";
 
 interface HubItem {
   to: string;
@@ -23,7 +24,7 @@ export default function DoctorSettingsHub() {
   const clinic = user?.doctor?.clinic ?? null;
   const clinicHint = !clinic
     ? "إنشاء عيادة (يتطلب موافقة الإدارة)"
-    : clinic.ownerId === user?.id
+    : canManageClinic(user)
     ? `إدارة «${clinic.nameAr}» وأطبائها ومساعديها`
     : `أنت ضمن «${clinic.nameAr}»؛ إدارتها لمديرها`;
 
@@ -31,7 +32,7 @@ export default function DoctorSettingsHub() {
     { to: "/overview", title: "نظرة عامة", hint: "الإحصاءات، الدخل والمستحقات، رمز الحجز QR، ودعوة زميل", icon: BarChart3 },
     { to: "/schedule", title: "أوقات العمل", hint: "أيام وساعات الدوام والعطل", icon: Clock },
     { to: "/reviews", title: "التقييمات", hint: "آراء المرضى بعد المواعيد", icon: Star },
-    { to: "/assistants", title: "المساعدون", hint: "دعوة المساعدين وإدارة حساباتهم", icon: UserCog },
+    ...(!clinic ? [{ to: "/assistants", title: "المساعدون", hint: "دعوة المساعدين وإدارة حساباتهم", icon: UserCog }] : []),
     { to: "/profile", title: "الملف المهني", hint: "بياناتك التي تظهر للمرضى", icon: Settings },
     { to: "/account", title: "إعدادات الحساب", hint: "البريد وكلمة المرور والجلسات", icon: KeyRound },
     {
@@ -41,7 +42,7 @@ export default function DoctorSettingsHub() {
       icon: MessageSquare,
       badge: unread.data?.unread,
     },
-    { to: "/clinic", title: "إدارة العيادة", hint: clinicHint, icon: Building2 },
+    ...(canOpenClinic(user) ? [{ to: "/clinic", title: canManageClinic(user) ? "إدارة العيادة" : "إنشاء عيادة", hint: clinicHint, icon: Building2 }] : []),
     ...(isDentalSpecialty(user?.doctor?.specialty)
       ? [{ to: "/treatment-plans", title: "خطط العلاج", hint: "خطط علاج الأسنان والمتابعات", icon: ClipboardList } as HubItem]
       : []),

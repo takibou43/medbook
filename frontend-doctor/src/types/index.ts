@@ -47,6 +47,8 @@ export interface Clinic {
 }
 
 export interface Doctor {
+  clinicManagerForId?: string | null;
+  clinicPermissions?: string[];
   id: string;
   userId: string;
   firstName: string;

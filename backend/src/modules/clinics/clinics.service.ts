@@ -14,13 +14,15 @@ import { ApiError } from "../../utils/ApiError";
 import { CLINIC_DOCTOR_MONTHLY_DZD, activeClinicWhere } from "../../lib/clinicBilling";
 import { PUBLIC_DOCTOR_SELECT } from "../doctors/doctors.service";
 import { ClinicProfileInput, registerClinicSchema, acceptClinicInviteSchema } from "./clinics.schema";
+import { ClinicPermission, CLINIC_PERMISSIONS } from "../../lib/clinicPermissions";
+import * as assistantsService from "../assistants/assistants.service";
 
 export const PUBLIC_CLINIC_SELECT = {
   id: true, nameAr: true, address: true, phone: true, description: true, photoUrl: true,
   wilaya: { select: { id: true, nameAr: true } }, city: { select: { id: true, nameAr: true } },
 } satisfies Prisma.ClinicSelect;
 const inviteSelect = { id: true, email: true, status: true, expiresAt: true, createdAt: true, termsPriceDzd: true, termsDoctorSharePercent: true } as const;
-const clinicAssistantSelect = { id: true, firstName: true, lastName: true, isActive: true, user: { select: { email: true } } } as const;
+const clinicAssistantSelect = { id: true, doctorId: true, clinicId: true, allDoctors: true, allowedDoctorIds: true, firstName: true, lastName: true, isActive: true, user: { select: { email: true } } } as const;
 export async function lockClinic(tx: Prisma.TransactionClient, id: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"clinic-members:" + id}, 0))`;
 }
@@ -61,7 +63,7 @@ export async function reviewTransfer(adminId: string, id: string, approve: boole
       if (!clinic) throw ApiError.badRequest("وثّق العيادة وفعّل اشتراكها قبل الموافقة على الانتقال.");
       const count = await tx.doctor.count({ where: { clinicId: clinic.id } });
       if (count >= clinic.paidDoctorCount) throw ApiError.conflict("زِد السعة المدفوعة قبل الموافقة على انتقال الطبيب.");
-      const joined = await tx.doctor.updateMany({ where: { id: request.doctorId, clinicId: null, user: { isActive: true } }, data: { clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } });
+      const joined = await tx.doctor.updateMany({ where: { id: request.doctorId, clinicId: null, user: { isActive: true } }, data: { clinicId: clinic.id, clinicManagerForId: null, clinicPermissions: [], wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } });
       if (!joined.count) throw ApiError.conflict("الطبيب غير متاح للانتقال أو مرتبط بعيادة بالفعل.");
       // الطلبات القديمة التي حملت شروط دعوة تُطبّق عند اعتماد طلب الانتقال.
       if (request.termsPriceDzd != null || request.termsDoctorSharePercent != null) {
@@ -79,8 +81,15 @@ async function validateLocation(input: ClinicProfileInput, db: Prisma.Transactio
   const city = await db.city.findFirst({ where: { id: input.cityId, wilayaId: input.wilayaId }, select: { id: true } });
   if (!city) throw ApiError.badRequest("المدينة لا تتبع الولاية المحددة.");
 }
-export async function ownedClinic(userId: string, db: Prisma.TransactionClient = prisma) {
-  const clinic = await db.clinic.findUnique({ where: { ownerId: userId }, include: { owner: { select: { isActive: true } } } });
+export async function ownedClinic(userId: string, db: Prisma.TransactionClient = prisma, permission?: ClinicPermission | "OWNER") {
+  let clinic = await db.clinic.findUnique({ where: { ownerId: userId }, include: { owner: { select: { isActive: true } } } });
+  if (!clinic) {
+    const doctor = await db.doctor.findUnique({ where: { userId }, select: { clinicId: true, clinicManagerForId: true, clinicPermissions: true, user: { select: { isActive: true } } } });
+    if (doctor?.clinicId && doctor.clinicManagerForId === doctor.clinicId && doctor.user.isActive) {
+      if (permission === "OWNER" || (permission && !doctor.clinicPermissions.includes(permission))) throw ApiError.forbidden("هذه الصلاحية يمنحها مالك العيادة فقط.");
+      clinic = await db.clinic.findUnique({ where: { id: doctor.clinicId }, include: { owner: { select: { isActive: true } } } });
+    }
+  }
   if (!clinic) throw ApiError.notFound("لا توجد عيادة مرتبطة بحسابك.");
   if (!clinic.owner?.isActive) throw ApiError.forbidden();
   return clinic;
@@ -115,7 +124,7 @@ export async function createOwnClinic(userId: string, input: ClinicProfileInput)
 }
 export async function updateOwnClinic(userId: string, input: ClinicProfileInput) {
   await validateLocation(input);
-  const clinic = await ownedClinic(userId);
+  const clinic = await ownedClinic(userId, prisma, "EDIT_PROFILE");
   return prisma.$transaction(async tx => {
     await lockClinic(tx, clinic.id);
     // Changes to the public identity/location require re-verification.
@@ -127,9 +136,12 @@ export async function updateOwnClinic(userId: string, input: ClinicProfileInput)
 }
 export async function getOwnClinic(userId: string) {
   const clinic = await ownedClinic(userId);
+  const isOwner = clinic.ownerId === userId;
+  const manager = isOwner ? null : await prisma.doctor.findUnique({ where: { userId }, select: { clinicPermissions: true } });
+  const permissions = isOwner ? [...CLINIC_PERMISSIONS] : manager?.clinicPermissions ?? [];
   const [doctors, invites, sharedAssistants] = await Promise.all([
     prisma.doctor.findMany({ where: { clinicId: clinic.id }, select: {
-      id: true, userId: true, firstName: true, lastName: true, verificationStatus: true, clinicId: true, consultationFee: true,
+      id: true, userId: true, firstName: true, lastName: true, verificationStatus: true, clinicId: true, consultationFee: true, clinicManagerForId: true, clinicPermissions: true,
       clinicTerms: { select: { clinicId: true, appointmentPriceDzd: true, doctorSharePercent: true } },
       specialty: { select: { nameAr: true } }, user: { select: { email: true, isActive: true } },
       assistants: { where: { OR: [{ clinicId: clinic.id }, { clinicId: null }] }, select: clinicAssistantSelect },
@@ -138,13 +150,17 @@ export async function getOwnClinic(userId: string) {
     prisma.assistant.findMany({ where: { clinicId: clinic.id }, select: clinicAssistantSelect }),
   ]);
   const { owner: _owner, ...safeClinic } = clinic;
-  return { ...safeClinic, doctors: doctors.map(d => managerDoctorView({ ...d, assistants: [...new Map([...d.assistants, ...sharedAssistants].map(a => [a.id, a])).values()] })), invites, billing: {
+  return { ...safeClinic, isOwner, permissions, assistants: [...new Map([...doctors.flatMap(d => d.assistants), ...sharedAssistants].map(a => [a.id, a])).values()], doctors: doctors.map(d => {
+    const visible = [...new Map([...d.assistants, ...sharedAssistants].map(a => [a.id, a])).values()].filter(a => !a.clinicId || a.allDoctors || a.allowedDoctorIds.includes(d.id));
+    const view = managerDoctorView({ ...d, assistants: visible });
+    return { ...view, terms: permissions.includes("MANAGE_TERMS") || permissions.includes("VIEW_FINANCE") ? view.terms : null };
+  }), invites: isOwner ? invites : [], billing: {
     ...clinicReferralBilling(doctors.length, clinic.referralDiscountUntil), monthlyPerDoctor: CLINIC_DOCTOR_MONTHLY_DZD,
     paidDoctorCount: clinic.paidDoctorCount,
   } };
 }
 export async function inviteDoctor(userId: string, email: string, terms: { appointmentPriceDzd?: number; doctorSharePercent?: number } = {}) {
-  const clinic = await ownedClinic(userId);
+  const clinic = await ownedClinic(userId, prisma, "OWNER");
   const rawToken = crypto.randomBytes(32).toString("hex");
   return prisma.$transaction(async tx => {
     await lockClinic(tx, clinic.id);
@@ -156,7 +172,7 @@ export async function inviteDoctor(userId: string, email: string, terms: { appoi
   });
 }
 export async function revokeDoctorInvite(userId: string, id: string) {
-  const clinic = await ownedClinic(userId);
+  const clinic = await ownedClinic(userId, prisma, "OWNER");
   const result = await prisma.clinicDoctorInvite.updateMany({ where: { id, clinicId: clinic.id, status: InviteStatus.PENDING }, data: { status: InviteStatus.REVOKED } });
   if (!result.count) throw ApiError.notFound("الدعوة غير موجودة أو مستعملة.");
 }
@@ -212,7 +228,7 @@ export async function acceptExistingDoctor(userId: string, token: string) {
     // Reuse the single-use invite and paid-capacity checks used for new doctors.
     await consumeInvite(tx, token);
     const joined = await tx.doctor.updateMany({ where: { id: user.doctor.id, clinicId: null, user: { isActive: true } },
-      data: { clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } });
+      data: { clinicId: clinic.id, clinicManagerForId: null, clinicPermissions: [], wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address } });
     if (!joined.count) throw ApiError.conflict("الطبيب مرتبط بعيادة بالفعل أو حسابه غير متاح.");
     if (invite!.termsPriceDzd != null || invite!.termsDoctorSharePercent != null) {
       const data = { clinicId: clinic.id, appointmentPriceDzd: invite!.termsPriceDzd, doctorSharePercent: invite!.termsDoctorSharePercent, updatedByUserId: clinic.ownerId };
@@ -244,13 +260,60 @@ export async function findOwnClinicAssistant(userId: string, email: string) {
 
 export async function setOwnClinicAssistantActive(userId: string, doctorId: string, assistantId: string, isActive: boolean) {
   const doctor = await clinicDoctor(userId, doctorId);
-  const clinic = await ownedClinic(userId);
+  const clinic = await ownedClinic(userId, prisma, "MANAGE_ASSISTANT_STATUS");
   const changed = await prisma.assistant.updateMany({
     where: { id: assistantId, OR: [{ clinicId: clinic.id }, { clinicId: null, doctorId: doctor.id }] },
     data: { isActive },
   });
   if (!changed.count) throw ApiError.notFound("المساعد غير موجود في عيادتك.");
   return prisma.assistant.findUnique({ where: { id: assistantId }, select: clinicAssistantSelect });
+}
+
+type AssistantScopeInput = { allDoctors: boolean; doctorIds: string[] };
+async function validateAssistantScope(clinicId: string, input: AssistantScopeInput, db: Prisma.TransactionClient = prisma) {
+  const ids = input.allDoctors ? [] : [...new Set(input.doctorIds)];
+  if (!input.allDoctors && !ids.length) throw ApiError.badRequest("اختر طبيبًا واحدًا على الأقل.");
+  const count = await db.doctor.count({ where: { clinicId, id: { in: ids }, user: { isActive: true } } });
+  if (count !== ids.length) throw ApiError.badRequest("اختر أطباء نشطين من هذه العيادة فقط.");
+  return { allDoctors: input.allDoctors, allowedDoctorIds: ids };
+}
+
+export async function inviteOwnClinicAssistant(userId: string, email: string, input?: AssistantScopeInput) {
+  const clinic = await ownedClinic(userId, prisma, "OWNER");
+  const existing = await findOwnClinicAssistant(userId, email);
+  // An old client reusing an email must never widen a restricted assistant's access.
+  if (existing) {
+    const assistant = input ? await setOwnClinicAssistantScope(userId, existing.id, input) : existing;
+    return { assistant, alreadyShared: true };
+  }
+  const scope = await validateAssistantScope(clinic.id, input ?? { allDoctors: true, doctorIds: [] });
+  const doctor = await prisma.doctor.findFirst({ where: { clinicId: clinic.id, user: { isActive: true }, ...(scope.allDoctors ? {} : { id: { in: scope.allowedDoctorIds } }) }, orderBy: { id: "asc" }, select: { userId: true } });
+  if (!doctor) throw ApiError.badRequest("أضف طبيبًا نشطًا إلى العيادة أولًا.");
+  const result = await assistantsService.createInvite(doctor.userId, email, { clinicId: clinic.id, ...scope });
+  const { tokenHash: _hash, ...invite } = result.invite;
+  return { invite, rawToken: result.rawToken };
+}
+
+export async function setOwnClinicAssistantScope(userId: string, assistantId: string, input: AssistantScopeInput) {
+  return prisma.$transaction(async tx => {
+    const clinic = await ownedClinic(userId, tx, "OWNER");
+    await lockClinic(tx, clinic.id);
+    const scope = await validateAssistantScope(clinic.id, input, tx);
+    const changed = await tx.assistant.updateMany({ where: { id: assistantId, clinicId: clinic.id }, data: scope });
+    if (!changed.count) throw ApiError.notFound("المساعد غير موجود في عيادتك.");
+    return tx.assistant.findUniqueOrThrow({ where: { id: assistantId }, select: clinicAssistantSelect });
+  });
+}
+
+export async function setClinicManager(userId: string, doctorId: string, input: { isManager: boolean; permissions: string[] }) {
+  return prisma.$transaction(async tx => {
+    const clinic = await ownedClinic(userId, tx, "OWNER");
+    await lockClinic(tx, clinic.id);
+    const doctor = await tx.doctor.findFirst({ where: { id: doctorId, clinicId: clinic.id, user: { isActive: true } }, select: { id: true, userId: true } });
+    if (!doctor) throw ApiError.notFound("الطبيب غير موجود في عيادتك.");
+    if (doctor.userId === clinic.ownerId) throw ApiError.badRequest("صلاحيات المالك ثابتة ولا تحتاج تعيين مدير.");
+    return tx.doctor.update({ where: { id: doctor.id }, data: { clinicManagerForId: input.isManager ? clinic.id : null, clinicPermissions: input.isManager ? [...new Set(input.permissions)] : [] }, select: { id: true, clinicManagerForId: true, clinicPermissions: true } });
+  });
 }
 export async function searchClinics(query: { q?: string; wilayaId?: string; cityId?: string; page: number }) {
   const where: Prisma.ClinicWhereInput = { ...activeClinicWhere(), ...(query.q ? { nameAr: { contains: query.q, mode: "insensitive" } } : {}),
@@ -340,7 +403,7 @@ export async function setDoctorTerms(userId: string, doctorId: string, body: unk
   const parsed = clinicDoctorTermsSchema.safeParse(body);
   if (!parsed.success) throw ApiError.badRequest("قيم السعر أو النسبة غير صالحة. السعر عدد صحيح موجب والنسبة بين 0 و100.");
   const input = parsed.data;
-  const clinic = await ownedClinic(userId);
+  const clinic = await ownedClinic(userId, prisma, "MANAGE_TERMS");
   return prisma.$transaction(async tx => {
     await lockClinic(tx, clinic.id);
     const doctor = await tx.doctor.findFirst({ where: { id: doctorId, clinicId: clinic.id }, select: { id: true, clinicId: true, consultationFee: true, clinicTerms: true } });
@@ -365,7 +428,7 @@ export async function setDoctorTerms(userId: string, doctorId: string, body: unk
 // تقرير العيادة المالي: لكل طبيب مستحقاته وحصة العيادة من المواعيد المكتملة وفق اللقطة المحفوظة وقت الحجز.
 // لا دفع ولا تحويل: عرض حسابي فقط. المواعيد الملغاة ولم يحضر والمعلقة تظهر عددًا ولا تدخل أي مبلغ.
 export async function clinicFinanceReport(userId: string, range: { from?: string; to?: string }) {
-  const clinic = await ownedClinic(userId);
+  const clinic = await ownedClinic(userId, prisma, "VIEW_FINANCE");
   const now = new Date();
   const from = new Date((range.from ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)) + "T00:00:00Z");
   const to = new Date((range.to ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)) + "T00:00:00Z");

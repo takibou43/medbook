@@ -6,12 +6,16 @@ import { ApiError } from "../../utils/ApiError";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { assistantDoctorWhere } from "../../lib/assistantScope";
 import { assistantQueues, assistantAppointments } from "./assistantBoard.service";
+import { assistantDailyIncome } from "./assistantIncome.service";
 import { algeriaTodayUTCMidnight } from "../../lib/slots";
 
 const router = Router();
 router.use(authenticate, authorize(Role.ASSISTANT));
 router.get("/queues", asyncHandler(async (req, res) => {
   res.json({ success: true, data: await assistantQueues(req.user!.id) });
+}));
+router.get("/daily-income", asyncHandler(async (req, res) => {
+  res.json({ success: true, data: await assistantDailyIncome(req.user!.id) });
 }));
 router.get("/appointments", asyncHandler(async (req, res) => {
   const date = req.query.date ?? algeriaTodayUTCMidnight().toISOString().slice(0, 10);

@@ -64,6 +64,8 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   const previous = useRef<Map<string, string | null>>(new Map());
   const queues = useQuery({ queryKey: ["assistant-queues", user?.id], queryFn: async () => (await api.get<{ data: DoctorQueue[] }>("/assistant/queues")).data.data, retry: false, refetchInterval: ASSISTANT_QUEUE_POLL_MS, refetchIntervalInBackground: false, refetchOnWindowFocus: true });
   const appointments = useQuery({ queryKey: ["assistant-appointments", user?.id, appointmentDate], queryFn: async () => (await api.get<{ data: BoardAppointment[] }>("/assistant/appointments", { params: { date: appointmentDate } })).data.data, retry: false, refetchInterval: 15000, refetchIntervalInBackground: false });
+  // المدخول اليومي: للصفحة الرئيسية فقط، إجمالي اليوم لأطباء المساعد المرتبطين (لا نسب ولا أسعار أطباء).
+  const income = useQuery({ queryKey: ["assistant-daily-income", user?.id], enabled: !appointmentsView, queryFn: async () => (await api.get<{ data: { totalDzd: number; completedCount: number } }>("/assistant/daily-income")).data.data, retry: false, refetchInterval: 30000, refetchIntervalInBackground: false, refetchOnWindowFocus: true });
   useEffect(() => {
     if (!queues.data) return;
     const rows = queues.data.map(row => ({ doctorId: row.doctor.id, current: row.queue.current }));
@@ -84,7 +86,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
         ? api.post(`/appointments/${appointment.id}/${kind}`, {}, config)
         : api.patch(`/appointments/${appointment.id}`, { status: kind }, config);
     },
-    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["assistant-queues"] }); void qc.invalidateQueries({ queryKey: ["assistant-appointments"] }); },
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["assistant-queues"] }); void qc.invalidateQueries({ queryKey: ["assistant-appointments"] }); void qc.invalidateQueries({ queryKey: ["assistant-daily-income"] }); },
     onError: error => showToast(apiErrorMessage(error), "error"),
   });
   function update(appointment: Appointment, kind: "arrived" | "late" | AppointmentStatus) {
@@ -174,24 +176,29 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       }}>{sound ? <Bell /> : <BellOff />}{sound ? "إيقاف الصوت" : "تفعيل صوت النداء"}</Button>
     </div>
     {queues.isSuccess && !doctorQueues.length && <p className="card p-5">لا يوجد أطباء مرتبطون بك حاليًا. تواصل مع مالك العيادة.</p>}
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="أعداد النتائج بعد التصفية">
+    {!appointmentsView && <section className="flex flex-wrap items-center justify-between gap-3" aria-label="المدخول اليومي وإضافة مريض">
+      <p className="card min-w-[14rem] flex-1 p-4 text-sm text-slate-700">المدخول اليومي
+        <strong className="mt-1 block text-2xl text-slate-900">{income.isSuccess ? <><bdi dir="ltr" className="tabular-nums">{income.data.totalDzd.toLocaleString("en-US")}</bdi> دج</> : income.isError ? "—" : "…"}</strong>
+        <span className="text-xs text-slate-600">{income.isSuccess ? `${income.data.completedCount} كشف مكتمل اليوم` : income.isError ? "تعذّر تحميل المدخول." : "جارٍ التحميل"}</span>
+      </p>
+      <WalkInPanel doctors={doctorQueues.map(row => row.doctor)} />
+    </section>}
+    {appointmentsView && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="أعداد النتائج بعد التصفية">
       {[["النتائج", list.length], ["وصل — ينتظر", list.filter(a => a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE")).length], ["تم نداؤه", list.filter(canMarkUnanswered).length], ["مكتمل", completed.length]].map(([label, count]) => <p key={label} className="card p-3 text-sm text-slate-700">{label}<strong className="mt-1 block text-xl text-slate-900">{count}</strong></p>)}
-    </div>
-    <section className="card grid gap-3 p-4 sm:grid-cols-3" aria-label="مرشحات الطابور">
+    </div>}
+    {appointmentsView && <section className="card grid gap-3 p-4 sm:grid-cols-3" aria-label="مرشحات الطابور">
       {appointmentsView && <label className="text-sm font-semibold text-slate-700">تاريخ المواعيد<input className="input mt-1 block min-h-11 w-full" dir="ltr" type="date" value={date} onChange={e => { if (e.target.value) setDate(e.target.value); }} /></label>}
       <label className="text-sm font-semibold text-slate-700">الطبيب<select className="input mt-1 min-h-11 w-full" value={filter.doctorId} onChange={e => setFilter(f => ({ ...f, doctorId: e.target.value }))}><option value="">كل الأطباء</option>{doctorQueues.map(({ doctor }) => <option key={doctor.id} value={doctor.id}>{doctorName(doctor)}</option>)}</select></label>
       <label className="text-sm font-semibold text-slate-700">الحالة<select className="input mt-1 min-h-11 w-full" value={filter.status} onChange={e => setFilter(f => ({ ...f, status: e.target.value }))}><option value="">كل الحالات</option><option value="ARRIVED">وصل — ينتظر</option>{Object.entries(RECEPTION_STATUSES).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label>
       <label className="text-sm font-semibold text-slate-700">البحث باسم المريض<input type="search" className="input mt-1 min-h-11 w-full" value={filter.search} onChange={e => setFilter(f => ({ ...f, search: e.target.value }))} placeholder="اكتب الاسم" /></label>
       {(filter.doctorId || filter.status || filter.search) && <Button variant="ghost" onClick={() => setFilter({ doctorId: "", status: "", search: "" })}>مسح المرشحات</Button>}
-    </section>
-    {!appointmentsView && <WalkInPanel doctors={doctorQueues.map(row => row.doctor)} />}
+    </section>}
     <section aria-label="قائمة المواعيد الموحدة" className="space-y-3">
       <h2 className="text-lg font-bold">{appointmentsView ? "المواعيد" : "مواعيد اليوم والطابور"}</h2>
       <p className="text-sm text-slate-700">مرتبة وفق طابور كل طبيب. النداء لا يؤكد بدء الكشف.</p>
       {appointments.isPending ? <Spinner /> : <>
         {!list.length ? <p className="card p-5">لا توجد مواعيد تطابق المرشحات في هذا اليوم.</p> : <>
           {visible.length > 0 && rows(visible)}
-          {!appointmentsView && completed.length > 0 && <details className="card p-4"><summary className="min-h-11 cursor-pointer font-semibold">المواعيد المكتملة ({completed.length})</summary><div className="mt-3">{rows(completed)}</div></details>}
         </>}
       </>}
     </section>

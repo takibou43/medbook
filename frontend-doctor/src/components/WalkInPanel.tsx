@@ -106,7 +106,7 @@ export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
 
   return (
     <>
-    <Button className="min-h-11" onClick={() => setOpen(true)}><UserPlus aria-hidden="true" className="h-5 w-5" />تسجيل مريض حضر</Button>
+    <Button className="min-h-11" onClick={() => setOpen(true)}><UserPlus aria-hidden="true" className="h-5 w-5" />إضافة مريض</Button>
     {lastDone && !open && <p role="status" className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-900">سُجّل {lastDone.guestFirstName} {lastDone.guestLastName} عند {lastDone.doctorName} — <bdi dir="ltr">{lastDone.startTime}</bdi></p>}
     <Modal open={open} onClose={() => { if (!inFlight.current) setOpen(false); }} title="تسجيل مريض حضر">
     <section aria-labelledby={`${formId}-title`}>

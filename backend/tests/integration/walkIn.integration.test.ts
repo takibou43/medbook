@@ -44,7 +44,7 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
   let today: Date;
   const tokens = { doctor: "", assistant: "", assistant2: "", patient: "" };
   const tag = `wi${Date.now().toString(36)}`;
-  const ids = { wilaya: "", city: "", specialty: "", doctor: "", patient: "", patientUser: "", assistant2: "", users: [] as string[] };
+  const ids = { wilaya: "", city: "", specialty: "", doctor: "", patient: "", patientUser: "", assistant2: "", otherDoctor: "", users: [] as string[] };
   const PATIENT_PHONE = `07${String(Date.now()).slice(-8)}`;
 
   const call = async (method: string, url: string, token?: string, body?: unknown) => {
@@ -83,6 +83,17 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
         schedules: { create: Array.from({ length: 7 }, (_, k) => ({ dayOfWeek: k, startTime: "00:00", endTime: "23:59" })) },
       },
     });
+    // طبيب آخر لا يعمل معه المساعد: محاولة استهدافه عبر الترويسة يجب أن تُرفض.
+    const du2 = await db.user.create({ data: { email: `${tag}-doc2@test.local`, passwordHash: "x", role: "DOCTOR" } });
+    const d2 = await db.doctor.create({
+      data: {
+        userId: du2.id, firstName: "طبيب2", lastName: tag, specialtyId: s.id, wilayaId: w.id, cityId: c.id, slotDurationMin: 5,
+        verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE",
+        schedules: { create: Array.from({ length: 7 }, (_, k) => ({ dayOfWeek: k, startTime: "00:00", endTime: "23:59" })) },
+      },
+    });
+    ids.otherDoctor = d2.id;
+    ids.users.push(du2.id);
     const pu = await db.user.create({
       data: { email: `${tag}-p@test.local`, phone: PATIENT_PHONE, passwordHash: "x", role: "PATIENT", patient: { create: { firstName: "مريض", lastName: tag } } },
       include: { patient: true },
@@ -119,8 +130,9 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
       await db.auditLog.deleteMany({ where: { userId: { in: ids.users } } });
       await db.pushSubscription.deleteMany({ where: { userId: { in: ids.users } } });
       await db.assistant.deleteMany({ where: { doctorId: ids.doctor } });
-      await db.doctorSchedule.deleteMany({ where: { doctorId: ids.doctor } });
-      await db.doctor.deleteMany({ where: { id: ids.doctor } });
+      await db.appointment.deleteMany({ where: { doctorId: ids.otherDoctor } });
+      await db.doctorSchedule.deleteMany({ where: { doctorId: { in: [ids.doctor, ids.otherDoctor] } } });
+      await db.doctor.deleteMany({ where: { id: { in: [ids.doctor, ids.otherDoctor] } } });
       await db.patient.deleteMany({ where: { id: ids.patient } });
       await db.user.deleteMany({ where: { id: { in: ids.users } } });
       await db.specialty.deleteMany({ where: { id: ids.specialty } });
@@ -175,6 +187,20 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
     expect(await db.notification.count({ where: { appointmentId: r.data.id } })).toBe(0);
     expect(h.sendNotification).not.toHaveBeenCalled();
     expect(h.sendSms).not.toHaveBeenCalled();
+    expect(await db.appointmentReminder.count({ where: { appointmentId: r.data.id } })).toBe(0);
+    expect((await db.appointment.findUniqueOrThrow({ where: { id: r.data.id } })).reminderSentAt).toBeNull();
+  });
+
+  it("استهداف طبيب آخر عبر X-Assistant-Doctor-Id ⇒ 403، ولا موعد عند أي من الطبيبين", async () => {
+    const n = await countToday();
+    const r = await fetch(base + "/api/appointments/walk-in", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer " + tokens.assistant, "X-Assistant-Doctor-Id": ids.otherDoctor },
+      body: JSON.stringify(body({ firstName: "مستهدف" })),
+    });
+    expect(r.status).toBe(403);
+    expect(await countToday()).toBe(n);
+    expect(await db.appointment.count({ where: { doctorId: ids.otherDoctor } })).toBe(0);
   });
 
   it("نفس المفتاح مرتين متتاليتين ⇒ نفس الموعد (200، replayed) ولا موعد ثانٍ", async () => {

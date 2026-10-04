@@ -25,6 +25,17 @@
 
 7. **Prisma schema في الجذر مع output مخصص** — `generator client { output = "../backend/node_modules/.prisma/client" }` بسبب أن `prisma/` خارج `backend/` (كما طُلب في هيكلة المشروع)، فيُوجَّه العميل المُولَّد صراحة إلى `node_modules` الخاص بـ backend حتى يعمل `import { PrismaClient } from "@prisma/client"` بشكل طبيعي.
 
+8. **استثناء «مريض حضر بدون موعد» (Walk-in)** — `POST /api/appointments/walk-in` في `backend/src/modules/appointments/walkIn.service.ts`. هو المسار الوحيد الذي ينشئ فيه غير المريض موعدًا لضيف، وله قواعد ثابتة:
+   - **المساعد وحده** (`authorize(Role.ASSISTANT)` + فحص مكرر في الخدمة). الطبيب لا يسجّل من هنا؛ هو يبرمج مرضاه عبر «موعد العودة».
+   - **الطبيب يُستخرج من جلسة المساعد** عبر `resolveActingDoctorId` (نفس فحص العيادة والتعطيل في الطابور). الجسم `.strict()` فلا يُقبل `doctorId` ولا `patientId` ولا `familyMemberId`، وترويسة `X-Assistant-Doctor-Id` لطبيب خارج نطاق المساعد ⇒ 403.
+   - **ضيف بالاسم ورقم جزائري** (`^0[5-7][0-9]{8}$`): `patientId = null` دائمًا. الاسم أو الهاتف لا يثبتان هوية حساب، فلا بحث عن مريض بالرقم ولا ربط ولا دمج.
+   - **اليوم فقط، أول فترة شاغرة لم يمضِ وقتها** عبر `reserveRequestedOrNextSlot` (نفس قفل الطابور والقيد الفريد في القرار 3). لا وقت شاغر ⇒ 409 `NO_SLOT_TODAY` ولا يُنشأ شيء.
+   - **`CONFIRMED` مع `arrivedAt = الآن`**، فيدخل طابور اليوم مباشرة.
+   - **`idempotencyKey` إلزامي** (القيد الموجود `@@unique([doctorId, idempotencyKey])`)، ويُفحص داخل القفل: النقر المزدوج والطلبات المتزامنة تعيد نفس الموعد. المفتاح نفسه لطلب مختلف أو من مساعد آخر ⇒ 409.
+   - **لا إشعار ولا Push ولا SMS ولا تذكير** لأي طرف. سطر AuditLog `WALK_IN_APPOINTMENT_CREATED` بلا اسم ولا هاتف.
+   - `createdBy = GUEST` و`createdByUserId` = حساب المساعد (لا قيمة ASSISTANT في enum؛ إضافتها تتطلب migration). الاستجابة بلا أي بيانات مالية.
+   - لا تغيير في المخطط ولا migrations.
+
 ## نقاط توسّع مستقبلية جاهزة في المخطط
 
 - `ai_conversations` / `ai_messages` — جاهزتان لطبقة MedBook AI (مؤجلة، راجع `TODO.md`).

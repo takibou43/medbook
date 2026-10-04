@@ -36,6 +36,11 @@ export const walkInSchema = z
       .transform((s) => s.replace(/[\s-]/g, ""))
       .pipe(z.string().regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)")),
     notes: z.string().trim().max(1000).optional(),
+    // اختياري: وقت من أوقات اليوم المتاحة (HH:mm). غيابه = أقرب وقت حر. الوقت المحجوز يُرفض صراحةً (409) ولا يُنقل.
+    startTime: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "صيغة الوقت يجب أن تكون HH:mm")
+      .optional(),
     idempotencyKey: z.string().uuid("مفتاح الطلب غير صالح"),
   })
   .strict();

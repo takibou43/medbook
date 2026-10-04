@@ -172,6 +172,9 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
     expect(row.familyMemberId).toBeNull();
     expect(row.activeSlot).toBe(true);
     expect(row.createdByUserId).toBe(ids.assistantUser);
+    // الملاحظة الثابتة دائمًا، حتى بلا ملاحظات مُدخلة.
+    expect(row.notes).toBe("سُجّل بواسطة المساعد");
+    expect(r.data.notes).toBe("سُجّل بواسطة المساعد");
 
     const audit = await db.auditLog.findFirst({ where: { action: "WALK_IN_APPOINTMENT_CREATED", entityId: r.data.id } });
     expect(audit).not.toBeNull();
@@ -289,6 +292,97 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
     } finally {
       await db.assistant.update({ where: { id: ids.assistant2 }, data: { isActive: true } });
     }
+  });
+
+  it("الملاحظات المُدخلة تُحفظ بعد عبارة «سُجّل بواسطة المساعد»", async () => {
+    const r = await walkIn(body({ firstName: "بملاحظة", notes: "  حرارة منذ يومين  " }));
+    expect(r.status).toBe(201);
+    const row = await db.appointment.findUniqueOrThrow({ where: { id: r.data.id } });
+    expect(row.notes).toBe("سُجّل بواسطة المساعد — حرارة منذ يومين");
+    const audit = await db.auditLog.findFirst({ where: { action: "WALK_IN_APPOINTMENT_CREATED", entityId: r.data.id } });
+    expect(JSON.stringify(audit!.meta)).not.toMatch(/حرارة/);
+  });
+
+  it("وقت محدد متاح اليوم ⇒ يُحجز ذلك الوقت بالضبط", async () => {
+    const r = await walkIn(body({ firstName: "بوقت", startTime: "15:00" }));
+    expect(r.status).toBe(201);
+    expect(r.data.startTime).toBe("15:00");
+    expect(r.data.endTime).toBe("15:05");
+    expect(r.data.status).toBe("CONFIRMED");
+    expect(r.data.arrivedAt).toBeTruthy();
+  });
+
+  it("وقت محدد محجوز ⇒ 409 SLOT_TAKEN برسالة واضحة، ولا يُنقل إلى وقت آخر ولا يُنشأ شيء", async () => {
+    expect((await walkIn(body({ firstName: "أول", startTime: "15:30" }))).status).toBe(201);
+    const n = await countToday();
+    const r = await walkIn(body({ firstName: "ثانٍ", startTime: "15:30" }));
+    expect(r.status).toBe(409);
+    expect(r.raw?.details?.code ?? r.code).toBe("SLOT_TAKEN");
+    expect(r.message).toMatch(/15:30 محجوز/);
+    expect(await countToday()).toBe(n);
+  });
+
+  it("وقت محدد مضى، أو خارج شبكة الأوقات، أو بصيغة خاطئة ⇒ 400 دون إنشاء", async () => {
+    const n = await countToday();
+    const past = await walkIn(body({ startTime: "09:00" }));
+    expect(past.status).toBe(400);
+    expect(past.message).toMatch(/مضى/);
+    const offGrid = await walkIn(body({ startTime: "15:02" }));
+    expect(offGrid.status).toBe(400);
+    expect(offGrid.message).toMatch(/ليس من أوقات عمل الطبيب/);
+    expect((await walkIn(body({ startTime: "9:00" }))).status).toBe(400);
+    expect((await walkIn(body({ startTime: "24:00" }))).status).toBe(400);
+    expect(await countToday()).toBe(n);
+  });
+
+  it("نفس المفتاح بنفس الوقت المحدد ⇒ نفس الموعد؛ ومع وقت مختلف أو ملاحظات مختلفة ⇒ 409", async () => {
+    const key = randomUUID();
+    const b = body({ idempotencyKey: key, firstName: "مفتاح", startTime: "16:00", notes: "أولى" });
+    const r1 = await walkIn(b);
+    expect(r1.status).toBe(201);
+    const n = await countToday();
+    const same = await walkIn(b);
+    expect(same.status).toBe(200);
+    expect(same.data.id).toBe(r1.data.id);
+    const otherTime = await walkIn({ ...b, startTime: "16:05" });
+    expect(otherTime.status).toBe(409);
+    expect(otherTime.message).toMatch(/مفتاح الطلب مستعمل/);
+    const otherNotes = await walkIn({ ...b, notes: "ثانية" });
+    expect(otherNotes.status).toBe(409);
+    const noNotes = await walkIn({ ...b, notes: undefined });
+    expect(noNotes.status).toBe(409);
+    expect(await countToday()).toBe(n);
+    expect(await db.appointment.count({ where: { doctorId: ids.doctor, date: today, startTime: "16:05" } })).toBe(0);
+  });
+
+  it("مفتاح بلا وقت محدد ثم إعادة بوقت مختلف ⇒ 409؛ وبلا ملاحظات ثم بملاحظات ⇒ 409", async () => {
+    const key = randomUUID();
+    const b = body({ idempotencyKey: key, firstName: "تلقائي" });
+    const r1 = await walkIn(b);
+    expect(r1.status).toBe(201);
+    const n = await countToday();
+    const wrongTime = r1.data.startTime === "17:00" ? "17:05" : "17:00";
+    expect((await walkIn({ ...b, startTime: wrongTime })).status).toBe(409);
+    expect((await walkIn({ ...b, startTime: r1.data.startTime })).status).toBe(200);
+    expect((await walkIn({ ...b, notes: "إضافة" })).status).toBe(409);
+    expect(await countToday()).toBe(n);
+  });
+
+  it("5 طلبات متزامنة بنفس المفتاح ووقت محدد ⇒ موعد واحد، والبقية تعيده", async () => {
+    const b = body({ firstName: "متزامن-وقت", startTime: "18:00" });
+    const n = await countToday();
+    const rs = await Promise.all(Array.from({ length: 5 }, () => walkIn(b)));
+    expect(rs.every((r) => r.status === 200 || r.status === 201)).toBe(true);
+    expect(rs.filter((r) => r.status === 201)).toHaveLength(1);
+    expect(new Set(rs.map((r) => r.data.id)).size).toBe(1);
+    expect(await countToday()).toBe(n + 1);
+  });
+
+  it("طلبان متزامنان بمفتاحين مختلفين على نفس الوقت المحدد ⇒ واحد 201 والآخر 409 SLOT_TAKEN", async () => {
+    const n = await countToday();
+    const rs = await Promise.all([walkIn(body({ firstName: "سباق1", startTime: "18:30" })), walkIn(body({ firstName: "سباق2", startTime: "18:30" }))]);
+    expect(rs.map((r) => r.status).sort()).toEqual([201, 409]);
+    expect(await countToday()).toBe(n + 1);
   });
 
   it("لا وقت شاغر متبقٍّ اليوم ⇒ 409 NO_SLOT_TODAY دون إنشاء", async () => {

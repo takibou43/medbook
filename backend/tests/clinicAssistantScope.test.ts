@@ -13,7 +13,7 @@ describe("clinic assistant authorization", () => {
   it("allows another doctor only through a live clinic membership query", async () => {
     db.doctor.findFirst.mockResolvedValue({ id: "colleague" });
     await expect(assistantDoctorContext.run("colleague", () => resolveActingDoctorId("assistant", Role.ASSISTANT))).resolves.toBe("colleague");
-    expect(db.doctor.findFirst).toHaveBeenCalledWith({ where: { id: "colleague", clinicId: "clinic-a", user: { isActive: true } }, select: { id: true } });
+    expect(db.doctor.findFirst).toHaveBeenCalledWith({ where: { AND: [{ clinicId: "clinic-a", user: { isActive: true } }, { id: "colleague" }] }, select: { id: true }, orderBy: { id: "asc" } });
   });
   it("rejects a foreign, transferred or inactive doctor", async () => {
     db.doctor.findFirst.mockResolvedValue(null);
@@ -30,8 +30,14 @@ describe("clinic assistant authorization", () => {
     await expect(assistantDoctorContext.run("foreign", () => resolveActingDoctorId("assistant", Role.ASSISTANT))).rejects.toMatchObject({ statusCode: 403 });
   });
   it("isolates simultaneous selections", async () => {
-    db.doctor.findFirst.mockImplementation(async ({ where }) => { await Promise.resolve(); return { id: where.id }; });
+    db.doctor.findFirst.mockImplementation(async ({ where }) => { await Promise.resolve(); return { id: where.AND[1].id }; });
     const results = await Promise.all(["first", "second"].map(id => assistantDoctorContext.run(id, async () => { await Promise.resolve(); return resolveActingDoctorId("assistant", Role.ASSISTANT); })));
     expect(results).toEqual(["first", "second"]);
+  });
+  it("intersects a restricted assignment with clinic membership on every request", async () => {
+    db.assistant.findUnique.mockResolvedValue({ doctorId: "inviter", clinicId: "clinic-a", allDoctors: false, allowedDoctorIds: ["assigned"], isActive: true, doctor: { user: { isActive: false } } });
+    db.doctor.findFirst.mockResolvedValue({ id: "assigned" });
+    await expect(resolveActingDoctorId("assistant", Role.ASSISTANT)).resolves.toBe("assigned");
+    expect(db.doctor.findFirst).toHaveBeenCalledWith({ where: { AND: [{ clinicId: "clinic-a", id: { in: ["assigned"] }, user: { isActive: true } }] }, select: { id: true }, orderBy: { id: "asc" } });
   });
 });

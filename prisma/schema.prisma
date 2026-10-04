@@ -387,6 +387,9 @@ model PatientBlock {
   @@map("patient_blocks")
 }
 model Doctor {
+  // A delegation belongs to this exact clinic; changing clinics never carries it over.
+  clinicManagerForId String?
+  clinicPermissions String[] @default([])
   clinicTransferRequests ClinicTransferRequest[]
   clinicTerms ClinicDoctorTerms?
   id          String    @id @default(uuid())
@@ -457,6 +460,8 @@ model Doctor {
 // الـ Backend مباشرة (انظر resolveActingDoctorId في backend/src/lib/actingDoctor.ts)،
 // وليس فقط إخفاءه في الواجهة.
 model Assistant {
+  allDoctors Boolean @default(true)
+  allowedDoctorIds String[] @default([])
   clinicId String?
   clinic Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
   id        String   @id @default(uuid())
@@ -478,6 +483,9 @@ model Assistant {
 // صريحًا — الرابط الفعلي يُبنى في الواجهة من الرمز الخام الذي لا يُخزَّن أبدًا. صلاحية
 // زمنية (expiresAt) وحالة (status) تمنعان إعادة استعمال رابط دعوة سبق قبوله أو انتهى.
 model AssistantInvite {
+  clinicId String?
+  allDoctors Boolean @default(true)
+  allowedDoctorIds String[] @default([])
   id         String       @id @default(uuid())
   doctorId   String
   doctor     Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)

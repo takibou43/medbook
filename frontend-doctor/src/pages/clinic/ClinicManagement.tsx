@@ -9,11 +9,13 @@ import ClinicTransferRequests from "./ClinicTransferRequests";
 import ClinicDoctorTerms, { DoctorTerms } from "./ClinicDoctorTerms";
 import ClinicFinanceReport from "./ClinicFinanceReport";
 import { doctorsCountAr, formatDayAr, formatDzd, parseTermsForm } from "../../lib/doctorUi";
+import ClinicStaff, { ClinicStaffAssistant, ClinicStaffDoctor } from "./ClinicStaff";
 interface ManagedClinic extends ClinicProfile {
+  ownerId: string | null; isOwner: boolean; permissions: string[]; assistants: ClinicStaffAssistant[];
   id: string; referralDiscountUntil: string | null; pendingReferralDays: number; verificationStatus: string; subscriptionStatus: string; subscriptionExpiresAt: string | null;
   billing: { billedDoctorCount: number; discountedDoctorCount: number; doctorCount: number; monthlyTotal: number; monthlyPerDoctor: number; paidDoctorCount: number };
-  doctors: { id: string; firstName: string; lastName: string; specialty: { nameAr: string }; verificationStatus: string; terms: DoctorTerms;
-    user: { email: string; isActive: boolean }; assistants: { id: string; firstName: string; lastName: string; isActive: boolean; user: { email: string } }[] }[];
+  doctors: (ClinicStaffDoctor & { id: string; firstName: string; lastName: string; specialty: { nameAr: string }; verificationStatus: string; terms: DoctorTerms | null;
+    user: { email: string; isActive: boolean }; assistants: ClinicStaffAssistant[] })[];
   invites: { id: string; email: string; expiresAt: string; termsPriceDzd?: number | null; termsDoctorSharePercent?: number | null }[];
 }
 const stateLabels: Record<string, string> = { ACTIVE: "نشط", UNPAID: "غير مفعّل", EXPIRED: "منتهي", PENDING: "قيد المراجعة", VERIFIED: "موثّق", REJECTED: "مرفوض" };
@@ -36,27 +38,19 @@ export default function ClinicManagement() {
       await refreshMe(); setEditing(false); setMessage("حُفظت بيانات العيادة. تغييرات الاسم والعنوان والموقع تحتاج مراجعة الإدارة.");
     });
   }
-  function invite(e: FormEvent<HTMLFormElement>, assistant = false) {
+  function invite(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const form = new FormData(e.currentTarget); const element = e.currentTarget;
     const body: Record<string, unknown> = { email: form.get("email") };
-    if (!assistant) {
-      const price = String(form.get("appointmentPriceDzd") ?? "").trim(); const share = String(form.get("doctorSharePercent") ?? "").trim();
-      if (price || share) {
-        const terms = parseTermsForm(price, share);
-        if (!terms.ok) { setError(terms.error + " اتركهما فارغين إن أردت ضبطهما لاحقًا."); setMessage(""); return; }
-        Object.assign(body, terms.value);
-      }
+    const price = String(form.get("appointmentPriceDzd") ?? "").trim(); const share = String(form.get("doctorSharePercent") ?? "").trim();
+    if (price || share) {
+      const terms = parseTermsForm(price, share);
+      if (!terms.ok) { setError(terms.error + " اتركهما فارغين إن أردت ضبطهما لاحقًا."); setMessage(""); return; }
+      Object.assign(body, terms.value);
     }
     void run(async () => {
-      const path = assistant ? `/clinics/mine/doctors/${form.get("doctorId")}/assistants` : "/clinics/mine/invites";
-      const result = (await api.post(path, body)).data.data;
-      if (assistant && result.alreadyShared) {
-        setLink(""); element.reset();
-        setMessage(result.assistant.isActive ? "هذا المساعد يعمل مع جميع أطباء العيادة بالفعل. يمكنه اختيار الطبيب من لوحة المساعد." : "هذا المساعد مرتبط بجميع أطباء العيادة، لكن وصوله معطّل. فعّل وصوله من بطاقة أحد الأطباء.");
-        return;
-      }
-      setLink(`${window.location.origin}/${assistant ? "assistant" : "clinic/doctor"}/accept/${result.rawToken}`);
-      element.reset(); setMessage(assistant ? "انسخ رابط الدعوة وأرسله للمساعد. بعد قبولها يعمل مع جميع أطباء العيادة." : "انسخ رابط الدعوة وأرسله لصاحب البريد المحدد. الرابط صالح لمدة 7 أيام.");
+      const result = (await api.post("/clinics/mine/invites", body)).data.data;
+      setLink(window.location.origin + "/clinic/doctor/accept/" + result.rawToken);
+      element.reset(); setMessage("انسخ رابط الدعوة وأرسله لصاحب البريد المحدد. الرابط صالح لمدة 7 أيام.");
     });
   }
   if (query.isPending) return <p>جارٍ تحميل العيادة…</p>;
@@ -75,7 +69,7 @@ export default function ClinicManagement() {
     {clinic && <>
       <details className="card space-y-3 p-5">
         <summary className="cursor-pointer text-lg font-bold">بيانات العيادة والاشتراك — {doctorsCountAr(clinic.billing.doctorCount)}</summary>
-        <div className="flex flex-wrap justify-between gap-3"><h2 className="text-lg font-bold">اشتراك العيادة</h2><Button variant="outline" onClick={() => setEditing(!editing)}>تعديل بيانات العيادة</Button></div>
+        <div className="flex flex-wrap justify-between gap-3"><h2 className="text-lg font-bold">اشتراك العيادة</h2>{clinic.permissions.includes("EDIT_PROFILE") && <Button variant="outline" onClick={() => setEditing(!editing)}>تعديل بيانات العيادة</Button>}</div>
         <p>المراجعة: {stateLabels[clinic.verificationStatus]} · الاشتراك: {clinic.subscriptionExpiresAt && new Date(clinic.subscriptionExpiresAt) <= new Date() ? "منتهي" : stateLabels[clinic.subscriptionStatus]}</p>
         <p className="text-sm text-slate-600">التكلفة الشهرية التقديرية حسب الأطباء المحتسبين حاليًا</p><p className="text-2xl font-bold text-primary-700">{formatDzd(clinic.billing.monthlyTotal)} / شهر</p>
         <dl className="grid gap-3 sm:grid-cols-2"><div><dt className="text-slate-500">الأطباء الحاليون</dt><dd>{doctorsCountAr(clinic.billing.doctorCount)}</dd></div><div><dt className="text-slate-500">السعة المدفوعة</dt><dd>{doctorsCountAr(clinic.billing.paidDoctorCount)}</dd></div><div><dt className="text-slate-500">الأطباء المحتسبون في التكلفة</dt><dd>{doctorsCountAr(clinic.billing.billedDoctorCount)} × {formatDzd(clinic.billing.monthlyPerDoctor)}</dd></div><div><dt className="text-slate-500">تاريخ الانتهاء</dt><dd>{clinic.subscriptionExpiresAt ? formatDayAr(clinic.subscriptionExpiresAt.slice(0, 10)) : "غير محدد"}</dd></div></dl>
@@ -83,26 +77,20 @@ export default function ClinicManagement() {
         {clinic.billing.discountedDoctorCount > 0 && <p className="text-emerald-700">مكافأة الإحالة: تُحسب تكلفة {doctorsCountAr(clinic.billing.billedDoctorCount)} بدل {doctorsCountAr(clinic.billing.doctorCount)} حتى {clinic.referralDiscountUntil?.slice(0, 10)}. جميع الأطباء مشمولون بالخدمة.</p>}
         {clinic.pendingReferralDays > 0 && <p>خصم محفوظ لمدة {clinic.pendingReferralDays} يومًا، يبدأ عند تفعيل الاشتراك.</p>}
       </details>
-      <div className="card p-5"><h2 className="mb-3 text-lg font-bold">دعوة طبيب إلى العيادة</h2>
+      {clinic.isOwner && <div className="card p-5"><h2 className="mb-3 text-lg font-bold">دعوة طبيب إلى العيادة</h2>
         <p className="mb-4 text-sm text-slate-600">أدخل بريد الطبيب، ثم أرسل له الرابط. ينضم عند قبول الدعوة دون انتظار موافقة الإدارة.</p>
         <form onSubmit={e => invite(e)} className="space-y-4"><Input name="email" type="email" label="بريد الطبيب" required />
           <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-semibold">تحديد سعر الكشف ونسبة الطبيب (اختياري)</summary><div className="mt-3 grid gap-3 sm:grid-cols-2"><Input name="appointmentPriceDzd" inputMode="numeric" label="سعر الكشف (دج)" /><Input name="doctorSharePercent" inputMode="numeric" label="نصيب الطبيب (%)" /></div><p className="mt-2 text-sm text-slate-500">يمكن تحديدهما بعد انضمام الطبيب. نصيب العيادة يُحسب تلقائيًا.</p></details>
           <Button type="submit" loading={busy} className="min-h-[48px]">إنشاء رابط الدعوة</Button></form>
         {clinic.invites.map(i => <div key={i.id} className="mt-3 flex flex-wrap justify-between gap-2 border-t pt-3"><span dir="ltr">{i.email}</span><span>{new Date(i.expiresAt) <= new Date() ? "منتهية" : "بانتظار القبول"}</span><button disabled={busy} className="text-red-600" onClick={() => void run(async () => { await api.delete(`/clinics/mine/invites/${i.id}`); })}>إلغاء الدعوة</button></div>)}
-      </div>
-      {clinic.doctors.length > 0 && <details className="card p-5"><summary className="cursor-pointer text-lg font-bold">إضافة مساعد</summary>
-        <form onSubmit={e => invite(e, true)} className="grid items-end gap-3 sm:grid-cols-3">
-          <input type="hidden" name="doctorId" value={clinic.doctors[0].id} />
-          <Input name="email" type="email" label="بريد المساعد" required /><Button type="submit" loading={busy}>دعوة مساعد</Button>
-        </form><p className="mt-2 text-sm text-slate-500">يكفي حساب مساعد واحد لجميع أطباء العيادة. المساعد الموجود يظهر مع كل طبيب ولا يحتاج دعوة أخرى.</p>
-      </details>}
+      </div>}
+      <ClinicStaff clinicId={clinic.id} ownerId={clinic.ownerId} isOwner={clinic.isOwner} permissions={clinic.permissions} doctors={clinic.doctors} assistants={clinic.assistants} busy={busy} run={run} onInvite={(token, message) => { setLink(token ? `${window.location.origin}/assistant/accept/${token}` : ""); setMessage(message); }} />
       {link && <div className="card space-y-2 p-5"><label htmlFor="invite-link" className="font-bold">رابط الدعوة الجديدة</label><input id="invite-link" value={link} readOnly dir="ltr" className="w-full rounded-lg border p-3" onFocus={e => e.target.select()} /><p className="text-sm text-slate-500">يظهر هذا الرابط بعد إنشائه فقط؛ احفظه قبل مغادرة الصفحة.</p><button onClick={() => setLink("")}>إخفاء الرابط</button></div>}
-      {clinic.doctors.length > 0 && <details className="card p-5"><summary className="cursor-pointer text-lg font-bold">تقرير إيرادات العيادة</summary><div className="mt-4"><ClinicFinanceReport /></div></details>}
+      {clinic.permissions.includes("VIEW_FINANCE") && clinic.doctors.length > 0 && <details className="card p-5"><summary className="cursor-pointer text-lg font-bold">تقرير إيرادات العيادة</summary><div className="mt-4"><ClinicFinanceReport /></div></details>}
       <div className="grid gap-4 md:grid-cols-2">{clinic.doctors.map(d => <article key={d.id} className="card p-5"><h2 className="font-bold">د. {d.firstName} {d.lastName}</h2><p>{d.specialty.nameAr} · {stateLabels[d.verificationStatus]}</p><p className="text-sm" dir="ltr">{d.user.email}</p>
-        <ClinicDoctorTerms doctorId={d.id} terms={d.terms} onSaved={async () => { await qc.invalidateQueries({ queryKey: ["my-clinic"] }); await qc.invalidateQueries({ queryKey: ["clinic-finance"] }); }} />
+        {clinic.permissions.includes("MANAGE_TERMS") && d.terms && <ClinicDoctorTerms doctorId={d.id} terms={d.terms} onSaved={async () => { await qc.invalidateQueries({ queryKey: ["my-clinic"] }); await qc.invalidateQueries({ queryKey: ["clinic-finance"] }); }} />}
         <h3 className="mt-4 font-semibold">المساعدون المتاحون لهذا الطبيب ({d.assistants.length})</h3>
-        <p className="mt-1 text-xs text-slate-500">تعطيل مساعد العيادة يوقف وصوله لجميع أطبائها.</p>
-        {d.assistants.map(a => <div key={a.id} className="mt-3 flex justify-between gap-3 border-t pt-3"><div>{a.firstName} {a.lastName}<p className="text-xs" dir="ltr">{a.user.email}</p></div><button disabled={busy} className={a.isActive ? "text-red-600" : "text-primary-700"} onClick={() => void run(async () => { await api.patch(`/clinics/mine/doctors/${d.id}/assistants/${a.id}`, { isActive: !a.isActive }); })}>{a.isActive ? "تعطيل الوصول" : "تفعيل الوصول"}</button></div>)}
+        {d.assistants.map(a => <p key={a.id} className="mt-2 text-sm">{a.firstName} {a.lastName} · {a.isActive ? "نشط" : "معطّل"}</p>)}
       </article>)}</div>
     </>}
   </section>;

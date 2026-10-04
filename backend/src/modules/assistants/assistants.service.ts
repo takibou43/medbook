@@ -20,21 +20,24 @@ function inviteExpiryDate(): Date {
 }
 
 /** طبيب فقط: إنشاء دعوة مساعد جديدة لبريد إلكتروني محدد. يُرجع الرمز الخام مرة واحدة فقط (لا يُخزَّن أبدًا). */
-export async function createInvite(doctorUserId: string, email: string) {
+export async function createInvite(doctorUserId: string, email: string, scope?: { clinicId: string; allDoctors: boolean; allowedDoctorIds: string[] }) {
   const doctorId = await resolveActingDoctorId(doctorUserId, Role.DOCTOR);
+  const doctor = await prisma.doctor.findUniqueOrThrow({ where: { id: doctorId }, include: { clinic: { select: { ownerId: true } } } });
+  if (scope && scope.clinicId !== doctor.clinicId) throw ApiError.forbidden();
+  if (!scope && doctor.clinicId && doctor.clinic?.ownerId !== doctorUserId) throw ApiError.forbidden("مالك العيادة وحده يضيف المساعدين.");
 
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) throw ApiError.conflict("هذا البريد الإلكتروني مستخدم بالفعل بحساب آخر على المنصة.");
 
   // دعوة معلّقة سابقة لنفس البريد عند نفس الطبيب: تُلغى وتُستبدل بدل تكديس دعوات صالحة متعددة لنفس البريد.
   await prisma.assistantInvite.updateMany({
-    where: { doctorId, email, status: InviteStatus.PENDING },
+    where: { ...(scope ? { doctor: { clinicId: scope.clinicId } } : { doctorId }), email, status: InviteStatus.PENDING },
     data: { status: InviteStatus.REVOKED, revokedAt: new Date() },
   });
 
   const rawToken = generateRawToken();
   const invite = await prisma.assistantInvite.create({
-    data: { doctorId, email, tokenHash: hashToken(rawToken), expiresAt: inviteExpiryDate() },
+    data: { doctorId, email, tokenHash: hashToken(rawToken), expiresAt: inviteExpiryDate(), ...(scope ?? { clinicId: doctor.clinicId }) },
   });
 
   return { invite, rawToken };
@@ -43,6 +46,7 @@ export async function createInvite(doctorUserId: string, email: string) {
 /** طبيب فقط: إعادة إرسال دعوة — رمز جديد وصلاحية جديدة لنفس السجل (لا تُنشئ دعوة موازية). */
 export async function resendInvite(doctorUserId: string, inviteId: string) {
   const doctorId = await resolveActingDoctorId(doctorUserId, Role.DOCTOR);
+  await requireAssistantOwner(doctorUserId, doctorId);
   const invite = await prisma.assistantInvite.findUnique({ where: { id: inviteId } });
   if (!invite || invite.doctorId !== doctorId) throw ApiError.notFound("الدعوة غير موجودة.");
   if (invite.status === InviteStatus.ACCEPTED) throw ApiError.badRequest("تم قبول هذه الدعوة بالفعل.");
@@ -59,6 +63,7 @@ export async function resendInvite(doctorUserId: string, inviteId: string) {
 /** طبيب فقط: إلغاء دعوة معلّقة قبل قبولها. */
 export async function revokeInvite(doctorUserId: string, inviteId: string) {
   const doctorId = await resolveActingDoctorId(doctorUserId, Role.DOCTOR);
+  await requireAssistantOwner(doctorUserId, doctorId);
   const invite = await prisma.assistantInvite.findUnique({ where: { id: inviteId } });
   if (!invite || invite.doctorId !== doctorId) throw ApiError.notFound("الدعوة غير موجودة.");
   if (invite.status === InviteStatus.ACCEPTED) {
@@ -74,6 +79,7 @@ export async function revokeInvite(doctorUserId: string, inviteId: string) {
 /** طبيب فقط: قائمة مساعديه الحاليين + دعواته المعلّقة/المنتهية معًا. */
 export async function listAssistants(doctorUserId: string) {
   const doctorId = await resolveActingDoctorId(doctorUserId, Role.DOCTOR);
+  await requireAssistantOwner(doctorUserId, doctorId);
 
   const [assistants, invites] = await Promise.all([
     prisma.assistant.findMany({
@@ -100,6 +106,7 @@ export async function listAssistants(doctorUserId: string) {
 /** طبيب فقط: تعطيل/تفعيل وصول مساعد — التعطيل يقطع الوصول فورًا من الـ Backend (انظر resolveActingDoctorId). */
 export async function setAssistantActive(doctorUserId: string, assistantId: string, isActive: boolean) {
   const doctorId = await resolveActingDoctorId(doctorUserId, Role.DOCTOR);
+  await requireAssistantOwner(doctorUserId, doctorId);
   const assistant = await prisma.assistant.findUnique({ where: { id: assistantId } });
   if (!assistant || assistant.doctorId !== doctorId) throw ApiError.notFound("المساعد غير موجود.");
 
@@ -150,6 +157,12 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
     const passwordHash = await hashPassword(data.password);
     const invitingDoctor = await tx.doctor.findUnique({ where: { id: invite.doctorId }, select: { clinicId: true } });
     if (!invitingDoctor) throw ApiError.notFound("الطبيب غير موجود.");
+    if (invite.clinicId && invite.clinicId !== invitingDoctor.clinicId) throw ApiError.forbidden("تغيّر ارتباط الطبيب بالعيادة. اطلب دعوة جديدة من المالك.");
+    if (!invite.allDoctors) {
+      if (!invite.clinicId || !invite.allowedDoctorIds.length) throw ApiError.forbidden();
+      const count = await tx.doctor.count({ where: { clinicId: invite.clinicId, id: { in: invite.allowedDoctorIds }, user: { isActive: true } } });
+      if (count !== invite.allowedDoctorIds.length) throw ApiError.forbidden("تغيّر الأطباء المحددون. اطلب دعوة جديدة من المالك.");
+    }
     const user = await tx.user.create({
       data: {
         email: invite.email,
@@ -159,6 +172,8 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
           create: {
             doctorId: invite.doctorId,
             clinicId: invitingDoctor.clinicId,
+            allDoctors: invite.allDoctors,
+            allowedDoctorIds: invite.allowedDoctorIds,
             firstName: data.firstName,
             lastName: data.lastName,
           },
@@ -177,4 +192,9 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
 
     return user;
   });
+}
+
+async function requireAssistantOwner(userId: string, doctorId: string) {
+  const doctor = await prisma.doctor.findUniqueOrThrow({ where: { id: doctorId }, include: { clinic: { select: { ownerId: true } } } });
+  if (doctor.clinicId && doctor.clinic?.ownerId !== userId) throw ApiError.forbidden("إدارة مساعدي العيادة من خلال الصلاحيات التي يمنحها المالك.");
 }

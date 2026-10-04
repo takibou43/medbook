@@ -88,7 +88,8 @@ function RowActionsMenu({
 
   function close(returnFocus: boolean) {
     onOpenChange(false);
-    if (returnFocus) requestAnimationFrame(() => buttonRef.current?.focus());
+    // setTimeout لا requestAnimationFrame: الأخير يتوقف تمامًا في التبويبات غير الظاهرة.
+    if (returnFocus) setTimeout(() => buttonRef.current?.focus(), 0);
   }
 
   function onMenuKeyDown(e: React.KeyboardEvent) {
@@ -201,12 +202,12 @@ export default function DoctorHome() {
   useEffect(() => {
     if (!pendingFocusId || busy || noShowTarget || followUpCtx) return;
     const id = pendingFocusId;
-    const frame = requestAnimationFrame(() => {
+    const timer = setTimeout(() => {
       const el = triggerEls.current.get(id);
       if (el?.isConnected) el.focus();
       setPendingFocusId(null);
-    });
-    return () => cancelAnimationFrame(frame);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [pendingFocusId, busy, noShowTarget, followUpCtx]);
 
   // المواعيد المعروضة اليوم: بلا الملغاة. رقم الدور يُحسب قبل البحث فلا يتغير بتصفية القائمة.

@@ -4,7 +4,6 @@ import { LucideIcon, LogOut, Menu, X } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../../context/AuthContext";
 import { Logo } from "../ui/Logo";
-import { AssistantDoctorSelector } from "../AssistantDoctorSelector";
 import { SwitchToPatientButton } from "../ProfilesCard";
 
 export interface DashboardNavItem {
@@ -52,7 +51,6 @@ export function DashboardLayout({
 
   return (
     <>
-    {user?.role === "ASSISTANT" && <div className="sticky top-0 z-40 bg-slate-50 p-3"><AssistantDoctorSelector /></div>}
     <div className="flex min-h-screen bg-slate-50">
       <aside className="hidden w-64 shrink-0 border-l border-slate-200 bg-white md:flex md:flex-col">
         <div className="flex h-16 items-center gap-2 border-b border-slate-200 px-5 text-primary-700">

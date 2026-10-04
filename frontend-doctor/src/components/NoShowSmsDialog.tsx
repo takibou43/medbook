@@ -26,6 +26,7 @@ export type NoShowDialogMode = "call" | "final";
 export interface NoShowTarget {
   id: string;
   patientName: string;
+  doctorName?: string;
   /** الرقم الخام كما وصل من الخادم (patient.user.phone أو guestPhone). */
   phone?: string | null;
   date?: string | null;
@@ -53,7 +54,7 @@ export function NoShowSmsDialog({ target, mode = "final", onConfirm, onClose }: 
   // نص الرسالة قابل للتعديل قبل فتح تطبيق الرسائل.
   const [message, setMessage] = useState("");
 
-  const doctorName = [user?.doctor?.firstName, user?.doctor?.lastName]
+  const doctorName = target?.doctorName ?? [user?.doctor?.firstName, user?.doctor?.lastName]
     .map((s) => (s ?? "").trim())
     .filter(Boolean)
     .join(" ");

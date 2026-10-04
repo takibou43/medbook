@@ -4,6 +4,8 @@ Only the clinic owner invites doctors and assistants, appoints managers, and cha
 
 An assistant can serve all current and future clinic doctors, or an explicit set chosen by the owner. Existing shared assistants retain all-doctor access. Each request intersects the stored assignment with live clinic membership and active doctor accounts. A disabled assistant loses access to every doctor. Reusing an existing assistant email never creates a second account; the legacy endpoint preserves its current scope.
 
+Assistants use a unified reception board, with no doctor selector. `/assistant/queues` returns all assigned doctors' queues, refreshed every four seconds while the board is visible. Each doctor's current called patient remains visible independently, including simultaneous calls. The appointments page combines the assigned doctors' appointments for the chosen date. Row actions carry that appointment's doctor header and are reauthorized server-side; no global browser selection is used. Optional sound requires a user gesture. Family beneficiaries remain attached to their original appointments.
+
 The owner can appoint an existing clinic doctor as manager and separately grant:
 
 - `EDIT_PROFILE`: edit clinic identity/location.

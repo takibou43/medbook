@@ -24,6 +24,7 @@ import Register from "./pages/Register";
 import ApplyDoctor from "./pages/ApplyDoctor";
 import AssistantAcceptInvite from "./pages/AssistantAcceptInvite";
 import DoctorHome from "./pages/doctor/DoctorHome";
+import AssistantBoard from "./pages/doctor/AssistantBoard";
 import DoctorOverview from "./pages/doctor/DoctorOverview";
 import DoctorSettingsHub from "./pages/doctor/DoctorSettingsHub";
 import DoctorAppointments from "./pages/doctor/DoctorAppointments";
@@ -75,7 +76,12 @@ const doctorMainNav = [
 /** الرئيسية: لوحة التحكم الجديدة للطبيب؛ المساعد يبقى على الرئيسية الحالية حتى المرحلة ج. */
 function HomeRoute() {
   const { user } = useAuth();
-  return user?.role === "ASSISTANT" ? <DoctorOverview /> : <DoctorHome />;
+  return user?.role === "ASSISTANT" ? <AssistantBoard /> : <DoctorHome />;
+}
+
+function AppointmentsRoute() {
+  const { user } = useAuth();
+  return user?.role === "ASSISTANT" ? <AssistantBoard appointmentsView /> : <DoctorAppointments />;
 }
 
 /**
@@ -161,7 +167,7 @@ export default function App() {
       <Route element={<ProtectedRoute allow={["DOCTOR", "ASSISTANT"]} />}>
         <Route element={<DoctorAreaLayout />}>
           <Route path="/" element={<HomeRoute />} />
-          <Route path="/appointments" element={<DoctorAppointments />} />
+          <Route path="/appointments" element={<AppointmentsRoute />} />
 
           <Route element={<ProtectedRoute allow={["DOCTOR"]} />}>
             <Route path="/overview" element={<DoctorOverview />} />

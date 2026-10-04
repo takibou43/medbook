@@ -44,7 +44,7 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
   let today: Date;
   const tokens = { doctor: "", assistant: "", assistant2: "", patient: "" };
   const tag = `wi${Date.now().toString(36)}`;
-  const ids = { wilaya: "", city: "", specialty: "", doctor: "", patient: "", patientUser: "", assistant2: "", otherDoctor: "", users: [] as string[] };
+  const ids = { wilaya: "", city: "", specialty: "", doctor: "", patient: "", patientUser: "", assistant2: "", otherDoctor: "", assistantUser: "", users: [] as string[] };
   const PATIENT_PHONE = `07${String(Date.now()).slice(-8)}`;
 
   const call = async (method: string, url: string, token?: string, body?: unknown) => {
@@ -105,7 +105,7 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
     // اشتراك Push للمريض: أي إشعار خاطئ سيظهر في sendNotification.
     await db.pushSubscription.create({ data: { userId: pu.id, endpoint: `https://fcm.googleapis.com/fcm/send/${tag}`, p256dh: "k", auth: "a" } });
     await db.pushSubscription.create({ data: { userId: du.id, endpoint: `https://fcm.googleapis.com/fcm/send/${tag}-d`, p256dh: "k", auth: "a" } });
-    Object.assign(ids, { doctor: d.id, patient: pu.patient!.id, patientUser: pu.id, assistant2: a2.id });
+    Object.assign(ids, { doctor: d.id, patient: pu.patient!.id, patientUser: pu.id, assistant2: a2.id, assistantUser: au.id });
     ids.users.push(du.id, pu.id, au.id, au2.id);
 
     const { signAccessToken } = await import("../../src/utils/jwt");
@@ -171,7 +171,7 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
     const row = await db.appointment.findUniqueOrThrow({ where: { id: r.data.id } });
     expect(row.familyMemberId).toBeNull();
     expect(row.activeSlot).toBe(true);
-    expect(row.createdByUserId).toBe(ids.users[2]);
+    expect(row.createdByUserId).toBe(ids.assistantUser);
 
     const audit = await db.auditLog.findFirst({ where: { action: "WALK_IN_APPOINTMENT_CREATED", entityId: r.data.id } });
     expect(audit).not.toBeNull();
@@ -292,9 +292,12 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
   });
 
   it("لا وقت شاغر متبقٍّ اليوم ⇒ 409 NO_SLOT_TODAY دون إنشاء", async () => {
-    vi.setSystemTime(new Date(today.getTime() + 22 * HOUR + 58 * 60000)); // 23:58 بالجزائر: آخر فترة 23:54 مضت
+    vi.setSystemTime(new Date(today.getTime() + 22 * HOUR + 58 * 60000)); // 23:58 بالجزائر: آخر فترة مضت
+    // توكن موقَّع بعد تقديم الساعة، وإلا انتهت صلاحية توكن الإعداد (15 دقيقة) وأعاد 401 بدل 409.
+    const { signAccessToken } = await import("../../src/utils/jwt");
+    const lateToken = signAccessToken({ sub: ids.assistantUser, role: "ASSISTANT" } as any);
     const n = await countToday();
-    const r = await walkIn(body({ firstName: "متأخر" }));
+    const r = await walkIn(body({ firstName: "متأخر" }), lateToken);
     expect(r.status).toBe(409);
     expect(r.message).toMatch(/لا يوجد وقت شاغر اليوم/);
     expect(await countToday()).toBe(n);

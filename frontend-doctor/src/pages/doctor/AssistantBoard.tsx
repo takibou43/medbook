@@ -43,19 +43,25 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   const { showToast } = useToast();
   const qc = useQueryClient();
   const [date, setDate] = useState(() => new Date(Date.now() + 3600000).toISOString().slice(0, 10));
+  const today = new Date(Date.now() + 3600000).toISOString().slice(0, 10);
+  const appointmentDate = appointmentsView ? date : today;
   const [sound, setSound] = useState(false);
   const [dialog, setDialog] = useState<{ appointment: Appointment; target: NoShowTarget; mode: "call" | "final" } | null>(null);
   const audio = useRef<AudioContext | null>(null);
   const previous = useRef<Map<string, string | null>>(new Map());
   const queues = useQuery({ queryKey: ["assistant-queues", user?.id], queryFn: async () => (await api.get<{ data: DoctorQueue[] }>("/assistant/queues")).data.data, refetchInterval: ASSISTANT_QUEUE_POLL_MS, refetchIntervalInBackground: false, refetchOnWindowFocus: true });
-  const appointments = useQuery({ queryKey: ["assistant-appointments", user?.id, date], enabled: appointmentsView, queryFn: async () => (await api.get<{ data: BoardAppointment[] }>("/assistant/appointments", { params: { date } })).data.data, refetchInterval: 15000, refetchIntervalInBackground: false });
+  const appointments = useQuery({ queryKey: ["assistant-appointments", user?.id, appointmentDate], queryFn: async () => (await api.get<{ data: BoardAppointment[] }>("/assistant/appointments", { params: { date: appointmentDate } })).data.data, refetchInterval: 15000, refetchIntervalInBackground: false });
   useEffect(() => {
     if (!queues.data) return;
     const rows = queues.data.map(row => ({ doctorId: row.doctor.id, current: row.queue.current }));
     const calls = newlyCalled(rows, previous.current);
+    if (calls.length) showToast(`نداء جديد: ${calls.map(call => {
+      const doctor = queues.data.find(row => row.doctor.id === call.doctorId)!.doctor;
+      return `${patientName(call.current!)} — ${doctorName(doctor)}`;
+    }).join("؛ ")}`, "info");
     if (calls.length && sound) chime(audio.current);
     previous.current = callSignatures(rows);
-  }, [queues.data, sound]);
+  }, [queues.data, sound, showToast]);
   useEffect(() => () => { void audio.current?.close().catch(() => undefined); }, []);
   const action = useMutation({
     mutationFn: async ({ appointment, kind }: { appointment: Appointment; kind: "arrived" | "late" | AppointmentStatus }) => {
@@ -90,27 +96,49 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   }
   if (queues.isPending) return <Spinner />;
   if (queues.isError) return <div role="alert" className="card p-5">{apiErrorMessage(queues.error)} <Button onClick={() => void queues.refetch()}>إعادة المحاولة</Button></div>;
+  const activeCalls = queues.data.flatMap(({ doctor, queue }) => queue.current ? [{ doctor, appointment: queue.current }] : [])
+    .sort((a, b) => (b.appointment.calledAt ?? "").localeCompare(a.appointment.calledAt ?? ""));
+  // Use the faster queue response for today's current/waiting rows, keeping the
+  // full daily list (including pending/completed appointments) from its own API.
+  const liveAppointments = new Map(queues.data.flatMap(({ queue }) => [
+    ...(queue.current ? [queue.current] : []), ...queue.waiting, ...queue.late,
+  ]).map(appointment => [appointment.id, appointment]));
+  const list = (appointments.data ?? []).map(appointment => ({ ...appointment, ...(liveAppointments.get(appointment.id) ?? {}), doctor: appointment.doctor }));
   return <div className="space-y-5">
     <NoShowSmsDialog target={dialog?.target ?? null} mode={dialog?.mode} onClose={() => setDialog(null)} onConfirm={async () => { if (dialog) await action.mutateAsync({ appointment: dialog.appointment, kind: dialog.mode === "call" ? "late" : "NO_SHOW" }); }} />
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h1 className="text-2xl font-bold">{appointmentsView ? "مواعيد الأطباء" : "استقبال العيادة"}</h1><p className="mt-1 text-sm text-slate-600">جميع الأطباء المرتبطين بك في شاشة واحدة. تظهر نداءاتهم تلقائيًا.</p></div>
+      <div><h1 className="text-2xl font-bold">{appointmentsView ? "مواعيد الأطباء" : "استقبال العيادة"}</h1><p className="mt-1 text-sm text-slate-600">قائمة واحدة للمواعيد، والنداءات الجديدة تظهر أعلاها تلقائيًا.</p></div>
       <Button variant="outline" onClick={() => {
         if (!sound) { try { audio.current ??= new AudioContext(); chime(audio.current); } catch { showToast("المتصفح لا يدعم التنبيه الصوتي.", "error"); return; } }
         setSound(value => !value);
       }}>{sound ? <Bell /> : <BellOff />}{sound ? "إيقاف الصوت" : "تفعيل صوت النداء"}</Button>
     </div>
     {!queues.data.length && <p className="card p-5">لا يوجد أطباء مرتبطون بك حاليًا. تواصل مع مالك العيادة.</p>}
-    <section aria-label="نداءات الأطباء الحالية" aria-live="polite" className="grid gap-3 md:grid-cols-2">
-      {queues.data.map(({ doctor, queue }) => <div key={doctor.id} className={`rounded-xl border p-4 ${queue.current ? "border-green-300 bg-green-50" : "border-slate-200 bg-white"}`}>
-        <h2 className="font-bold">{doctorName(doctor)}</h2>
-        {queue.current ? <><p className="mt-3 flex items-center gap-2 text-lg font-bold text-green-800"><Megaphone className="h-5 w-5 shrink-0" />نادى على: {patientName(queue.current)}</p><p className="my-2 text-sm text-slate-600">{queue.current.calledAt && `وقت النداء: ${new Date(queue.current.calledAt).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" })}`}</p>{actions(queue.current)}</> : <p className="mt-3 text-sm text-slate-500">لا يوجد مريض منادى عليه الآن</p>}
-        <p className="mt-3 text-sm">في الانتظار: {queue.waiting.length + queue.late.length}</p>
-      </div>)}
+    <section aria-label="نداءات الأطباء الحالية" aria-live="polite" className="overflow-hidden rounded-xl border border-green-200 bg-green-50">
+      <h2 className="flex items-center gap-2 px-4 py-3 font-bold text-green-900"><Megaphone className="h-5 w-5" />النداءات الحالية{activeCalls.length > 0 && <span className="text-sm">({activeCalls.length})</span>}</h2>
+      {!activeCalls.length ? <p className="px-4 pb-3 text-sm text-slate-600">لا يوجد نداء حاليًا.</p> : <ul className="divide-y divide-green-200">
+        {activeCalls.map(({ doctor, appointment }) => <li key={doctor.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2.5">
+          <span className="font-bold text-green-900">{patientName(appointment)}</span>
+          <span className="text-sm text-green-800">{doctorName(doctor)}{appointment.calledAt && <span className="mr-3 text-xs text-slate-500">{new Date(appointment.calledAt).toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" })}</span>}</span>
+        </li>)}
+      </ul>}
     </section>
-    {appointmentsView ? <section className="space-y-3">
-      <label className="block font-semibold">تاريخ المواعيد<input aria-label="تاريخ المواعيد" className="input mt-2 block" type="date" value={date} onChange={event => { if (event.target.value) setDate(event.target.value); }} /></label>
-      {appointments.isPending ? <Spinner /> : appointments.isError ? <p role="alert">{apiErrorMessage(appointments.error)}</p> : !appointments.data.length ? <p className="card p-5">لا توجد مواعيد في هذا اليوم.</p> : appointments.data.map(a => <article key={a.id} className="card space-y-3 p-4"><div className="flex flex-wrap justify-between gap-2"><h3 className="font-bold">{patientName(a)}</h3><AppointmentStatusBadge status={a.status} /></div><p className="text-sm text-slate-600">{doctorName(a.doctor)} · {a.startTime}</p>{actions(a)}</article>)}
-    </section> : <section className="space-y-3"><h2 className="text-lg font-bold">طوابير اليوم</h2>{queues.data.map(({ doctor, queue }) => <section key={doctor.id} className="card space-y-3 p-4"><h3 className="font-bold">{doctorName(doctor)}</h3>{!(queue.ordered ?? [...queue.waiting, ...queue.late]).length && <p className="text-sm text-slate-500">لا يوجد مرضى في الانتظار.</p>}{(queue.ordered ?? [...queue.waiting, ...queue.late]).map((a, index) => <article key={a.id} className="space-y-2 border-t border-slate-100 pt-3"><div className="flex flex-wrap justify-between gap-2"><span className="font-semibold">{index + 1}. {patientName(a)}</span><AppointmentStatusBadge status={a.status} /></div><p className="text-sm text-slate-500">{a.startTime}{a.arrivedAt ? " · وصل إلى العيادة" : ""}</p>{actions(a)}</article>)}</section>)}</section>}
+    <section aria-label="قائمة المواعيد الموحدة" className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-bold">{appointmentsView ? "المواعيد" : "مواعيد اليوم"}</h2><p className="text-sm text-slate-500">الأطباء المرتبطون بك: {queues.data.length}</p></div>
+      {appointmentsView && <label className="block text-sm font-semibold">تاريخ المواعيد<input aria-label="تاريخ المواعيد" className="input mt-2 block" type="date" value={date} onChange={event => { if (event.target.value) setDate(event.target.value); }} /></label>}
+      {appointments.isPending ? <Spinner /> : appointments.isError ? <div role="alert">{apiErrorMessage(appointments.error)} <Button variant="outline" onClick={() => void appointments.refetch()}>إعادة المحاولة</Button></div> : !list.length ? <p className="card p-5">لا توجد مواعيد في هذا اليوم.</p> : <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div aria-hidden="true" className="hidden grid-cols-[5rem_1.3fr_1fr_7rem_1.5fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-500 lg:grid"><span>الوقت</span><span>المريض</span><span>الطبيب</span><span>الحالة</span><span>الإجراءات</span></div>
+        <ol className="divide-y divide-slate-100">
+          {list.map(a => <li key={a.id} className={`grid grid-cols-2 items-center gap-x-3 gap-y-2 px-4 py-3 lg:grid-cols-[5rem_1.3fr_1fr_7rem_1.5fr] ${a.status === "IN_PROGRESS" ? "bg-green-50/50" : ""}`}>
+            <span className="text-sm tabular-nums">{a.startTime}</span>
+            <span className="font-semibold">{patientName(a)}</span>
+            <span className="text-sm text-slate-600">{doctorName(a.doctor)}</span>
+            <div><AppointmentStatusBadge status={a.status} />{a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && <span className="mr-2 text-xs text-green-700">وصل</span>}</div>
+            <div className="col-span-2 lg:col-span-1">{actions(a)}</div>
+          </li>)}
+        </ol>
+      </div>}
+    </section>
     <p className="text-xs text-slate-500">تحديث النداءات تلقائيًا كل 4 ثوانٍ أثناء فتح هذه الشاشة.</p>
   </div>;
 }

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { AppointmentStatus } from "@prisma/client";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as service from "./appointments.service";
+import { createWalkIn } from "./walkIn.service";
 import { redactDoctorSecrets } from "../../lib/redact";
 import { ApiError } from "../../utils/ApiError";
 
@@ -67,4 +68,10 @@ export const callPatient = asyncHandler(async (req: Request, res: Response) => {
 export const markArrived = asyncHandler(async (req: Request, res: Response) => {
   const data = await service.markPatientArrived(req.user!.id, req.params.id, req.user!.role);
   res.json({ success: true, data });
+});
+
+// مريض حضر بدون موعد (للمساعد): 201 عند الإنشاء، و200 مع replayed=true عند إعادة نفس الطلب.
+export const walkIn = asyncHandler(async (req: Request, res: Response) => {
+  const { appointment, replayed } = await createWalkIn(req.user!.id, req.user!.role, req.body);
+  res.status(replayed ? 200 : 201).json({ success: true, data: { ...appointment, replayed } });
 });

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
 import { Role } from "@prisma/client";
-import { createAppointmentSchema, updateStatusSchema } from "./appointments.schema";
+import { createAppointmentSchema, updateStatusSchema, walkInSchema } from "./appointments.schema";
 import * as controller from "./appointments.controller";
 
 const router = Router();
@@ -10,6 +10,10 @@ router.use(authenticate);
 
 // POST /api/appointments — المريض فقط يحجز
 router.post("/", authorize(Role.PATIENT), validate({ body: createAppointmentSchema }), controller.create);
+
+// POST /api/appointments/walk-in — مريض حضر بدون موعد: المساعد وحده يسجّله من الاستقبال (ضيف بالاسم والهاتف،
+// اليوم، أول وقت شاغر، وصل الآن، بلا إشعارات). الطبيب يجدول مرضاه عبر «موعد العودة» لا من هنا.
+router.post("/walk-in", authorize(Role.ASSISTANT), validate({ body: walkInSchema }), controller.walkIn);
 
 // GET /api/appointments — يرجع مواعيد المستخدم الحالي (مريض أو طبيب) حسب الدور
 router.get("/", controller.listMine);

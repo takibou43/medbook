@@ -20,3 +20,24 @@ export const updateStatusSchema = z.object({
 });
 
 export type CreateAppointmentInput = z.infer<typeof createAppointmentSchema>;
+
+/**
+ * «مريض حضر بدون موعد» — المساعد يسجّله من الاستقبال (POST /api/appointments/walk-in).
+ * ضيف بالاسم والهاتف فقط: لا patientId ولا familyMemberId يُقبلان من العميل (strict)، ولا ربط بأي حساب
+ * اعتمادًا على الاسم أو الهاتف. idempotencyKey يمنع إنشاء موعدين عند النقر المزدوج أو إعادة الإرسال.
+ */
+export const walkInSchema = z
+  .object({
+    firstName: z.string().trim().min(2, "الاسم قصير جدًا").max(60, "الاسم طويل جدًا"),
+    lastName: z.string().trim().min(2, "اللقب قصير جدًا").max(60, "اللقب طويل جدًا"),
+    // نقبل المسافات والشرطات أثناء الكتابة ونحفظ الرقم بلا فواصل (نفس صيغة حجز الضيف: 0551234567).
+    phone: z
+      .string()
+      .transform((s) => s.replace(/[\s-]/g, ""))
+      .pipe(z.string().regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)")),
+    notes: z.string().trim().max(1000).optional(),
+    idempotencyKey: z.string().uuid("مفتاح الطلب غير صالح"),
+  })
+  .strict();
+
+export type WalkInInput = z.infer<typeof walkInSchema>;

@@ -77,7 +77,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     const today = new Date(Date.now() + 3600000).toISOString().slice(0, 10);
     const openDialog = (mode: "call" | "final") => {
       const d = queues.data?.find(row => row.doctor.id === a.doctorId)?.doctor;
-      setDialog({ appointment: a, mode, target: { id: a.id, patientName: patientName(a), doctorName: d ? doctorName(d) : undefined, phone: a.patient?.user?.phone ?? a.guestPhone, date: a.date, startTime: a.startTime, alreadyNoShow: a.status === "NO_SHOW" } });
+      setDialog({ appointment: a, mode, target: { id: a.id, patientName: patientName(a), doctorName: d ? `${d.firstName} ${d.lastName}` : undefined, phone: a.patient?.user?.phone ?? a.guestPhone, date: a.date, startTime: a.startTime, alreadyNoShow: a.status === "NO_SHOW" } });
     };
     return <div className="flex flex-wrap gap-2">
       {a.status === "PENDING" && <Button variant="outline" disabled={action.isPending} onClick={() => update(a, "CONFIRMED")}>تأكيد</Button>}

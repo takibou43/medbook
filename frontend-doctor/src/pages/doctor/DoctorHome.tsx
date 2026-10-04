@@ -250,9 +250,9 @@ export default function DoctorHome() {
     }
   }
 
-  function openFollowUp(a: Appointment) {
+  function openFollowUp(a: Appointment, focusId = a.id) {
     setMenuId(null);
-    setPendingFocusId(a.id);
+    setPendingFocusId(focusId);
     setFollowUpCtx({
       parentAppointmentId: a.id,
       beneficiaryName: beneficiaryName(a),
@@ -382,7 +382,7 @@ export default function DoctorHome() {
               <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-slate-600">لا يوجد مريض بالداخل الآن.</p>
             )}
 
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <div className="mt-4 flex gap-2">
               {current && (
                 <Button
                   className="flex-1"
@@ -393,26 +393,41 @@ export default function DoctorHome() {
                   <Check className="h-4 w-4" aria-hidden="true" /> إنهاء الكشف
                 </Button>
               )}
+              {current ? (
+                <Button
+                  className="flex-1"
+                  variant="outline"
+                  disabled={busy || !canScheduleFollowUp(current)}
+                  aria-describedby={!canScheduleFollowUp(current) ? "follow-up-hint" : undefined}
+                  onClick={() => openFollowUp(current, "current-card")}
+                >
+                  <CalendarPlus className="h-4 w-4" aria-hidden="true" /> جدولة موعد آخر
+                </Button>
+              ) : (
               <Button
                 className="flex-1"
                 variant="outline"
                 loading={callNext.isPending}
-                disabled={busy || !canCallNext}
+                disabled={busy || queue.isPending || queue.isError || !canCallNext}
                 aria-describedby="call-next-hint"
                 onClick={() => run(async () => { await callNext.mutateAsync(); }, "تمت مناداة المريض التالي.", "current-card")}
               >
-                استدعاء التالي <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                نادي المريض التالي <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </Button>
+              )}
             </div>
-            <p id="call-next-hint" className="mt-2 text-xs text-slate-500">
-              {queue.isError
+            {!current && <p id="call-next-hint" className="mt-2 text-xs text-slate-500">
+              {queue.isError || queue.isPending
                 ? "الاستدعاء غير متاح حتى يُحمَّل الطابور."
-                : current
-                ? "أنهِ الكشف أولاً: لا يمكن مناداة مريض آخر وهناك مريض بالداخل."
                 : nextList.length === 0
                 ? "لا يوجد مريض في الانتظار."
                 : "ينادى المريض الأول في ترتيب الطابور أدناه."}
-            </p>
+            </p>}
+            {current && !canScheduleFollowUp(current) && (
+              <p id="follow-up-hint" className="mt-2 text-xs text-slate-500">
+                جدولة موعد آخر تتطلب حساب مريض مرتبطًا بالحجز.
+              </p>
+            )}
           </section>
 
           {/* جدول اليوم */}

@@ -13,6 +13,7 @@ import { callSignatures, newlyCalled } from "../../lib/assistantCalls";
 import { RELATIONSHIP_LABELS } from "../../lib/features";
 import { appointmentActions } from "../../lib/doctorUi";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
+import { WalkInPanel, WALK_IN_NOTE } from "../../components/WalkInPanel";
 
 type DoctorQueue = { doctor: { id: string; firstName: string; lastName: string }; queue: QueueState };
 type BoardAppointment = Appointment & { doctor: DoctorQueue["doctor"] };
@@ -123,6 +124,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
         </li>)}
       </ul>}
     </section>
+    {!appointmentsView && <WalkInPanel doctors={queues.data.map(row => row.doctor)} />}
     <section aria-label="قائمة المواعيد الموحدة" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-bold">{appointmentsView ? "المواعيد" : "مواعيد اليوم"}</h2><p className="text-sm text-slate-500">الأطباء المرتبطون بك: {queues.data.length}</p></div>
       {appointmentsView && <label className="block text-sm font-semibold">تاريخ المواعيد<input aria-label="تاريخ المواعيد" className="input mt-2 block" type="date" value={date} onChange={event => { if (event.target.value) setDate(event.target.value); }} /></label>}
@@ -133,7 +135,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
             <span className="text-sm tabular-nums">{a.startTime}</span>
             <span className="font-semibold">{patientName(a)}</span>
             <span className="text-sm text-slate-600">{doctorName(a.doctor)}</span>
-            <div><AppointmentStatusBadge status={a.status} />{a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && <span className="mr-2 text-xs text-green-700">وصل</span>}</div>
+            <div><AppointmentStatusBadge status={a.status} />{a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && <span className="mr-2 text-xs text-green-700">وصل</span>}{a.notes?.startsWith(WALK_IN_NOTE) && <span className="mr-2 text-xs text-slate-500">حضر بدون موعد</span>}</div>
             <div className="col-span-2 lg:col-span-1">{actions(a)}</div>
           </li>)}
         </ol>

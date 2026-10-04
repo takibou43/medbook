@@ -13,6 +13,8 @@ import {
 } from "../../lib/slotAssign";
 import { DoctorQueueBusyError } from "../../lib/doctorLock";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
+import { assistantDoctorContext } from "../../lib/assistantDoctorContext";
+import { assistantDoctorWhere } from "../../lib/assistantScope";
 import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
 import { loadFinancialCreate } from "../../lib/clinicFinance";
 import { writeAudit } from "../../lib/audit";
@@ -100,9 +102,23 @@ async function findByKey(db: Prisma.TransactionClient, doctorId: string, key: st
   return db.appointment.findUnique({ where: { doctorId_idempotencyKey: { doctorId, idempotencyKey: key } }, select: WALK_IN_SELECT });
 }
 
+/**
+ * مساعد عيادة مرتبط بأكثر من طبيب يجب أن يحدد الطبيب صراحةً (X-Assistant-Doctor-Id) — لا نسجّل
+ * المريض بصمت عند «أول» طبيب في القائمة. الطبيب المحدد يُتحقق منه بعدها في resolveActingDoctorId
+ * (ارتباطات المساعد الفعلية ∩ أعضاء العيادة النشطين ⇒ وإلا 403). هذا تضييق فقط، لا توسيع.
+ */
+async function requireDoctorChoiceWhenMany(userId: string) {
+  if (assistantDoctorContext.getStore()) return;
+  const assistant = await prisma.assistant.findUnique({ where: { userId }, select: { clinicId: true, doctorId: true, allDoctors: true, allowedDoctorIds: true, isActive: true } });
+  if (!assistant?.clinicId || !assistant.isActive) return; // resolveActingDoctorId يرفض/يحل الباقي
+  const count = await prisma.doctor.count({ where: assistantDoctorWhere(assistant) });
+  if (count > 1) throw ApiError.badRequest("اختر الطبيب الذي سيُسجَّل له المريض.", { code: "DOCTOR_REQUIRED" });
+}
+
 export async function createWalkIn(userId: string, role: Role, input: WalkInInput) {
   // المسار محصور بالمساعد في الراوتر؛ نكرر الفحص هنا كي لا تُستدعى الخدمة من مكان آخر بدور مختلف.
   if (role !== Role.ASSISTANT) throw ApiError.forbidden();
+  await requireDoctorChoiceWhenMany(userId);
   const doctorId = await resolveActingDoctorId(userId, role);
 
   // إعادة إرسال سريعة (نقرة مزدوجة/انقطاع شبكة) لطلب نجح: نعيده دون لمس القفل.

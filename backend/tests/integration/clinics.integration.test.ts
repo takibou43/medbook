@@ -362,6 +362,37 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
     expect(await doctorIds()).toEqual([]);
     expect((await request(app).get("/api/appointments/queue").set(headers)).status).toBe(403);
   });
+  it("shows simultaneous doctor calls on one assistant board and revokes assignment immediately", async () => {
+    const o = await owner();
+    const joined = await accept(await invite(o.token));
+    const firstId = o.user.doctor.id; const secondId = joined.body.data.user.doctor.id;
+    const invitation = await request(app).post("/api/clinics/mine/assistants").set(bearer(o.token)).send({ email: email(), allDoctors: true });
+    const accepted = await request(app).post("/api/auth/register/assistant").send({ token: invitation.body.data.rawToken, password: "ClinicTest123!", firstName: "استقبال", lastName: "موحد" });
+    expect(accepted.status).toBe(201);
+    const headers = bearer(accepted.body.data.accessToken);
+    const today = new Date(Date.now() + 3600000).toISOString().slice(0, 10);
+    const createWaiting = (doctorId: string, name: string) => db.appointment.create({ data: { doctorId, date: new Date(today + "T00:00:00Z"), startTime: "23:00", endTime: "23:15", status: "CONFIRMED", type: "IN_PERSON", guestFirstName: name, guestLastName: "اختبار", guestPhone: "0550000000" } });
+    const [first, second] = await Promise.all([createWaiting(firstId, "مريض الأول"), createWaiting(secondId, "مريض الثاني")]);
+    const board = () => request(app).get("/api/assistant/queues").set({ ...headers, "X-Assistant-Doctor-Id": "stale-foreign-selection" });
+    expect((await board()).body.data.every((row: { queue: { current: unknown } }) => row.queue.current === null)).toBe(true);
+    expect((await request(app).post(`/api/appointments/${second.id}/arrived`).set({ ...headers, "X-Assistant-Doctor-Id": secondId })).status).toBe(200);
+    const called = await Promise.all([
+      request(app).post("/api/appointments/queue/next").set(bearer(sign({ sub: o.user.id, role: "DOCTOR" }))),
+      request(app).post("/api/appointments/queue/next").set(bearer(joined.body.data.accessToken)),
+    ]);
+    expect(called.map(response => response.status)).toEqual([200, 200]);
+    const response = await board(); expect(response.status).toBe(200);
+    expect(response.body.data.map((row: { queue: { current: { id: string } } }) => row.queue.current.id).sort()).toEqual([first.id, second.id].sort());
+    const all = await request(app).get(`/api/assistant/appointments?date=${today}`).set(headers);
+    expect(all.status).toBe(200); expect(all.body.data.map((row: { id: string }) => row.id).sort()).toEqual([first.id, second.id].sort());
+    expect((await request(app).get("/api/assistant/queues").set(bearer(o.token))).status).toBe(403);
+    expect((await request(app).get("/api/assistant/appointments?date=2026-02-30").set(headers)).status).toBe(400);
+    await db.assistant.update({ where: { id: accepted.body.data.user.assistant.id }, data: { allDoctors: false, allowedDoctorIds: [firstId] } });
+    expect((await board()).body.data.map((row: { doctor: { id: string } }) => row.doctor.id)).toEqual([firstId]);
+    expect((await request(app).get(`/api/assistant/appointments?date=${today}`).set(headers)).body.data.map((row: { id: string }) => row.id)).toEqual([first.id]);
+    expect((await request(app).post(`/api/appointments/${second.id}/arrived`).set({ ...headers, "X-Assistant-Doctor-Id": secondId })).status).toBe(403);
+    await db.appointment.deleteMany({ where: { id: { in: [first.id, second.id] } } });
+  });
   it("assigns clinic assistants to the selected doctor without leaking billing", async () => {
     const o = await owner(); const id = o.user.doctor.id;
     const invited = await request(app).post(`/api/clinics/mine/doctors/${id}/assistants`).set(bearer(o.token)).send({ email: email() });

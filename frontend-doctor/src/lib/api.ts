@@ -15,8 +15,6 @@ export const api = axios.create({
 
 let accessToken: string | null = localStorage.getItem("medbook_doctor_access_token");
 const assistantSelectionKey = "medbook_assistant_selected_doctor";
-export const selectedAssistantDoctor = () => sessionStorage.getItem(assistantSelectionKey);
-export function selectAssistantDoctor(id: string) { sessionStorage.setItem(assistantSelectionKey, id); }
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
@@ -31,8 +29,6 @@ export function getAccessToken() {
 api.interceptors.request.use((config) => {
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
-    const selected = selectedAssistantDoctor();
-    if (selected) config.headers["X-Assistant-Doctor-Id"] = selected;
   }
   return config;
 });

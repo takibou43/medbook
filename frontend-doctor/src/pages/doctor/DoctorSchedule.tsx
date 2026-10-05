@@ -5,7 +5,7 @@ import { api, apiErrorMessage } from "../../lib/api";
 import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
-import { Input, Select } from "../../components/ui/Input";
+import { Select } from "../../components/ui/Input";
 import { DateField } from "../../components/ui/DateField";
 import { formatDayAr } from "../../lib/doctorUi";
 

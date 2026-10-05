@@ -5,7 +5,7 @@ import * as clinicsService from "../clinics/clinics.service";
 import { issueTokens } from "../../lib/tokens";
 import { env } from "../../config/env";
 import * as profilesService from "./profiles.service";
-import { clearDoctorSession, clearPatientSession, setPatientSession } from "../../lib/sessionCookies";
+import { clearPatientSession, setPatientSession } from "../../lib/sessionCookies";
 
 function sanitizeUser(user: any) {
   const { passwordHash, ...rest } = user;

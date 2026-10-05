@@ -33,7 +33,7 @@ export function DashboardLayout({
   settingsStart?: number;
   clinicMode?: boolean;
 }) {
-  const { logout, user } = useAuth();
+  const { logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   // العنصر نشط إن طابق مساره (NavLink) أو كان المسار الحالي من صفحاته التابعة (activeFor).

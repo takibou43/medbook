@@ -4,7 +4,7 @@ import { algeriaToday, appointmentsLink, appointmentsCountAr, formatDayAr, forma
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { CalendarClock, CalendarCheck, CalendarDays, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Download, Printer, AlertTriangle, Wallet } from "lucide-react";
+import { CalendarClock, CalendarDays, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Download, Printer, AlertTriangle, Wallet } from "lucide-react";
 import { api } from "../../lib/api";
 import { StatCard } from "../../components/StatCard";
 import { Spinner } from "../../components/ui/States";

@@ -1,5 +1,5 @@
 import { PUBLIC_TERMS_SELECT, withPublicFee } from "../../lib/clinicFinance";
-import { Prisma, VerificationStatus, SubscriptionStatus, AppointmentStatus } from "@prisma/client";
+import { Prisma, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { maskLastName } from "../reviews/reviews.service";

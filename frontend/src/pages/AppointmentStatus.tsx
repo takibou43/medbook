@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Clock, MapPin, Phone, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { api } from "../lib/api";
+import { statusPollInterval } from "../lib/statusPolling";
 import { Spinner, EmptyState } from "../components/ui/States";
 
 // نُحدّث كل 20 ثانية: سريع بما يكفي ليشعر المريض أن الرقم حيّ، وخفيف بما يكفي
@@ -45,7 +46,7 @@ export default function AppointmentStatus() {
     queryKey: ["appointment-status", id],
     queryFn: async () => (await api.get<{ data: QueueStatus }>("/booking/status/" + id)).data.data,
     enabled: Boolean(id),
-    refetchInterval: STATUS_POLL_MS,
+    refetchInterval: query => statusPollInterval(query.state.data, STATUS_POLL_MS),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
     retry: false,

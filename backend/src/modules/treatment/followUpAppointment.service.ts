@@ -1,6 +1,6 @@
 import { loadFinancialCreate } from "../../lib/clinicFinance";
 import { safeErrorCode } from "../../lib/safeError";
-import { AppointmentStatus, Prisma, SubscriptionStatus, VerificationStatus } from "@prisma/client";
+import { AppointmentStatus, Prisma, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
 import { ApiError } from "../../utils/ApiError";

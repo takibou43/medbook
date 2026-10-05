@@ -203,9 +203,7 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
     const partialRecords = rows.filter(
       (r) => !r.guestFirstName || !r.guestLastName || !r.endTime || r.status !== "CONFIRMED"
     ).length;
-    const notifMismatch = created.userIds.filter(
-      (uid, i) => (notifications.find((n) => n.userId === uid)?._count._all ?? 0) !== rows.filter((r) => r.doctorId === created.doctorIds[i]).length
-    ).length;
+    const staffBookingNotifications = notifications.reduce((count, n) => count + n._count._all, 0);
 
     const report = {
       requests: TOTAL,
@@ -224,7 +222,7 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
       transactionErrors,
       gapsOrWrongOrderDoctors: gapsOrWrongOrder,
       partialRecords,
-      notificationMismatchDoctors: notifMismatch,
+      staffBookingNotifications,
       idleInTransaction: idleInTx[0]?.c,
       uniqueIndexPresent: uniqueIdx.length > 0,
     };
@@ -243,7 +241,7 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
     expect(report.transactionErrors).toBe(0);
     expect(report.gapsOrWrongOrderDoctors).toBe(0);
     expect(report.partialRecords).toBe(0);
-    expect(report.notificationMismatchDoctors).toBe(0);
+    expect(report.staffBookingNotifications).toBe(0);
     expect(report.idleInTransaction).toBe(0);
     for (const id of created.doctorIds) expect(rows.filter((r) => r.doctorId === id).length).toBe(PER_DOCTOR);
   }, 120000);

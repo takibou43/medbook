@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
-import { AlertTriangle, Bell, BellRing, CalendarPlus, CheckCircle2, Clock3, Info, MessageCircle, Phone, Search, UserCheck, X } from "lucide-react";
+import { AlertTriangle, CalendarPlus, CheckCircle2, Clock3, Info, MessageCircle, Phone, Search, UserCheck, X } from "lucide-react";
 import { useMyAppointments, useUpdateAppointmentStatus } from "../../hooks/useAppointments";
-import { useNewAppointmentAlert, requestNotificationPermission } from "../../hooks/useNewAppointmentAlert";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
 import { EmptyState, ErrorState, SkeletonRows } from "../../components/ui/States";
 import { DateField } from "../../components/ui/DateField";
@@ -333,14 +332,6 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
   );
   const updateStatus = useUpdateAppointmentStatus();
   const { showToast } = useToast();
-  const [notifOn, setNotifOn] = useState(typeof Notification !== "undefined" && Notification.permission === "granted");
-
-  // تنبيه فوري عند وصول حجز جديد أثناء فتح الصفحة (صوت + إشعار + رسالة).
-  const handleNew = useCallback(
-    (count: number) => showToast(count === 1 ? "وصلك حجز جديد!" : `وصلتك ${count} حجوزات جديدة!`, "success"),
-    [showToast]
-  );
-  useNewAppointmentAlert(appointments, handleNew);
 
   // بحث محلي بالاسم أو رقم الهاتف (الأرقام تُقارن بعد تجريدها من الفواصل)، ثم ترتيب
   // يدفع المواعيد التي فات وقتها إلى أسفل القائمة.
@@ -357,18 +348,6 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
       .filter(matches)
       .sort((a: any, b: any) => Number(hasTimePassed(a.date, a.startTime)) - Number(hasTimePassed(b.date, b.startTime)));
   }, [appointments, query]);
-
-  async function enableNotifications() {
-    const res = await requestNotificationPermission();
-    if (res === "granted") {
-      setNotifOn(true);
-      showToast("تم تفعيل إشعارات الحجوزات الجديدة.", "success");
-    } else if (res === "denied") {
-      showToast("الإشعارات محظورة في إعدادات المتصفح.", "error");
-    } else if (res === "unsupported") {
-      showToast("متصفحك لا يدعم الإشعارات.", "error");
-    }
-  }
 
   async function changeStatus(id: string, status: AppointmentStatus, appointment?: any) {
     if (updateStatus.isPending) return; // منع الإرسال المتكرر
@@ -438,18 +417,6 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
           <h1 className="text-2xl font-extrabold text-slate-900">إدارة المواعيد</h1>
           <LiveIndicator isFetching={isFetching} updatedAt={dataUpdatedAt} />
         </div>
-        <button
-          type="button"
-          onClick={enableNotifications}
-          disabled={notifOn}
-          className={clsx(
-            "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition",
-            notifOn ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-          )}
-        >
-          {notifOn ? <BellRing className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
-          {notifOn ? "الإشعارات مفعّلة" : "تفعيل إشعارات الحجوزات"}
-        </button>
       </header>
 
       {/* شريط الأدوات: بحث + فترة زمنية */}

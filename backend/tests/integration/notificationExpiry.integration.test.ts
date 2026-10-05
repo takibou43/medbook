@@ -7,7 +7,7 @@
  *  2) بعد نهاية اليوم: يختفي من القائمة ثم يُحذف دوريًا؛ إشعار موعد الغد والإشعار العام يبقيان.
  *  3) إشعار منتهٍ في القاعدة لا يعود عند فتح التطبيق (GET /api/notifications).
  *  4) لا إشعار (داخل التطبيق ولا Push) لموعد انتهى يومه، حتى لو تغيّرت حالته الآن.
- *  5) الحجز ينشئ إشعار الطبيب مرتبطًا بالموعد.
+ *  5) الحجز يُحفظ دون إشعار الطبيب أو Push للطاقم.
  *  6) تذكيرات الساعة/5 دقائق تحمل الموعد ووسمه ونهاية يومه.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
@@ -216,14 +216,14 @@ describe.skipIf(!TEST_URL)("انتهاء إشعارات الموعد بانته�
     expect(h.sendNotification).not.toHaveBeenCalled();
   });
 
-  it("5) الحجز: إشعار الطبيب مرتبط بالموعد وينتهي بنهاية يومه", async () => {
+  it("5) الحجز محفوظ دون إشعار للطبيب أو Push", async () => {
     const r = await call("POST", "/api/booking", { firstName: "مريض", lastName: "حجز", wilayaId: ids.wilaya, specialtyId: ids.specialty, doctorId: ids.doctor }, patientToken);
     expect(r.status).toBe(201);
     const appt = await db.appointment.findUnique({ where: { id: r.data.id } });
     const row = await db.notification.findFirst({ where: { userId: ids.doctorUser, appointmentId: appt!.id } });
-    expect(row).toBeTruthy();
-    expect(row!.type).toBe("APPOINTMENT_CREATED");
-    expect(row!.expiresAt!.toISOString()).toBe(expiry.appointmentDayEndsAt(appt!.date).toISOString());
+    expect(appt).not.toBeNull();
+    expect(row).toBeNull();
+    expect(h.sendNotification).not.toHaveBeenCalled();
   });
 
   it("6) تذكيرات Push (قبل ساعة / 5 دقائق) تحمل الموعد ووسمه ونهاية يومه — لموعد الغد نهاية الغد", async () => {
@@ -236,4 +236,20 @@ describe.skipIf(!TEST_URL)("انتهاء إشعارات الموعد بانته�
       expect(p.expiresAt).toBe(expiry.appointmentDayEndsAt(tomorrow).toISOString());
     }
   });
+  it("7) يخفي إشعارات المواعيد السابقة للطبيب والمساعد دون حذفها", async () => {
+    const assistant = await db.user.create({ data: { email: tag + "-quiet@test.local", passwordHash: "x", role: "ASSISTANT" } });
+    ids.userIds.push(assistant.id);
+    const { signAccessToken } = await import("../../src/utils/jwt");
+    const assistantToken = signAccessToken({ sub: assistant.id, role: "ASSISTANT" });
+    for (const [userId, token] of [[ids.doctorUser, doctorToken], [assistant.id, assistantToken]]) {
+      const old = await db.notification.create({ data: { userId, type: "APPOINTMENT_CREATED", title: "حجز قديم", message: "حجز" } });
+      const message = await db.notification.create({ data: { userId, type: "NEW_MESSAGE", title: "رسالة", message: "رسالة" } });
+      const response = await call("GET", "/api/notifications?unread=true", undefined, token);
+      expect(response.status).toBe(200);
+      expect(response.data.some((n: any) => n.id === old.id)).toBe(false);
+      expect(response.data.some((n: any) => n.id === message.id)).toBe(true);
+      expect(await db.notification.findUnique({ where: { id: old.id } })).not.toBeNull();
+    }
+  });
+
 });

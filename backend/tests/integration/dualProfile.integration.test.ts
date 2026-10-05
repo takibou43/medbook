@@ -615,8 +615,8 @@ describe.skipIf(!TEST_URL)("حساب بملفين مريض + طبيب (PostgreSQ
       const dList = (await call("GET", "/api/notifications", undefined, dt)).data as Array<{ type: string; appointmentId: string | null }>;
       expect(pList.map((n) => n.type).sort()).toEqual(["APPOINTMENT_CANCELLED", "NEW_DOCTOR_IN_AREA"]);
       expect(pList.find((n) => n.appointmentId)?.appointmentId).toBe(apptAsPatient.id);
-      expect(dList.map((n) => n.type).sort()).toEqual(["APPOINTMENT_CANCELLED", "NEW_MESSAGE"]);
-      expect(dList.find((n) => n.appointmentId)?.appointmentId).toBe(apptAsDoctor.id);
+      expect(dList.map((n) => n.type)).toEqual(["NEW_MESSAGE"]);
+      expect(dList.some((n) => n.appointmentId)).toBe(false);
 
       // حساب بملف واحد: كل إشعاراته تظهر كما كانت.
       const single = await registerDoctor({ verified: true });

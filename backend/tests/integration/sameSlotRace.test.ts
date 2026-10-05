@@ -238,10 +238,8 @@ describe.skipIf(!TEST_URL)("Race Condition — نفس الطبيب + نفس ال
     }
     expect(active).toHaveLength(rs.length + preExistingActive); // لا صفوف جزئية/يتيمة
     expect(await overlaps(doctor.id)).toBe(0); // لا تداخل مع أي موعد آخر (ولا مع المحجوز مسبقًا)
-    // إشعار الطبيب: واحد لكل حجز ويحمل الوقت المحجوز فعليًا لا الوقت المطلوب
-    expect(notifs).toHaveLength(ok.length);
-    const timeOf = new Map(ok.map((r) => [r.data.id as string, r.data.startTime as string]));
-    for (const n of notifs) expect(n.message).toContain(`الساعة ${timeOf.get(n.appointmentId!)}.`);
+    // الحجوزات المتزامنة محفوظة دون أي إشعارات حجز للطبيب.
+    expect(notifs).toHaveLength(0);
     return { ok, times };
   }
 

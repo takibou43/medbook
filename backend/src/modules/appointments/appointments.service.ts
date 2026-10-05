@@ -23,7 +23,6 @@ import { writeAudit } from "../../lib/audit";
 import { statusTimingError } from "../../lib/appointmentTiming";
 import { applyAppointmentPrice, loadFinancialCreate, patientPriceFor, PUBLIC_TERMS_SELECT, withAppointmentPrice } from "../../lib/clinicFinance";
 
-
 function addMinutes(hhmm: string, minutes: number): string {
   const [h, m] = hhmm.split(":").map(Number);
   const total = h * 60 + m + minutes;
@@ -113,21 +112,6 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
     throw err;
   }
   const appointment = reserved.result;
-
-  // الإشعار بعد اكتمال المعاملة وبالوقت المحجوز فعليًا (قد يختلف عن المطلوب)، وفشله لا يُفشل حجزًا محفوظًا.
-  try {
-    await createNotification(
-      doctor.userId,
-      "APPOINTMENT_CREATED",
-      "طلب حجز موعد جديد",
-      `لديك طلب حجز جديد من ${familyMember ? `${familyMember.firstName} ${familyMember.lastName}` : `${appointment.patient!.firstName} ${appointment.patient!.lastName}`} بتاريخ ${input.date} الساعة ${appointment.startTime}.`,
-      undefined,
-      undefined,
-      { id: appointment.id, date: appointment.date }
-    );
-  } catch (notifyErr) {
-    console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", safeErrorCode(notifyErr));
-  }
 
   return { ...applyAppointmentPrice(appointment, financial.create.priceDzd), requestedStartTime: input.startTime, shiftedFromRequested: reserved.shifted };
 }
@@ -527,7 +511,7 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
       message: `تم تأكيد موعدك مع د. ${updated.doctor.firstName} ${updated.doctor.lastName} بتاريخ ${updated.date.toISOString().slice(0, 10)} الساعة ${updated.startTime}.`,
     },
     CANCELLED: {
-      userId: role === "PATIENT" ? updated.doctor.userId : updated.patient?.userId,
+      userId: role === "PATIENT" ? undefined : updated.patient?.userId,
       title: "تم إلغاء الموعد",
       type: "APPOINTMENT_CANCELLED",
       message: `تم إلغاء الموعد بتاريخ ${updated.date.toISOString().slice(0, 10)} الساعة ${updated.startTime}.`,

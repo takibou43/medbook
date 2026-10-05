@@ -243,4 +243,8 @@ describe.skipIf(!TEST_URL)("اختيار اليوم والوقت الاختيا�
     expect(status.status).toBe(200);
     expect(status.data.startTime).toBe("09:00");
   });
+  it("9) جميع مسارات الحجز وإلغاء المريض تبقى صامتة للطبيب", async () => {
+    expect(await db.notification.count({ where: { userId: { in: ids.users }, type: { in: ["APPOINTMENT_CREATED", "APPOINTMENT_CANCELLED"] } } })).toBe(0);
+  });
+
 });

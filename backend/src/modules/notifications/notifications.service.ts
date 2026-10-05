@@ -103,15 +103,20 @@ const PATIENT_GENERAL_TYPES = ["NEW_DOCTOR_IN_AREA"];
 
 /**
  * حساب بملفين: كل واجهة ترى إشعاراتها فقط. إشعار الموعد يُنسب بملكية الموعد نفسه (مريضه أو طبيبه)،
- * والعام بالنوع. حساب بملف واحد لا يُطبَّق عليه أي فلتر (سلوكه كما كان تمامًا).
+ * والعام بالنوع. واجهة الطاقم لا تعرض إشعارات المواعيد، حتى للحساب ذي الملفين.
  */
 async function audienceFilter(userId: string, role?: Role): Promise<Prisma.NotificationWhereInput> {
+  const staffFilter: Prisma.NotificationWhereInput = { appointmentId: null, type: { not: { startsWith: "APPOINTMENT_" } } };
+  if (role === Role.ASSISTANT) return staffFilter;
   if (role !== Role.PATIENT && role !== Role.DOCTOR) return {};
   const u = await prisma.user.findUnique({ where: { id: userId }, select: { patient: { select: { id: true } }, doctor: { select: { id: true } } } });
+  if (role === Role.DOCTOR) {
+    return u?.patient && u?.doctor
+      ? { AND: [staffFilter, { type: { notIn: PATIENT_GENERAL_TYPES } }] }
+      : staffFilter;
+  }
   if (!u?.patient || !u?.doctor) return {};
-  return role === Role.PATIENT
-    ? { OR: [{ appointmentId: null, type: { in: PATIENT_GENERAL_TYPES } }, { appointment: { patientId: u.patient.id } }] }
-    : { OR: [{ appointmentId: null, type: { notIn: PATIENT_GENERAL_TYPES } }, { appointment: { doctorId: u.doctor.id } }] };
+  return { OR: [{ appointmentId: null, type: { in: PATIENT_GENERAL_TYPES } }, { appointment: { patientId: u.patient.id } }] };
 }
 
 export async function listForUser(userId: string, onlyUnread = false, now: Date = new Date(), role?: Role) {

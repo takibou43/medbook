@@ -1,4 +1,3 @@
-import { safeErrorCode } from "../../lib/safeError";
 import { AppointmentStatus, Prisma, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { applyAppointmentPrice, loadFinancialCreate, patientPriceFor, PUBLIC_TERMS_SELECT, withAppointmentPrice } from "../../lib/clinicFinance";
@@ -17,7 +16,6 @@ import {
 
 // أقصى انتظار في طابور الحجز لطبيب واحد قبل الرفض بـ503 (أقل من مهلة العميل 45 ثانية).
 const QUEUE_TURN_MAX_WAIT_MS = 30_000;
-import { createNotification } from "../notifications/notifications.service";
 import { GuestBookingInput, GuestSlotsQuery, AvailabilityQuery } from "./booking.schema";
 import { estimateSessionMinutes } from "../appointments/appointments.service";
 import { locateInQueue, DAY_QUEUE_STATUSES } from "../../lib/doctorQueue";
@@ -31,11 +29,6 @@ import { getDoctorAvailability as getDoctorDaySlots } from "../doctors/doctors.s
  */
 
 const SLOT_MINUTES = 20;
-
-// وصف صاحب الحجز في إشعار الطبيب: الضيف "(بدون حساب)" كما كان، والمريض المسجَّل "(حساب مريض)".
-function accountLabel(patientId: string | null): string {
-  return patientId ? "(حساب مريض)" : "(بدون حساب)";
-}
 
 /**
  * بيانات إضافية للحجز من حساب مريض: المستفيد (فرد عائلة تحقق الـcontroller من ملكيته) ومن أنشأ الموعد.
@@ -287,7 +280,7 @@ async function createAutoAssignedAppointment(
   try {
     // قراءة "أول دور شاغر" + إنشاء الموعد معًا داخل معاملة واحدة تحت قفل طابور هذا الطبيب،
     // فلا يستطيع طلب آخر لنفس الطبيب أخذ الدور نفسه بين القراءة والكتابة (كان هذا هو السباق).
-    const { appointment, slot } = await withDoctorQueueTurn(doctorId, QUEUE_TURN_MAX_WAIT_MS, async () => {
+    const { appointment } = await withDoctorQueueTurn(doctorId, QUEUE_TURN_MAX_WAIT_MS, async () => {
       // تحميل بيانات الطبيب وعلاقاته (نحو 6 استعلامات) *قبل* فتح المعاملة والقفل: لا تتأثر بالتسابق، وتركها
       // داخل القفل كانت تُطيل الجزء المتسلسل الوحيد في النظام. الخانتان تسمحان بتداخلها مع كتابة الطلب السابق.
       const doctor = await loadBookableDoctor(doctorId);
@@ -322,21 +315,6 @@ async function createAutoAssignedAppointment(
       { maxWait: 20000, timeout: 30000 }
       );
     });
-
-    // الإشعار بعد اكتمال المعاملة: فشله لا يجوز أن يجعل حجزًا محفوظًا يبدو فاشلًا (فيُعاد ويتكرر).
-    try {
-      await createNotification(
-        slot.doctor.userId,
-        "APPOINTMENT_CREATED",
-        "طلب حجز موعد جديد",
-        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} ${accountLabel(patientId)} بتاريخ ${slot.dateStr} الساعة ${slot.startTime}.`,
-        undefined,
-        undefined,
-        { id: appointment.id, date: slot.date }
-      );
-    } catch (notifyErr) {
-      console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", safeErrorCode(notifyErr));
-    }
 
     return appointment;
   } catch (err) {
@@ -410,19 +388,6 @@ async function createChosenDayAppointment(
     throw err;
   }
 
-  try {
-    await createNotification(
-      doctor.userId,
-      "APPOINTMENT_CREATED",
-      "طلب حجز موعد جديد",
-      `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} ${accountLabel(patientId)} بتاريخ ${dateStr} الساعة ${appointment.startTime}.`,
-      undefined,
-      undefined,
-      { id: appointment.id, date: appointment.date }
-    );
-  } catch (notifyErr) {
-    console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", safeErrorCode(notifyErr));
-  }
   return applyAppointmentPrice(appointment, financial.create.priceDzd);
 }
 
@@ -517,21 +482,6 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
     }
     const appointment = reserved.result;
 
-    // الإشعار بعد اكتمال المعاملة وبالوقت المحجوز فعليًا (قد يختلف عن المطلوب)، وفشله لا يُفشل حجزًا محفوظًا.
-    try {
-      await createNotification(
-        doctor.userId,
-        "APPOINTMENT_CREATED",
-        "طلب حجز موعد جديد",
-        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} ${accountLabel(patientId)} بتاريخ ${input.date} الساعة ${appointment.startTime}.`,
-        undefined,
-        undefined,
-        { id: appointment.id, date: appointment.date }
-      );
-    } catch (notifyErr) {
-      console.error("تعذّر إنشاء إشعار الحجز (الحجز محفوظ):", safeErrorCode(notifyErr));
-    }
-
     // requestedStartTime: ليعرف العميل أن الوقت نُقل تلقائيًا إن كان المطلوب قد حُجز.
     return { ...applyAppointmentPrice(appointment, financial.create.priceDzd), requestedStartTime: input.startTime, shiftedFromRequested: reserved.shifted };
   }
@@ -569,16 +519,6 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
         },
         include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
       });
-
-      await createNotification(
-        doctor.userId,
-        "APPOINTMENT_CREATED",
-        "طلب حجز موعد جديد",
-        `لديك طلب حجز جديد من ${input.firstName} ${input.lastName} ${accountLabel(patientId)} بتاريخ ${input.date} الساعة ${input.startTime}.`,
-        undefined,
-        undefined,
-        { id: appointment.id, date: appointment.date }
-      );
 
       return applyAppointmentPrice(appointment, financial.create.priceDzd);
     } catch (err) {
@@ -685,16 +625,6 @@ export async function cancelGuestAppointment(id: string, phone: string) {
     data: { status: AppointmentStatus.CANCELLED, ...RELEASE_SLOT_DATA },
     select: GUEST_PUBLIC_SELECT,
   });
-
-  await createNotification(
-    appointment.doctor.userId,
-    "APPOINTMENT_CANCELLED",
-    "تم إلغاء موعد",
-    `قام ${appointment.guestFirstName} ${appointment.guestLastName} (بدون حساب) بإلغاء موعده بتاريخ ${appointment.date.toISOString().slice(0, 10)} الساعة ${appointment.startTime}.`,
-    undefined,
-    undefined,
-    { id: appointment.id, date: appointment.date }
-  );
 
   return toGuestPublic(updated);
 }

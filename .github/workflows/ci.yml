@@ -69,7 +69,10 @@ jobs:
         run: npx vitest run --reporter=default --reporter=json --outputFile.json=vitest-report.json
       - name: Fail if any integration file was skipped
         run: node scripts/assert-integration-ran.mjs vitest-report.json
-      - run: npm run build
+      - name: Build with production dependencies (Render parity)
+        run: |
+          npm prune --omit=dev
+          npm run build
 
   frontend:
     runs-on: ubuntu-latest

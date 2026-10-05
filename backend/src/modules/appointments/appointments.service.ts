@@ -1,4 +1,6 @@
 import { assertNotOwnDoctor } from "../../lib/accountProfiles";
+import { singleFlight } from "../../lib/singleFlight";
+import { liveUpdates } from "../../lib/liveUpdates";
 import { safeErrorCode } from "../../lib/safeError";
 import { AppointmentStatus, Prisma, Role, SmsStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
@@ -638,22 +640,28 @@ async function requireDoctor(doctorUserId: string, role: Role) {
  */
 export async function getQueueForDoctor(doctorUserId: string, role: Role) {
   const doctor = await requireDoctor(doctorUserId, role);
-  await autoExpireStaleAppointments(doctor.id);
+  return queueReads(`${doctor.id}:${algeriaTodayUTCMidnight().toISOString()}:${liveUpdates.current()}`, () => readDoctorQueue(doctor.id));
+}
+
+const queueReads = singleFlight<Awaited<ReturnType<typeof readDoctorQueue>>>();
+
+async function readDoctorQueue(doctorId: string) {
+  await autoExpireStaleAppointments(doctorId);
 
   const today = todayRangeUTC();
   const [appointments, sessionEstimate, todayByStatus] = await Promise.all([
     prisma.appointment.findMany({
       where: {
-        doctorId: doctor.id,
+        doctorId,
         date: today,
         status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS] },
       },
       include: QUEUE_INCLUDE,
       orderBy: [{ startTime: "asc" }],
     }),
-    estimateSessionDetails(doctor.id),
+    estimateSessionDetails(doctorId),
     // ملخص مواعيد اليوم حسب الحالة — لتمييز الحالة الفارغة: لا مواعيد اليوم / لا منتظرين / اكتملت المواعيد.
-    prisma.appointment.groupBy({ by: ["status"], where: { doctorId: doctor.id, date: today }, _count: { _all: true } }),
+    prisma.appointment.groupBy({ by: ["status"], where: { doctorId, date: today }, _count: { _all: true } }),
   ]);
   const countOf = (st: AppointmentStatus) => todayByStatus.find((r) => r.status === st)?._count._all ?? 0;
   const todaySummary = {

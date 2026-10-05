@@ -8,6 +8,9 @@ import { syncTrialSubscriptions } from "./lib/trial";
 import { sweepStaleAppointmentsForAllDoctors } from "./modules/appointments/appointments.service";
 import { runReminderCycle } from "./modules/reminders/reminders.service";
 import { purgeExpiredNotifications } from "./modules/notifications/notifications.service";
+import { adaptiveJob } from "./lib/adaptiveJob";
+import { nextReminderDelay, nextTrialDelay } from "./lib/backgroundTiming";
+import { liveUpdates } from "./lib/liveUpdates";
 
 // كل 15 دقيقة: حذف إشعارات المواعيد التي انتهى يومها (العرض يستبعدها فورًا أصلًا).
 const NOTIFICATION_PURGE_INTERVAL_MS = 15 * 60 * 1000;
@@ -57,9 +60,7 @@ async function bootstrapAdminUser() {
   }
 }
 
-// مزامنة فترة التجربة المجانية: عند الإقلاع ثم كل خمس دقائق، حتى يُفتح الاشتراك تلقائيًا للطبيب
-// الذي سجّل لتوّه دون انتظار تدخلك، وحتى تتوقف الاشتراكات وحدها لحظة انتهاء التجربة.
-const TRIAL_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+// مزامنة الاشتراكات عند الإقلاع والتغييرات، وعند أقرب انتهاء، مع فحص احتياطي خلال ربع ساعة.
 
 // اعتماد الغياب عند انتهاء دوام الطبيب: القاعدة نفسها الموجودة في
 // autoExpireStaleAppointments، لكن مشغَّلة دوريًا لكل الأطباء حتى لا تنتظر أن يفتح
@@ -114,23 +115,25 @@ Promise.all([
   syncTrialSubscriptions(),
   sweepStaleAppointmentsForAllDoctors(),
 ]).finally(() => {
-  setInterval(() => {
-    void syncTrialSubscriptions();
-  }, TRIAL_SYNC_INTERVAL_MS);
+  const trialJob = adaptiveJob(syncTrialSubscriptions, nextTrialDelay);
+  liveUpdates.subscribe(() => trialJob.wake());
 
   // اعتماد "لم يحضر" لمن انتهى دوام طبيبه وهو غائب — بلا حذف أي سجل من قاعدة البيانات.
   setInterval(() => {
     void sweepStaleAppointmentsForAllDoctors();
   }, NO_SHOW_SWEEP_INTERVAL_MS);
 
-  // تذكيرات مواعيد المرضى (قبل ساعة وقبل 5 دقائق) — دقة الدقيقة ضرورية لتذكير الخمس دقائق.
+  // دقة الدقيقة قرب المواعيد؛ في الفترات الهادئة يتراجع الفحص مع استيقاظ فوري بعد أي تعديل.
   // الحالة كلها في قاعدة البيانات (AppointmentReminder)، فإعادة تشغيل الخادم لا تُضيع ولا تكرّر شيئًا:
   // الدورة التالية تكمل من حيث توقفت، والقيد الفريد + الحجز الذرّي يمنعان الإرسال المزدوج.
   if (env.reminders.enabled) {
     const intervalMs = Math.max(15_000, env.reminders.intervalMs || 60_000);
-    setInterval(() => {
-      runReminderCycle().catch((err) => console.error("تعذّر تشغيل دورة التذكيرات:", safeErrorCode(err)));
-    }, intervalMs);
+    const reminderJob = adaptiveJob(
+      () => runReminderCycle(),
+      () => nextReminderDelay(intervalMs),
+      intervalMs,
+    );
+    liveUpdates.subscribe(() => reminderJob.wake());
   }
 
   // إشعارات المواعيد تنتهي بانتهاء يوم الموعد (توقيت الجزائر): تُخفى فورًا بفلتر القراءة، وتُحذف هنا دوريًا.

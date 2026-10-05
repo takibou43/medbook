@@ -33,6 +33,7 @@
     "@types/node": "^20.14.2",
     "@types/web-push": "^3.6.3",
     "bcryptjs": "^2.4.3",
+    "compression": "^1.8.2",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
@@ -48,6 +49,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/compression": "^1.8.1",
     "@types/supertest": "^6.0.2",
     "supertest": "^7.0.0",
     "vitest": "^2.1.1"

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { Appointment } from "../types";
+import { useLiveUpdates } from "../context/LiveUpdatesContext";
+import { livePollInterval } from "../lib/livePolling";
 
 // طابور العيادة يتغيّر لحظيًا (حجز جديد، مريض دخل، آخر تأخّر)، فنُحدّثه أسرع من بقية
 // الصفحات — مع التوقف عندما يكون التبويب في الخلفية حتى لا نُرهق الخادم المجاني.
@@ -27,10 +29,11 @@ export interface QueueState {
 export const ASSISTANT_QUEUE_POLL_MS = 4000;
 
 export function useQueue(pollMs: number = QUEUE_POLL_MS) {
+  const live = useLiveUpdates();
   return useQuery({
     queryKey: ["queue"],
     queryFn: async () => (await api.get<{ data: QueueState }>("/appointments/queue")).data.data,
-    refetchInterval: pollMs,
+    refetchInterval: livePollInterval(live, pollMs),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });

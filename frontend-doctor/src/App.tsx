@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
+import { Spinner } from "./components/ui/States";
+import { PageLoadBoundary } from "./components/PageLoadBoundary";
 import { canManageClinic, canOpenClinic } from "./lib/clinicAccess";
 import {
   LayoutDashboard,
@@ -20,37 +22,37 @@ import { DashboardLayout } from "./components/layout/DashboardLayout";
 import { ProtectedRoute } from "./routes/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
 
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ApplyDoctor from "./pages/ApplyDoctor";
-import AssistantAcceptInvite from "./pages/AssistantAcceptInvite";
-import DoctorHome from "./pages/doctor/DoctorHome";
-import AssistantBoard from "./pages/doctor/AssistantBoard";
-import DoctorOverview from "./pages/doctor/DoctorOverview";
-import DoctorSettingsHub from "./pages/doctor/DoctorSettingsHub";
-import DoctorAppointments from "./pages/doctor/DoctorAppointments";
-import DoctorSchedule from "./pages/doctor/DoctorSchedule";
-import DoctorPatients from "./pages/doctor/DoctorPatients";
-import DoctorReviews from "./pages/doctor/DoctorReviews";
-import DoctorProfileSettings from "./pages/doctor/DoctorProfileSettings";
-import AssistantManagement from "./pages/doctor/AssistantManagement";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminUsers from "./pages/admin/AdminUsers";
-import AdminPatientBlocks from "./pages/admin/AdminPatientBlocks";
-import AdminDoctors from "./pages/admin/AdminDoctors";
-import AdminSpecialties from "./pages/admin/AdminSpecialties";
-import AdminWilayas from "./pages/admin/AdminWilayas";
-import AdminReviews from "./pages/admin/AdminReviews";
-import AdminAppointments from "./pages/admin/AdminAppointments";
-import AdminMessages from "./pages/admin/AdminMessages";
-import DoctorMessages from "./pages/doctor/DoctorMessages";
-import DoctorTreatmentPlans from "./pages/doctor/DoctorTreatmentPlans";
-import AdminReferrals from "./pages/admin/AdminReferrals";
-import AccountSettings from "./pages/AccountSettings";
-import ClinicRegister from "./pages/clinic/ClinicRegister";
-import ClinicManagement from "./pages/clinic/ClinicManagement";
-import ClinicDoctorInvite from "./pages/clinic/ClinicDoctorInvite";
-import AdminClinics from "./pages/admin/AdminClinics";
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const ApplyDoctor = lazy(() => import("./pages/ApplyDoctor"));
+const AssistantAcceptInvite = lazy(() => import("./pages/AssistantAcceptInvite"));
+const DoctorHome = lazy(() => import("./pages/doctor/DoctorHome"));
+const AssistantBoard = lazy(() => import("./pages/doctor/AssistantBoard"));
+const DoctorOverview = lazy(() => import("./pages/doctor/DoctorOverview"));
+const DoctorSettingsHub = lazy(() => import("./pages/doctor/DoctorSettingsHub"));
+const DoctorAppointments = lazy(() => import("./pages/doctor/DoctorAppointments"));
+const DoctorSchedule = lazy(() => import("./pages/doctor/DoctorSchedule"));
+const DoctorPatients = lazy(() => import("./pages/doctor/DoctorPatients"));
+const DoctorReviews = lazy(() => import("./pages/doctor/DoctorReviews"));
+const DoctorProfileSettings = lazy(() => import("./pages/doctor/DoctorProfileSettings"));
+const AssistantManagement = lazy(() => import("./pages/doctor/AssistantManagement"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminPatientBlocks = lazy(() => import("./pages/admin/AdminPatientBlocks"));
+const AdminDoctors = lazy(() => import("./pages/admin/AdminDoctors"));
+const AdminSpecialties = lazy(() => import("./pages/admin/AdminSpecialties"));
+const AdminWilayas = lazy(() => import("./pages/admin/AdminWilayas"));
+const AdminReviews = lazy(() => import("./pages/admin/AdminReviews"));
+const AdminAppointments = lazy(() => import("./pages/admin/AdminAppointments"));
+const AdminMessages = lazy(() => import("./pages/admin/AdminMessages"));
+const DoctorMessages = lazy(() => import("./pages/doctor/DoctorMessages"));
+const DoctorTreatmentPlans = lazy(() => import("./pages/doctor/DoctorTreatmentPlans"));
+const AdminReferrals = lazy(() => import("./pages/admin/AdminReferrals"));
+const AccountSettings = lazy(() => import("./pages/AccountSettings"));
+const ClinicRegister = lazy(() => import("./pages/clinic/ClinicRegister"));
+const ClinicManagement = lazy(() => import("./pages/clinic/ClinicManagement"));
+const ClinicDoctorInvite = lazy(() => import("./pages/clinic/ClinicDoctorInvite"));
+const AdminClinics = lazy(() => import("./pages/admin/AdminClinics"));
 import { useAdminUnread, useDoctorUnread, useUnreadToast } from "./hooks/useMessaging";
 
 // الروابط المشتركة بين الطبيب والمساعد (الصفحات التي يُسمح للمساعد برؤيتها فقط).
@@ -96,7 +98,6 @@ function DoctorAreaLayout() {
   useEffect(() => {
     document.title = isAssistant ? "مادبوك — لوحة المساعد" : "مادبوك — لوحة تحكم الطبيب";
   }, [isAssistant]);
-  const doctorName = user?.assistant?.doctor ? `${user.assistant.doctor.firstName} ${user.assistant.doctor.lastName}` : "";
   // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
   const unread = useDoctorUnread(!isAssistant && !!user);
   useUnreadToast(unread.data?.unread, () => "رسالة جديدة من الإدارة", "/messages?focus=unread");
@@ -140,6 +141,8 @@ function AdminAreaLayout() {
 
 export default function App() {
   return (
+    <PageLoadBoundary>
+    <Suspense fallback={<Spinner />}>
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
@@ -207,6 +210,8 @@ export default function App() {
 
       <Route path="*" element={<Login />} />
     </Routes>
+    </Suspense>
+    </PageLoadBoundary>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Copy, RefreshCcw, Ban, UserCog, Power, Link as LinkIcon } from "lucide-react";
+import { RefreshCcw, Ban, UserCog, Power, Link as LinkIcon } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";

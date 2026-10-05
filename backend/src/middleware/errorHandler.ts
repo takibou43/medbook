@@ -8,8 +8,7 @@ export function notFoundHandler(req: Request, res: Response) {
   res.status(404).json({ success: false, message: `المسار غير موجود: ${req.method} ${req.originalUrl}` });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
+export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
   // Zod validation errors
   if (err instanceof ZodError) {
     return res.status(400).json({

@@ -1,5 +1,5 @@
 import { safeErrorCode } from "../../lib/safeError";
-import { AppointmentStatus, Prisma, VerificationStatus, SubscriptionStatus } from "@prisma/client";
+import { AppointmentStatus, Prisma, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { applyAppointmentPrice, loadFinancialCreate, patientPriceFor, PUBLIC_TERMS_SELECT, withAppointmentPrice } from "../../lib/clinicFinance";
 import { ApiError } from "../../utils/ApiError";

@@ -53,8 +53,20 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   const [filter, setFilter] = useState({ doctorId: "", status: "", search: "" });
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => { clearInterval(timer); };
+    let timer: number | undefined;
+    const updateVisibility = () => {
+      window.clearInterval(timer);
+      timer = undefined;
+      if (document.hidden) return;
+      setNow(Date.now());
+      timer = window.setInterval(() => setNow(Date.now()), 1000);
+    };
+    updateVisibility();
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", updateVisibility);
+    };
   }, []);
   const [dialog, setDialog] = useState<{ appointment: Appointment; target: NoShowTarget; mode: "call" | "final" } | null>(null);
   const [missedCall, setMissedCall] = useState<Appointment | null>(null);

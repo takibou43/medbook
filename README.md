@@ -2,18 +2,18 @@
 
 منصة رقمية لحجز وإدارة المواعيد الطبية، موجهة للسوق الجزائري، بواجهة عربية RTL كاملة.
 
-Frontend: React + TypeScript + Vite + Tailwind CSS + TanStack Query + React Hook Form + Zod
+Frontend: React + TypeScript + Vite + Tailwind CSS + TanStack Query + React Hook Form
 Backend: Node.js + TypeScript + Express + Prisma ORM
 Database: PostgreSQL
 Auth: JWT (Access + Refresh) + Role-Based Access Control (PATIENT / DOCTOR / ADMIN)
 
-> ⚠️ **ملاحظة مهمة وشفافة**: تم بناء هذا المشروع بالكامل (الكود، مخطط قاعدة البيانات، الـ API، الواجهة) داخل بيئة عمل لا تملك صلاحية تشغيل Shell/Docker/PostgreSQL فعليًا على هذا الجهاز، لذلك **لم يُنفَّذ `npm install` ولا الاختبارات فعليًا من طرفي**. الكود مكتوب ومُراجَع يدويًا بعناية ليعمل مباشرة، لكن يجب عليك تشغيله محليًا باتّباع الخطوات أدناه للتأكد، وإخباري بأي خطأ يظهر لإصلاحه فورًا.
+فحوص المشروع موجودة في `.github/workflows/ci.yml`: بناء الأجزاء الثلاثة واختبارات الواجهتين والخادم، بما فيها اختبارات PostgreSQL في بيئة CI معزولة. نجاح الفحوص المحلية لا يؤكد حالة النسخة المنشورة؛ يجب التحقق من الحجز والصلاحيات على بيئة التشغيل قبل استقبال أطباء حقيقيين.
 
 ---
 
 ## 1. المتطلبات
 
-- Node.js 20+
+- Node.js 22.12 أو أحدث ضمن الإصدار 22 (وفق `backend/package.json`)
 - npm 10+
 - PostgreSQL 16 (أو Docker)
 
@@ -86,14 +86,15 @@ npm run dev                  # يشغّل الواجهة على http://localhost
 
 ```
 medbook/
-├── frontend/          # React + Vite + Tailwind (RTL)
+├── frontend/          # واجهة المرضى: React + Vite + Tailwind (RTL)
 │   └── src/
-│       ├── components/ui/     # Design System (Button, Input, Modal, Tabs...)
-│       ├── components/layout/ # Header, Footer, DashboardLayout
-│       ├── pages/              # public, patient/, doctor/, admin/
+│       ├── components/ui/     # العناصر المشتركة (Button, Input, States...)
+│       ├── components/layout/ # Header, Footer, Layout
+│       ├── pages/              # الحجز، حالة الموعد، العيادات، account/
 │       ├── hooks/               # React Query hooks
 │       ├── context/            # AuthContext
 │       └── lib/                # axios client, query client
+├── frontend-doctor/    # واجهة الطبيب والمساعد والعيادة والإدارة
 ├── backend/            # Express + TypeScript
 │   └── src/
 │       ├── modules/            # auth, doctors, appointments, admin, reviews...

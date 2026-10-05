@@ -1,6 +1,6 @@
 import { assertNotOwnDoctor } from "../../lib/accountProfiles";
 import { safeErrorCode } from "../../lib/safeError";
-import { AppointmentStatus, Prisma, Role, SubscriptionStatus, SmsStatus } from "@prisma/client";
+import { AppointmentStatus, Prisma, Role, SmsStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { isWithinWorkingHours, isPast, algeriaTodayUTCMidnight, closingTimeForDate } from "../../lib/slots";
@@ -12,7 +12,7 @@ import { CreateAppointmentInput } from "./appointments.schema";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
 import { latePenaltyFor, pickNext, projectQueueOrder } from "../../lib/queueOrder";
 import { assertPatientCanBook, evaluateAutoBlockSafe } from "../patientBlocks/patientBlocks.service";
-import { SLOT_OCCUPYING_WHERE, RELEASE_SLOT_DATA } from "../../lib/slotOccupancy";
+import { RELEASE_SLOT_DATA } from "../../lib/slotOccupancy";
 import { appointmentNotificationTag } from "../../lib/appointmentExpiry";
 import { beneficiaryOf, FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
 import { syncDentalFollowUps, syncDentalFollowUpsSafe } from "../../lib/dentalFollowUpSync";

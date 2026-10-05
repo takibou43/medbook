@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, BellOff } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import { useLiveUpdates } from "../../context/LiveUpdatesContext";
+import { livePollInterval } from "../../lib/livePolling";
 import { useToast } from "../../components/ui/Toast";
 import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/States";
@@ -43,6 +45,7 @@ function chime(context: AudioContext | null) {
 }
 
 export default function AssistantBoard({ appointmentsView = false }: { appointmentsView?: boolean }) {
+  const live = useLiveUpdates();
   const { user } = useAuth();
   const { showToast } = useToast();
   const qc = useQueryClient();
@@ -74,10 +77,10 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   const advancing = useRef(false);
   const audio = useRef<AudioContext | null>(null);
   const previous = useRef<Map<string, string | null>>(new Map());
-  const queues = useQuery({ queryKey: ["assistant-queues", user?.id], queryFn: async () => (await api.get<{ data: DoctorQueue[] }>("/assistant/queues")).data.data, retry: false, refetchInterval: ASSISTANT_QUEUE_POLL_MS, refetchIntervalInBackground: false, refetchOnWindowFocus: true });
-  const appointments = useQuery({ queryKey: ["assistant-appointments", user?.id, appointmentDate], queryFn: async () => (await api.get<{ data: BoardAppointment[] }>("/assistant/appointments", { params: { date: appointmentDate } })).data.data, retry: false, refetchInterval: 15000, refetchIntervalInBackground: false });
+  const queues = useQuery({ queryKey: ["assistant-queues", user?.id], queryFn: async () => (await api.get<{ data: DoctorQueue[] }>("/assistant/queues")).data.data, retry: false, refetchInterval: livePollInterval(live, ASSISTANT_QUEUE_POLL_MS), refetchIntervalInBackground: false, refetchOnWindowFocus: true });
+  const appointments = useQuery({ queryKey: ["assistant-appointments", user?.id, appointmentDate], queryFn: async () => (await api.get<{ data: BoardAppointment[] }>("/assistant/appointments", { params: { date: appointmentDate } })).data.data, retry: false, refetchInterval: livePollInterval(live, 15000), refetchIntervalInBackground: false });
   // المدخول اليومي: للصفحة الرئيسية فقط، إجمالي اليوم لأطباء المساعد المرتبطين (لا نسب ولا أسعار أطباء).
-  const income = useQuery({ queryKey: ["assistant-daily-income", user?.id], enabled: !appointmentsView, queryFn: async () => (await api.get<{ data: { totalDzd: number; completedCount: number } }>("/assistant/daily-income")).data.data, retry: false, refetchInterval: 30000, refetchIntervalInBackground: false, refetchOnWindowFocus: true });
+  const income = useQuery({ queryKey: ["assistant-daily-income", user?.id], enabled: !appointmentsView, queryFn: async () => (await api.get<{ data: { totalDzd: number; completedCount: number } }>("/assistant/daily-income")).data.data, retry: false, refetchInterval: livePollInterval(live, 30000), refetchIntervalInBackground: false, refetchOnWindowFocus: true });
   useEffect(() => {
     if (!queues.data) return;
     const rows = queues.data.map(row => ({ doctorId: row.doctor.id, current: row.queue.current }));

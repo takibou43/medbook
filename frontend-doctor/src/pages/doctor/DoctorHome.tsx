@@ -5,6 +5,8 @@ import clsx from "clsx";
 import { AlertTriangle, ArrowLeft, CalendarClock, CalendarPlus, Check, CheckCircle2, Hourglass, MoreHorizontal, Search } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import { useLiveUpdates } from "../../context/LiveUpdatesContext";
+import { livePollInterval } from "../../lib/livePolling";
 import { useToast } from "../../components/ui/Toast";
 import { Spinner } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
@@ -162,6 +164,7 @@ function RowActionsMenu({
 }
 
 export default function DoctorHome() {
+  const live = useLiveUpdates();
   const { user } = useAuth();
   const { showToast } = useToast();
   const qc = useQueryClient();
@@ -172,7 +175,7 @@ export default function DoctorHome() {
   const stats = useQuery({
     queryKey: ["doctor-dashboard"],
     queryFn: async () => (await api.get("/doctor/dashboard")).data.data,
-    refetchInterval: 30000,
+    refetchInterval: livePollInterval(live, 30000),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });

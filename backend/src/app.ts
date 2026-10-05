@@ -3,6 +3,9 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
+import { clinicalCompression } from "./middleware/clinicalCompression";
+import liveRoutes from "./modules/live/live.routes";
+import { liveInvalidation } from "./middleware/liveInvalidation";
 import { env } from "./config/env";
 import { ApiError } from "./utils/ApiError";
 import { apiLimiter } from "./middleware/rateLimiter";
@@ -59,9 +62,13 @@ export function createApp() {
   );
   app.use(express.json({ limit: "2mb" }));
   app.use(cookieParser());
+  // Compress large clinical list responses, excluding credential/invitation routes.
+  app.use(clinicalCompression);
+  app.use("/api", liveInvalidation);
   // Paths/queries can contain invite tokens, patient identifiers or phone numbers.
   if (!env.isProd) app.use(morgan(":method :status :response-time ms - :res[content-length]"));
   app.use("/api", apiLimiter);
+  app.use("/api/live", liveRoutes);
 
   app.get("/health", (_req, res) => res.json({ success: true, message: "MedBook API يعمل بنجاح 🩺" }));
 

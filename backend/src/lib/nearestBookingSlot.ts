@@ -6,7 +6,7 @@ export interface BookingRange extends BookedRange {
 }
 
 /** Today's completed visits no longer block their scheduled duration, but legacy unique keys remain reserved. */
-export function nearestBookingSlot(date: Date, schedules: ScheduleBlock[], booked: BookingRange[], duration: number, queueEmpty: boolean, nowMs = Date.now()): string | null {
+export function nearestBookingSlot(date: Date, schedules: ScheduleBlock[], booked: BookingRange[], duration: number, queueEmpty: boolean, nowMs = Date.now(), excludedStarts: ReadonlySet<string> = new Set()): string | null {
   const localNow = new Date(nowMs + ALGERIA_OFFSET_MINUTES * 60000);
   const today = localNow.toISOString().slice(0, 10);
   const day = date.toISOString().slice(0, 10);
@@ -20,10 +20,10 @@ export function nearestBookingSlot(date: Date, schedules: ScheduleBlock[], booke
   if (day === today && (queueEmpty || completed.length > 0)) {
     for (let start = from; start + duration < 1440; start++) {
       const format = (value: number) => `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
-      if (!reservedStarts.has(format(start)) && isWithinWorkingHours(date, format(start), format(start + duration), schedules)
+      if (!excludedStarts.has(format(start)) && !reservedStarts.has(format(start)) && isWithinWorkingHours(date, format(start), format(start + duration), schedules)
         && !occupied.some(range => start < minutes(range.endTime) && minutes(range.startTime) < start + duration)) return format(start);
     }
     return null;
   }
-  return grid.find(time => minutes(time) >= from && !reservedStarts.has(time)) ?? null;
+  return grid.find(time => minutes(time) >= from && !reservedStarts.has(time) && !excludedStarts.has(time)) ?? null;
 }

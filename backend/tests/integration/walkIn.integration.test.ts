@@ -385,6 +385,33 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
     expect(await countToday()).toBe(n + 1);
   });
 
+  it("حجز المساعد الآلي يعيد استخدام فترة مكتملة مبكرًا، ويحمي المفتاح القديم والحجز الجديد", async () => {
+    vi.setSystemTime(new Date(today.getTime() + 13 * HOUR + 14 * 60000 + 30000)); // 14:14:30 Algeria
+    const historical = await db.appointment.create({ data: {
+      doctorId: ids.doctor, date: today, startTime: "14:15", endTime: "23:59", status: "COMPLETED",
+      guestFirstName: "قديم", guestLastName: "مكتمل", activeSlot: true, endedAt: new Date(),
+    } });
+    try {
+      const firstBody = body({ firstName: "أقرب" });
+      const first = await walkIn(firstBody);
+      expect(first.status).toBe(201);
+      expect(first.data.startTime).toBe("14:16");
+      expect(first.data.endTime).toBe("14:21");
+      expect(new Date(first.data.date).getTime()).toBe(today.getTime());
+      const replay = await walkIn(firstBody);
+      expect(replay.status).toBe(200);
+      expect(replay.data.id).toBe(first.data.id);
+      const next = await walkIn(body({ firstName: "بعده" }));
+      expect(next.status).toBe(201);
+      expect(next.data.startTime).toBe("14:21");
+      expect((await db.appointment.findUniqueOrThrow({ where: { id: historical.id } })).status).toBe("COMPLETED");
+      expect(h.sendNotification).not.toHaveBeenCalled();
+      expect(h.sendSms).not.toHaveBeenCalled();
+    } finally {
+      await db.appointment.delete({ where: { id: historical.id } });
+    }
+  });
+
   it("لا وقت شاغر متبقٍّ اليوم ⇒ 409 NO_SLOT_TODAY دون إنشاء", async () => {
     vi.setSystemTime(new Date(today.getTime() + 22 * HOUR + 58 * 60000)); // 23:58 بالجزائر: آخر فترة مضت
     // توكن موقَّع بعد تقديم الساعة، وإلا انتهت صلاحية توكن الإعداد (15 دقيقة) وأعاد 401 بدل 409.

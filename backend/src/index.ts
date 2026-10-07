@@ -1,3 +1,4 @@
+import { isKeepAwakeWindow } from "./lib/awakeWindow";
 import { safeErrorCode } from "./lib/safeError";
 import { createApp } from "./app";
 import { env } from "./config/env";
@@ -65,37 +66,19 @@ async function bootstrapAdminUser() {
 // احتياطيًا لإيقاظه إن نام فعلًا (فالنائم لا يستطيع طرق نفسه). RENDER_EXTERNAL_URL تضبطها منصة الاستضافة تلقائيًا.
 const SELF_PING_INTERVAL_MS = 10 * 60 * 1000;
 
-// نافذة الإبقاء مستيقظًا بتوقيت الجزائر (UTC+1 بلا توقيت صيفي): من الخامسة صباحًا حتى منتصف الليل.
-// السبب: الخطة المجانية تمنح 750 ساعة تشغيل شهريًا لكامل مساحة العمل، وإبقاؤه مستيقظًا 24/24
-// يستهلك 744 ساعة في الشهر ذي 31 يومًا — هامش 6 ساعات فقط، وتجاوزه يوقف الخدمة إلى بداية الشهر التالي.
-// بهذه النافذة (19 ساعة يوميًا) ينخفض الاستهلاك إلى نحو 589 ساعة، مع بقاء الموقع سريعًا طوال ساعات العيادة.
-// من يفتح الموقع ليلًا يوقظ الخادم بنفسه (مع انتظار أول طلب قرابة 40 ثانية، والمهلة 45).
-const AWAKE_FROM_HOUR = 5;
-// يوم الجمعة: العيادات مغلقة صباحًا، فلا داعي لإبقاء الخادم مستيقظًا — يبدأ من الخامسة مساءً.
-const FRIDAY_AWAKE_FROM_HOUR = 17;
-const FRIDAY = 5; // 0 = الأحد وفق ترقيم JavaScript
-const ALGERIA_UTC_OFFSET_MS = 60 * 60 * 1000;
-
-// وقت الجزائر الآن كـDate مزاحة، حتى نقرأ اليوم والساعة من مرجع واحد متسق: لو قرأنا اليوم
-// بتوقيت UTC والساعة بتوقيت الجزائر لاختلفا بين الساعة 23:00 ومنتصف الليل بتوقيت UTC.
-function algeriaNow(): Date {
-  return new Date(Date.now() + ALGERIA_UTC_OFFSET_MS);
-}
-
+// يتوقف الإبقاء التلقائي مستيقظًا عند 18:00 بتوقيت الجزائر.
+// زيارة المستخدم بعد ذلك تظل قادرة على إيقاظ الخادم.
 function startSelfPing() {
   const baseUrl = process.env.RENDER_EXTERNAL_URL;
   if (!baseUrl) return;
 
   setInterval(() => {
-    const now = algeriaNow();
-    const startHour = now.getUTCDay() === FRIDAY ? FRIDAY_AWAKE_FROM_HOUR : AWAKE_FROM_HOUR;
-    // النافذة تمتد دائمًا حتى منتصف الليل، فيكفي التحقق من بدايتها.
-    if (now.getUTCHours() < startHour) return;
+    if (!isKeepAwakeWindow(new Date())) return;
     fetch(baseUrl + "/health").catch(() => undefined);
   }, SELF_PING_INTERVAL_MS);
 
   console.log(
-    "⏰ الطرق الذاتي مفعّل: من " + AWAKE_FROM_HOUR + ":00 حتى منتصف الليل، ومن " + FRIDAY_AWAKE_FROM_HOUR + ":00 يوم الجمعة (توقيت الجزائر)."
+    "⏰ الطرق الذاتي مفعّل: 07:30–18:00 يوميًا (توقيت الجزائر)."
   );
 }
 

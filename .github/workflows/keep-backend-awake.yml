@@ -13,10 +13,10 @@ on:
   schedule:
     # التوقيت هنا بـUTC، والجزائر UTC+1. نوافق نافذة الخادم حتى لا توقظه هذه المهمة ليلًا
     # فتستهلك ساعات التشغيل المجانية دون فائدة.
-    # السبت–الخميس: من 05:00 إلى منتصف الليل بتوقيت الجزائر
-    - cron: "*/5 4-22 * * 0,1,2,3,4,6"
-    # الجمعة: من 17:00 إلى منتصف الليل بتوقيت الجزائر
-    - cron: "*/5 16-22 * * 5"
+    # السبت–الخميس: من 05:00 إلى 18:00 بتوقيت الجزائر
+    - cron: "*/5 4-16 * * 0,1,2,3,4,6"
+    # الجمعة: من 17:00 إلى 18:00 بتوقيت الجزائر
+    - cron: "*/5 16 * * 5"
   workflow_dispatch:
 
 jobs:
@@ -26,6 +26,15 @@ jobs:
       - name: Ping health endpoint
         run: |
           for attempt in 1 2 3; do
+            # Check execution time, not scheduled time: delayed/manual runs must not wake it at night.
+            utc_hour=$((10#$(date -u +%H)))
+            utc_day=$(date -u +%u)
+            start_hour=4
+            if [ "$utc_day" = "5" ]; then start_hour=16; fi
+            if [ "$utc_hour" -lt "$start_hour" ] || [ "$utc_hour" -ge 17 ]; then
+              echo "Outside keep-awake hours (Algeria); skipping ping."
+              exit 0
+            fi
             code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 90 https://medbook-xg66.onrender.com/health || echo "000")
             echo "Attempt $attempt -> HTTP $code"
             if [ "$code" = "200" ]; then

@@ -56,7 +56,7 @@ export function buildNoShowMessage(parts: {
   if (time) when.push(`على الساعة ${time}`);
 
   return [
-    doctorName ? `مادبوك - د. ${doctorName}` : "مادبوك",
+    doctorName ? `MedBook - د. ${doctorName}` : "MedBook",
     "",
     patientName ? `عزيزي/عزيزتي ${patientName}،` : "عزيزي/عزيزتي المريض،",
     `لقد حان موعدكم${doctorName ? ` مع الدكتور ${doctorName}` : ""}${when.length ? " " + when.join(" ") : ""}، ولم يتم تسجيل حضوركم.`,
@@ -77,7 +77,7 @@ export function buildQueueCallMessage(parts: { doctorName?: string | null; patie
   const patientName = clean(parts.patientName);
 
   return [
-    doctorName ? `مادبوك - د. ${doctorName}` : "مادبوك",
+    doctorName ? `MedBook - د. ${doctorName}` : "MedBook",
     "",
     patientName ? `السلام عليكم ${patientName}،` : "السلام عليكم،",
     `نحيطكم علمًا بأن دوركم لدى ${doctorName ? `د. ${doctorName}` : "الطبيب"} قد حان. يرجى التوجه إلى العيادة في أقرب وقت.`,

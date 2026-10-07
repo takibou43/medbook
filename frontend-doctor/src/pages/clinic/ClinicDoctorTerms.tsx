@@ -50,7 +50,7 @@ export default function ClinicDoctorTerms({ doctorId, terms, onSaved }: { doctor
       <div className="flex gap-3"><Button type="submit" loading={saving}>حفظ</Button><button type="button" onClick={() => { setEditing(false); setError(""); }}>إلغاء</button></div>
     </form>}
     {example && <p className="mt-2 text-sm text-slate-700">{example}</p>}
-    <p className="mt-1 text-xs text-slate-500">هذه النسبة خاصة بإيراد المواعيد، ومنفصلة عن اشتراك مادبوك. لا يراها الأطباء الآخرون.</p>
+    <p className="mt-1 text-xs text-slate-500">هذه النسبة خاصة بإيراد المواعيد، ومنفصلة عن اشتراك MedBook. لا يراها الأطباء الآخرون.</p>
     {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
     {done && <p role="status" className="mt-2 text-sm text-primary-800">{done}</p>}
   </div>;

@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "مادبوك — لوحة الطبيب",
-  "short_name": "مادبوك طبيب",
+  "name": "MedBook — لوحة الطبيب",
+  "short_name": "MedBook طبيب",
   "description": "منصة حجز وإدارة المواعيد الطبية",
   "lang": "ar",
   "dir": "rtl",

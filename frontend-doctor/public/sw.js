@@ -1,4 +1,4 @@
-// ===== مادبوك — لوحة الطبيب — Service Worker (بدون أي مكتبة خارجية) =====
+// ===== MedBook — لوحة الطبيب — Service Worker (بدون أي مكتبة خارجية) =====
 // يحتوي إضافةً إلى منطق الكاش على معالِجات إشعارات الويب (Web Push) الخاصة بالطبيب.
 //
 // المبادئ التي بُني عليها هذا الملف:
@@ -165,7 +165,7 @@ self.addEventListener("push", (event) => {
     return;
   }
 
-  const title = data.title || "مادبوك";
+  const title = data.title || "MedBook";
   const options = {
     body: data.body || "افتح اللوحة لعرض التفاصيل.",
     icon: "/icons/icon-192.png",

@@ -96,7 +96,7 @@ function DoctorAreaLayout() {
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
   useEffect(() => {
-    document.title = isAssistant ? "مادبوك — لوحة المساعد" : "مادبوك — لوحة تحكم الطبيب";
+    document.title = isAssistant ? "MedBook — لوحة المساعد" : "MedBook — لوحة تحكم الطبيب";
   }, [isAssistant]);
   // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
   const unread = useDoctorUnread(!isAssistant && !!user);

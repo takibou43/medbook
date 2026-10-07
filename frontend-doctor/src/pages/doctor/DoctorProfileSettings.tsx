@@ -158,7 +158,7 @@ export default function DoctorProfileSettings() {
         </div>
         {priceLocked && (
           <p className="rounded-xl bg-primary-50 p-3 text-sm text-primary-900" role="note">
-            سعر الموعد ونسبتك يحددهما مدير {clinicTerms?.clinicName ? `عيادة «${clinicTerms.clinicName}»` : "العيادة"}، ولا يمكنك تعديلهما من هنا. نسبتك من قيمة الموعد: <strong>{formatPercent(clinicTerms?.doctorSharePercent)}</strong>، ونسبة العيادة: <strong>{formatPercent(clinicTerms?.clinicSharePercent)}</strong>. هذه النسبة خاصة بإيراد المواعيد ومنفصلة عن اشتراك مادبوك.
+            سعر الموعد ونسبتك يحددهما مدير {clinicTerms?.clinicName ? `عيادة «${clinicTerms.clinicName}»` : "العيادة"}، ولا يمكنك تعديلهما من هنا. نسبتك من قيمة الموعد: <strong>{formatPercent(clinicTerms?.doctorSharePercent)}</strong>، ونسبة العيادة: <strong>{formatPercent(clinicTerms?.clinicSharePercent)}</strong>. هذه النسبة خاصة بإيراد المواعيد ومنفصلة عن اشتراك MedBook.
           </p>
         )}
         <Input label="رقم الهاتف" {...register("phone")} />

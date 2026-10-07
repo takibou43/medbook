@@ -79,7 +79,7 @@ export default function Login() {
           </a>
         </p>
         <p className="mt-2 text-center text-xs leading-5 text-slate-500">
-          لديك حساب مريض في مادبوك؟ سجّل الدخول هنا بنفس البريد وكلمة المرور، ثم قدّم طلبك كطبيب من داخل حسابك دون إنشاء حساب آخر.
+          لديك حساب مريض في MedBook؟ سجّل الدخول هنا بنفس البريد وكلمة المرور، ثم قدّم طلبك كطبيب من داخل حسابك دون إنشاء حساب آخر.
         </p>
         <p className="mt-2 text-center text-sm text-slate-600"><a href="/register/clinic" className="font-semibold text-primary-700 hover:underline">إنشاء حساب صاحب عيادة</a></p>
       </div>

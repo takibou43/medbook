@@ -6,7 +6,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/Toast";
 import { Spinner } from "../components/ui/States";
 import { Doctor, FamilyMember, NextSlot, Paginated } from "../types";
-import { bookingError, diffMinutes, doctorAddress, splitFullName } from "../lib/booking";
+import { bookingError, doctorAddress, splitFullName } from "../lib/booking";
 import { BookingSteps, StepId } from "../components/booking/BookingSteps";
 import { SpecialtyOption, SpecialtyStep } from "../components/booking/SpecialtyStep";
 import { DoctorStep } from "../components/booking/DoctorStep";
@@ -222,17 +222,11 @@ export default function BookAppointment() {
     setSubmitError(null);
     try {
       const appointment = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice, familyMemberId: selectedMember?.id ?? null });
-      // مدة الحدث في التقويم = المدة الفعلية للموعد كما سجّلها الخادم (وليس رقمًا ثابتًا)،
-      // مع رجوع احتياطي لمدة الدور المعروضة قبل التأكيد إن تعذّر حساب الفرق لأي سبب.
-      const durationMinutes = diffMinutes(appointment.startTime, appointment.endTime) || nextSlot?.slotMinutes || 20;
       setConfirmed({
         date: appointment.date,
         startTime: appointment.startTime,
         doctorName: `${selectedDoctor.firstName} ${selectedDoctor.lastName}`,
         address: doctorAddress(selectedDoctor),
-        patientName: `${name.firstName} ${name.lastName}`,
-        clinicPhone: selectedDoctor.clinic?.phone || selectedDoctor.phone || null,
-        durationMinutes,
       });
       showToast("تم إرسال طلب الحجز بنجاح!", "success");
       // نفرّغ بيانات المريض فور نجاح الحجز حتى لا يُكرَّر الحجز بالخطأ بضغطة ثانية.

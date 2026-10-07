@@ -2,10 +2,14 @@ import { AppointmentStatus, ReminderStatus, SubscriptionStatus } from "@prisma/c
 import { prisma } from "./prisma";
 import { algeriaDayOf, appointmentStartUtc } from "../modules/reminders/reminders.service";
 
-const QUIET_CHECK_MS = 15 * 60_000;
+// Align quiet jobs to one hourly window, rather than waking Neon at staggered times.
+const QUIET_CHECK_MS = 60 * 60_000;
+export function quietCheckDelay(now: Date): number {
+  return QUIET_CHECK_MS - (now.getTime() % QUIET_CHECK_MS);
+}
 export function reminderDelay(starts: Date[], pending: Date | null, now: Date, intervalMs: number) {
   const earliest = Math.min(...starts.map(start => start.getTime() - 2 * 60 * 60_000), pending?.getTime() ?? Infinity);
-  return Math.max(intervalMs, Math.min(QUIET_CHECK_MS, earliest - now.getTime()));
+  return Math.max(intervalMs, Math.min(quietCheckDelay(now), earliest - now.getTime()));
 }
 
 export async function nextReminderDelay(intervalMs: number, now = new Date()) {
@@ -26,5 +30,5 @@ export async function nextTrialDelay(now = new Date()) {
     where: { subscriptionStatus: SubscriptionStatus.ACTIVE, subscriptionExpiresAt: { gte: now } },
     select: { subscriptionExpiresAt: true }, orderBy: { subscriptionExpiresAt: "asc" },
   });
-  return Math.max(1000, Math.min(QUIET_CHECK_MS, (next?.subscriptionExpiresAt?.getTime() ?? Infinity) - now.getTime() + 1));
+  return Math.max(1000, Math.min(quietCheckDelay(now), (next?.subscriptionExpiresAt?.getTime() ?? Infinity) - now.getTime() + 1));
 }

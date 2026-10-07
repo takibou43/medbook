@@ -1,3 +1,4 @@
+import { algeriaDayStart } from "../../lib/doctorQueue";
 import { assertNotOwnDoctor } from "../../lib/accountProfiles";
 import { singleFlight } from "../../lib/singleFlight";
 import { liveUpdates } from "../../lib/liveUpdates";
@@ -215,10 +216,25 @@ export async function autoExpireStaleAppointments(doctorId: string) {
   // ضمن إحصائيات الغياب وسجل المريض، وتظهر فقط في قائمة "لم يحضروا" لا في النشطة.
 }
 
+/** Only doctors with unresolved appointments today or earlier can need expiry work. */
+export async function listAppointmentExpiryCandidates(now = new Date()) {
+  const where = {
+    status: { in: EXPIRABLE_STATUSES },
+    date: { lte: algeriaDayStart(now) },
+  };
+  return prisma.doctor.findMany({
+    where: { appointments: { some: where } },
+    select: {
+      id: true, schedules: true,
+      appointments: { where, select: { date: true }, orderBy: { date: "asc" }, take: 1 },
+    },
+  });
+}
+
 /**
  * كنس دوري لكل الأطباء بنفس قاعدة انتهاء الدوام أعلاه، دون انتظار أن يفتح أحد لوحة
  * الطبيب. ضروري حتى يُعتمد غياب من لم يحضر حتى إغلاق العيادة ولو لم يفتح الطبيب ولا
- * مساعده التطبيق بقية اليوم. يعمل داخل خادم Express الدائم (Render) عبر setInterval في
+ * مساعده التطبيق بقية اليوم. يعمل داخل خادم Express الدائم (Render) عبر جدولة تكيفية في
  * src/index.ts — الواجهات وحدها على Vercel، فلا علاقة لدوالها بهذه المهمة.
  *
  * آمن للتكرار تمامًا: لا يلمس إلا المواعيد غير المحسومة (CONFIRMED / LATE / IN_PROGRESS)
@@ -227,8 +243,10 @@ export async function autoExpireStaleAppointments(doctorId: string) {
  */
 export async function sweepStaleAppointmentsForAllDoctors() {
   try {
-    const doctors = await prisma.doctor.findMany({ select: { id: true } });
+    const doctors = await listAppointmentExpiryCandidates();
     for (const doctor of doctors) {
+      const day = doctor.appointments[0]?.date;
+      if (!day || !isPast(day, closingTimeForDate(day, doctor.schedules) ?? "23:59")) continue;
       try {
         await autoExpireStaleAppointments(doctor.id);
       } catch (err) {

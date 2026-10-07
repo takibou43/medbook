@@ -4,8 +4,11 @@ import { reminderDelay } from "../src/lib/backgroundTiming";
 const now = new Date("2026-10-05T06:00:00Z");
 describe("reminder scheduling preserves due and queue notifications", () => {
   it("backs off only when there are no imminent appointments or reminders", () => {
-    expect(reminderDelay([], null, now, 60000)).toBe(900000);
-    expect(reminderDelay([new Date("2026-10-05T12:00:00Z")], null, now, 60000)).toBe(900000);
+    expect(reminderDelay([], null, now, 60000)).toBe(3600000);
+    expect(reminderDelay([new Date("2026-10-05T12:00:00Z")], null, now, 60000)).toBe(3600000);
+  });
+  it("wakes when a future appointment enters its reminder window", () => {
+    expect(reminderDelay([new Date("2026-10-05T08:10:00Z")], null, now, 60000)).toBe(600000);
   });
   it("keeps the minute cadence for imminent and already waiting patients", () => {
     expect(reminderDelay([new Date("2026-10-05T07:00:00Z")], null, now, 60000)).toBe(60000);

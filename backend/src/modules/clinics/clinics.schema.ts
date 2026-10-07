@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { inviteTermsFields } from "../../lib/clinicFinance";
+import { specialtyNameSchema } from "../../lib/specialtySelection";
 export const clinicProfileSchema = z.object({
   nameAr: z.string().trim().min(2).max(150),
   address: z.string().trim().min(3).max(500),
@@ -10,7 +11,7 @@ export const clinicProfileSchema = z.object({
 }).strict();
 export const clinicDoctorProfileSchema = z.object({
   firstName: z.string().trim().min(2).max(100), lastName: z.string().trim().min(2).max(100),
-  specialtyId: z.string().uuid(), gender: z.enum(["MALE", "FEMALE"]).optional(),
+  specialtyId: z.string().uuid().optional(), specialtyName: specialtyNameSchema.optional(), gender: z.enum(["MALE", "FEMALE"]).optional(),
   yearsExperience: z.coerce.number().int().min(0).max(80).optional(),
   bio: z.string().trim().max(2000).optional(),
   consultationFee: z.coerce.number().int().min(0).optional(),

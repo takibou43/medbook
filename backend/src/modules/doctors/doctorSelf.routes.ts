@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { specialtyNameSchema } from "../../lib/specialtySelection";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -73,6 +74,7 @@ const profileSchema = z.object({
   photoUrl: z.string().url().optional(),
   clinicId: z.string().uuid().optional(),
   specialtyId: z.string().uuid().optional(),
+  specialtyName: specialtyNameSchema.optional(),
   wilayaId: z.string().uuid().optional(),
   cityId: z.string().uuid().optional(),
   // مدة الجلسة بالدقائق — يبني عليها النظام ترتيب أدوار المرضى.

@@ -77,6 +77,26 @@ export async function revokeInvite(doctorUserId: string, inviteId: string) {
 }
 
 /** طبيب فقط: قائمة مساعديه الحاليين + دعواته المعلّقة/المنتهية معًا. */
+export async function attendanceResponsibility(doctorUserId: string) {
+  const doctorId = await resolveActingDoctorId(doctorUserId, Role.DOCTOR);
+  const doctor = await prisma.doctor.findUnique({ where: { id: doctorId }, select: { clinicId: true } });
+  const assistant = await prisma.assistant.findFirst({
+    where: {
+      isActive: true,
+      user: { isActive: true },
+      OR: [
+        { doctorId, clinicId: null },
+        ...(doctor?.clinicId ? [{ clinicId: doctor.clinicId, OR: [
+          { allDoctors: true },
+          { allDoctors: false, allowedDoctorIds: { has: doctorId } },
+        ] }] : []),
+      ],
+    },
+    select: { id: true },
+  });
+  return { hasActiveAssistant: !!assistant };
+}
+
 export async function listAssistants(doctorUserId: string) {
   const doctorId = await resolveActingDoctorId(doctorUserId, Role.DOCTOR);
   await requireAssistantOwner(doctorUserId, doctorId);

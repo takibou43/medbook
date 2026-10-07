@@ -12,6 +12,7 @@ import bcrypt from "../backend/node_modules/bcryptjs";
 
 import fs from "fs";
 import path from "path";
+import specialtyCatalog from "../backend/src/data/algeria-specialties.json";
 
 const prisma = new PrismaClient();
 
@@ -93,6 +94,12 @@ const SPECIALTIES: { nameAr: string; nameFr: string; icon: string; description: 
   { nameAr: "طب الأعصاب", nameFr: "Neurologie", icon: "brain", description: "أمراض الجهاز العصبي" },
   { nameAr: "الأنف والأذن والحنجرة", nameFr: "ORL", icon: "ear", description: "أمراض الأنف والأذن والحنجرة" },
 ];
+
+for (const [nameAr, nameFr] of specialtyCatalog) {
+  if (!SPECIALTIES.some(s => s.nameAr === nameAr)) {
+    SPECIALTIES.push({ nameAr, nameFr, icon: "stethoscope", description: nameAr });
+  }
+}
 
 const MALE_FIRST = ["محمد", "أحمد", "يوسف", "عبد الرحمن", "كريم", "سفيان", "إسلام", "بلال", "رياض", "طارق"];
 const FEMALE_FIRST = ["أمينة", "سارة", "خديجة", "ياسمين", "نور الهدى", "فاطمة الزهراء", "إيمان", "مريم", "لينة", "هاجر"];

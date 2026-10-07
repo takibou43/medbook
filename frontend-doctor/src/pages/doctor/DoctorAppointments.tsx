@@ -1,3 +1,4 @@
+import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
@@ -164,9 +165,10 @@ interface CardProps {
   /** «برمجة موعد عودة» (الطبيب وحده، لمريض بحساب). */
   onFollowUp?: () => void;
   role?: "DOCTOR" | "ASSISTANT";
+  canManageAttendance: boolean;
 }
 
-function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy, pending, onFollowUp, role }: CardProps) {
+function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy, pending, onFollowUp, role, canManageAttendance }: CardProps) {
   const phone = patientPhone(a);
   const wa = toWhatsAppNumber(phone);
   const isOpen = a.status === "CONFIRMED" || a.status === "PENDING";
@@ -231,7 +233,7 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {actions.note}
           </p>
         )}
-        {actions.noShow.visible && !actions.noShow.enabled && actions.noShow.reason && (
+        {canManageAttendance && actions.noShow.visible && !actions.noShow.enabled && actions.noShow.reason && (
           <p id={noShowReasonId} className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {actions.noShow.reason}
           </p>
@@ -265,7 +267,7 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> اكتمل الموعد
           </Button>
         )}
-        {actions.noShow.visible && (
+        {canManageAttendance && actions.noShow.visible && (
           <Button
             variant="outline"
             onClick={onNoShow}
@@ -281,7 +283,7 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
             <CalendarPlus className="h-4 w-4" /> برمجة موعد عودة
           </Button>
         )}
-        {a.status === "NO_SHOW" && (
+        {canManageAttendance && a.status === "NO_SHOW" && (
           <>
             <Button onClick={onArrivedLate} disabled={busy} loading={pending} title="وصل بعد فوات موعده — أدخله الآن">
               <UserCheck className="h-4 w-4" /> حضر متأخرًا
@@ -299,6 +301,7 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
 function AppointmentsListSection({ filters, onFiltersChange }: { filters: AppointmentFilters; onFiltersChange: (f: AppointmentFilters) => void }) {
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
+  const canManageAttendance = useAttendanceActions();
   const { status: filter, from, to } = filters;
   // البحث يُكتب محليًا فورًا ويُحفظ في الرابط بعد توقف الكتابة قليلًا (يبقى عند الرجوع/التنقل).
   const [query, setQuery] = useState(filters.q);
@@ -532,7 +535,8 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
             <AppointmentCard
               key={a.id}
               appointment={a}
-              role={user?.role === "ASSISTANT" ? "ASSISTANT" : "DOCTOR"}
+              canManageAttendance={canManageAttendance}
+          role={user?.role === "ASSISTANT" ? "ASSISTANT" : "DOCTOR"}
               onComplete={() => changeStatus(a.id, "COMPLETED", a)}
               onNoShow={() => openNoShow(a)}
               onArrivedLate={() => markArrivedLate(a.id)}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { specialtyNameSchema } from "../../lib/specialtySelection";
 
 export const registerPatientSchema = z.object({
   email: z.string().email("بريد إلكتروني غير صالح"),
@@ -17,7 +18,8 @@ export const registerDoctorSchema = z.object({
   password: z.string().min(8, "كلمة المرور يجب أن تكون 8 خانات على الأقل"),
   firstName: z.string().min(2),
   lastName: z.string().min(2),
-  specialtyId: z.string().uuid("التخصص مطلوب"),
+  specialtyId: z.string().uuid("التخصص مطلوب").optional(),
+  specialtyName: specialtyNameSchema.optional(),
   wilayaId: z.string().uuid("الولاية مطلوبة"),
   cityId: z.string().uuid("المدينة مطلوبة"),
   clinicId: z.string().uuid().optional(),

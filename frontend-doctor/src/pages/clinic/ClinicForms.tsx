@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Input, Select } from "../../components/ui/Input";
-import { useSpecialties, useWilayas } from "../../hooks/useCatalog";
+import { useWilayas } from "../../hooks/useCatalog";
+import { SpecialtyInput } from "../../components/SpecialtyInput";
 export interface ClinicProfile { nameAr: string; address: string; phone?: string | null; wilayaId: string; cityId: string; description?: string | null; photoUrl?: string | null }
 export function profileFromForm(form: FormData) {
   return Object.fromEntries(["nameAr", "address", "phone", "wilayaId", "cityId", "description", "photoUrl"].flatMap(k => {
@@ -8,7 +9,7 @@ export function profileFromForm(form: FormData) {
   }));
 }
 export function doctorFromForm(form: FormData) {
-  return { firstName: String(form.get("firstName") || ""), lastName: String(form.get("lastName") || ""), specialtyId: String(form.get("specialtyId") || "") };
+  return { firstName: String(form.get("firstName") || ""), lastName: String(form.get("lastName") || ""), specialtyName: String(form.get("specialtyName") || "") };
 }
 export function ClinicProfileFields({ initial }: { initial?: ClinicProfile }) {
   const { data: wilayas } = useWilayas();
@@ -31,9 +32,8 @@ export function ClinicProfileFields({ initial }: { initial?: ClinicProfile }) {
   </>;
 }
 export function DoctorProfileFields() {
-  const { data: specialties } = useSpecialties();
   return <>
     <div className="grid grid-cols-2 gap-3"><Input name="firstName" label="اسم الطبيب" required minLength={2} /><Input name="lastName" label="لقب الطبيب" required minLength={2} /></div>
-    <Select name="specialtyId" label="التخصص" required><option value="">اختر التخصص</option>{specialties?.map(s => <option key={s.id} value={s.id}>{s.nameAr}</option>)}</Select>
+    <SpecialtyInput name="specialtyName" />
   </>;
 }

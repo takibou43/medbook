@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../context/AuthContext";
-import { useSpecialties, useWilayas } from "../hooks/useCatalog";
+import { useWilayas } from "../hooks/useCatalog";
 import { Input, Select } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
 import { useToast } from "../components/ui/Toast";
 import { Logo } from "../components/ui/Logo";
 import { api, apiErrorMessage } from "../lib/api";
 import { referralCodeFromSearch } from "../lib/features";
+import { SpecialtyInput } from "../components/SpecialtyInput";
 
 interface DoctorForm {
   firstName: string;
@@ -17,7 +18,7 @@ interface DoctorForm {
   phone: string;
   password: string;
   gender: string;
-  specialtyId: string;
+  specialtyName: string;
   wilayaId: string;
   cityId: string;
   yearsExperience: number;
@@ -29,7 +30,6 @@ export default function Register() {
   const { registerDoctor } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
-  const { data: specialties } = useSpecialties();
   const { data: wilayas } = useWilayas();
   const [loading, setLoading] = useState(false);
   const [selectedWilaya, setSelectedWilaya] = useState("");
@@ -108,14 +108,7 @@ export default function Register() {
           </div>
           <Input label="البريد الإلكتروني" type="email" error={doctorForm.formState.errors.email?.message} {...doctorForm.register("email", { required: "مطلوب" })} />
           <Input label="رقم الهاتف" error={doctorForm.formState.errors.phone?.message} {...doctorForm.register("phone")} />
-          <Select label="التخصص" error={doctorForm.formState.errors.specialtyId?.message} {...doctorForm.register("specialtyId", { required: "مطلوب" })}>
-            <option value="">اختر التخصص</option>
-            {specialties?.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nameAr}
-              </option>
-            ))}
-          </Select>
+          <SpecialtyInput error={doctorForm.formState.errors.specialtyName?.message} {...doctorForm.register("specialtyName", { required: "مطلوب" })} />
           <div className="grid grid-cols-2 gap-3">
             <Select
               label="الولاية"

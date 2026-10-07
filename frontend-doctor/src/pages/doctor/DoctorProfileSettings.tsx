@@ -9,9 +9,10 @@ import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
 import { useSpecialties, useWilayas } from "../../hooks/useCatalog";
 import { formatDzd, formatPercent } from "../../lib/doctorUi";
+import { SpecialtyInput } from "../../components/SpecialtyInput";
 
 interface FormValues {
-  specialtyId: string;
+  specialtyName: string;
   wilayaId: string;
   cityId: string;
   bio: string;
@@ -76,7 +77,7 @@ export default function DoctorProfileSettings() {
     // لن يستطيع المتصفح تحديد القيمة الحالية لأن الخيار المطابق لن يكون موجودًا بعد.
     if (me?.doctor && specialties && wilayas) {
       reset({
-        specialtyId: me.doctor.specialtyId ?? "",
+        specialtyName: me.doctor.specialty?.nameAr ?? specialties.find(s => s.id === me.doctor.specialtyId)?.nameAr ?? "",
         wilayaId: me.doctor.wilayaId ?? "",
         cityId: me.doctor.cityId ?? "",
         bio: me.doctor.bio ?? "",
@@ -122,14 +123,7 @@ export default function DoctorProfileSettings() {
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-extrabold text-slate-900">ملفي المهني</h1>
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
-        <Select label="التخصص" {...register("specialtyId", { required: "مطلوب" })}>
-          <option value="">اختر التخصص</option>
-          {specialties?.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.nameAr}
-            </option>
-          ))}
-        </Select>
+        <SpecialtyInput {...register("specialtyName", { required: "مطلوب" })} />
         <div className="grid grid-cols-2 gap-3">
           <Select label="الولاية" {...register("wilayaId", { required: "مطلوب" })}>
             <option value="">اختر</option>

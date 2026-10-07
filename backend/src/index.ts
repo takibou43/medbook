@@ -9,11 +9,9 @@ import { sweepStaleAppointmentsForAllDoctors } from "./modules/appointments/appo
 import { runReminderCycle } from "./modules/reminders/reminders.service";
 import { purgeExpiredNotifications } from "./modules/notifications/notifications.service";
 import { adaptiveJob } from "./lib/adaptiveJob";
-import { nextReminderDelay, nextTrialDelay } from "./lib/backgroundTiming";
+import { nextReminderDelay } from "./lib/backgroundTiming";
+import { nextMaintenanceDelay } from "./lib/maintenanceTiming";
 import { liveUpdates } from "./lib/liveUpdates";
-
-// كل 15 دقيقة: حذف إشعارات المواعيد التي انتهى يومها (العرض يستبعدها فورًا أصلًا).
-const NOTIFICATION_PURGE_INTERVAL_MS = 15 * 60 * 1000;
 
 const app = createApp();
 
@@ -60,14 +58,6 @@ async function bootstrapAdminUser() {
   }
 }
 
-// مزامنة الاشتراكات عند الإقلاع والتغييرات، وعند أقرب انتهاء، مع فحص احتياطي خلال ربع ساعة.
-
-// اعتماد الغياب عند انتهاء دوام الطبيب: القاعدة نفسها الموجودة في
-// autoExpireStaleAppointments، لكن مشغَّلة دوريًا لكل الأطباء حتى لا تنتظر أن يفتح
-// أحدهم لوحته. ربع ساعة يكفي: دقة الاعتماد تُقاس بوقت إغلاق العيادة لا بالدقيقة.
-// نستعمل setInterval داخل خادم Render الدائم (الواجهات وحدها على Vercel).
-const NO_SHOW_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
-
 // إبقاء الخادم مستيقظًا: خطة الاستضافة المجانية تُنيم الخدمة بعد نحو 15 دقيقة بلا طلبات،
 // فيصير أول فتح للموقع بعدها بطيئًا (قيسنا 24 ثانية). المهمة المجدولة في GitHub Actions
 // لم تكفِ وحدها لأن GitHub يؤخّر الجداول القصيرة كثيرًا (قست الفواصل الفعلية: ساعتان إلى خمس).
@@ -112,16 +102,20 @@ function startSelfPing() {
 Promise.all([
   grandfatherExistingDoctors(),
   bootstrapAdminUser(),
-  syncTrialSubscriptions(),
-  sweepStaleAppointmentsForAllDoctors(),
 ]).finally(() => {
-  const trialJob = adaptiveJob(syncTrialSubscriptions, nextTrialDelay);
-  liveUpdates.subscribe(() => trialJob.wake());
-
-  // اعتماد "لم يحضر" لمن انتهى دوام طبيبه وهو غائب — بلا حذف أي سجل من قاعدة البيانات.
-  setInterval(() => {
-    void sweepStaleAppointmentsForAllDoctors();
-  }, NO_SHOW_SWEEP_INTERVAL_MS);
+  // One serialized maintenance cycle. Quiet checks share an hourly window;
+  // clinic closing, subscription expiry and notification expiry wake it sooner.
+  const maintenanceJob = adaptiveJob(async () => {
+    await syncTrialSubscriptions();
+    await sweepStaleAppointmentsForAllDoctors();
+    try {
+      await purgeExpiredNotifications();
+    } catch (err) {
+      console.error("تعذّر حذف إشعارات المواعيد المنتهية:", safeErrorCode(err));
+      throw err;
+    }
+  }, nextMaintenanceDelay);
+  liveUpdates.subscribe(() => maintenanceJob.wake());
 
   // دقة الدقيقة قرب المواعيد؛ في الفترات الهادئة يتراجع الفحص مع استيقاظ فوري بعد أي تعديل.
   // الحالة كلها في قاعدة البيانات (AppointmentReminder)، فإعادة تشغيل الخادم لا تُضيع ولا تكرّر شيئًا:
@@ -135,13 +129,6 @@ Promise.all([
     );
     liveUpdates.subscribe(() => reminderJob.wake());
   }
-
-  // إشعارات المواعيد تنتهي بانتهاء يوم الموعد (توقيت الجزائر): تُخفى فورًا بفلتر القراءة، وتُحذف هنا دوريًا.
-  // لا تلمس الإشعارات العامة (expiresAt = NULL).
-  const purge = () =>
-    purgeExpiredNotifications().catch((err) => console.error("تعذّر حذف إشعارات المواعيد المنتهية:", safeErrorCode(err)));
-  void purge();
-  setInterval(purge, NOTIFICATION_PURGE_INTERVAL_MS);
 
   startSelfPing();
 

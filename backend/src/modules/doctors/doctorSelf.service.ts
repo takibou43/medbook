@@ -1,3 +1,4 @@
+import { resolveSpecialtyId } from "../../lib/specialtySelection";
 import { AppointmentStatus, Prisma, Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -102,6 +103,7 @@ export async function updateOwnProfile(
     photoUrl: string;
     clinicId: string;
     specialtyId: string;
+    specialtyName: string;
     wilayaId: string;
     cityId: string;
     slotDurationMin: number;
@@ -124,7 +126,16 @@ export async function updateOwnProfile(
     if (clinic?.ownerId && ((data.wilayaId && data.wilayaId !== clinic.wilayaId) || (data.cityId && data.cityId !== clinic.cityId) || (data.address !== undefined && data.address !== clinic.address)))
       throw ApiError.badRequest("موقع طبيب العيادة يتبع موقع العيادة.");
   }
-  return prisma.doctor.update({ where: { id: doctor.id }, data });
+  const { specialtyName, ...profile } = data;
+  if (specialtyName === undefined && profile.specialtyId === undefined) {
+    return prisma.doctor.update({ where: { id: doctor.id }, data: profile });
+  }
+  return prisma.$transaction(async tx => {
+    if (specialtyName !== undefined || profile.specialtyId !== undefined) {
+      profile.specialtyId = await resolveSpecialtyId(tx, { specialtyName, specialtyId: profile.specialtyId });
+    }
+    return tx.doctor.update({ where: { id: doctor.id }, data: profile });
+  });
 }
 
 export async function getWeeklySchedule(userId: string) {

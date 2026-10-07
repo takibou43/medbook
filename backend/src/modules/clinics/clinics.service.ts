@@ -1,3 +1,4 @@
+import { resolveSpecialtyId } from "../../lib/specialtySelection";
 import { isDoctorAccount } from "../../lib/accountProfiles";
 import { isDoctorProfilePublic } from "../../lib/doctorVisibility";
 import { queueNewDoctorAreaNotifications, pushNewDoctorAreaNotification } from "../notifications/newDoctorArea.service";
@@ -102,9 +103,13 @@ export async function registerClinic(input: z.infer<typeof registerClinicSchema>
     if (existing) throw ApiError.conflict("البريد الإلكتروني مستخدم مسبقًا. سجّل الدخول لإنشاء عيادتك.");
     const user = await tx.user.create({ data: { email: input.email, passwordHash, role: input.doctor ? Role.DOCTOR : Role.CLINIC_OWNER } });
     const clinic = await tx.clinic.create({ data: { ...input.clinic, ownerId: user.id } });
-    if (input.doctor) await tx.doctor.create({ data: {
-      ...input.doctor, userId: user.id, clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address,
+    if (input.doctor) {
+      const { specialtyName, ...profile } = input.doctor;
+      const specialtyId = await resolveSpecialtyId(tx, input.doctor);
+      await tx.doctor.create({ data: {
+      ...profile, specialtyId, userId: user.id, clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address,
     } });
+    }
     return tx.user.findUniqueOrThrow({ where: { id: user.id }, include: { doctor: true, ownedClinic: true } });
   });
 }
@@ -206,8 +211,10 @@ export async function acceptNewDoctor(input: z.infer<typeof acceptClinicInviteSc
   return prisma.$transaction(async tx => {
     const { invite, clinic } = await consumeInvite(tx, input.token);
     if (await tx.user.findFirst({ where: { email: { equals: invite.email, mode: "insensitive" } } })) throw ApiError.conflict("الحساب موجود. سجّل الدخول لقبول الدعوة.");
+    const { specialtyName, ...profile } = input.doctor;
+    const specialtyId = await resolveSpecialtyId(tx, input.doctor);
     return tx.user.create({ data: { email: invite.email, passwordHash, role: Role.DOCTOR,
-      doctor: { create: { ...input.doctor, clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address,
+      doctor: { create: { ...profile, specialtyId, clinicId: clinic.id, wilayaId: clinic.wilayaId, cityId: clinic.cityId, address: clinic.address,
         ...(invite.termsPriceDzd != null || invite.termsDoctorSharePercent != null
           ? { clinicTerms: { create: { clinicId: clinic.id, appointmentPriceDzd: invite.termsPriceDzd, doctorSharePercent: invite.termsDoctorSharePercent, updatedByUserId: clinic.ownerId } } } : {}) } },
     }, include: { doctor: true } });

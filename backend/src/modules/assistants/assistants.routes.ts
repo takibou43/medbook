@@ -11,6 +11,10 @@ import * as service from "./assistants.service";
 const router = Router();
 router.use(authenticate, authorize(Role.DOCTOR));
 
+router.get("/attendance", asyncHandler(async (req, res) => {
+  res.json({ success: true, data: await service.attendanceResponsibility(req.user!.id) });
+}));
+
 router.get(
   "/",
   asyncHandler(async (req, res) => {

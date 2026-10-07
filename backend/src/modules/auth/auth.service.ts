@@ -1,3 +1,4 @@
+import { resolveSpecialtyId } from "../../lib/specialtySelection";
 import { Role, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { hashPassword, comparePassword, getDummyPasswordHash } from "../../utils/password";
@@ -57,6 +58,7 @@ export async function registerDoctor(input: RegisterDoctorInput) {
   // الحساب + ملف الطبيب + سجل الإحالة (PENDING) في معاملة واحدة. لا مكافأة عند التسجيل: تُمنح للمُحيل
   // عند توثيق هذا الطبيب فعليًا (referrals.service). المُحيل لا يتغيّر بعد الإنشاء (لا مسار لذلك).
   const user = await prisma.$transaction(async (tx) => {
+    const specialtyId = await resolveSpecialtyId(tx, input);
     const created = await tx.user.create({
     data: {
       email: input.email,
@@ -67,7 +69,7 @@ export async function registerDoctor(input: RegisterDoctorInput) {
         create: {
           firstName: input.firstName,
           lastName: input.lastName,
-          specialtyId: input.specialtyId,
+          specialtyId,
           wilayaId: input.wilayaId,
           cityId: input.cityId,
           clinicId: input.clinicId,

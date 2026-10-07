@@ -1,3 +1,4 @@
+import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useEffect, useRef, useState } from "react";
 import { Bell, BellOff, CheckCircle2, Clock3, Megaphone, PhoneCall, UserCheck, UserX, Users, X } from "lucide-react";
 import { Card } from "../../components/ui/Card";
@@ -80,6 +81,7 @@ export default function DoctorQueue() {
   const { showToast } = useToast();
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
+  const canManageAttendance = useAttendanceActions();
   const { data, isLoading, isFetching } = useQueue(isAssistant ? ASSISTANT_QUEUE_POLL_MS : QUEUE_POLL_MS);
 
   // شريط «الطبيب نادى على: فلان» الذي يظهر عند المساعد تلقائيًا.
@@ -295,7 +297,7 @@ export default function DoctorQueue() {
                 <CheckCircle2 className="ml-1.5 h-4 w-4" /> أنهى الموعد
               </Button>
             )}
-            <Button
+            {canManageAttendance && <Button
               variant="outline"
               className={isAssistant ? "col-span-2" : undefined}
               loading={markLate.isPending || callNext.isPending}
@@ -334,10 +336,10 @@ export default function DoctorQueue() {
               }}
             >
               <Clock3 className="ml-1.5 h-4 w-4" /> متأخر
-            </Button>
+            </Button>}
             {/* نودي عليه فلم يحضر: رسالة جاهزة من هاتف المساعد + بقاؤه في المتابعة.
                 لا تسجيل غياب نهائي هنا — ذلك يحدث وحده عند انتهاء دوام الطبيب. */}
-            <Button
+            {canManageAttendance && <Button
               variant="outline"
               className="col-span-2 border-red-200 text-red-600 hover:bg-red-50"
               disabled={busy}
@@ -345,7 +347,7 @@ export default function DoctorQueue() {
               onClick={() => openNoShow(current)}
             >
               <UserX className="ml-1.5 h-4 w-4" /> لم يحضر — إشعاره برسالة
-            </Button>
+            </Button>}
           </div>
         </Card>
       ) : (

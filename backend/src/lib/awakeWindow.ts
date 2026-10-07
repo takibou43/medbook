@@ -1,6 +1,6 @@
-/** Algeria is UTC+1. Stop automatic keep-alive at 18:00, including Fridays. */
+/** Automatic keep-alive runs daily from 08:30 inclusive to 18:00 exclusive in Algeria. */
 export function isKeepAwakeWindow(now: Date): boolean {
   const local = new Date(now.getTime() + 60 * 60_000);
-  const startHour = local.getUTCDay() === 5 ? 17 : 5;
-  return local.getUTCHours() >= startHour && local.getUTCHours() < 18;
+  const minutes = local.getUTCHours() * 60 + local.getUTCMinutes();
+  return minutes >= 8 * 60 + 30 && minutes < 18 * 60;
 }

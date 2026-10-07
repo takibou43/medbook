@@ -4,6 +4,9 @@ const date = new Date("2026-10-07T00:00:00Z");
 const now = Date.parse("2026-10-07T13:14:30Z");
 const schedules = [{ dayOfWeek: 3, startTime: "14:00", endTime: "17:00", isException: false, exceptionDate: null, isOff: false }];
 describe("nearest automatic booking", () => {
+  it("excludes a start that failed a unique-key race during retry", () => {
+    expect(nearestBookingSlot(date, schedules, [], 60, true, now, new Set(["14:15"]))).toBe("14:16");
+  });
   it("reuses a completed visit's scheduled interval without colliding with its historical unique key", () => {
     const booked = [{ startTime: "14:15", endTime: "15:15", status: "COMPLETED", activeSlot: true }];
     expect(nearestBookingSlot(date, schedules, booked, 60, true, now)).toBe("14:16");

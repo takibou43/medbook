@@ -198,8 +198,8 @@ export async function createWalkIn(userId: string, role: Role, input: WalkInInpu
   try {
     created = requested
       ? (await reserveExactSlot({ doctor, date, startTime: requested, create })).result
-      : // «00:00» = أقرب فترة حرة لم يمضِ وقتها (firstFreeSlotAtOrAfter يتخطى الماضي).
-        (await reserveRequestedOrNextSlot({ doctor, date, requestedStart: "00:00", create })).result;
+      : // نفس حساب أقرب وقت للحجز الآلي للمريض، مع احترام فترات الدوام وحجوزات اليوم النشطة.
+        (await reserveRequestedOrNextSlot({ doctor, date, requestedStart: "00:00", automaticToday: true, create })).result;
   } catch (err) {
     if (err instanceof ExactSlotUnavailableError) {
       // قد يكون الوقت أخذه طلب متزامن بنفس المفتاح: نعيد ما أنشأه إن كان نفس الطلب.

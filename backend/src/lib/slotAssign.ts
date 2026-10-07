@@ -3,6 +3,8 @@ import { prisma } from "./prisma";
 import { generateAvailableSlots, isPast, ScheduleBlock } from "./slots";
 import { SLOT_OCCUPYING_WHERE } from "./slotOccupancy";
 import { lockDoctorQueue, withDoctorQueueTurn } from "./doctorLock";
+import { nearestBookingSlot } from "./nearestBookingSlot";
+import { DAY_QUEUE_STATUSES } from "./doctorQueue";
 
 /**
  * حجز «الوقت المطلوب أو أقرب وقت متاح بعده» لدى طبيب في يوم معيّن — للحجز بوقت محدد
@@ -109,6 +111,8 @@ export async function reserveRequestedOrNextSlot<T>(opts: {
   doctor: SlotDoctor;
   date: Date;
   requestedStart: string;
+  /** Reception's automatic choice only; explicit-time bookings keep their existing rules. */
+  automaticToday?: boolean;
   create: (tx: Prisma.TransactionClient, slot: AssignedSlot) => Promise<T>;
 }): Promise<{ result: T; slot: AssignedSlot; shifted: boolean; attempts: number }> {
   const { doctor, date, requestedStart, create } = opts;
@@ -128,9 +132,11 @@ export async function reserveRequestedOrNextSlot<T>(opts: {
             await lockDoctorQueue(tx, doctor.id);
             const booked = await tx.appointment.findMany({
               where: { doctorId: doctor.id, date: { gte: startOfDay, lte: endOfDay }, ...SLOT_OCCUPYING_WHERE },
-              select: { startTime: true, endTime: true },
+              select: { startTime: true, endTime: true, status: true, activeSlot: true },
             });
-            const chosen = firstFreeSlotAtOrAfter(date, doctor.schedules, booked, slotMinutes, requestedStart, failed);
+            const chosen = opts.automaticToday
+              ? nearestBookingSlot(date, doctor.schedules, booked, slotMinutes, !booked.some(row => DAY_QUEUE_STATUSES.includes(row.status)), Date.now(), failed)
+              : firstFreeSlotAtOrAfter(date, doctor.schedules, booked, slotMinutes, requestedStart, failed);
             if (!chosen) throw new NoSlotAvailableError();
             pick.value = chosen;
             return create(tx, { startTime: chosen, endTime: addMinutes(chosen, slotMinutes), slotMinutes });

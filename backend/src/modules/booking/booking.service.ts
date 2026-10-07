@@ -1,5 +1,6 @@
 import { AppointmentStatus, Prisma, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { nearestBookingSlot } from "../../lib/nearestBookingSlot";
 import { applyAppointmentPrice, loadFinancialCreate, patientPriceFor, PUBLIC_TERMS_SELECT, withAppointmentPrice } from "../../lib/clinicFinance";
 import { ApiError } from "../../utils/ApiError";
 import { generateAvailableSlots, isWithinWorkingHours, isPast, algeriaTodayUTCMidnight } from "../../lib/slots";
@@ -105,7 +106,7 @@ async function bookedRangesForDoctorOnDate(doctorId: string, date: Date, db: Db 
       date: { gte: startOfDay, lte: endOfDay },
       ...SLOT_OCCUPYING_WHERE,
     },
-    select: { startTime: true, endTime: true },
+    select: { startTime: true, endTime: true, status: true },
   });
 }
 
@@ -147,9 +148,8 @@ async function scanForNextSlot(
     date.setUTCDate(date.getUTCDate() + i);
 
     const booked = await bookedRangesForDoctorOnDate(doctor.id, date, db);
-    const slots = generateAvailableSlots(date, doctor.schedules, booked, slotMinutes);
-    // نتخطى ما مضى من وقت اليوم — لا يُعطى للمريض دور في ساعة فاتت.
-    const next = slots.find((s) => !isPast(date, s));
+    const queueEmpty = !booked.some(row => DAY_QUEUE_STATUSES.includes(row.status));
+    const next = nearestBookingSlot(date, doctor.schedules, booked, slotMinutes, queueEmpty);
     if (next) {
       return {
         doctor,

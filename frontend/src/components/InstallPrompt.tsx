@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
 
 /**
- * شريط "تثبيت مادبوك" — غير مزعج بالقصد:
+ * شريط "تثبيت MedBook" — غير مزعج بالقصد:
  *  - لا يظهر إطلاقًا إذا كان التطبيق مثبّتًا ويعمل في وضع standalone.
  *  - لا يظهر إذا كان المتصفح لا يدعم التثبيت (لا beforeinstallprompt ولا سفاري آيفون).
  *  - إذا أغلقه المستخدم لا يعود قبل 30 يومًا.
@@ -116,12 +116,12 @@ export function InstallPrompt() {
         <div className="min-w-0 flex-1">
           {mode === "prompt" ? (
             <>
-              <p className="text-sm font-bold text-slate-800">ثبّت مادبوك على هاتفك</p>
+              <p className="text-sm font-bold text-slate-800">ثبّت MedBook على هاتفك</p>
               <p className="text-xs text-slate-500">فتح أسرع وأيقونة على شاشتك، بلا متجر ولا مساحة تُذكر.</p>
             </>
           ) : (
             <>
-              <p className="text-sm font-bold text-slate-800">أضِف مادبوك إلى شاشتك</p>
+              <p className="text-sm font-bold text-slate-800">أضِف MedBook إلى شاشتك</p>
               <p className="text-xs leading-6 text-slate-500">
                 اضغط زر المشاركة في شريط سفاري، ثم اختر «إضافة إلى الشاشة الرئيسية».
               </p>
@@ -132,7 +132,7 @@ export function InstallPrompt() {
         {mode === "prompt" && (
           <button onClick={install} className="btn-primary shrink-0 px-3 py-2 text-xs">
             <Download className="h-4 w-4" />
-            تثبيت مادبوك
+            تثبيت MedBook
           </button>
         )}
 

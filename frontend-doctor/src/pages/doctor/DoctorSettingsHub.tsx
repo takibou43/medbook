@@ -38,7 +38,7 @@ export default function DoctorSettingsHub() {
     {
       to: unread.data?.unread ? "/messages?focus=unread" : "/messages",
       title: "مراسلة الإدارة",
-      hint: "تواصل مع إدارة مادبوك",
+      hint: "تواصل مع إدارة MedBook",
       icon: MessageSquare,
       badge: unread.data?.unread,
     },

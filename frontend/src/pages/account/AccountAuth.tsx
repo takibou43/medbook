@@ -92,7 +92,7 @@ export default function AccountAuth() {
   return (
     <div className="container-app py-8">
       <div className="mx-auto max-w-md">
-        <h1 className="mb-1 text-center text-2xl font-extrabold text-slate-900">حسابي في مادبوك</h1>
+        <h1 className="mb-1 text-center text-2xl font-extrabold text-slate-900">حسابي في MedBook</h1>
         <p className="mb-6 text-center text-sm text-slate-600">
           الحجز يتطلب حسابًا بالبريد الإلكتروني — يتيح لك متابعة مواعيدك وتلقي تذكير قبل الموعد.{" "}
           <Link to="/" className="font-semibold text-primary-700 hover:underline">

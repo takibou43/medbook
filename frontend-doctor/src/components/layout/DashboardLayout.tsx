@@ -55,7 +55,7 @@ export function DashboardLayout({
       <aside className="hidden w-64 shrink-0 border-l border-slate-200 bg-white md:flex md:flex-col">
         <div className="flex h-16 items-center gap-2 border-b border-slate-200 px-5 text-primary-700">
           <Logo className="h-8 w-8" />
-          <span className="text-lg font-extrabold">مادبوك / MadBook</span>
+          <span className="text-lg font-extrabold">MedBook</span>
         </div>
         <p className="px-5 pt-4 text-xs font-semibold uppercase text-slate-400">{title}</p>
         {subtitle && (
@@ -99,7 +99,7 @@ export function DashboardLayout({
         <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-5 md:hidden">
           <div className="flex items-center gap-2 text-primary-700">
             <Logo className="h-7 w-7" />
-            <span className="text-lg font-extrabold">مادبوك / MadBook</span>
+            <span className="text-lg font-extrabold">MedBook</span>
           </div>
           <button
             onClick={() => setMobileMenuOpen((v) => !v)}

@@ -1,7 +1,7 @@
 import { Phone } from "lucide-react";
 import { Logo } from "../ui/Logo";
 
-// رقم مادبوك الرسمي للتواصل المباشر — بصيغة جزائرية دون مسافات (tel: يتطلب ذلك).
+// رقم MedBook الرسمي للتواصل المباشر — بصيغة جزائرية دون مسافات (tel: يتطلب ذلك).
 // نفس الرقم يُعرض في الواجهة وفي رابط tel: (لا رقم مختلف بينهما).
 const MEDBOOK_PHONE = "+213552530669";
 
@@ -21,10 +21,10 @@ export function Footer() {
           <a
             href={`tel:${MEDBOOK_PHONE}`}
             className="btn-primary w-full sm:w-auto"
-            aria-label={`اتصل بمادبوك على الرقم ${MEDBOOK_PHONE}`}
+            aria-label={`اتصل بMedBook على الرقم ${MEDBOOK_PHONE}`}
           >
             <Phone className="h-4 w-4" />
-            اتصل بمادبوك
+            اتصل بMedBook
           </a>
         </div>
       </div>

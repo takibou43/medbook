@@ -88,10 +88,10 @@ export type ApiErrorKind = "offline" | "timeout" | "network" | "rateLimited" | "
 
 export const API_MESSAGES = {
   offline: "لا يوجد اتصال بالإنترنت.",
-  timeout: "استغرق الاتصال بخادم مادبوك وقتًا أطول من المتوقع.",
-  network: "تعذّر الاتصال بخادم مادبوك. حاول مرة أخرى بعد قليل.",
+  timeout: "استغرق الاتصال بخادم MedBook وقتًا أطول من المتوقع.",
+  network: "تعذّر الاتصال بخادم MedBook. حاول مرة أخرى بعد قليل.",
   rateLimited: "عدد الطلبات كبير حاليًا. انتظر قليلًا ثم أعد المحاولة.",
-  server: "حدث خطأ مؤقت في خادم مادبوك. حاول مرة أخرى.",
+  server: "حدث خطأ مؤقت في خادم MedBook. حاول مرة أخرى.",
 } as const;
 
 export function classifyApiError(error: unknown): { kind: ApiErrorKind; status?: number } {

@@ -172,7 +172,7 @@ export default function DoctorOverview() {
       ".brand{margin-top:32px;font-size:12px;color:#999;}" +
       "@media print{body{padding:0;}}" +
       "</style></head><body>" +
-      "<h1>مادبوك / MadBook" + (doctorName ? " — " + doctorName : "") + "</h1>" +
+      "<h1>MedBook" + (doctorName ? " — " + doctorName : "") + "</h1>" +
       "<p class='sub'>امسح الرمز لحجز موعد</p>" +
       "<img src='" + qrImageUrl + "' alt='QR' />" +
       "<p class='instructions'>لحجز موعد، امسح الرمز بكاميرا هاتفك.</p>" +

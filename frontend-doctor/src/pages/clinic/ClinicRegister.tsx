@@ -16,7 +16,7 @@ export default function ClinicRegister() {
     } catch (err) { setError(apiErrorMessage(err, "تعذر تسجيل العيادة.")); } finally { setBusy(false); }
   }
   return <main className="container-app mx-auto max-w-xl py-10" dir="rtl">
-    <h1 className="mb-2 text-2xl font-extrabold">سجّل عيادتك في مادبوك</h1>
+    <h1 className="mb-2 text-2xl font-extrabold">سجّل عيادتك في MedBook</h1>
     <p className="mb-5 text-slate-600">اشتراك واحد للعيادة: 4,000 دج شهريًا لكل طبيب، شامل حسابات المساعدين. تُراجع الإدارة العيادة والأطباء قبل إتاحة الحجز.</p>
     <form onSubmit={submit} className="card space-y-4 p-6">
       <Input name="email" label="بريد صاحب العيادة" type="email" required />

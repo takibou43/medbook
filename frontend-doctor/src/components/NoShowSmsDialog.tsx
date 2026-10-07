@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Copy, Info, MessageSquare, UserX } from "lucide-react";
+import { Copy, Info, MessageSquare } from "lucide-react";
 import { Modal } from "./ui/Modal";
 import { Button } from "./ui/Button";
 import { useToast } from "./ui/Toast";
@@ -14,13 +14,7 @@ import {
   normalizeAlgerianPhone,
 } from "../lib/noShowSms";
 
-/**
- * وضعان لهذه النافذة:
- * - "call": نودي على المريض فلم يستجب. نفتح رسالة «دورك قد حان» فقط، ويبقى الموعد
- *   قابلًا للمتابعة (ينتقل إلى قائمة المتأخرين) — بلا أي غياب نهائي. الغياب النهائي
- *   يُعتمد وحده عند انتهاء دوام الطبيب (autoExpireStaleAppointments في الخادم).
- * - "final": صفحة المواعيد — تسجيل «لم يحضر» يدويًا كما كان تمامًا، بلا تغيير.
- */
+/** Opens an editable SMS draft without changing the appointment. */
 export type NoShowDialogMode = "call" | "final";
 
 export interface NoShowTarget {
@@ -37,16 +31,14 @@ export interface NoShowTarget {
 
 interface Props {
   target: NoShowTarget | null;
-  /** الافتراضي "final" حتى تبقى صفحة المواعيد على سلوكها السابق حرفيًا. */
+  /** Selects the message wording only; neither mode changes the appointment. */
   mode?: NoShowDialogMode;
-  /** "final": يُحدّث الحالة إلى NO_SHOW. "call": ينقل الموعد إلى المتأخرين. يرمي استثناءً عند الفشل. */
-  onConfirm: (id: string) => Promise<unknown>;
   onClose: () => void;
 }
 
 const NO_PHONE_MESSAGE = "لا يوجد رقم هاتف صالح لهذا المريض.";
 
-export function NoShowSmsDialog({ target, mode = "final", onConfirm, onClose }: Props) {
+export function NoShowSmsDialog({ target, mode = "call", onClose }: Props) {
   const { user } = useAuth();
   const { showToast } = useToast();
   const [sent, setSent] = useState(false);
@@ -64,7 +56,7 @@ export function NoShowSmsDialog({ target, mode = "final", onConfirm, onClose }: 
   // النهائي من سُجّل غيابه مسبقًا يبدأ من خطوة الرسالة مباشرة (منع التكرار).
   useEffect(() => {
     if (!target) return;
-    setSent(callMode ? false : Boolean(target.alreadyNoShow));
+    setSent(false);
     setBusy(false);
     setMessage(
       callMode
@@ -94,18 +86,17 @@ export function NoShowSmsDialog({ target, mode = "final", onConfirm, onClose }: 
   async function confirm() {
     if (busy || !target) return;
     // وضع النداء بلا رقم صالح: لا نفتح الرسائل ولا نغيّر حالة الموعد إطلاقًا.
-    if (callMode && !phone) {
+    if (!phone) {
       showToast(NO_PHONE_MESSAGE, "error");
       return;
     }
     setBusy(true);
     try {
-      await onConfirm(target.id);
       setSent(true);
       if (smsHref && mobile) {
         // فتح تطبيق الرسائل فورًا؛ إن حجبه المتصفح يبقى الزر الظاهر بديلاً.
         window.location.href = smsHref;
-      } else if (callMode) {
+      } else {
         // حاسوب: لا تطبيق رسائل هنا — ننسخ النص ولا ندّعي أن الرسالة أُرسلت.
         const ok = await copyText(message);
         showToast(
@@ -124,7 +115,7 @@ export function NoShowSmsDialog({ target, mode = "final", onConfirm, onClose }: 
     <Modal
       open
       onClose={onClose}
-      title={callMode ? "المريض لم يحضر — إشعاره برسالة" : sent ? "إشعار المريض برسالة SMS" : "تسجيل عدم حضور المريض"}
+      title="إرسال رسالة"
       footer={
         sent ? (
           <Button variant="outline" onClick={onClose}>
@@ -135,15 +126,9 @@ export function NoShowSmsDialog({ target, mode = "final", onConfirm, onClose }: 
             <Button variant="ghost" onClick={onClose} disabled={busy}>
               إلغاء
             </Button>
-            {callMode ? (
-              <Button loading={busy} onClick={confirm}>
-                <MessageSquare className="ml-1.5 h-4 w-4" /> فتح الرسائل
-              </Button>
-            ) : (
-              <Button variant="danger" loading={busy} onClick={confirm}>
-                <UserX className="ml-1.5 h-4 w-4" /> تسجيل «لم يحضر»
-              </Button>
-            )}
+            <Button loading={busy} onClick={confirm}>
+              <MessageSquare className="ml-1.5 h-4 w-4" /> فتح الرسائل
+            </Button>
           </>
         )
       }
@@ -164,22 +149,10 @@ export function NoShowSmsDialog({ target, mode = "final", onConfirm, onClose }: 
           )}
         </div>
 
-        {sent ? (
-          <p className="flex items-start gap-1.5 rounded-xl bg-emerald-50 p-3 text-emerald-800">
+        <p className="flex items-start gap-1.5 rounded-xl bg-emerald-50 p-3 text-emerald-800">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
-            {callMode
-              ? "لم يُسجَّل غياب نهائي: بقي الموعد في المتابعة ويعود دوره بعد مريضين، ويُعتمد الغياب تلقائيًا عند انتهاء دوام الطبيب فقط."
-              : target.alreadyNoShow
-              ? "هذا المريض مسجَّل مسبقًا كـ «لم يحضر». يمكنك إعادة فتح الرسالة دون تسجيل غياب جديد."
-              : "تم تسجيل المريض كـ «لم يحضر». سيتم فتح تطبيق الرسائل لإرسال إشعار للمريض."}
-          </p>
-        ) : (
-          <p className="text-slate-500">
-            {callMode
-              ? "سيتم فتح تطبيق الرسائل في هاتفك، ويمكنك تعديل الرسالة قبل إرسالها. لن يُسجَّل الموعد كغياب نهائي."
-              : "سنسجّل الغياب ثم نفتح تطبيق الرسائل في هاتفك برسالة جاهزة تُرسل من شريحتك."}
-          </p>
-        )}
+            سيتم فتح تطبيق الرسائل برسالة قابلة للتعديل. الموعد يبقى كما هو دون تغيير حالته.
+        </p>
 
         <div>
           <label className="label" htmlFor="sms-message">

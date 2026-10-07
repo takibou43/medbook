@@ -1,3 +1,4 @@
+import { canSendAttendanceMessage } from "../../lib/assistantReception";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,8 +17,8 @@ import { StatCard } from "../../components/StatCard";
 import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
 import { NoShowSmsDialog, type NoShowTarget } from "../../components/NoShowSmsDialog";
 import { useCallNext, useCallPatient, useFinishAppointment, useMarkLate, useQueue } from "../../hooks/useQueue";
-import { useMyAppointments, useUpdateAppointmentStatus } from "../../hooks/useAppointments";
-import { appointmentActions, appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
+import { useMyAppointments } from "../../hooks/useAppointments";
+import { appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
 import { canScheduleFollowUp } from "../../lib/features";
 import { appointmentPhone, beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import type { Appointment } from "../../types";
@@ -186,7 +187,6 @@ export default function DoctorHome() {
   const callNext = useCallNext();
   const callPatient = useCallPatient();
   const markLate = useMarkLate();
-  const updateStatus = useUpdateAppointmentStatus();
 
   const [search, setSearch] = useState("");
   const [menuId, setMenuId] = useState<string | null>(null);
@@ -201,7 +201,7 @@ export default function DoctorHome() {
   };
 
   const doctor = user?.doctor;
-  const busy = finish.isPending || callNext.isPending || callPatient.isPending || markLate.isPending || updateStatus.isPending;
+  const busy = finish.isPending || callNext.isPending || callPatient.isPending || markLate.isPending;
 
   // يُنفَّذ بعد انتهاء أي طلب (الأزرار تعود مفعّلة) حتى لا يضيع التركيز على زر معطّل.
   useEffect(() => {
@@ -280,19 +280,6 @@ export default function DoctorHome() {
     });
   }
 
-  async function recordNoShow(id: string) {
-    try {
-      const res = await updateStatus.mutateAsync({ id, status: "NO_SHOW" });
-      showToast("تم تسجيل المريض كـ «لم يحضر».", "success");
-      refreshAll();
-      return res;
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-      refreshAll();
-      throw err;
-    }
-  }
-
   // ---- اشتراك/توثيق: تنبيهات مختصرة ----
   const clinicSubscription = user?.doctor?.clinic?.ownerId ? user.doctor.clinic : null;
   const effectiveExpiry = clinicSubscription ? clinicSubscription.subscriptionExpiresAt : user?.doctor?.subscriptionExpiresAt;
@@ -307,7 +294,7 @@ export default function DoctorHome() {
 
   return (
     <div className="space-y-5">
-      <NoShowSmsDialog target={noShowTarget} onConfirm={recordNoShow} onClose={() => setNoShowTarget(null)} />
+      <NoShowSmsDialog target={noShowTarget} onClose={() => setNoShowTarget(null)} />
       <FollowUpModal open={Boolean(followUpCtx)} ctx={followUpCtx} onClose={() => setFollowUpCtx(null)} onDone={refreshAll} />
 
       {/* ترحيب */}
@@ -470,11 +457,10 @@ export default function DoctorHome() {
                 </div>
                 <ul>
                   {filtered.map((a, i) => {
-                    const actions = appointmentActions(a, "DOCTOR");
                     const showFollowUp = a.status === "COMPLETED" && canScheduleFollowUp(a);
                     const canCall = CALL_ALLOWED.includes(a.status) && !current;
                     const canLate = canManageAttendance && LATE_ALLOWED.includes(a.status);
-                    const canNoShow = canManageAttendance && actions.noShow.visible;
+                    const canNoShow = canManageAttendance && canSendAttendanceMessage(a);
                     const hasMenu = canCall || canLate || canNoShow;
                     const name = beneficiaryName(a);
                     return (
@@ -512,7 +498,7 @@ export default function DoctorHome() {
                                 ...(canCall ? [{ key: "call", label: "نادِ هذا المريض", onSelect: () => run(async () => { await callPatient.mutateAsync(a.id); }, "تمت مناداة المريض.", a.id) }] : []),
                                 ...(canLate ? [{ key: "late", label: "متأخر", onSelect: () => run(async () => { await markLate.mutateAsync(a.id); }, "سُجّل المريض متأخراً.", a.id) }] : []),
                                 ...(canNoShow
-                                  ? [{ key: "noshow", label: "لم يحضر", danger: true, disabled: !actions.noShow.enabled, hint: actions.noShow.reason, onSelect: () => openNoShow(a) }]
+                                  ? [{ key: "noshow", label: "إرسال رسالة", onSelect: () => openNoShow(a) }]
                                   : []),
                               ]}
                             />

@@ -5,6 +5,7 @@ import clsx from "clsx";
 import { AlertTriangle, ArrowLeft, CalendarClock, CalendarPlus, Check, CheckCircle2, Hourglass, MoreHorizontal, Search } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
+import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useLiveUpdates } from "../../context/LiveUpdatesContext";
 import { livePollInterval } from "../../lib/livePolling";
 import { useToast } from "../../components/ui/Toast";
@@ -164,6 +165,7 @@ function RowActionsMenu({
 }
 
 export default function DoctorHome() {
+  const canManageAttendance = useAttendanceActions();
   const live = useLiveUpdates();
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -471,8 +473,9 @@ export default function DoctorHome() {
                     const actions = appointmentActions(a, "DOCTOR");
                     const showFollowUp = a.status === "COMPLETED" && canScheduleFollowUp(a);
                     const canCall = CALL_ALLOWED.includes(a.status) && !current;
-                    const canLate = LATE_ALLOWED.includes(a.status);
-                    const hasMenu = canCall || canLate || actions.noShow.visible;
+                    const canLate = canManageAttendance && LATE_ALLOWED.includes(a.status);
+                    const canNoShow = canManageAttendance && actions.noShow.visible;
+                    const hasMenu = canCall || canLate || canNoShow;
                     const name = beneficiaryName(a);
                     return (
                       <li
@@ -508,7 +511,7 @@ export default function DoctorHome() {
                               items={[
                                 ...(canCall ? [{ key: "call", label: "نادِ هذا المريض", onSelect: () => run(async () => { await callPatient.mutateAsync(a.id); }, "تمت مناداة المريض.", a.id) }] : []),
                                 ...(canLate ? [{ key: "late", label: "متأخر", onSelect: () => run(async () => { await markLate.mutateAsync(a.id); }, "سُجّل المريض متأخراً.", a.id) }] : []),
-                                ...(actions.noShow.visible
+                                ...(canNoShow
                                   ? [{ key: "noshow", label: "لم يحضر", danger: true, disabled: !actions.noShow.enabled, hint: actions.noShow.reason, onSelect: () => openNoShow(a) }]
                                   : []),
                               ]}

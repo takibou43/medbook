@@ -127,6 +127,9 @@ export async function updateOwnProfile(
       throw ApiError.badRequest("موقع طبيب العيادة يتبع موقع العيادة.");
   }
   const { specialtyName, ...profile } = data;
+  if (specialtyName === undefined && profile.specialtyId === undefined) {
+    return prisma.doctor.update({ where: { id: doctor.id }, data: profile });
+  }
   return prisma.$transaction(async tx => {
     if (specialtyName !== undefined || profile.specialtyId !== undefined) {
       profile.specialtyId = await resolveSpecialtyId(tx, { specialtyName, specialtyId: profile.specialtyId });

@@ -112,14 +112,6 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
     const schedules = Array.from({ length: 7 }, (_, d) => ({
       dayOfWeek: d, startTime: "00:00", endTime: "23:59", isException: false, exceptionDate: null, isOff: false,
     }));
-    const expectedSlots: string[] = [];
-    for (let day = 0; expectedSlots.length < PER_DOCTOR && day < 5; day++) {
-      const date = algeriaTodayUTCMidnight();
-      date.setUTCDate(date.getUTCDate() + day);
-      for (const s of generateAvailableSlots(date, schedules, [], SLOT_MIN)) {
-        if (!isPast(date, s) && expectedSlots.length < PER_DOCTOR) expectedSlots.push(`${date.toISOString().slice(0, 10)} ${s}`);
-      }
-    }
 
     // ---- 100 طلب: كلٌّ بهاتف واسم فريدين لتمييز الحجز المكرر والمفقود ----
     const reqs = Array.from({ length: TOTAL }, (_, n) => ({
@@ -154,6 +146,7 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
       })
     );
     const elapsedMs = Date.now() - t0;
+    const requestEnd = Date.now();
 
     // ---- الفحص من قاعدة البيانات نفسها ----
     const rows = await db.appointment.findMany({
@@ -197,7 +190,21 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
       perDoctor[id.slice(0, 8)] = list.length;
       const keys = list.map((r) => `${r.date.toISOString().slice(0, 10)} ${r.startTime}`);
       if (new Set(keys).size !== keys.length) duplicateQueueNumbers += keys.length - new Set(keys).size;
-      // الترتيب الصحيح: الأدوار المحجوزة = أول N دور متاح بلا ثغرة، متسلسلة تصاعديًا
+      // First booking starts at the nearest minute; later bookings retain the grid.
+      const first = list[0];
+      expect(first).toBeDefined();
+      const firstUtc = Date.parse(`${first.date.toISOString().slice(0, 10)}T${first.startTime}:00+01:00`);
+      expect(firstUtc).toBeGreaterThanOrEqual(Math.ceil(t0 / 60000) * 60000);
+      expect(firstUtc).toBeLessThanOrEqual(Math.ceil(requestEnd / 60000) * 60000);
+      const expectedSlots = [keys[0]];
+      for (let day = 0; expectedSlots.length < PER_DOCTOR && day < 5; day++) {
+        const date = new Date(first.date);
+        date.setUTCDate(date.getUTCDate() + day);
+        const occupied = day === 0 ? [{ startTime: first.startTime, endTime: first.endTime }] : [];
+        for (const slot of generateAvailableSlots(date, schedules, occupied, SLOT_MIN).sort()) {
+          if ((day > 0 || slot >= first.endTime) && expectedSlots.length < PER_DOCTOR) expectedSlots.push(`${date.toISOString().slice(0, 10)} ${slot}`);
+        }
+      }
       if (JSON.stringify(keys) !== JSON.stringify(expectedSlots.slice(0, keys.length))) gapsOrWrongOrder++;
     }
     const partialRecords = rows.filter(

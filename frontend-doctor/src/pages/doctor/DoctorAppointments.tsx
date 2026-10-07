@@ -1,3 +1,4 @@
+import { canSendAttendanceMessage } from "../../lib/assistantReception";
 import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -173,7 +174,6 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
   const wa = toWhatsAppNumber(phone);
   const isOpen = a.status === "CONFIRMED" || a.status === "PENDING";
   const actions = appointmentActions(a, role);
-  const noShowReasonId = `noshow-reason-${a.id}`;
 
   const reminderHref = wa
     ? `https://wa.me/${wa}?text=${encodeURIComponent(
@@ -233,11 +233,6 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {actions.note}
           </p>
         )}
-        {canManageAttendance && actions.noShow.visible && !actions.noShow.enabled && actions.noShow.reason && (
-          <p id={noShowReasonId} className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
-            <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {actions.noShow.reason}
-          </p>
-        )}
       </div>
 
       {/* الإجراءات — مفصولة بصريًا عن الوسوم لتُقرأ كعناصر قابلة للنقر */}
@@ -267,15 +262,14 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> اكتمل الموعد
           </Button>
         )}
-        {canManageAttendance && actions.noShow.visible && (
+        {canManageAttendance && canSendAttendanceMessage(a) && (
           <Button
             variant="outline"
             onClick={onNoShow}
-            disabled={busy || !actions.noShow.enabled}
-            aria-describedby={!actions.noShow.enabled ? noShowReasonId : undefined}
-            title={actions.noShow.reason}
+            disabled={busy}
+            title="إرسال رسالة دون تغيير الموعد"
           >
-            لم يحضر
+            إرسال رسالة
           </Button>
         )}
         {onFollowUp && canScheduleFollowUp(a) && a.status !== "NO_SHOW" && (
@@ -287,9 +281,6 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
           <>
             <Button onClick={onArrivedLate} disabled={busy} loading={pending} title="وصل بعد فوات موعده — أدخله الآن">
               <UserCheck className="h-4 w-4" /> حضر متأخرًا
-            </Button>
-            <Button variant="outline" onClick={onNoShow} disabled={busy} title="إعادة فتح رسالة الإشعار">
-              <MessageCircle className="h-4 w-4" /> إشعار SMS
             </Button>
           </>
         )}
@@ -395,24 +386,10 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
     }
   }
 
-  /** مثل changeStatus لكنه يُعيد رمي الخطأ حتى لا تفتح النافذة الرسائل عند فشل الطلب. */
-  async function recordNoShow(id: string) {
-    setPendingId(id);
-    try {
-      const res = await updateStatus.mutateAsync({ id, status: "NO_SHOW" });
-      showToast("تم تسجيل المريض كـ «لم يحضر».", "success");
-      return res;
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-      throw err;
-    } finally {
-      setPendingId(null);
-    }
-  }
 
   return (
     <div className="space-y-4">
-      <NoShowSmsDialog target={noShowTarget} onConfirm={recordNoShow} onClose={() => setNoShowTarget(null)} />
+      <NoShowSmsDialog target={noShowTarget} onClose={() => setNoShowTarget(null)} />
 
       {/* الهيدر: العنوان + مؤشر مباشر مُختصر بدل الشرح المطوّل */}
       <header className="flex flex-wrap items-center justify-between gap-3">

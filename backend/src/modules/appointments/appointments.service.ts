@@ -414,6 +414,7 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
     extraData.arrivedAt = null;
   } else if (newStatus === AppointmentStatus.IN_PROGRESS) {
     extraData.calledAt = new Date();
+    extraData.callCount = { increment: 1 };
   }
 
   // انتقال ذرّي (compare-and-swap): نكتب فقط إن كانت الحالة ما زالت كما قرأناها. طلبان متزامنان
@@ -721,7 +722,7 @@ export async function callNextPatient(doctorUserId: string, role: Role) {
 
       const called = await tx.appointment.update({
         where: { id: next.id },
-        data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date() },
+        data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date(), callCount: { increment: 1 } },
         include: QUEUE_INCLUDE,
       });
       await tx.appointment.updateMany({
@@ -848,7 +849,7 @@ export async function callSpecificPatient(doctorUserId: string, appointmentId: s
 
       const called = await tx.appointment.update({
         where: { id: appointmentId },
-        data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date(), skipCredits: 0 },
+        data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date(), callCount: { increment: 1 }, skipCredits: 0 },
         include: QUEUE_INCLUDE,
       });
       await tx.appointment.updateMany({

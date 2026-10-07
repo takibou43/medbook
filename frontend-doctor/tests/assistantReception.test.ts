@@ -1,8 +1,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canMarkLate, canMarkUnanswered, canOfferNoShow, filterReception, orderReception, receptionLabel, receptionConnection, receptionTime, callAge, callTime } from "../src/lib/assistantReception.ts";
+import { canSendAttendanceMessage, canMarkLate, canMarkUnanswered, canOfferNoShow, filterReception, orderReception, receptionLabel, receptionConnection, receptionTime, callAge, callTime } from "../src/lib/assistantReception.ts";
 import type { Appointment } from "../src/types/index.ts";
 const row = (id: string, changes: Partial<Appointment> = {}): Appointment => ({ id, doctorId: "d1", status: "CONFIRMED", date: "2026-10-04", startTime: "09:00", endTime: "09:15", type: "IN_PERSON", guestFirstName: "سارة", guestLastName: "علي", ...changes });
+test("message is available only after two real calls without arrival and never changes appointment identity or state", () => {
+  const a = row("called", { status: "IN_PROGRESS", callCount: 2, calledAt: "2026-10-04T08:00:00Z", familyMemberId: "child" });
+  const original = structuredClone(a);
+  assert.equal(canSendAttendanceMessage(a), true);
+  assert.deepEqual(a, original);
+  assert.equal(canSendAttendanceMessage({ ...a, callCount: 1 }), false);
+  assert.equal(canSendAttendanceMessage({ ...a, callCount: undefined, deferredCount: 2 }), false);
+  assert.equal(canSendAttendanceMessage({ ...a, arrivedAt: "now" }), false);
+  assert.equal(canSendAttendanceMessage({ ...a, calledAt: null }), false);
+  assert.equal(canSendAttendanceMessage({ ...a, status: "LATE" }), true);
+  for (const status of ["CONFIRMED", "PENDING", "COMPLETED", "CANCELLED", "NO_SHOW"] as const) {
+    assert.equal(canSendAttendanceMessage({ ...a, status }), false);
+  }
+});
 test("late action covers today's absent waiting patients and timed calls, preserving arrived and terminal patients", () => {
   for (const status of ["CONFIRMED", "LATE", "IN_PROGRESS"] as const) {
     const a = row(status, { status, calledAt: "2026-10-04T08:00:00Z" });

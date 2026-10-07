@@ -18,6 +18,11 @@ export function canMarkUnanswered(a: Appointment) {
 export function canOfferNoShow(a: Appointment) {
   return (a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt;
 }
+/** Send a draft only after two real calls and no recorded arrival; never mutate the booking. */
+export function canSendAttendanceMessage(a: Appointment) {
+  return (a.callCount ?? 0) >= 2 && !a.arrivedAt && Boolean(a.calledAt)
+    && (a.status === "IN_PROGRESS" || a.status === "LATE");
+}
 /** Deferral is available only for today's absent waiting patients or a timed call. */
 export function canMarkLate(a: Appointment, today: string) {
   return a.date.slice(0, 10) === today && !a.arrivedAt

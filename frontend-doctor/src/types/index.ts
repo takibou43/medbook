@@ -117,6 +117,7 @@ export interface Appointment {
   review?: Review | null;
   // حقول طابور العيادة اليومي
   calledAt?: string | null;
+  callCount?: number;
   deferredCount?: number;
   skipCredits?: number;
   arrivedAt?: string | null;

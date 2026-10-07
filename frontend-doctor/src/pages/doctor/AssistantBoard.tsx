@@ -17,7 +17,7 @@ import { beneficiaryName } from "../../lib/appointmentPeople";
 import { appointmentActions } from "../../lib/doctorUi";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { WalkInPanel, WALK_IN_NOTE } from "../../components/WalkInPanel";
-import { canMarkLate, canMarkUnanswered, canOfferNoShow, callAge, callTime, filterReception, orderReception, receptionConnection, receptionLabel, receptionTime, RECEPTION_STATUSES } from "../../lib/assistantReception";
+import { canSendAttendanceMessage, canMarkLate, canMarkUnanswered, callAge, callTime, filterReception, orderReception, receptionConnection, receptionLabel, receptionTime, RECEPTION_STATUSES } from "../../lib/assistantReception";
 import { advanceAfterMissedCall } from "../../lib/assistantAdvance";
 
 type DoctorQueue = { doctor: { id: string; firstName: string; lastName: string }; queue: QueueState };
@@ -149,10 +149,9 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     return <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
       {a.status === "PENDING" && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CONFIRMED")}>تأكيد</Button>}
       {(a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt && a.date.slice(0, 10) === today && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "arrived")}>وصل المريض</Button>}
-      {canMarkUnanswered(a) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => setMissedCall(a)}>لم يحضر للنداء — التالي</Button>}
+      {canMarkUnanswered(a) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => setMissedCall(a)}>تأجيل ونداء التالي</Button>}
       {canMarkLate(a, today) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "late")}>متأخر</Button>}
-      {canMarkUnanswered(a) && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => openDialog("call")}>لم يحضر — إشعاره برسالة</Button>}
-      {canOfferNoShow(a) && rules.noShow.visible && <Button variant="ghost" disabled={action.isPending || advance.isPending || !rules.noShow.enabled} title={rules.noShow.reason} onClick={() => openDialog("final")}>لم يحضر</Button>}
+      {canSendAttendanceMessage(a) && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => openDialog("call")}>إرسال رسالة</Button>}
       {rules.note && <p className="text-xs text-slate-600">{rules.note}</p>}
       {(a.status === "PENDING" || a.status === "CONFIRMED") && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CANCELLED")}>إلغاء الموعد</Button>}
     </div>;
@@ -184,7 +183,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       <p className="mt-3 text-sm text-slate-700">استخدم هذا الإجراء فقط إن لم يبدأ المريض الكشف. لن يُسجَّل غياب نهائي ولن تُفتح الرسائل.</p>
     </Modal>
     {Object.values(advanceRetries).map(appointment => <div key={appointment.doctorId} role="alert" className="card p-4 text-slate-800"><p>تم تأجيل {patientName(appointment)} دون حذف موعده، لكن نداء التالي لم يتأكد.</p><Button className="mt-2 min-h-11" loading={advance.isPending} onClick={() => void deferAndAdvance(appointment, true)}>إعادة محاولة نداء التالي</Button></div>)}
-    <NoShowSmsDialog target={dialog?.target ?? null} mode={dialog?.mode} onClose={() => setDialog(null)} onConfirm={async () => { if (dialog) await action.mutateAsync({ appointment: dialog.appointment, kind: dialog.mode === "call" ? "late" : "NO_SHOW" }); }} />
+    <NoShowSmsDialog target={dialog?.target ?? null} mode={dialog?.mode} onClose={() => setDialog(null)} />
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h1 className="text-2xl font-bold">{appointmentsView ? "مواعيد الأطباء" : "الطابور"}</h1><p className="mt-1 text-sm text-slate-600">المواعيد والنداءات في قائمة واحدة، دون تكرار المريض.</p></div>
       <Button variant="outline" onClick={() => {

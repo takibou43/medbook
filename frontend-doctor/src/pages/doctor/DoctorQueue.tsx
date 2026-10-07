@@ -1,3 +1,4 @@
+import { canSendAttendanceMessage } from "../../lib/assistantReception";
 import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useEffect, useRef, useState } from "react";
 import { Bell, BellOff, CheckCircle2, Clock3, Megaphone, PhoneCall, UserCheck, UserX, Users, X } from "lucide-react";
@@ -122,23 +123,6 @@ export default function DoctorQueue() {
     });
   }
 
-  /**
-   * المريض نودي عليه فلم يحضر: لا نسجّله غائبًا نهائيًا هنا إطلاقًا. ننقله إلى قائمة
-   * المتأخرين (يعود دوره تلقائيًا بعد مريضين، بلا حد للتأجيل) ثم تفتح النافذة تطبيق
-   * الرسائل من هاتف المساعد. الغياب النهائي (NO_SHOW) يُعتمد وحده عند انتهاء دوام
-   * الطبيب عبر autoExpireStaleAppointments في الخادم — وهي القاعدة الموجودة أصلًا.
-   */
-  async function deferAndNotify(id: string) {
-    markSelfAction();
-    try {
-      const res = await markLate.mutateAsync(id);
-      showToast(lateToast(res), "success");
-      return res;
-    } catch (err) {
-      showToast(apiErrorMessage(err, "تعذّر نقله إلى قائمة المتأخرين."), "error");
-      throw err;
-    }
-  }
 
   // المريض الحالي تغيّر دون أن يضغط هذا الجهاز شيئًا ⇒ الطبيب نادى عليه: نعرض اسمه للمساعد فورًا.
   const currentId = data ? data.current?.id ?? null : undefined;
@@ -219,7 +203,7 @@ export default function DoctorQueue() {
 
   return (
     <div className="space-y-5">
-      <NoShowSmsDialog target={noShowTarget} mode="call" onConfirm={deferAndNotify} onClose={() => setNoShowTarget(null)} />
+      <NoShowSmsDialog target={noShowTarget} mode="call" onClose={() => setNoShowTarget(null)} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-slate-900">طابور اليوم</h1>
@@ -339,14 +323,14 @@ export default function DoctorQueue() {
             </Button>}
             {/* نودي عليه فلم يحضر: رسالة جاهزة من هاتف المساعد + بقاؤه في المتابعة.
                 لا تسجيل غياب نهائي هنا — ذلك يحدث وحده عند انتهاء دوام الطبيب. */}
-            {canManageAttendance && <Button
+            {canManageAttendance && canSendAttendanceMessage(current) && <Button
               variant="outline"
               className="col-span-2 border-red-200 text-red-600 hover:bg-red-50"
               disabled={busy}
               title="لم يستجب للنداء — إشعاره برسالة دون تسجيل غياب نهائي"
               onClick={() => openNoShow(current)}
             >
-              <UserX className="ml-1.5 h-4 w-4" /> لم يحضر — إشعاره برسالة
+              <UserX className="ml-1.5 h-4 w-4" /> إرسال رسالة
             </Button>}
           </div>
         </Card>
@@ -437,11 +421,11 @@ export default function DoctorQueue() {
                   >
                     {isLate ? "نادِه الآن" : "نادِه"}
                   </button>
-                  {isLate && (
+                  {canManageAttendance && canSendAttendanceMessage(a) && (
                     <button
                       type="button"
                       disabled={busy}
-                      title="لم يستجب — إشعاره برسالة دون تسجيل غياب نهائي"
+                      title="إرسال رسالة"
                       aria-label={`إشعار ${patientName(a)} برسالة`}
                       onClick={() => openNoShow(a)}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-white disabled:opacity-40"
@@ -484,16 +468,16 @@ export default function DoctorQueue() {
                     >
                       نادِه الآن
                     </button>
-                    <button
+                    {canManageAttendance && canSendAttendanceMessage(a) && <button
                       type="button"
                       disabled={busy}
-                      title="لم يستجب — إشعاره برسالة دون تسجيل غياب نهائي"
+                      title="إرسال رسالة"
                       aria-label={`إشعار ${patientName(a)} برسالة`}
                       onClick={() => openNoShow(a)}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-white disabled:opacity-40"
                     >
                       <UserX className="h-4 w-4" />
-                    </button>
+                    </button>}
                   </div>
                 </Card>
               );

@@ -106,7 +106,7 @@ async function bookedRangesForDoctorOnDate(doctorId: string, date: Date, db: Db 
       date: { gte: startOfDay, lte: endOfDay },
       ...SLOT_OCCUPYING_WHERE,
     },
-    select: { startTime: true, endTime: true, status: true },
+    select: { startTime: true, endTime: true, status: true, activeSlot: true },
   });
 }
 

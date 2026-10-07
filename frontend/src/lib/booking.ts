@@ -23,58 +23,6 @@ export function splitFullName(full: string): { firstName: string; lastName: stri
   return { firstName, lastName };
 }
 
-// فرق الدقائق بين وقتي بداية ونهاية الموعد الفعليَّين (بصيغة HH:mm) كما سجّلهما الخادم —
-// نستخدمها كمدة دقيقة للحدث في التقويم بدل افتراض مدة ثابتة.
-export function diffMinutes(start: string, end: string): number {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  return eh * 60 + em - (sh * 60 + sm);
-}
-
-// رابط "أضِف إلى التقويم" — يُنشأ بالكامل في المتصفح من بيانات الموعد الفعلية (بلا خادم
-// إضافي وبلا أي مكتبة جديدة). نعتمد حاليًا على Google Calendar فقط كخيار مبسّط وموحّد يعمل
-// من أي متصفح على Android وiOS دون تنزيل ملف. بتوقيت الجزائر UTC+1 (بلا توقيت صيفي).
-export function buildGoogleCalendarUrl(params: {
-  doctorName: string;
-  patientName: string;
-  clinicPhone: string | null;
-  address: string | null;
-  dateStr: string;
-  startTime: string;
-  durationMinutes: number;
-}): string {
-  const { doctorName, patientName, clinicPhone, address, dateStr, startTime, durationMinutes } = params;
-  // نحلّل dateStr بمرونة: قد يصل كسلسلة "YYYY-MM-DD" فقط (كما في معاينة الدور) أو كطابع
-  // زمني ISO كامل بالحرف T (كما في استجابة إنشاء الموعد الفعلي). نمرّ دائمًا عبر new Date()
-  // ونقرأ مكوّناته بتوقيت UTC مباشرة، بصرف النظر عن الصيغة الواردة.
-  const baseDate = new Date(dateStr);
-  const [h, mi] = startTime.split(":").map(Number);
-  const ALGERIA_OFFSET_MS = 60 * 60000;
-  const startUtc = new Date(
-    Date.UTC(baseDate.getUTCFullYear(), baseDate.getUTCMonth(), baseDate.getUTCDate(), h, mi) - ALGERIA_OFFSET_MS
-  );
-  const endUtc = new Date(startUtc.getTime() + Math.max(durationMinutes, 5) * 60000);
-  const fmt = (dt: Date) => dt.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-
-  const title = `موعد طبي مع الدكتور ${doctorName}`;
-  const description = [
-    "موعد طبي محجوز عبر MedBook",
-    `الطبيب: د. ${doctorName}`,
-    `المريض: ${patientName}`,
-    clinicPhone ? `هاتف العيادة: ${clinicPhone}` : null,
-  ]
-    .filter((p): p is string => Boolean(p))
-    .join(" | ");
-
-  return (
-    "https://calendar.google.com/calendar/render?action=TEMPLATE" +
-    `&text=${encodeURIComponent(title)}` +
-    `&dates=${fmt(startUtc)}/${fmt(endUtc)}` +
-    `&details=${encodeURIComponent(description)}` +
-    (address ? `&location=${encodeURIComponent(address)}` : "")
-  );
-}
-
 export function formatLongDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" });
 }

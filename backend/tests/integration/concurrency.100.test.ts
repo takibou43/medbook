@@ -9,7 +9,7 @@
  * تشغيل: TEST_DATABASE_URL="postgresql://postgres@127.0.0.1:54329/medbook_test?schema=public" npm test -- concurrency
  * (يجب أن تكون قاعدة الاختبار قد أُنشئت بـ `prisma db push`).
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import fs from "fs";
 import http from "http";
 import type { AddressInfo } from "net";
@@ -252,4 +252,36 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
     expect(report.idleInTransaction).toBe(0);
     for (const id of created.doctorIds) expect(rows.filter((r) => r.doctorId === id).length).toBe(PER_DOCTOR);
   }, 120000);
+  it("books today after early completion without reusing the legacy unique start or overlapping a new reservation", async () => {
+    const { algeriaTodayUTCMidnight } = await import("../../src/lib/slots");
+    const day = algeriaTodayUTCMidnight();
+    const dateStr = day.toISOString().slice(0, 10);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse(`${dateStr}T12:14:30Z`));
+    try {
+      const doctorId = created.doctorIds[0];
+      await db.appointment.deleteMany({ where: { doctorId } });
+      const history = await db.appointment.create({ data: {
+        doctorId, date: day, startTime: "13:15", endTime: "23:59", status: "COMPLETED",
+        guestFirstName: "تاريخ", guestLastName: "مكتمل", activeSlot: true, endedAt: new Date(`${dateStr}T12:14:00Z`),
+      } });
+      const body = { firstName: "مريض", lastName: "اختبار", doctorId, wilayaId: created.wilayaId, specialtyId: created.specialtyId };
+      const preview = await fetch(`${base}/api/booking/next-slot?doctorId=${doctorId}`);
+      expect(preview.status).toBe(200);
+      expect((await preview.json() as any).data.startTime).toBe("13:16");
+      const book = async () => {
+        const response = await fetch(`${base}/api/booking`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${patientToken}` }, body: JSON.stringify(body) });
+        expect(response.status).toBe(201);
+        return (await response.json() as any).data;
+      };
+      const first = await book();
+      expect(first.date.slice(0, 10)).toBe(dateStr);
+      expect(first.startTime).toBe("13:16");
+      const second = await book();
+      expect(second.startTime).toBe("13:36");
+      expect(second.startTime).toBe(first.endTime);
+      expect((await db.appointment.findUniqueOrThrow({ where: { id: history.id } })).status).toBe("COMPLETED");
+    } finally {
+      clock.mockRestore();
+    }
+  });
 });

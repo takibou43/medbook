@@ -18,6 +18,11 @@ export function canMarkUnanswered(a: Appointment) {
 export function canOfferNoShow(a: Appointment) {
   return (a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt;
 }
+/** Deferral is available only for today's absent waiting patients or a timed call. */
+export function canMarkLate(a: Appointment, today: string) {
+  return a.date.slice(0, 10) === today && !a.arrivedAt
+    && (canOfferNoShow(a) || canMarkUnanswered(a));
+}
 export function filterReception<T extends Appointment>(rows: T[], filter: ReceptionFilter, name: (a: T) => string): T[] {
   const search = filter.search.trim().normalize("NFKC").toLocaleLowerCase();
   return rows.filter(a => (!filter.doctorId || a.doctorId === filter.doctorId)

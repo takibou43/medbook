@@ -17,7 +17,7 @@ import { beneficiaryName } from "../../lib/appointmentPeople";
 import { appointmentActions } from "../../lib/doctorUi";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { WalkInPanel, WALK_IN_NOTE } from "../../components/WalkInPanel";
-import { canMarkUnanswered, canOfferNoShow, callAge, callTime, filterReception, orderReception, receptionConnection, receptionLabel, receptionTime, RECEPTION_STATUSES } from "../../lib/assistantReception";
+import { canMarkLate, canMarkUnanswered, canOfferNoShow, callAge, callTime, filterReception, orderReception, receptionConnection, receptionLabel, receptionTime, RECEPTION_STATUSES } from "../../lib/assistantReception";
 import { advanceAfterMissedCall } from "../../lib/assistantAdvance";
 
 type DoctorQueue = { doctor: { id: string; firstName: string; lastName: string }; queue: QueueState };
@@ -150,7 +150,9 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       {a.status === "PENDING" && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CONFIRMED")}>تأكيد</Button>}
       {(a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt && a.date.slice(0, 10) === today && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "arrived")}>وصل المريض</Button>}
       {canMarkUnanswered(a) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => setMissedCall(a)}>لم يحضر للنداء — التالي</Button>}
-      {appointmentsView && canOfferNoShow(a) && rules.noShow.visible && <Button variant="ghost" disabled={action.isPending || advance.isPending || !rules.noShow.enabled} title={rules.noShow.reason} onClick={() => openDialog("final")}>لم يحضر</Button>}
+      {canMarkLate(a, today) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "late")}>متأخر</Button>}
+      {canMarkUnanswered(a) && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => openDialog("call")}>لم يحضر — إشعاره برسالة</Button>}
+      {canOfferNoShow(a) && rules.noShow.visible && <Button variant="ghost" disabled={action.isPending || advance.isPending || !rules.noShow.enabled} title={rules.noShow.reason} onClick={() => openDialog("final")}>لم يحضر</Button>}
       {rules.note && <p className="text-xs text-slate-600">{rules.note}</p>}
       {(a.status === "PENDING" || a.status === "CONFIRMED") && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CANCELLED")}>إلغاء الموعد</Button>}
     </div>;

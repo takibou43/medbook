@@ -219,7 +219,7 @@ export const wilayasAdmin = {
     remove: (id: string) => removeCatalog("wilaya", id),
     addCity: (wilayaId: string, nameAr: string) => saveCatalog("city", null, {wilayaId,nameAr}),
     addCitiesBulk: async (wilayaId: string, names: string[]) => prisma.$transaction(async tx => {
-          await tx.$queryRaw`SELECT pg_advisory_xact_lock(724002)`;
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(724002)`;
           const wilaya = await tx.wilaya.findUnique({ where: { id: wilayaId } });
           if (!wilaya) throw ApiError.notFound("الولاية غير موجودة.");
           const existing = await tx.city.findMany({ where: { wilayaId }, select: { nameAr: true } });
@@ -329,8 +329,8 @@ export async function listAppointmentsAdmin(params: { id?: string; filter?: Appo
   else if (params.filter === "cancelled") where.status = "CANCELLED";
 
   if(params.doctorId)where.doctorId=params.doctorId;
-  if(params.status)where.status=params.status;
-  if(params.from||params.to)where.AND=[{date:{...(params.from?{gte:new Date(params.from+"T00:00:00Z")}:{}),...(params.to?{lte:new Date(params.to+"T23:59:59.999Z")}: {})}}];
+  if(params.status)where.AND=[{status:params.status}];
+  if(params.from||params.to)where.AND=[...(Array.isArray(where.AND)?where.AND:[]),{date:{...(params.from?{gte:new Date(params.from+"T00:00:00Z")}:{}),...(params.to?{lte:new Date(params.to+"T23:59:59.999Z")}: {})}}];
   const q = params.q?.trim();
   if (q) {
     where.OR = [

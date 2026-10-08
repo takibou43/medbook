@@ -1,3 +1,4 @@
+import { loadAdminDoctorOptions } from '../../components/admin/doctorOptions';
 import { useAdminListParams } from "../../hooks/useAdminListParams";
 import { AdminResults } from "../../components/admin/AdminUI";
 import { useQuery } from "@tanstack/react-query";
@@ -30,7 +31,7 @@ export default function AdminAppointments() {
   const id = params.get("id");
   const filter = FILTERS.find((f) => f.key === params.get("filter"))?.key ?? "all";
   const from=params.get("from")??"",to=params.get("to")??"",doctorId=params.get("doctorId")??"",status=params.get("status")??"";
-  const doctors=useQuery({queryKey:["admin-appointment-doctors",search],queryFn:async({signal})=>(await api.get("/admin/doctors",{signal,params:{q:search||undefined,pageSize:50}})).data.data});
+  const doctors=useQuery({queryKey:["admin-doctor-options"],queryFn:({signal})=>loadAdminDoctorOptions(signal)});
   const filtered = !!(q || id || filter !== "all" || from || to || doctorId || status);
   const query = useQuery({
     queryKey: ["admin-appointments", filter, search, page, id, from,to,doctorId,status],

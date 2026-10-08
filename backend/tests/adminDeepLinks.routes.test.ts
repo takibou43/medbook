@@ -26,6 +26,12 @@ describe('admin deep links on protected HTTP routes',()=>{
    expect((await request(app).get('/api/admin/'+kind).query({id:ID}).set('Authorization',auth('PATIENT'))).status).toBe(403);
   });
  }
+
+ it('appointment tabs and explicit date/status filters intersect rather than override',async()=>{
+  const res=await request(app).get('/api/admin/appointments').query({filter:'completed',status:'CONFIRMED',from:'2026-10-01',to:'2026-10-08'}).set('Authorization',auth('ADMIN'));
+  expect(res.status).toBe(200);const where=db.appointment.findMany.mock.calls[0][0].where;
+  expect(where.status).toBe('COMPLETED');expect(where.AND).toEqual(expect.arrayContaining([{status:'CONFIRMED'},expect.objectContaining({date:expect.objectContaining({gte:new Date('2026-10-01T00:00:00Z')})})]));
+ });
  it('appointments retain family beneficiary in the response selection',async()=>{
   await request(app).get('/api/admin/appointments').query({id:ID}).set('Authorization',auth('ADMIN'));
   expect(db.appointment.findMany.mock.calls[0][0].select).toMatchObject({familyMemberId:true,familyMember:{select:{firstName:true,lastName:true}}});

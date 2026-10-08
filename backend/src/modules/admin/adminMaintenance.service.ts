@@ -17,7 +17,7 @@ export const previewDemoData=()=>preview(prisma);
 export async function purgeReviewedDemoData(expected:{id:string;version:string}[],actor:string,reason?:string){
  if(!expected.length)throw ApiError.badRequest('اختر سجلات من المعاينة أولًا.');
  try{return await prisma.$transaction(async tx=>{
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(724003)`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(724003)`;
   const ids=expected.map(r=>r.id);await tx.$queryRaw(Prisma.sql`SELECT id FROM users WHERE id IN (${Prisma.join(ids)}) FOR UPDATE`);
   const snapshot=await preview(tx);
   for(const target of expected){const actual=snapshot.records.find(r=>r.id===target.id);if(!actual||!actual.eligible||actual.version!==target.version||target.id===actor)throw ApiError.conflict('تغيرت السجلات أو لم تعد مؤهلة. أعد المعاينة.');}

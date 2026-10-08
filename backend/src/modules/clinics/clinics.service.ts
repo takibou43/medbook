@@ -348,7 +348,7 @@ export function clinicAdminRevision(c:{verificationStatus:string;subscriptionSta
 export async function adminUpdateClinic(id: string, data: {
   verificationStatus?: VerificationStatus; subscriptionStatus?: SubscriptionStatus; subscriptionExpiresAt?: Date | null; paidDoctorCount?: number; expectedSnapshot?:string;
 }) {
-  if (!Object.keys(data).length) throw ApiError.badRequest("لا يوجد تغيير.");
+  if (!Object.keys(data).some(key=>key!=='expectedSnapshot')) throw ApiError.badRequest("لا يوجد تغيير.");
   const result = await prisma.$transaction(async tx => {
     await lockClinic(tx, id);
     const clinic = await tx.clinic.findUnique({ where: { id }, include: { owner: { select: { isActive: true } } } });

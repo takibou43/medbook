@@ -7,7 +7,7 @@ import { ApiError } from "../../utils/ApiError";
 export async function changeUserAccess(userId: string, active: boolean | null, actor?: string, reason?:string) {
   try {
     return await prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(724001)`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(724001)`;
       const user = await tx.user.findUnique({ where: { id: userId } });
       if (!user) throw ApiError.notFound("المستخدم غير موجود.");
       if (active !== true && userId === actor) throw ApiError.badRequest("لا يمكنك حذف حسابك الحالي أو تعطيله.");
@@ -36,7 +36,7 @@ type CatalogKind='specialty'|'wilaya'|'city';
 const delegate=(tx:Prisma.TransactionClient,kind:CatalogKind):any=>tx[kind];
 export async function saveCatalog(kind:CatalogKind,id:string|null,input:Record<string,unknown>){
  return prisma.$transaction(async tx=>{
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(724002)`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(724002)`;
   const data={...input};
   if(typeof data.nameAr==='string')data.nameAr=normalizeCatalogName(data.nameAr);
   if(typeof data.nameFr==='string')data.nameFr=normalizeCatalogName(data.nameFr);

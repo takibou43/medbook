@@ -2,7 +2,7 @@ import type { Beneficiary } from "../types/index.ts";
 import { beneficiaryLabel } from "./family.ts";
 
 export function platformText(text: string): string {
-  return text.replace(/MadBook|مادبوك|ميدبوك/giu, "MedBook");
+  return text.replace(/MadBook|مادبوك|ميدبوك/giu, "MedBook").replace(/\b\d{4}-\d{2}-\d{2}\b/g, date => arabicDate(date));
 }
 
 export function patientName(beneficiary?: Beneficiary): string {

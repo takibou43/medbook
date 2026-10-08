@@ -27,7 +27,7 @@ function fixture(url,method='GET',body={}){
  if(method==='PATCH'&&p.startsWith('/admin/doctors/'))return {};
  if(method==='PATCH'&&p.startsWith('/admin/users/'))return {id:U,isActive:false};
  if(method==='POST'&&/^\/admin\/patients\/[^/]+\/(unblock|block)$/.test(p))return {};
- let result=legacy.fixture(url,method,body);if(p==='/admin/doctors'&&result)result={...result,items:result.items.map(d=>({...d,clinic:{id:K,nameAr:clinic.nameAr,ownerId:'owner'},user:{...d.user,phone:'0550000000'}}))};
+ let result=legacy.fixture(url,method,body);if(p==='/admin/doctors'&&result)result={...result,totalPages:1,items:result.items.map(d=>({...d,clinic:{id:K,nameAr:clinic.nameAr,ownerId:'owner'},user:{...d.user,phone:'0550000000'}}))};
  if(p==='/admin/appointments'&&result)result={...result,items:result.items.map(a=>({...a,doctor:{...a.doctor,clinic:{id:K,nameAr:clinic.nameAr}}}))};
  return result;
 }

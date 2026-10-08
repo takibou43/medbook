@@ -117,6 +117,7 @@ const h = vi.hoisted(() => {
     auditLog: { create: vi.fn(async ({ data }: any) => (s.audit.push(data), data)) },
   };
   db.$queryRaw=vi.fn(async()=>[]);
+  db.$executeRaw=vi.fn(async()=>1);
   db.$transaction = vi.fn(async (work: (tx: typeof db) => unknown) => work(db));
   return { s, db, DOCTOR, future };
 });

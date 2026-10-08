@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -13,10 +13,13 @@ import { AppointmentStatusBadge } from "../../components/ui/Badge";
 import { Spinner } from "../../components/ui/States";
 import { useToast } from "../../components/ui/Toast";
 import type { FamilyMember, MyAppointment } from "../../types";
-import { beneficiaryLabel, filterByBeneficiary, isFamilyAppointment, memberFullName, type BeneficiaryFilter } from "../../lib/family";
+import { filterByBeneficiary, memberFullName, type BeneficiaryFilter } from "../../lib/family";
 import { clearInvalidAppointmentCaches, fromCachedPatientAppointment, loadAppointmentCache, saveAppointmentCache } from "../../lib/appointmentCache";
 import { useWilayas } from "../../hooks/useCatalog";
 import { useMarkAllNotificationsRead, useNotifications } from "../../hooks/useNotifications";
+
+import { arabicDate, patientName, platformText } from "../../lib/patientPresentation";
+import { CancelAppointmentDialog } from "../../components/account/CancelAppointmentDialog";
 
 const ACTIVE = new Set(["PENDING", "CONFIRMED", "RESCHEDULE_REQUIRED", "IN_PROGRESS", "LATE"]);
 const CANCELLABLE = new Set(["PENDING", "CONFIRMED", "RESCHEDULE_REQUIRED"]);
@@ -26,9 +29,7 @@ function algeriaToday(): string {
   return new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-function formatDay(iso: string) {
-  return new Date(iso).toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
-}
+const formatDay = arabicDate;
 
 function AppointmentItem({
   a,
@@ -48,7 +49,7 @@ function AppointmentItem({
   const address = a.doctor.clinic?.address || a.doctor.address;
   const [rating, setRating] = useState(false);
   return (
-    <li className={clsx("glass p-4", highlight && "ring-2 ring-primary-500")}>
+    <li id={`appointment-${a.id}`} className={clsx("glass p-4", highlight && "ring-2 ring-primary-500")}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-bold text-slate-900">
@@ -58,10 +59,10 @@ function AppointmentItem({
         </div>
         <AppointmentStatusBadge status={a.status} />
       </div>
-      {/* المستفيد: يظهر فقط حين يكون الموعد لفرد من العائلة (الموعد الذاتي كما كان). */}
-      {isFamilyAppointment(a) && (
+      {/* الاسم يأتي من مستفيد الموعد، دون استبداله بهوية الحساب. */}
+      {a.beneficiary && (
         <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-800">
-          <Users className="h-3.5 w-3.5" aria-hidden="true" /> الموعد لـ {beneficiaryLabel(a.beneficiary)}
+          <Users className="h-3.5 w-3.5" aria-hidden="true" /> الموعد لـ {patientName(a.beneficiary)}
         </p>
       )}
       {a.createdBy === "DOCTOR" && a.type === "FOLLOW_UP" && (
@@ -109,15 +110,15 @@ function AppointmentItem({
       {ACTIVE.has(a.status) && (
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           {a.status !== "RESCHEDULE_REQUIRED" && (
-            <Link to={`/status/${a.id}`} className="font-semibold text-primary-700 hover:underline">
+            <Link to={`/status/${a.id}`} className="btn-outline min-h-[48px]">
               متابعة دوري
             </Link>
           )}
           {a.status === "RESCHEDULE_REQUIRED" && (
-            <Link to="/" className="font-semibold text-primary-700 hover:underline">حجز موعد جديد</Link>
+            <Link to="/" className="btn-outline min-h-[48px]">حجز موعد جديد</Link>
           )}
           {onCancel && CANCELLABLE.has(a.status) && (
-            <button type="button" onClick={onCancel} disabled={cancelling} className="font-semibold text-red-600 hover:underline disabled:opacity-50">
+            <button type="button" onClick={onCancel} disabled={cancelling} className="ms-auto min-h-[48px] rounded-xl border border-red-200 px-4 font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">
               إلغاء الموعد
             </button>
           )}
@@ -127,6 +128,23 @@ function AppointmentItem({
   );
 }
 
+function AccountTasks() {
+  return <>
+        <Link to="/" className="btn-primary flex min-h-[48px] w-full items-center justify-center gap-2">
+          <Plus className="h-4 w-4" aria-hidden="true" /> حجز موعد جديد
+        </Link>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Link to="/account/family" className="glass flex min-h-[48px] items-center justify-center gap-2 text-sm font-semibold text-primary-700">
+            <Users className="h-4 w-4" aria-hidden="true" /> أفراد العائلة
+          </Link>
+          <Link to="/account/treatment-plans" className="glass flex min-h-[48px] items-center justify-center gap-2 text-sm font-semibold text-primary-700">
+            <ClipboardList className="h-4 w-4" aria-hidden="true" /> خطط العلاج
+          </Link>
+        </div>
+  </>;
+}
+
 export default function MyAccount() {
   const { user, loading, logout } = useAuth();
   const { showToast } = useToast();
@@ -134,8 +152,11 @@ export default function MyAccount() {
   const queryClient = useQueryClient();
   const [params] = useSearchParams();
   const focusId = params.get("appointment");
+  const handledFocus = useRef<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelCandidate, setCancelCandidate] = useState<MyAppointment | null>(null);
   // فلتر المستفيد: أنا / كل الأسرة / فرد محدد (فلترة محلية على نفس القائمة).
+  const [pastLimit, setPastLimit] = useState(10);
   const [beneficiary, setBeneficiary] = useState<BeneficiaryFilter>("all");
   const [dismissed, setDismissed] = useState<string[]>(() => readDismissed());
   const { data: wilayas } = useWilayas();
@@ -152,7 +173,7 @@ export default function MyAccount() {
   const [usingOfflineCopy, setUsingOfflineCopy] = useState(() => !navigator.onLine && Boolean(initialCache));
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["my-appointments"],
+    queryKey: ["my-appointments", user?.id],
     queryFn: async () => {
       try {
         const appointments = (await api.get<{ data: MyAppointment[] }>("/patient/account/appointments")).data.data;
@@ -180,7 +201,7 @@ export default function MyAccount() {
   });
 
   const { data: profile, refetch: refetchProfile } = useQuery({
-    queryKey: ["patient-profile"],
+    queryKey: ["patient-profile", user?.id],
     queryFn: async () => (await api.get<{ data: { cityId?: string | null; city?: { id: string; wilayaId: string; wilaya?: { id: string } } | null } }>("/patient/profile")).data.data,
     enabled: Boolean(user),
   });
@@ -202,7 +223,7 @@ export default function MyAccount() {
   const isOffline = !online || usingOfflineCopy;
   // أفراد العائلة لخيارات الفلتر (من الخادم فقط، ولا يُخزَّنون على الجهاز).
   const { data: familyMembers } = useQuery({
-    queryKey: ["family-members-all"],
+    queryKey: ["family-members-all", user?.id],
     queryFn: async () => (await api.get<{ data: FamilyMember[] }>("/patient/family-members", { params: { includeArchived: "true" } })).data.data,
     enabled: Boolean(user) && online,
     retry: false,
@@ -219,6 +240,16 @@ export default function MyAccount() {
     const upIds = new Set(up.map((a) => a.id));
     return { upcoming: up, past: list.filter((a) => !upIds.has(a.id)) };
   }, [data, beneficiary]);
+
+  useEffect(() => {
+    if (!focusId) { handledFocus.current = null; return; }
+    if (handledFocus.current === focusId || !data?.some(a => a.id === focusId)) return;
+    handledFocus.current = focusId;
+    setBeneficiary("all");
+    setPastLimit(data.length);
+    const timer = window.setTimeout(() => document.getElementById(`appointment-${focusId}`)?.scrollIntoView({ block: "center" }), 0);
+    return () => window.clearTimeout(timer);
+  }, [focusId, data]);
 
   // «كيف تقيّم الطبيب؟»: الموعد المفتوح من الإشعار إن كان قابلًا للتقييم، وإلا آخر موعد مكتمل فقط (إن لم
   // يُقيَّم ولم يُخفَ) — لا نلاحق المريض بمواعيد أقدم؛ تلك يبقى تقييمها متاحًا في «المواعيد السابقة».
@@ -255,10 +286,13 @@ export default function MyAccount() {
 
   async function cancel(id: string) {
     if (isOffline) return;
-    if (!window.confirm("هل تريد إلغاء هذا الموعد؟")) return;
+    const appointment = data?.find(a => a.id === id);
+    if (!appointment) return;
+    if (!CANCELLABLE.has(appointment.status) || cancellingId) return;
     setCancellingId(id);
     try {
       await api.delete(`/appointments/${id}`);
+      setCancelCandidate(null);
       showToast("تم إلغاء الموعد.", "success");
       await refetch();
     } catch (err) {
@@ -286,7 +320,7 @@ export default function MyAccount() {
 
   return (
     <div className="container-app py-8">
-      <div className="mx-auto max-w-xl space-y-5">
+      <div className="patient-account mx-auto max-w-xl space-y-5">
         <div className="glass flex items-start justify-between gap-3 p-5">
           <div className="min-w-0">
             <h1 className="text-xl font-extrabold text-slate-900">{fullName || "حسابي"}</h1>
@@ -298,6 +332,67 @@ export default function MyAccount() {
             <LogOut className="h-4 w-4" aria-hidden="true" /> تسجيل الخروج
           </button>
         </div>
+
+        {isOffline && currentCache && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+            <p className="flex items-center gap-2 font-bold"><WifiOff className="h-5 w-5" /> أنت غير متصل بالإنترنت. يتم عرض آخر نسخة محفوظة.</p>
+            <p className="mt-1">آخر تحديث: {new Date(currentCache.savedAt).toLocaleString("ar-DZ")}</p>
+          </div>
+        )}
+
+        {!isOffline && (familyMembers?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-2" role="group" aria-label="عرض مواعيد">
+            {[
+              { id: "all", label: "كل الأسرة" },
+              { id: "self", label: "أنا" },
+              ...(familyMembers ?? []).map((m) => ({ id: m.id, label: memberFullName(m) + (m.archivedAt ? " (مؤرشف)" : "") })),
+            ].map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                aria-pressed={beneficiary === f.id}
+                onClick={() => { setBeneficiary(f.id); setPastLimit(10); }}
+                className={clsx(
+                  "min-h-[48px] rounded-full border px-3 text-sm font-semibold transition",
+                  beneficiary === f.id ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-primary-400"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {(isLoading && !data || isError || isOffline && !currentCache) && <>
+            <AccountTasks />
+
+        </>}
+        {isLoading && !data ? (
+          <Spinner label="جارٍ تحميل مواعيدك..." />
+        ) : isOffline && !currentCache ? (
+          <div className="glass p-4 text-sm text-amber-800">لا يمكن تحميل المواعيد دون اتصال. اتصل بالإنترنت مرة واحدة لعرضها لاحقًا.</div>
+        ) : isError ? (
+          <div className="glass p-4 text-sm text-red-600">
+            {apiErrorMessage(error, "تعذّر تحميل مواعيدك.")}{" "}
+            <button type="button" className="font-semibold underline" onClick={() => refetch()}>
+              إعادة المحاولة
+            </button>
+          </div>
+        ) : (
+          <>
+            <section>
+              <h2 className="mb-2 font-bold text-slate-900">مواعيدي القادمة</h2>
+              {upcoming.length === 0 ? (
+                <p className="glass p-4 text-sm text-slate-500">لا توجد مواعيد قادمة.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {upcoming.map((a) => (
+                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onCancel={isOffline ? undefined : () => setCancelCandidate(a)} cancelling={cancellingId === a.id} offline={isOffline} />
+                  ))}
+                </ul>
+              )}
+            </section>
+            <AccountTasks />
 
         {ratePromptFor && (
           <RatePrompt
@@ -311,8 +406,47 @@ export default function MyAccount() {
           />
         )}
 
-        <ProfilesCard />
+            {past.length > 0 && (
+              <section>
+                <h2 className="mb-2 font-bold text-slate-900">المواعيد السابقة</h2>
+                <ul className="space-y-3">
+                  {past.slice(0, pastLimit).map((a) => (
+                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onRated={isOffline ? undefined : afterRated} offline={isOffline} />
+                  ))}
+                </ul>
+                {past.length > pastLimit && <button type="button" className="btn-outline mt-3 w-full min-h-[48px]" onClick={() => setPastLimit(n => n + 10)}>عرض المزيد ({past.length - pastLimit} موعدًا)</button>}
+              </section>
+            )}
+          </>
+        )}
+        {notifications && notifications.length > 0 && (
+          <section className="glass p-4">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 font-bold text-slate-900"><Bell className="h-5 w-5 text-primary-600" /> الإشعارات</h2>
+              {notifications.some((notification) => !notification.isRead) && (
+                <button type="button" className="min-h-[48px] rounded-xl px-3 text-xs font-semibold text-primary-700 hover:bg-primary-50" disabled={markAllNotificationsRead.isPending} onClick={() => markAllNotificationsRead.mutate(undefined, { onError: err => showToast(apiErrorMessage(err, "تعذّر تعليم الإشعارات كمقروء."), "error") })}>
+                  تعليم الكل كمقروء
+                </button>
+              )}
+            </div>
+            <ul className="mt-3 space-y-2">
+              {notifications.slice(0, 5).map((notification) => (
+                <li key={notification.id} className={clsx("rounded-xl border p-3", notification.isRead ? "border-slate-200 bg-white/60" : "border-primary-200 bg-primary-50")}>
+                  <p className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                    {!notification.isRead && <BellRing className="h-4 w-4 text-primary-600" />}{platformText(notification.title)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">{platformText(notification.message)}</p>
+                  <p className="mt-1 text-xs text-slate-500">{arabicDate(notification.createdAt)}</p>
+                  {notification.appointmentId && data?.some(a => a.id === notification.appointmentId) && <Link className="btn-outline mt-2 min-h-[48px]" to={`/account?appointment=${encodeURIComponent(notification.appointmentId)}`}>عرض الموعد</Link>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
+        <details className="glass p-4">
+          <summary className="min-h-[48px] cursor-pointer font-bold">الإعدادات: المنطقة وتفضيلات الإشعارات</summary>
+          <div className="mt-3 space-y-4">
         <section className="glass p-4">
           <h2 className="flex items-center gap-2 font-bold text-slate-900"><MapPin className="h-5 w-5 text-primary-600" /> منطقتي</h2>
           <p className="mt-1 text-xs text-slate-500">اختر منطقتك لتصلك إشعارات الأطباء الجدد في ولايتك.</p>
@@ -336,111 +470,12 @@ export default function MyAccount() {
           </button>
         </section>
 
-        {notifications && notifications.length > 0 && (
-          <section className="glass p-4">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="flex items-center gap-2 font-bold text-slate-900"><Bell className="h-5 w-5 text-primary-600" /> الإشعارات</h2>
-              {notifications.some((notification) => !notification.isRead) && (
-                <button type="button" className="text-xs font-semibold text-primary-700 hover:underline" onClick={() => markAllNotificationsRead.mutate()}>
-                  تعليم الكل كمقروء
-                </button>
-              )}
-            </div>
-            <ul className="mt-3 space-y-2">
-              {notifications.slice(0, 5).map((notification) => (
-                <li key={notification.id} className={clsx("rounded-xl border p-3", notification.isRead ? "border-slate-200 bg-white/60" : "border-primary-200 bg-primary-50")}>
-                  <p className="flex items-center gap-2 text-sm font-bold text-slate-800">
-                    {!notification.isRead && <BellRing className="h-4 w-4 text-primary-600" />}{notification.title}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-600">{notification.message}</p>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         <ReminderCard />
 
-        {isOffline && currentCache && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
-            <p className="flex items-center gap-2 font-bold"><WifiOff className="h-5 w-5" /> أنت غير متصل بالإنترنت. يتم عرض آخر نسخة محفوظة.</p>
-            <p className="mt-1">آخر تحديث: {new Date(currentCache.savedAt).toLocaleString("ar-DZ")}</p>
           </div>
-        )}
-
-        <Link to="/" className="btn-primary flex min-h-[48px] w-full items-center justify-center gap-2">
-          <Plus className="h-4 w-4" aria-hidden="true" /> حجز موعد جديد
-        </Link>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Link to="/account/family" className="glass flex min-h-[48px] items-center justify-center gap-2 text-sm font-semibold text-primary-700">
-            <Users className="h-4 w-4" aria-hidden="true" /> أفراد العائلة
-          </Link>
-          <Link to="/account/treatment-plans" className="glass flex min-h-[48px] items-center justify-center gap-2 text-sm font-semibold text-primary-700">
-            <ClipboardList className="h-4 w-4" aria-hidden="true" /> خطط العلاج
-          </Link>
-        </div>
-
-        {!isOffline && (familyMembers?.length ?? 0) > 0 && (
-          <div className="flex flex-wrap gap-2" role="group" aria-label="عرض مواعيد">
-            {[
-              { id: "all", label: "كل الأسرة" },
-              { id: "self", label: "أنا" },
-              ...(familyMembers ?? []).map((m) => ({ id: m.id, label: memberFullName(m) + (m.archivedAt ? " (مؤرشف)" : "") })),
-            ].map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                aria-pressed={beneficiary === f.id}
-                onClick={() => setBeneficiary(f.id)}
-                className={clsx(
-                  "min-h-[40px] rounded-full border px-3 text-sm font-semibold transition",
-                  beneficiary === f.id ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-primary-400"
-                )}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {isLoading && !data ? (
-          <Spinner label="جارٍ تحميل مواعيدك..." />
-        ) : isOffline && !currentCache ? (
-          <div className="glass p-4 text-sm text-amber-800">لا يمكن تحميل المواعيد دون اتصال. اتصل بالإنترنت مرة واحدة لعرضها لاحقًا.</div>
-        ) : isError ? (
-          <div className="glass p-4 text-sm text-red-600">
-            {apiErrorMessage(error, "تعذّر تحميل مواعيدك.")}{" "}
-            <button type="button" className="font-semibold underline" onClick={() => refetch()}>
-              إعادة المحاولة
-            </button>
-          </div>
-        ) : (
-          <>
-            <section>
-              <h2 className="mb-2 font-bold text-slate-900">مواعيدي القادمة</h2>
-              {upcoming.length === 0 ? (
-                <p className="glass p-4 text-sm text-slate-500">لا توجد مواعيد قادمة.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {upcoming.map((a) => (
-                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onCancel={isOffline ? undefined : () => cancel(a.id)} cancelling={cancellingId === a.id} offline={isOffline} />
-                  ))}
-                </ul>
-              )}
-            </section>
-            {past.length > 0 && (
-              <section>
-                <h2 className="mb-2 font-bold text-slate-900">المواعيد السابقة</h2>
-                <ul className="space-y-3">
-                  {past.map((a) => (
-                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onRated={isOffline ? undefined : afterRated} offline={isOffline} />
-                  ))}
-                </ul>
-              </section>
-            )}
-          </>
-        )}
+        </details>
+        <ProfilesCard />
+        {cancelCandidate && <CancelAppointmentDialog appointment={cancelCandidate} busy={Boolean(cancellingId)} onClose={() => setCancelCandidate(null)} onConfirm={() => void cancel(cancelCandidate.id)} />}
       </div>
     </div>
   );

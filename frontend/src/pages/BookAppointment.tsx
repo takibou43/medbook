@@ -207,6 +207,7 @@ export default function BookAppointment() {
   });
 
   async function confirmBooking() {
+    if (confirmed || bookMutation.isPending) return;
     if (!selectedDoctor) return;
     if (!user) return goToAuth(selectedDoctor.id);
     const values = form.getValues();
@@ -417,7 +418,7 @@ export default function BookAppointment() {
               />
             )}
 
-            {step === "confirm" && selectedDoctor && (nextSlot || choice) && user && (
+            {step === "confirm" && !confirmed && selectedDoctor && (nextSlot || choice) && user && (
               <ConfirmStep
                 ref={headingRef}
                 doctor={selectedDoctor}
@@ -448,7 +449,7 @@ export default function BookAppointment() {
             user ? (
               <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-right">
                 <ReminderCard compact />
-                <Link to="/account" className="block text-center text-sm font-semibold text-primary-700 hover:underline">
+                <Link to="/account" className="flex min-h-[48px] items-center justify-center text-sm font-semibold text-primary-700 hover:underline">
                   عرض مواعيدي
                 </Link>
               </div>

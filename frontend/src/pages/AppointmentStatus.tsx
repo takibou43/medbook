@@ -1,9 +1,13 @@
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Clock, MapPin, Phone, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { api } from "../lib/api";
 import { statusPollInterval } from "../lib/statusPolling";
 import { Spinner, EmptyState } from "../components/ui/States";
+
+import { useAuth } from "../context/AuthContext";
+import type { MyAppointment } from "../types";
+import { arabicDate, patientName, directionsUrl } from "../lib/patientPresentation";
 
 // نُحدّث كل 20 ثانية: سريع بما يكفي ليشعر المريض أن الرقم حيّ، وخفيف بما يكفي
 // ألا يُرهق الخادم لو فتح عشرات المرضى الصفحة في نفس الوقت.
@@ -41,6 +45,13 @@ function formatWait(minutes: number): string {
 
 export default function AppointmentStatus() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useAuth();
+  // Never add patient identity to the public status response. Resolve only through the authenticated account endpoint.
+  const identity = useQuery({
+    queryKey: ["status-beneficiary", user?.id, id],
+    queryFn: async () => (await api.get<{ data: MyAppointment[] }>("/patient/account/appointments")).data.data.find(a => a.id === id),
+    enabled: Boolean(user && id), retry: false, gcTime: 0,
+  });
 
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ["appointment-status", id],
@@ -66,11 +77,8 @@ export default function AppointmentStatus() {
   }
 
   const doctorName = "د. " + data.doctor.firstName + " " + data.doctor.lastName;
-  const dateLabel = new Date(data.date).toLocaleDateString("ar-DZ", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  const dateLabel = arabicDate(data.date);
+  const directions = directionsUrl(data.doctor.address);
 
   // الحالات المنتهية: لا رقم دور، فقط رسالة واضحة.
   const finished =
@@ -86,6 +94,12 @@ export default function AppointmentStatus() {
           </p>
         </div>
 
+        <div className="card p-4" aria-live="polite">
+          {identity.data ? <>
+            <p className="font-bold">الموعد لـ {patientName(identity.data.beneficiary)}</p>
+            {identity.data.type === "FOLLOW_UP" && identity.data.createdBy === "DOCTOR" && <p className="mt-2 text-sm text-amber-800">موعد عودة برمجه الطبيب</p>}
+          </> : <p className="text-sm text-slate-600">{user ? identity.isPending ? "جارٍ تحميل اسم المستفيد…" : "تعذّر عرض اسم المستفيد لهذا الحساب." : "سجّل الدخول إلى حساب الموعد لعرض اسم المستفيد."} <Link className="btn-outline mt-2" to={user ? "/account" : `/account/login?redirect=${encodeURIComponent(`/status/${id}`)}`}>فتح حساب المريض</Link></p>}
+        </div>
         {/* البطاقة الرئيسية */}
         {finished ? (
           <div className="card p-6 text-center">
@@ -174,10 +188,11 @@ export default function AppointmentStatus() {
               {data.doctor.address}
             </p>
           )}
+          {directions && <a className="btn-outline min-h-[48px]" href={directions} target="_blank" rel="noopener noreferrer">الاتجاهات إلى العيادة</a>}
           {data.doctor.phone && (
             <a
               href={"tel:" + data.doctor.phone}
-              className="flex items-center gap-2 font-semibold text-primary-600"
+              className="flex min-h-[48px] items-center gap-2 font-semibold text-primary-600"
             >
               <Phone className="h-4 w-4 shrink-0" />
               {data.doctor.phone}
@@ -189,7 +204,7 @@ export default function AppointmentStatus() {
           type="button"
           onClick={() => refetch()}
           disabled={isFetching}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-primary-300 disabled:opacity-60"
+          className="flex min-h-[48px] w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-primary-300 disabled:opacity-60"
         >
           <RefreshCw className={"h-4 w-4 " + (isFetching ? "animate-spin" : "")} />
           {isFetching ? "جارٍ التحديث..." : "تحديث الآن"}

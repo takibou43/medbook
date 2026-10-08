@@ -1,5 +1,6 @@
 import type { Doctor } from "../types";
 import { API_MESSAGES, classifyApiError } from "./api";
+import { arabicDate } from "./patientPresentation";
 
 // عنوان عيادة الطبيب الظاهر للمريض عند الحجز — عنوان العيادة أدق من العنوان الشخصي
 // للطبيب إن وُجدت عيادة مسجَّلة، وإلا نستعمل عنوان الطبيب نفسه إن أدخله.
@@ -24,7 +25,7 @@ export function splitFullName(full: string): { firstName: string; lastName: stri
 }
 
 export function formatLongDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" });
+  return arabicDate(dateStr);
 }
 
 // "طبيب واحد" / "طبيبان" / "3 أطباء" / "12 طبيبًا" — صيغة العدد الصحيحة بالعربية.

@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Search, Star, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { Doctor } from "../../types";
+import { RegionFilters } from "./RegionFilters";
+import { useDialogFocus } from "./useDialogFocus";
 import { Input } from "../ui/Input";
 import { Spinner, EmptyState } from "../ui/States";
 
@@ -14,6 +16,10 @@ interface Props {
 // البحث المباشر عن طبيب بالاسم — خيار ثانوي (المسار الأساسي: التخصص ثم الطبيب).
 // يبحث عبر كل الأطباء الموثّقين دون اختيار تخصص أولًا (GET /doctors?q=).
 export function DoctorSearchModal({ onClose, onSelect }: Props) {
+  const dialogRef = useDialogFocus(onClose);
+  const [wilayaId, setWilayaId] = useState("");
+  const [cityId, setCityId] = useState("");
+  const searching = (name: string) => name.length >= 2 || Boolean(wilayaId);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
 
@@ -29,19 +35,20 @@ export function DoctorSearchModal({ onClose, onSelect }: Props) {
   }, [onClose]);
 
   const { data, isFetching, isError, refetch } = useQuery({
-    queryKey: ["doctor-name-search", debounced],
-    queryFn: async () => (await api.get<{ data: { items: Doctor[] } }>("/doctors", { params: { q: debounced, pageSize: 10 } })).data.data.items,
-    enabled: debounced.length >= 2,
+    queryKey: ["doctor-name-search", debounced, wilayaId, cityId],
+    queryFn: async () => (await api.get<{ data: { items: Doctor[] } }>("/doctors", { params: { q: debounced, wilayaId: wilayaId || undefined, cityId: cityId || undefined, pageSize: 10 } })).data.data.items,
+    enabled: searching(debounced),
     retry: false,
   });
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 p-4 pt-16" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="doctor-search-title"
-        className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+        className="max-h-[80vh] overflow-y-auto w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -51,13 +58,15 @@ export function DoctorSearchModal({ onClose, onSelect }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            className="flex h-12 w-12 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             aria-label="إغلاق"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
         <Input placeholder="اكتب اسم الطبيب..." aria-label="اسم الطبيب" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
+        <RegionFilters wilayaId={wilayaId} cityId={cityId} onChange={(w,c) => { setWilayaId(w); setCityId(c); }} />
+        <button className="btn-outline" type="button" onClick={() => { setQuery(""); setDebounced(""); setWilayaId(""); setCityId(""); }}>مسح الفلاتر</button>
         {isFetching && <Spinner label="جارٍ البحث..." />}
         {isError && !isFetching && (
           <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-4 text-center text-sm text-red-700">
@@ -67,7 +76,7 @@ export function DoctorSearchModal({ onClose, onSelect }: Props) {
             </button>
           </div>
         )}
-        {debounced.length >= 2 && !isFetching && !isError && (
+        {searching(debounced) && !isFetching && !isError && (
           <ul className="mt-3 max-h-80 space-y-2 overflow-y-auto">
             {data && data.length > 0 ? (
               data.map((d) => (
@@ -89,13 +98,13 @@ export function DoctorSearchModal({ onClose, onSelect }: Props) {
                     </div>
                     <div className="flex shrink-0 items-center gap-1 text-sm text-amber-600">
                       <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
-                      {d.avgRating > 0 ? d.avgRating.toFixed(1) : "جديد"}
+                      {d.avgRating > 0 ? d.avgRating.toFixed(1) : "جديد"} {typeof d.reviewsCount === "number" && <span>({d.reviewsCount})</span>}
                     </div>
                   </button>
                 </li>
               ))
             ) : (
-              <EmptyState title="لا نتائج" description="جرّب اسمًا آخر." />
+              <EmptyState title="لا نتائج" description="جرّب اسمًا أو منطقة أخرى، أو امسح الفلاتر." />
             )}
           </ul>
         )}

@@ -1,0 +1,43 @@
+[
+  {
+    "method": "POST",
+    "route": "/api/booking",
+    "payload": {
+      "firstName": "سارة",
+      "lastName": "اختبار",
+      "phone": "0550000000",
+      "wilayaId": "w1",
+      "specialtyId": "s1",
+      "doctorId": "doctor1",
+      "date": "2026-10-08",
+      "startTime": "14:00",
+      "exactTime": true
+    }
+  },
+  {
+    "method": "POST",
+    "route": "/api/booking",
+    "payload": {
+      "firstName": "ياسين",
+      "lastName": "اختبار",
+      "phone": "0550000000",
+      "wilayaId": "w1",
+      "specialtyId": "s1",
+      "doctorId": "doctor1",
+      "familyMemberId": "child1",
+      "date": "2026-10-08",
+      "startTime": "09:00",
+      "exactTime": true
+    }
+  },
+  {
+    "method": "PATCH",
+    "route": "/api/notifications/read-all",
+    "payload": {}
+  },
+  {
+    "method": "DELETE",
+    "route": "/api/appointments/family-upcoming",
+    "payload": {}
+  }
+]

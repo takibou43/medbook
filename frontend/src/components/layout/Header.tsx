@@ -9,7 +9,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-white/60 bg-white/50 backdrop-blur-md">
       <div className="container-app flex h-16 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 text-primary-700">
+        <Link to="/" className="flex min-h-[48px] items-center gap-2 text-primary-700">
           <Logo className="h-8 w-8" />
           <span className="text-lg font-extrabold">MedBook</span>
         </Link>
@@ -17,7 +17,7 @@ export function Header() {
             الآن فيتابع المريض مواعيده من «حسابي». حجوزات الضيوف القديمة تبقى قابلة للاستعلام عبر
             GET /api/booking/lookup (معرّف الموعد + الهاتف) فقط. */}
         {/* حساب المريض (مطلوب لإتمام الحجز): رابط واحد صغير لا يزاحم خطوات الحجز. */}
-        <Link to="/clinics" className="rounded-xl px-3 py-2 text-sm font-semibold text-primary-700 hover:bg-white/70">العيادات</Link>
+        <Link to="/clinics" className="flex min-h-[48px] items-center rounded-xl px-2 text-sm font-semibold text-primary-700 hover:bg-white/70">العيادات</Link>
         {!loading && (
           <Link
             to={user ? "/account" : "/account/login"}

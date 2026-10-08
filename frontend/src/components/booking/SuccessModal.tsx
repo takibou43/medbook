@@ -1,6 +1,8 @@
 import { ReactNode, useEffect } from "react";
 import { CheckCircle2, MapPin } from "lucide-react";
 import { Button } from "../ui/Button";
+import { arabicDate } from "../../lib/patientPresentation";
+import { useDialogFocus } from "./useDialogFocus";
 
 export interface ConfirmedBooking {
   date: string;
@@ -13,6 +15,7 @@ export interface ConfirmedBooking {
 // مع دور dialog وإغلاق بـ Escape لتحسين إمكانية الوصول.
 // extra: محتوى إضافي اختياري (مثل بطاقة «ذكّرني بموعدي» للمريض المسجّل) — الضيف لا يرى أي تغيير.
 export function SuccessModal({ booking, onClose, extra }: { booking: ConfirmedBooking; onClose: () => void; extra?: ReactNode }) {
+  const dialogRef = useDialogFocus(onClose);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -23,6 +26,7 @@ export function SuccessModal({ booking, onClose, extra }: { booking: ConfirmedBo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="booking-success-title"
@@ -36,7 +40,7 @@ export function SuccessModal({ booking, onClose, extra }: { booking: ConfirmedBo
         <div className="mt-3 space-y-1">
           <p className="font-semibold text-slate-700">الدكتور: {booking.doctorName}</p>
           <p className="text-slate-600">
-            التاريخ: {new Date(booking.date).toLocaleDateString("ar-DZ", { weekday: "long", day: "numeric", month: "long" })}
+            التاريخ: {arabicDate(booking.date)}
           </p>
           <p className="text-slate-600">الساعة: {booking.startTime}</p>
         </div>

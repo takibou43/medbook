@@ -1,9 +1,10 @@
+import { AdminResults, AdminActions } from "../../components/admin/AdminUI";
 import { useAdminListParams } from "../../hooks/useAdminListParams";
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../lib/api";
-import { Spinner, EmptyState } from "../../components/ui/States";
+import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { useToast } from "../../components/ui/Toast";
@@ -14,7 +15,7 @@ import { BlockPatientDialog, BlockTarget } from "../../components/BlockPatientDi
 const ROLE_LABELS: Record<Role, string> = { PATIENT: "مريض", DOCTOR: "طبيب", ADMIN: "إدارة", ASSISTANT: "مساعد", CLINIC_OWNER: "صاحب عيادة" };
 
 export default function AdminUsers() {
-  const { params, q, setQ, search, page, setPage, update } = useAdminListParams();
+  const { params, q, setQ, search, page, setPage, update, clear } = useAdminListParams();
   const id = params.get("id");
   const role = params.get("role") && params.get("role")! in ROLE_LABELS ? params.get("role") as Role : "";
   const setRole = (value: string) => update("role", value);
@@ -22,7 +23,7 @@ export default function AdminUsers() {
   const qc = useQueryClient();
   const [blockTarget, setBlockTarget] = useState<{ t: BlockTarget; mode: "block" | "unblock" } | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["admin-users", search, role, page, id],
     queryFn: async ({ signal }) => (await api.get("/admin/users", { signal, params: { id: id || undefined, q: search || undefined, role: role || undefined, page } })).data.data,
   });
@@ -48,6 +49,28 @@ export default function AdminUsers() {
     }
   }
 
+  const actions = (u: any) => (<AdminActions label={"المستخدم " + u.email}>
+                        <Button variant="outline" onClick={() => toggleActive(u.id, u.isActive)}>
+                          {u.isActive ? "تعطيل" : "تفعيل"}
+                        </Button>
+                        {u.role === "PATIENT" && u.patient && (
+                          <Button
+                            variant="outline"
+                            onClick={() =>
+                              setBlockTarget({
+                                t: { patientId: u.patient.id, name: `${u.patient.firstName} ${u.patient.lastName}`.trim(), email: u.email },
+                                mode: u.patient.blocks?.length > 0 ? "unblock" : "block",
+                              })
+                            }
+                          >
+                            {u.patient.blocks?.length > 0 ? "رفع الحظر" : "حظر المريض"}
+                          </Button>
+                        )}
+                        <Button variant="danger" onClick={() => remove(u.id)}>
+                          حذف
+                        </Button>
+                      </AdminActions>);
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-extrabold text-slate-900">إدارة المستخدمين</h1>
@@ -64,11 +87,23 @@ export default function AdminUsers() {
         </select>
       </div>
 
+      <AdminResults total={data?.total} filtered={!!(q || id || role)} onClear={clear} />
+
       {isLoading ? (
         <Spinner />
+      ) : isError ? (
+        <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />
       ) : data && data.items.length > 0 ? (
         <>
-          <div className="card overflow-x-auto p-0">
+          <div className="space-y-3 md:hidden">
+            {data.items.map((u: any) => <article key={u.id} aria-label={"حساب " + u.email} className="card space-y-3 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3"><h2 className="min-w-[140px] flex-1 break-words font-bold text-slate-900"><bdi>{[u.patient?.firstName ?? u.doctor?.firstName, u.patient?.lastName ?? u.doctor?.lastName].filter(Boolean).join(" ") || u.email}</bdi></h2>{actions(u)}</div>
+              <p className="break-all text-sm text-slate-600"><bdi dir="ltr">{u.email}</bdi></p>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm"><dt className="text-slate-600">الهاتف</dt><dd><bdi dir="ltr">{u.phone ?? "—"}</bdi></dd><dt className="text-slate-600">الدور</dt><dd>{ROLE_LABELS[u.role as Role]}</dd></dl>
+              <div className="flex flex-wrap gap-2"><span className={"badge " + (u.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>{u.isActive ? "مفعّل" : "معطّل"}</span>{u.patient?.blocks?.length > 0 && <span className="badge bg-red-100 text-red-700">محظور من الحجز</span>}</div>
+            </article>)}
+          </div>
+          <div className="card hidden overflow-x-auto p-0 md:block">
             <table className="w-full text-right text-sm">
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
@@ -92,27 +127,7 @@ export default function AdminUsers() {
                       {u.patient?.blocks?.length > 0 && <span className="badge mr-1 bg-red-100 text-red-700">محظور من الحجز</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <Button variant="outline" onClick={() => toggleActive(u.id, u.isActive)}>
-                          {u.isActive ? "تعطيل" : "تفعيل"}
-                        </Button>
-                        {u.role === "PATIENT" && u.patient && (
-                          <Button
-                            variant="outline"
-                            onClick={() =>
-                              setBlockTarget({
-                                t: { patientId: u.patient.id, name: `${u.patient.firstName} ${u.patient.lastName}`.trim(), email: u.email },
-                                mode: u.patient.blocks?.length > 0 ? "unblock" : "block",
-                              })
-                            }
-                          >
-                            {u.patient.blocks?.length > 0 ? "رفع الحظر" : "حظر المريض"}
-                          </Button>
-                        )}
-                        <Button variant="danger" onClick={() => remove(u.id)}>
-                          حذف
-                        </Button>
-                      </div>
+                      {actions(u)}
                     </td>
                   </tr>
                 ))}
@@ -122,7 +137,7 @@ export default function AdminUsers() {
           <Pagination page={data.page} totalPages={data.totalPages} onChange={setPage} />
         </>
       ) : (
-        <EmptyState title="لا يوجد مستخدمون" />
+        <EmptyState title={!!(q || id || role) ? "لا نتائج مطابقة" : "لا يوجد مستخدمون"} description={!!(q || id || role) ? "جرّب تغيير البحث أو مسح الفلاتر." : undefined} />
       )}
 
       <BlockPatientDialog target={blockTarget?.t ?? null} mode={blockTarget?.mode ?? "block"} onClose={() => setBlockTarget(null)} />

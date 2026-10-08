@@ -1,9 +1,10 @@
+import { AdminResults, AdminActions } from "../../components/admin/AdminUI";
 import { useAdminListParams } from "../../hooks/useAdminListParams";
 
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../lib/api";
-import { Spinner, EmptyState } from "../../components/ui/States";
+import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { VerificationBadge, SubscriptionBadge } from "../../components/ui/Badge";
@@ -12,14 +13,14 @@ import { Pagination } from "../../components/ui/Pagination";
 import { VerificationStatus, SubscriptionStatus } from "../../types";
 
 export default function AdminDoctors() {
-  const { params, q, setQ, search, page, setPage, update } = useAdminListParams();
+  const { params, q, setQ, search, page, setPage, update, clear } = useAdminListParams();
   const id = params.get("id");
   const status = ["PENDING", "VERIFIED", "REJECTED"].includes(params.get("status") ?? "") ? params.get("status") as VerificationStatus : "";
   const setStatus = (value: string) => update("status", value);
   const { showToast } = useToast();
   const qc = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["admin-doctors", search, status, page, id],
     queryFn: async ({ signal }) =>
       (await api.get("/admin/doctors", { signal, params: { id: id || undefined, q: search || undefined, verificationStatus: status || undefined, page } })).data.data,
@@ -62,8 +63,12 @@ export default function AdminDoctors() {
         </select>
       </div>
 
+      <AdminResults total={data?.total} filtered={!!(q || id || status)} onClear={clear} />
+
       {isLoading ? (
         <Spinner />
+      ) : isError ? (
+        <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />
       ) : data && data.items.length > 0 ? (
         <>
           <div className="space-y-3">
@@ -81,6 +86,7 @@ export default function AdminDoctors() {
                   <VerificationBadge status={d.verificationStatus} />
                   {d.clinic?.ownerId ? <Link to="/admin/clinics" className="text-sm text-primary-700">اشتراك {d.clinic.nameAr}</Link> : <SubscriptionBadge status={d.subscriptionStatus ?? "UNPAID"} />}
                   <Link to={`/admin/messages?doctor=${d.id}`} className="btn-outline !px-3 !py-1.5 text-xs">مراسلة</Link>
+                  <AdminActions label={"الطبيب " + d.firstName + " " + d.lastName}>
                   {d.verificationStatus !== "VERIFIED" && (
                     <Button onClick={() => setVerification(d.id, "VERIFIED")}>توثيق</Button>
                   )}
@@ -98,6 +104,7 @@ export default function AdminDoctors() {
                       إيقاف الاشتراك
                     </Button>
                   )}
+                  </AdminActions>
                 </div>
               </div>
             ))}
@@ -105,7 +112,7 @@ export default function AdminDoctors() {
           <Pagination page={data.page} totalPages={data.totalPages} onChange={setPage} />
         </>
       ) : (
-        <EmptyState title="لا يوجد أطباء" />
+        <EmptyState title={!!(q || id || status) ? "لا نتائج مطابقة" : "لا يوجد أطباء"} description={!!(q || id || status) ? "جرّب تغيير البحث أو مسح الفلاتر." : undefined} />
       )}
     </div>
   );

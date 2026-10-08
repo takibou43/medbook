@@ -118,25 +118,25 @@ function DoctorAreaLayout() {
 }
 
 const adminNav = [
-  { to: "/admin/clinics", label: "العيادات", icon: Building2 },
   { to: "/admin", label: "الرئيسية", icon: LayoutDashboard, end: true },
-  { to: "/admin/appointments", label: "المواعيد", icon: CalendarClock },
-  { to: "/admin/messages", label: "الرسائل", icon: MessageSquare },
-  { to: "/admin/users", label: "المستخدمون", icon: UsersIcon },
-  { to: "/admin/patient-blocks", label: "المرضى المحظورون", icon: UserX },
-  { to: "/admin/referrals", label: "إحالات الأطباء", icon: Gift },
-  { to: "/admin/doctors", label: "الأطباء", icon: Stethoscope },
-  { to: "/admin/specialties", label: "التخصصات", icon: ShieldCheck },
-  { to: "/admin/wilayas", label: "الولايات", icon: Building2 },
-  { to: "/admin/reviews", label: "التقييمات", icon: Star },
-  { to: "/admin/account", label: "إعدادات الحساب", icon: KeyRound },
+  { to: "/admin/appointments", label: "المواعيد", icon: CalendarClock, group: "التشغيل والمتابعة" },
+  { to: "/admin/messages", label: "الرسائل", icon: MessageSquare, group: "التشغيل والمتابعة" },
+  { to: "/admin/patient-blocks", label: "المرضى المحظورون", icon: UserX, group: "التشغيل والمتابعة" },
+  { to: "/admin/reviews", label: "التقييمات", icon: Star, group: "التشغيل والمتابعة" },
+  { to: "/admin/users", label: "المستخدمون", icon: UsersIcon, group: "الحسابات والأطباء والعيادات" },
+  { to: "/admin/doctors", label: "الأطباء", icon: Stethoscope, group: "الحسابات والأطباء والعيادات" },
+  { to: "/admin/clinics", label: "العيادات", icon: Building2, group: "الحسابات والأطباء والعيادات" },
+  { to: "/admin/referrals", label: "إحالات الأطباء", icon: Gift, group: "الحسابات والأطباء والعيادات" },
+  { to: "/admin/specialties", label: "التخصصات", icon: ShieldCheck, group: "الكتالوج والإعدادات" },
+  { to: "/admin/wilayas", label: "الولايات والبلديات", icon: Building2, group: "الكتالوج والإعدادات" },
+  { to: "/admin/account", label: "إعدادات الحساب", icon: KeyRound, group: "الكتالوج والإعدادات" },
 ];
 
 function AdminAreaLayout() {
   const unread = useAdminUnread();
   useUnreadToast(unread.data?.unread, () => `رسالة جديدة من ${unread.data?.latest ? `د. ${unread.data.latest.doctorName}` : "طبيب"}`);
   const items = adminNav.map((i) => (i.to === "/admin/messages" ? { ...i, badge: unread.data?.unread } : i));
-  return <DashboardLayout title="لوحة الإدارة" items={items} />;
+  return <DashboardLayout title="لوحة الإدارة" contentClassName="admin-page" items={items} />;
 }
 
 export default function App() {

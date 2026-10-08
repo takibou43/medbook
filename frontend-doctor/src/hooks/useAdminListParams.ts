@@ -28,5 +28,13 @@ export function useAdminListParams() {
       return next;
     });
   }
-  return { params, q, setQ, search, page, setPage: (value: number) => update("page", String(value)), update };
+  function clear() {
+    setQ("");
+    setParams((old) => {
+      const next = new URLSearchParams(old);
+      ["q", "page", "id", "filter", "status", "role"].forEach((key) => next.delete(key));
+      return next;
+    });
+  }
+  return { clear, params, q, setQ, search, page, setPage: (value: number) => update("page", String(value)), update };
 }

@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
-import { Spinner } from "../components/ui/States";
+import { Spinner, ErrorState } from "../components/ui/States";
 import { useToast } from "../components/ui/Toast";
 import { useAuth } from "../context/AuthContext";
 import { ProfilesCard } from "../components/ProfilesCard";
@@ -18,7 +18,7 @@ interface FormValues {
 }
 
 export default function AccountSettings() {
-  const { data: me, isLoading } = useQuery({
+  const { data: me, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["me-account"],
     queryFn: async () => (await api.get("/auth/me")).data.data,
   });
@@ -59,7 +59,7 @@ export default function AccountSettings() {
     }
   }
 
-  if (isLoading) return <Spinner />;
+  if (isLoading || isError) return <div className="space-y-5"><h1 className="text-2xl font-extrabold text-slate-900">إعدادات الحساب</h1>{isLoading ? <Spinner /> : <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />}</div>;
 
   return (
     <div className="max-w-xl space-y-6">

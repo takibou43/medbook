@@ -1,3 +1,5 @@
+import { AdminResults, AdminActions } from "../../components/admin/AdminUI";
+import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
 import { FormEvent, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../lib/api";
@@ -23,12 +25,13 @@ export default function AdminClinics() {
     {error && <p role="alert" className="text-red-600">{error}</p>}{success && <p role="status" className="text-primary-700">{success}</p>}
     <div className="card space-y-3 p-5"><h2 className="text-lg font-bold">طلبات انتقال الأطباء المسجّلين</h2>
       <p className="text-sm text-slate-600">تأكّد من موافقة صاحب العيادة، ثم وثّق العيادة وفعّل اشتراكًا بسعة تشمل الطبيب قبل الموافقة.</p>
-      {transfers.isPending && <p>جارٍ تحميل الطلبات…</p>}{transfers.isError && <p role="alert">{apiErrorMessage(transfers.error)}</p>}
+      {transfers.isPending && <Spinner label="جارٍ تحميل طلبات الانتقال…" />}{transfers.isError && <ErrorState message={apiErrorMessage(transfers.error)} onRetry={() => void transfers.refetch()} />}
       {transfers.data?.length === 0 && <p>لا توجد طلبات معلّقة.</p>}
-      {transfers.data?.map(r => <article key={r.id} className="space-y-2 border-t pt-3"><p>د. {r.doctor.firstName} {r.doctor.lastName} ← {r.clinic.nameAr}</p><p dir="ltr">{r.doctor.user.email}</p><div className="flex gap-2"><Button disabled={!!busy} onClick={() => void review(r.id, true)}>الموافقة على الانتقال</Button><Button variant="danger" disabled={!!busy} onClick={() => void review(r.id, false)}>رفض الطلب</Button></div></article>)}
+      {transfers.data?.map(r => <article key={r.id} className="space-y-2 border-t pt-3"><p>د. {r.doctor.firstName} {r.doctor.lastName} ← {r.clinic.nameAr}</p><p dir="ltr">{r.doctor.user.email}</p><AdminActions label={"طلب انتقال " + r.doctor.firstName + " " + r.doctor.lastName}><Button disabled={!!busy} onClick={() => void review(r.id, true)}>الموافقة على الانتقال</Button><Button variant="danger" disabled={!!busy} onClick={() => void review(r.id, false)}>رفض الطلب</Button></AdminActions></article>)}
     </div>
-    {query.isPending && <p>جارٍ التحميل…</p>}{query.isError && <p role="alert">{apiErrorMessage(query.error, "تعذر تحميل العيادات.")}</p>}
-    {query.data?.length === 0 && <p>لم تُسجل عيادات بعد.</p>}
+    <AdminResults total={query.data?.length} />
+    {query.isPending && <Spinner label="جارٍ تحميل العيادات…" />}{query.isError && <ErrorState message={apiErrorMessage(query.error, "تعذر تحميل العيادات.")} onRetry={() => void query.refetch()} />}
+    {query.data?.length === 0 && <EmptyState title="لا توجد عيادات" />}
     {query.data?.map(c => <form key={`${c.id}-${c.subscriptionExpiresAt}-${c.verificationStatus}-${c.subscriptionStatus}-${c.paidDoctorCount}`} onSubmit={e => void save(e, c.id)} className="card space-y-4 p-5">
       <h2 className="text-lg font-bold">{c.nameAr}</h2><p>{c.address}</p><p dir="ltr">{c.owner.email}</p>
       <p>{c._count.doctors} أطباء · المبلغ الشهري الحالي: <b>{c.monthlyTotal.toLocaleString("ar-DZ")} دج</b></p>

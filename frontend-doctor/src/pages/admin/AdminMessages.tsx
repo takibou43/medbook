@@ -50,11 +50,12 @@ export default function AdminMessages() {
             <Search className="pointer-events-none absolute right-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input aria-label="بحث عن طبيب في المحادثات" value={q} onChange={(e) => setQ(e.target.value)} placeholder="بحث عن طبيب..." className="input pr-9" />
           </div>
+          <div className="flex items-center justify-between px-3 py-2 text-xs text-slate-600"><span role="status">عدد النتائج: {list.data?.total ?? "—"}</span>{q && <button className="btn-ghost" onClick={() => setQ("")}>مسح البحث</button>}</div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {list.isLoading ? (
               <Spinner />
             ) : list.isError && !list.data ? (
-              <ErrorState message={apiErrorMessage(list.error)} />
+              <ErrorState message={apiErrorMessage(list.error)} onRetry={() => void list.refetch()} />
             ) : list.data && list.data.items.length > 0 ? (
               list.data.items.map((c) => (
                 <button

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { LucideIcon, LogOut, Menu, X } from "lucide-react";
 import clsx from "clsx";
@@ -15,10 +15,12 @@ export interface DashboardNavItem {
   badge?: number;
   /** مسارات تابعة تُبقي هذا العنصر مضيئًا عند زيارتها (مثل صفحات «الإعدادات»). */
   activeFor?: string[];
+  group?: string;
 }
 
 export function DashboardLayout({
   title,
+  contentClassName,
   subtitle,
   items,
   dailyNavigation = false,
@@ -26,6 +28,7 @@ export function DashboardLayout({
   clinicMode = false,
 }: {
   title: string;
+  contentClassName?: string;
   /** شارة اختيارية تحت العنوان (مثل "مساعد لدى د. ..."). لا تُعرض إن لم تُمرَّر. */
   subtitle?: string;
   items: DashboardNavItem[];
@@ -43,6 +46,16 @@ export function DashboardLayout({
   // (hidden md:flex)، فلم يكن هناك أي وسيلة للوصول إليها على الشاشات الصغيرة. أضفنا قائمة
   // منسدلة تُفتح بزر همبرغر في الترويسة على الهاتف وتحتوي نفس الروابط.
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuId = useId();
+  const menuButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") { setMobileMenuOpen(false); menuButton.current?.focus(); } };
+    document.addEventListener("keydown", close);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener("keydown", close); };
+  }, [mobileMenuOpen]);
 
   async function handleLogout() {
     await logout();
@@ -67,6 +80,7 @@ export function DashboardLayout({
         <nav className="flex-1 space-y-1 p-3">
           {items.map((item, index) => (
             <div key={item.to}>
+            {item.group && item.group !== items[index - 1]?.group && <p className="px-3 pb-2 pt-4 text-xs font-bold text-slate-600">{item.group}</p>}
             {index === settingsStart && <p className="px-3 pb-2 pt-4 text-xs font-bold text-slate-500">الإدارة والإعدادات</p>}
             <NavLink
               to={item.to}
@@ -102,6 +116,9 @@ export function DashboardLayout({
             <span className="text-lg font-extrabold">MedBook</span>
           </div>
           <button
+            ref={menuButton}
+            aria-controls={menuId}
+            aria-expanded={mobileMenuOpen}
             onClick={() => setMobileMenuOpen((v) => !v)}
             className="btn-ghost"
             aria-label={mobileMenuOpen ? "إغلاق القائمة" : "فتح القائمة"}
@@ -111,8 +128,10 @@ export function DashboardLayout({
         </header>
 
         {mobileMenuOpen && (
-          <nav className="fixed inset-x-0 top-16 bottom-20 z-50 overflow-y-auto space-y-1 border-b border-slate-200 bg-white p-3 md:hidden">
-            {items.map((item) => (
+          <nav id={menuId} aria-label="قائمة الأقسام" className={clsx("fixed inset-x-0 top-16 z-50 overflow-y-auto space-y-1 border-b border-slate-200 bg-white p-3 md:hidden", dailyNavigation ? "bottom-20" : "bottom-0")}>
+            {items.map((item, index) => (
+              <div key={item.to}>
+              {item.group && item.group !== items[index - 1]?.group && <p className="px-3 pb-2 pt-4 text-xs font-bold text-slate-600">{item.group}</p>}
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -130,7 +149,7 @@ export function DashboardLayout({
                 {item.badge ? (
                   <span className="mr-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">{item.badge}</span>
                 ) : null}
-              </NavLink>
+              </NavLink></div>
             ))}
             {clinicMode && <NavLink to="/clinic" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl p-3 text-primary-700">إدارة العيادة</NavLink>}
             <SwitchToPatientButton className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 hover:bg-slate-100" onDone={() => setMobileMenuOpen(false)} />
@@ -143,7 +162,7 @@ export function DashboardLayout({
 
         {/* min-w-0 + overflow-x-hidden: خط دفاع أخير حتى لا يُخرج أي عنصر عريض (رابط طويل،
             جدول، رقم غير قابل للقصّ) الصفحة كاملة عن عرض شاشة الهاتف. */}
-        <main className={clsx("min-w-0 flex-1 overflow-x-hidden p-4 md:p-8", dailyNavigation && "pb-24 md:pb-8")}>
+        <main className={clsx("min-w-0 flex-1 overflow-x-hidden p-4 md:p-8", contentClassName, dailyNavigation && "pb-24 md:pb-8")}>
           <Outlet />
         </main>
         {dailyNavigation && <nav aria-label="التنقل اليومي" className="fixed inset-x-0 bottom-0 z-40 flex border-t bg-white pb-[env(safe-area-inset-bottom)] md:hidden">

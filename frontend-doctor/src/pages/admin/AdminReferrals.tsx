@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useAdminListParams } from "../../hooks/useAdminListParams";
+import { AdminResults } from "../../components/admin/AdminUI";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { api, apiErrorMessage } from "../../lib/api";
-import { Spinner, EmptyState } from "../../components/ui/States";
+import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
 import { Pagination } from "../../components/ui/Pagination";
 import type { AdminReferral, DoctorReferralStatus, Paginated } from "../../types";
 
@@ -19,12 +20,13 @@ const STATUS: Record<DoctorReferralStatus, { label: string; cls: string }> = {
 const day = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString("ar-DZ") : "—");
 
 export default function AdminReferrals() {
-  const [status, setStatus] = useState<DoctorReferralStatus | "">("");
-  const [page, setPage] = useState(1);
+  const { params, page, setPage, update, clear } = useAdminListParams();
+  const status = params.get("status") && params.get("status")! in STATUS ? params.get("status") as DoctorReferralStatus : "";
+  const setStatus = (value: string) => update("status", value);
   const q = useQuery({
     queryKey: ["admin-referrals", status, page],
-    queryFn: async () =>
-      (await api.get<{ data: Paginated<AdminReferral> }>("/admin/referrals", { params: { status: status || undefined, page, pageSize: 50 } })).data.data,
+    queryFn: async ({ signal }) =>
+      (await api.get<{ data: Paginated<AdminReferral> }>("/admin/referrals", { signal, params: { status: status || undefined, page, pageSize: 50 } })).data.data,
   });
 
   return (
@@ -36,19 +38,21 @@ export default function AdminReferrals() {
           <button
             key={s || "all"}
             type="button"
-            onClick={() => { setStatus(s); setPage(1); }}
-            className={clsx("rounded-full border px-3 py-1.5 text-sm font-semibold", status === s ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-600")}
+            aria-pressed={status === s}
+            onClick={() => { setStatus(s); }}
+            className={clsx("min-h-11 rounded-full border px-3 py-1.5 text-sm font-semibold", status === s ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-600")}
           >
             {s ? STATUS[s].label : "الكل"}
           </button>
         ))}
       </div>
+      <AdminResults total={q.data?.total} filtered={!!status} onClear={clear} />
       {q.isLoading ? (
         <Spinner />
       ) : q.isError ? (
-        <p className="card p-4 text-sm text-red-600" role="alert">{apiErrorMessage(q.error)}</p>
+        <ErrorState message={apiErrorMessage(q.error)} onRetry={() => void q.refetch()} />
       ) : (q.data?.items.length ?? 0) === 0 ? (
-        <EmptyState title="لا توجد إحالات" />
+        <EmptyState title={status ? "لا نتائج مطابقة" : "لا توجد إحالات"} />
       ) : (
         <>
           <div className="card overflow-x-auto p-0">

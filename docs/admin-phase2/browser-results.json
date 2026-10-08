@@ -1,0 +1,86 @@
+{
+  "base": "http://127.0.0.1:5190",
+  "results": [
+    {
+      "name": "navigation groups, home first, active section and all twelve routes",
+      "status": "passed"
+    },
+    {
+      "name": "URL filters, reload, history and clear retain unrelated parameters",
+      "status": "passed"
+    },
+    {
+      "name": "secondary actions hidden, disclosure Escape and outside dismissal, no write on open",
+      "status": "passed"
+    },
+    {
+      "name": "appointments and accounts fit 360",
+      "status": "passed"
+    },
+    {
+      "name": "appointments and accounts fit 390",
+      "status": "passed"
+    },
+    {
+      "name": "appointments and accounts fit 768",
+      "status": "passed"
+    },
+    {
+      "name": "appointments and accounts fit 1280",
+      "status": "passed"
+    },
+    {
+      "name": "mobile menu closes with Escape, restores focus and reaches account settings",
+      "status": "passed"
+    },
+    {
+      "name": "request failure preserves search, retry recovers real results",
+      "status": "passed"
+    },
+    {
+      "name": "empty data differs from no matching search",
+      "status": "passed"
+    },
+    {
+      "name": "delayed old search cannot replace newer result",
+      "status": "passed"
+    },
+    {
+      "name": "dashboard request failure offers retry with stable heading",
+      "status": "passed"
+    },
+    {
+      "name": "message search preserves recipient, drafts remain per doctor",
+      "status": "passed"
+    },
+    {
+      "name": "list errors offer retry across catalog, reviews, referrals and clinics",
+      "status": "passed"
+    },
+    {
+      "name": "failed mocked save retains fields and reports no false success",
+      "status": "passed"
+    },
+    {
+      "name": "sensitive catalog, geography and review actions fit mobile and stay hidden",
+      "status": "passed"
+    },
+    {
+      "name": "no JavaScript errors",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "writes": [
+    {
+      "method": "POST",
+      "path": "/api/admin/specialties"
+    }
+  ],
+  "externalRequests": "blocked; all API requests fulfilled in browser",
+  "limits": [
+    "No real administrator writes",
+    "No physical keyboard or screen reader verification",
+    "No production database snapshots"
+  ]
+}

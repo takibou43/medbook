@@ -107,3 +107,10 @@ body {
 .pwa-install-bar {
   padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
 }
+
+/* Admin controls share readable text and consistent touch targets. */
+.admin-page .btn-primary, .admin-page .btn-outline, .admin-page .btn-ghost, .admin-page .btn-danger { min-height: 44px; font-size: 0.875rem; }
+.admin-page .text-slate-500 { color: #475569; }
+.admin-page .badge { white-space: nowrap; }
+.admin-actions[open] { z-index: 30; }
+.admin-actions summary::-webkit-details-marker { display: none; }

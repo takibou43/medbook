@@ -32,4 +32,7 @@ test("old notification branding is presented consistently without altering store
   const original = "انضم طبيب جديد إلى مادبوك. MadBook";
   assert.equal(platformText(original), "انضم طبيب جديد إلى MedBook. MedBook");
   assert.equal(original, "انضم طبيب جديد إلى مادبوك. MadBook");
+  const dated = "موعدك يوم 2026-10-22 على الساعة 08:49.";
+  assert.equal(platformText(dated), `موعدك يوم ${arabicDate("2026-10-22")} على الساعة 08:49.`);
+  assert.equal(dated, "موعدك يوم 2026-10-22 على الساعة 08:49.");
 });

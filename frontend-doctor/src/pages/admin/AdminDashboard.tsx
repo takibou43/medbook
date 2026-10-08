@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useAdminListParams } from "../../hooks/useAdminListParams";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Users, Stethoscope, Building2, CalendarDays, CalendarClock, CheckCircle2, XCircle, ShieldAlert, Trash2, MessageSquare, UserPlus, Search, Activity, RefreshCw } from "lucide-react";
@@ -22,46 +23,41 @@ const STATE_STYLE: Record<SystemCheck["state"], { dot: string; text: string }> =
 };
 
 function GlobalSearch() {
-  const [q, setQ] = useState("");
-  const [dq, setDq] = useState("");
-  useEffect(() => {
-    const t = setTimeout(() => setDq(q.trim()), 350);
-    return () => clearTimeout(t);
-  }, [q]);
+  const { q, setQ, search: dq } = useAdminListParams();
   const { data, isFetching, isError } = useQuery({
     queryKey: ["admin-search", dq],
     enabled: dq.length >= 2,
-    queryFn: async () => (await api.get("/admin/search", { params: { q: dq } })).data.data,
+    queryFn: async ({ signal }) => (await api.get("/admin/search", { signal, params: { q: dq } })).data.data,
   });
   const empty = data && !data.doctors.length && !data.patients.length && !data.appointments.length && !data.messages.length;
   const name = (x: { firstName: string; lastName: string }) => `${x.firstName} ${x.lastName}`;
   return (
     <div className="relative">
       <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="بحث عن طبيب أو مريض أو موعد أو رسالة..." className="input pr-9" />
-      {dq.length >= 2 && (
+      <input aria-label="البحث العام في الإدارة" value={q} onChange={(e) => setQ(e.target.value)} placeholder="بحث عن طبيب أو مريض أو موعد أو رسالة..." className="input pr-9" />
+      {dq.length >= 2 && q.trim() === dq && (
         <div className="absolute z-20 mt-2 max-h-96 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
           {isFetching && <p className="p-3 text-sm text-slate-500">جارٍ البحث...</p>}
           {isError && <p className="p-3 text-sm text-red-600">تعذّر البحث. حاول مرة أخرى.</p>}
           {empty && <p className="p-3 text-sm text-slate-500">لا نتائج مطابقة.</p>}
           {data?.doctors.map((d: any) => (
-            <Link key={d.id} to={`/admin/doctors`} onClick={() => setQ("")} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">
+            <Link key={d.id} to={`/admin/doctors?id=${encodeURIComponent(d.id)}`} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">
               <span className="text-xs text-slate-400">طبيب · </span>د. {name(d)} {d.specialty?.nameAr && <span className="text-slate-500">— {d.specialty.nameAr}</span>}
             </Link>
           ))}
           {data?.patients.map((p: any) => (
-            <Link key={p.id} to={`/admin/users?role=PATIENT`} onClick={() => setQ("")} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">
+            <Link key={p.id} to={`/admin/users?role=PATIENT&id=${encodeURIComponent(p.userId)}`} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">
               <span className="text-xs text-slate-400">مريض · </span>{name(p)} {p.phone && <span className="text-slate-500" dir="ltr">{p.phone}</span>}
             </Link>
           ))}
           {data?.appointments.map((a: any) => (
-            <Link key={a.id} to={`/admin/appointments`} onClick={() => setQ("")} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">
+            <Link key={a.id} to={`/admin/appointments?id=${encodeURIComponent(a.id)}`} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">
               <span className="text-xs text-slate-400">موعد · </span>
-              {a.patient ? name(a.patient) : `${a.guestFirstName ?? ""} ${a.guestLastName ?? ""}`} — د. {name(a.doctor)} — {new Date(a.date).toLocaleDateString("ar-DZ", { timeZone: "UTC" })} {a.startTime}
+              {a.familyMember ? name(a.familyMember) : a.patient ? name(a.patient) : `${a.guestFirstName ?? ""} ${a.guestLastName ?? ""}`} — د. {name(a.doctor)} — {new Date(a.date).toLocaleDateString("ar-DZ", { timeZone: "UTC" })} {a.startTime}
             </Link>
           ))}
           {data?.messages.map((m: any) => (
-            <Link key={m.id} to={`/admin/messages?doctor=${m.doctorId}`} onClick={() => setQ("")} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">
+            <Link key={m.id} to={`/admin/messages?doctor=${m.doctorId}`} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">
               <span className="text-xs text-slate-400">رسالة · </span>د. {m.doctorName}: <span className="text-slate-500">{m.preview}</span>
             </Link>
           ))}
@@ -144,7 +140,7 @@ export default function AdminDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="المرضى" value={stats?.patients ?? 0} icon={Users} to="/admin/users?role=PATIENT" />
         <StatCard label="الأطباء" value={stats?.doctors ?? 0} icon={Stethoscope} to="/admin/doctors" />
-        <StatCard label="العيادات" value={stats?.clinics ?? 0} icon={Building2} />
+        <StatCard label="العيادات" value={stats?.clinics ?? 0} icon={Building2} to="/admin/clinics" />
         <StatCard label="إجمالي المواعيد" value={stats?.appointments ?? 0} icon={CalendarDays} to="/admin/appointments" />
         <StatCard label="مواعيد اليوم" value={stats?.todayAppointments ?? 0} icon={CalendarClock} to="/admin/appointments?filter=today" />
         <StatCard label="مواعيد مكتملة" value={stats?.completed ?? 0} icon={CheckCircle2} tone="green" to="/admin/appointments?filter=completed" />
@@ -191,7 +187,7 @@ export default function AdminDashboard() {
               <Activity className="h-5 w-5 text-primary-600" />
               حالة النظام
             </h2>
-            <button onClick={() => status.refetch()} className="btn-ghost !p-1.5" aria-label="إعادة الفحص" disabled={status.isFetching}>
+            <button onClick={() => status.refetch()} className="btn-ghost !p-1.5" aria-label="إعادة الفحص" title="إعادة فحص حالة النظام" disabled={status.isFetching}>
               <RefreshCw className={clsx("h-4 w-4", status.isFetching && "animate-spin")} />
             </button>
           </div>
@@ -232,7 +228,7 @@ export default function AdminDashboard() {
                     <p className="font-semibold text-slate-800">{a.title}</p>
                     {a.detail && <p className="truncate text-xs text-slate-500">{a.detail}</p>}
                   </div>
-                  <span className="shrink-0 text-xs text-slate-400">{timeAgo(a.at)}</span>
+                  <span title={new Date(a.at).toLocaleString("ar-DZ")} className="shrink-0 text-xs text-slate-500">وقت النشاط: {timeAgo(a.at)}</span>
                 </Link>
               </li>
             ))}

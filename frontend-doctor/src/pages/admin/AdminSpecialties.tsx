@@ -69,7 +69,7 @@ export default function AdminSpecialties() {
                 <p className="font-bold text-slate-800">{s.nameAr}</p>
                 {s.description && <p className="text-xs text-slate-500">{s.description}</p>}
               </div>
-              <button onClick={() => remove(s.id)} className="rounded-lg p-2 text-red-500 hover:bg-red-50">
+              <button aria-label={`حذف تخصص ${s.nameAr}`} title={`حذف تخصص ${s.nameAr}`} onClick={() => remove(s.id)} className="rounded-lg p-2 text-red-500 hover:bg-red-50">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>

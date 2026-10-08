@@ -96,7 +96,7 @@ export default function AdminWilayas() {
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setCityModal(w.id)}>
                     <Plus className="h-4 w-4" />
-                    بلدية
+                    إضافة بلدية
                   </Button>
                   <Button variant="danger" onClick={() => removeWilaya(w.id)}>
                     حذف
@@ -108,7 +108,7 @@ export default function AdminWilayas() {
                   {w.cities.map((c: any) => (
                     <span key={c.id} className="badge flex items-center gap-1 bg-slate-100 text-slate-700">
                       {c.nameAr}
-                      <button onClick={() => removeCity(c.id)}>
+                      <button aria-label={`حذف بلدية ${c.nameAr} من ولاية ${w.nameAr}`} title={`حذف بلدية ${c.nameAr}`} onClick={() => removeCity(c.id)}>
                         <Trash2 className="h-3 w-3 text-red-500" />
                       </button>
                     </span>
@@ -146,7 +146,7 @@ export default function AdminWilayas() {
       <Modal
         open={!!cityModal}
         onClose={() => setCityModal(null)}
-        title="إضافة بلدية"
+        title={`إضافة بلدية — ${data?.find((w: any) => w.id === cityModal)?.nameAr ?? ""}`}
         footer={
           <>
             <Button variant="outline" onClick={() => setCityModal(null)}>

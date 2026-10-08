@@ -35,7 +35,7 @@ export async function getStats() {
 
 // ---------------- Users management ----------------
 
-export async function listUsers(params: { role?: Role; q?: string; page?: number; pageSize?: number }) {
+export async function listUsers(params: { id?: string; role?: Role; q?: string; page?: number; pageSize?: number }) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 20));
 
@@ -47,7 +47,7 @@ export async function listUsers(params: { role?: Role; q?: string; page?: number
   const searchFilter: Prisma.UserWhereInput = params.q
     ? { OR: [{ email: { contains: params.q, mode: "insensitive" } }, { phone: { contains: params.q } }] }
     : {};
-  const where: Prisma.UserWhereInput = { AND: [roleFilter, searchFilter] };
+  const where: Prisma.UserWhereInput = { AND: [roleFilter, searchFilter, ...(params.id ? [{ id: params.id }] : [])] };
 
 
   const [items, total] = await Promise.all([
@@ -157,11 +157,12 @@ export async function createAdminUser(email: string, password: string, phone?: s
 
 // ---------------- Doctors management ----------------
 
-export async function listDoctorsAdmin(params: { verificationStatus?: VerificationStatus; q?: string; page?: number; pageSize?: number }) {
+export async function listDoctorsAdmin(params: { id?: string; verificationStatus?: VerificationStatus; q?: string; page?: number; pageSize?: number }) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 20));
 
   const where: Prisma.DoctorWhereInput = {
+          ...(params.id ? { id: params.id } : {}),
         ...(params.verificationStatus ? { verificationStatus: params.verificationStatus } : {}),
         ...(params.q
                   ? {
@@ -387,10 +388,10 @@ export async function getAppointmentsSeries(range: SeriesRange) {
 
 export type AppointmentFilter = "all" | "today" | "completed" | "cancelled";
 
-export async function listAppointmentsAdmin(params: { filter?: AppointmentFilter; q?: string; page?: number; pageSize?: number }) {
+export async function listAppointmentsAdmin(params: { id?: string; filter?: AppointmentFilter; q?: string; page?: number; pageSize?: number }) {
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 20));
-  const where: Prisma.AppointmentWhereInput = {};
+  const where: Prisma.AppointmentWhereInput = params.id ? { id: params.id } : {};
   if (params.filter === "today") {
     const start = algeriaTodayUTCMidnight();
     const end = new Date(start);
@@ -420,6 +421,8 @@ export async function listAppointmentsAdmin(params: { filter?: AppointmentFilter
         status: true,
         guestFirstName: true,
         guestLastName: true,
+        familyMemberId: true,
+        familyMember: { select: { firstName: true, lastName: true } },
         patient: { select: { firstName: true, lastName: true } },
         doctor: { select: { id: true, firstName: true, lastName: true } },
       },
@@ -478,7 +481,7 @@ export async function getRecentActivity(limit = 15): Promise<ActivityItem[]> {
       title: "تسجيل طبيب جديد",
       detail: `د. ${d.firstName} ${d.lastName}${d.verificationStatus === "PENDING" ? " — بانتظار التحقق" : ""}`,
       at: d.createdAt,
-      link: d.verificationStatus === "PENDING" ? "/admin/doctors?status=PENDING" : "/admin/doctors",
+      link: `/admin/doctors?id=${d.id}`,
     });
   }
   for (const a of appts) {
@@ -488,9 +491,9 @@ export async function getRecentActivity(limit = 15): Promise<ActivityItem[]> {
       id: `appt-${a.id}-${a.updatedAt.getTime()}`,
       type: ev.type,
       title: ev.title,
-      detail: `د. ${a.doctor.firstName} ${a.doctor.lastName} — ${dayKey(a.date)} ${a.startTime}`,
+      detail: `د. ${a.doctor.firstName} ${a.doctor.lastName} — ${a.date.toLocaleDateString("ar-DZ", { timeZone: "UTC" })} ${a.startTime} (تاريخ الموعد)`,
       at: created ? a.createdAt : a.updatedAt,
-      link: "/admin/appointments",
+      link: `/admin/appointments?id=${a.id}`,
     });
   }
   for (const m of messages) {
@@ -597,7 +600,7 @@ export async function globalSearch(qRaw: string) {
     prisma.patient.findMany({
       where: { OR: [ci("firstName"), ci("lastName"), { user: { phone: { contains: q } } }] },
       take: 5,
-      select: { id: true, firstName: true, lastName: true, user: { select: { phone: true } } },
+      select: { id: true, firstName: true, lastName: true, user: { select: { id: true, phone: true } } },
     }),
     prisma.appointment.findMany({
       where: { OR: [ci("guestFirstName"), ci("guestLastName"), { patient: { OR: [ci("firstName"), ci("lastName")] } }] },
@@ -605,6 +608,8 @@ export async function globalSearch(qRaw: string) {
       take: 5,
       select: {
         id: true, date: true, startTime: true, status: true, guestFirstName: true, guestLastName: true,
+        familyMemberId: true,
+        familyMember: { select: { firstName: true, lastName: true } },
         patient: { select: { firstName: true, lastName: true } },
         doctor: { select: { firstName: true, lastName: true } },
       },
@@ -618,7 +623,7 @@ export async function globalSearch(qRaw: string) {
   ]);
   return {
     doctors,
-    patients: patients.map((p) => ({ id: p.id, firstName: p.firstName, lastName: p.lastName, phone: p.user.phone })),
+    patients: patients.map((p) => ({ id: p.id, userId: p.user.id, firstName: p.firstName, lastName: p.lastName, phone: p.user.phone })),
     appointments,
     messages: messages.map((m) => ({
       id: m.id,

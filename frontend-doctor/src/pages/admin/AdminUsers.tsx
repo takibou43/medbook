@@ -1,5 +1,6 @@
+import { useAdminListParams } from "../../hooks/useAdminListParams";
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../lib/api";
 import { Spinner, EmptyState } from "../../components/ui/States";
@@ -13,18 +14,17 @@ import { BlockPatientDialog, BlockTarget } from "../../components/BlockPatientDi
 const ROLE_LABELS: Record<Role, string> = { PATIENT: "مريض", DOCTOR: "طبيب", ADMIN: "إدارة", ASSISTANT: "مساعد", CLINIC_OWNER: "صاحب عيادة" };
 
 export default function AdminUsers() {
-  const [q, setQ] = useState("");
-  const [searchParams] = useSearchParams();
-  const initialRole = searchParams.get("role");
-  const [role, setRole] = useState<Role | "">(initialRole && initialRole in ROLE_LABELS ? (initialRole as Role) : "");
-  const [page, setPage] = useState(1);
+  const { params, q, setQ, search, page, setPage, update } = useAdminListParams();
+  const id = params.get("id");
+  const role = params.get("role") && params.get("role")! in ROLE_LABELS ? params.get("role") as Role : "";
+  const setRole = (value: string) => update("role", value);
   const { showToast } = useToast();
   const qc = useQueryClient();
   const [blockTarget, setBlockTarget] = useState<{ t: BlockTarget; mode: "block" | "unblock" } | null>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin-users", q, role, page],
-    queryFn: async () => (await api.get("/admin/users", { params: { q: q || undefined, role: role || undefined, page } })).data.data,
+    queryKey: ["admin-users", search, role, page, id],
+    queryFn: async ({ signal }) => (await api.get("/admin/users", { signal, params: { id: id || undefined, q: search || undefined, role: role || undefined, page } })).data.data,
   });
 
   async function toggleActive(id: string, isActive: boolean) {
@@ -51,10 +51,11 @@ export default function AdminUsers() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-extrabold text-slate-900">إدارة المستخدمين</h1>
+      {id && <p className="text-sm text-primary-700" role="status">عرض السجل المحدد من الرابط</p>}
 
       <div className="flex flex-wrap gap-3">
-        <Input placeholder="بحث بالبريد أو الهاتف..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
-        <select className="input max-w-[160px]" value={role} onChange={(e) => setRole(e.target.value as Role | "")}>
+        <Input label="بحث عن مستخدم" placeholder="بحث بالبريد أو الهاتف..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
+        <select aria-label="دور المستخدم" className="input max-w-[160px]" value={role} onChange={(e) => setRole(e.target.value as Role | "")}>
           <option value="">كل الأدوار</option>
           <option value="PATIENT">مريض</option>
           <option value="DOCTOR">طبيب</option>
@@ -80,9 +81,9 @@ export default function AdminUsers() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {data.items.map((u: any) => (
-                  <tr key={u.id}>
-                    <td className="px-4 py-3 text-slate-700">{u.email}</td>
-                    <td className="px-4 py-3 text-slate-600">{u.phone ?? "—"}</td>
+                  <tr key={u.id} className={id === u.id ? "bg-primary-50" : undefined}>
+                    <td className="px-4 py-3 text-slate-700" dir="ltr">{u.email}</td>
+                    <td className="px-4 py-3 text-slate-600" dir="ltr">{u.phone ?? "—"}</td>
                     <td className="px-4 py-3 text-slate-600">{ROLE_LABELS[u.role as Role]}</td>
                     <td className="px-4 py-3">
                       <span className={`badge ${u.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>

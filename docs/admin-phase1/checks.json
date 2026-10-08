@@ -1,0 +1,17 @@
+{
+  "branch": "fix/admin-phase1-20261008",
+  "base": "a842a90",
+  "frontendTypeCheck": "passed",
+  "frontendBuild": "passed",
+  "backendBuild": "passed",
+  "existingFrontendTests": { "passed": 65, "failed": 0 },
+  "targetedBackendTests": { "passed": 59, "failed": 0, "database": "mocked Prisma", "files": ["adminDeepLinks.routes.test.ts", "messaging.routes.test.ts", "messaging.util.test.ts", "securityAudit.regression.test.ts"] },
+  "browserTests": { "passed": 17, "failed": 0, "javascriptErrors": 0, "api": "fixtures only", "externalNetwork": "blocked" },
+  "diffCheck": "passed",
+  "actionMatrixRows": 79,
+  "runtime": "Node 24.16.0 on Windows; Node 22 declared by backend was not separately tested",
+  "productionDataChanged": false,
+  "schemaChanged": false,
+  "realMessagesSent": false,
+  "published": false
+}

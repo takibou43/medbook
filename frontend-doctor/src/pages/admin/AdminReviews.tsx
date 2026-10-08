@@ -41,7 +41,7 @@ export default function AdminReviews() {
                 <RatingStars value={r.rating} size={14} />
                 {r.comment && <p className="mt-1 text-sm text-slate-600">{r.comment}</p>}
               </div>
-              <button onClick={() => remove(r.id)} className="rounded-lg p-2 text-red-500 hover:bg-red-50">
+              <button aria-label={`حذف تقييم ${r.patient?.firstName ?? ""} ${r.patient?.lastName ?? ""} للطبيب ${r.doctor?.firstName ?? ""} ${r.doctor?.lastName ?? ""}`} title="حذف التقييم" onClick={() => remove(r.id)} className="rounded-lg p-2 text-red-500 hover:bg-red-50">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>

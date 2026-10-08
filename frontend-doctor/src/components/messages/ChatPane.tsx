@@ -21,12 +21,20 @@ export function ChatPane({
   scope,
   me,
   peerLabel,
+  initialDraft = "",
+  onDraftChange,
+  initialAttempt,
+  onAttemptChange,
   focusUnread = false,
   onFocusHandled,
 }: {
   scope: MessagingScope;
   me: "ADMIN" | "DOCTOR";
   peerLabel: string;
+  initialDraft?: string;
+  initialAttempt?: { content: string; clientId: string };
+  onAttemptChange?: (attempt: { content: string; clientId: string } | undefined) => void;
+  onDraftChange?: (text: string) => void;
   /** عند الوصول من إشعار: مرِّر إلى أول رسالة واردة غير مقروءة (أو آخر رسالة واردة) وأبرزها. */
   focusUnread?: boolean;
   onFocusHandled?: () => void;
@@ -38,8 +46,10 @@ export function ChatPane({
   const [older, setOlder] = useState<ChatMessage[]>([]);
   const [hasMoreOlder, setHasMoreOlder] = useState<boolean | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [text, setText] = useState("");
-  const pendingId = useRef<{ content: string; clientId: string } | null>(null);
+  const [text, updateText] = useState(initialDraft);
+  const sending = useRef(false);
+  const setText = (value: string) => { updateText(value); onDraftChange?.(value); };
+  const pendingId = useRef<{ content: string; clientId: string } | null>(initialAttempt ?? null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const listRef = useRef<HTMLDivElement>(null);
@@ -49,8 +59,7 @@ export function ChatPane({
   useEffect(() => {
     setOlder([]);
     setHasMoreOlder(null);
-    setText("");
-    pendingId.current = null;
+    setText(initialDraft);
     stickToBottom.current = true;
   }, [scopeKey]);
 
@@ -115,23 +124,27 @@ export function ChatPane({
     }
   }
 
-  function submit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     const content = text.trim();
-    if (!content || send.isPending) return;
-    // نُعيد استعمال clientId إن فشلت المحاولة السابقة بنفس النص (شبكة/مهلة) => لا رسالة مكرّرة.
+    if (!content || send.isPending || sending.current) return;
+    sending.current = true;
     if (!pendingId.current || pendingId.current.content !== content) {
       pendingId.current = { content, clientId: crypto.randomUUID() };
+      onAttemptChange?.(pendingId.current);
     }
-    send.mutate(pendingId.current, {
-      onSuccess: () => {
-        setText("");
-        pendingId.current = null;
-        stickToBottom.current = true;
-        showToast("✓ تم إرسال الرسالة", "success");
-      },
-      onError: (err) => showToast(apiErrorMessage(err, "تعذّر إرسال الرسالة."), "error"),
-    });
+    try {
+      await send.mutateAsync(pendingId.current);
+      setText("");
+      pendingId.current = null;
+      onAttemptChange?.(undefined);
+      stickToBottom.current = true;
+      showToast("تم إرسال الرسالة", "success");
+    } catch (err) {
+      showToast(apiErrorMessage(err, "تعذّر إرسال الرسالة."), "error");
+    } finally {
+      sending.current = false;
+    }
   }
 
   return (
@@ -195,6 +208,8 @@ export function ChatPane({
       <form onSubmit={submit} className="border-t border-slate-200 bg-white p-3">
         <div className="flex items-end gap-2">
           <textarea
+            aria-label={`رسالة إلى ${peerLabel}`}
+            disabled={send.isPending}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {

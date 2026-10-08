@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useAdminListParams } from "../../hooks/useAdminListParams";
+
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiErrorMessage } from "../../lib/api";
 import { Spinner, EmptyState } from "../../components/ui/States";
@@ -11,20 +12,17 @@ import { Pagination } from "../../components/ui/Pagination";
 import { VerificationStatus, SubscriptionStatus } from "../../types";
 
 export default function AdminDoctors() {
-  const [q, setQ] = useState("");
-  const [searchParams] = useSearchParams();
-  const initialStatus = searchParams.get("status");
-  const [status, setStatus] = useState<VerificationStatus | "">(
-    initialStatus === "PENDING" || initialStatus === "VERIFIED" || initialStatus === "REJECTED" ? initialStatus : ""
-  );
-  const [page, setPage] = useState(1);
+  const { params, q, setQ, search, page, setPage, update } = useAdminListParams();
+  const id = params.get("id");
+  const status = ["PENDING", "VERIFIED", "REJECTED"].includes(params.get("status") ?? "") ? params.get("status") as VerificationStatus : "";
+  const setStatus = (value: string) => update("status", value);
   const { showToast } = useToast();
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["admin-doctors", q, status, page],
-    queryFn: async () =>
-      (await api.get("/admin/doctors", { params: { q: q || undefined, verificationStatus: status || undefined, page } })).data.data,
+    queryKey: ["admin-doctors", search, status, page, id],
+    queryFn: async ({ signal }) =>
+      (await api.get("/admin/doctors", { signal, params: { id: id || undefined, q: search || undefined, verificationStatus: status || undefined, page } })).data.data,
   });
 
   async function setVerification(id: string, s: VerificationStatus) {
@@ -52,10 +50,11 @@ export default function AdminDoctors() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-extrabold text-slate-900">إدارة الأطباء</h1>
+      {id && <p className="text-sm text-primary-700" role="status">عرض السجل المحدد من الرابط</p>}
 
       <div className="flex flex-wrap gap-3">
-        <Input placeholder="بحث بالاسم..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
-        <select className="input max-w-[180px]" value={status} onChange={(e) => setStatus(e.target.value as VerificationStatus | "")}>
+        <Input label="بحث عن طبيب" placeholder="بحث بالاسم..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
+        <select aria-label="حالة توثيق الطبيب" className="input max-w-[180px]" value={status} onChange={(e) => setStatus(e.target.value as VerificationStatus | "")}>
           <option value="">كل الحالات</option>
           <option value="PENDING">قيد المراجعة</option>
           <option value="VERIFIED">موثّق</option>
@@ -69,7 +68,7 @@ export default function AdminDoctors() {
         <>
           <div className="space-y-3">
             {data.items.map((d: any) => (
-              <div key={d.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div key={d.id} id={`doctor-${d.id}`} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-bold text-slate-800">
                     د. {d.firstName} {d.lastName} — {d.specialty?.nameAr}

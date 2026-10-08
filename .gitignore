@@ -9,3 +9,7 @@ coverage/
 backend/generated/
 frontend/dist/
 *.tsbuildinfo
+
+frontend-doctor/.vite-cache/
+docs/admin-phase1/baseline/
+docs/admin-phase1/baseline.zip

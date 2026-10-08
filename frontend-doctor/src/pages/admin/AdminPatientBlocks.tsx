@@ -49,8 +49,8 @@ export default function AdminPatientBlocks() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Input placeholder="بحث بالاسم أو البريد أو الهاتف..." value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="max-w-xs" />
-        <select className="input max-w-[180px]" value={status} onChange={(e) => { setStatus(e.target.value as "active" | "all"); setPage(1); }}>
+        <Input label="بحث عن مريض محظور" placeholder="بحث بالاسم أو البريد أو الهاتف..." value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="max-w-xs" />
+        <select aria-label="حالة الحظر" className="input max-w-[180px]" value={status} onChange={(e) => { setStatus(e.target.value as "active" | "all"); setPage(1); }}>
           <option value="active">المحظورون حاليًا</option>
           <option value="all">كل السجل (مع الملغى)</option>
         </select>

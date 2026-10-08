@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { ArrowRight, MessageSquare, Search } from "lucide-react";
 import clsx from "clsx";
-import { apiErrorMessage } from "../../lib/api";
+import { api, apiErrorMessage } from "../../lib/api";
 import { Spinner, ErrorState } from "../../components/ui/States";
 import { ChatPane } from "../../components/messages/ChatPane";
 import { useConversationList, timeAgo } from "../../hooks/useMessaging";
@@ -18,7 +19,20 @@ export default function AdminMessages() {
   }, [q]);
 
   const list = useConversationList(debounced);
-  const current = list.data?.items.find((c) => c.doctorId === selected);
+  // Recipient identity is fetched by ID, independently of search and pagination.
+  const recipient = useQuery({
+    queryKey: ["admin-message-recipient", selected],
+    enabled: !!selected,
+    queryFn: async ({ signal }) => {
+      const result = (await api.get("/admin/doctors", { signal, params: { id: selected } })).data.data;
+      const doctor = result.items.find((d: { id: string }) => d.id === selected);
+      if (!doctor) throw new Error("تعذر تحديد المستلم. أعد اختيار الطبيب.");
+      return { doctorName: [doctor.firstName, doctor.lastName].join(" "), specialty: doctor.specialty?.nameAr };
+    },
+  });
+  const current = recipient.data;
+  const [attempts, setAttempts] = useState<Record<string, { content: string; clientId: string } | undefined>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   const select = (id: string | null) => setParams(id ? { doctor: id } : {}, { replace: false });
 
@@ -34,7 +48,7 @@ export default function AdminMessages() {
         <div className={clsx("flex min-h-0 flex-col border-slate-200 md:border-l", selected ? "hidden md:flex" : "flex")}>
           <div className="relative border-b border-slate-200 p-3">
             <Search className="pointer-events-none absolute right-6 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="بحث عن طبيب..." className="input pr-9" />
+            <input aria-label="بحث عن طبيب في المحادثات" value={q} onChange={(e) => setQ(e.target.value)} placeholder="بحث عن طبيب..." className="input pr-9" />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {list.isLoading ? (
@@ -80,16 +94,36 @@ export default function AdminMessages() {
           {selected ? (
             <>
               <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
-                <button onClick={() => select(null)} className="btn-ghost !p-1.5 md:hidden" aria-label="رجوع لقائمة المحادثات">
+                <button onClick={() => select(null)} className="btn-ghost !p-1.5 md:hidden" aria-label="رجوع لقائمة المحادثات" title="رجوع لقائمة المحادثات">
                   <ArrowRight className="h-5 w-5" />
                 </button>
                 <div>
-                  <p className="font-bold text-slate-800">{current ? `د. ${current.doctorName}` : "المحادثة"}</p>
+                  <p className="font-bold text-slate-800" dir="auto">{current ? `د. ${current.doctorName}` : recipient.isLoading ? "جارٍ تحديد المستلم…" : "تعذر تحديد المستلم"}</p>
                   {current?.specialty && <p className="text-xs text-slate-500">{current.specialty}</p>}
                 </div>
               </div>
               <div className="min-h-0 flex-1">
-                <ChatPane scope={{ kind: "admin", doctorId: selected }} me="ADMIN" peerLabel={current ? `د. ${current.doctorName}` : "الطبيب"} />
+                {current ? (
+                  <ChatPane
+                    key={selected}
+                    scope={{ kind: "admin", doctorId: selected }}
+                    me="ADMIN"
+                    peerLabel={"د. " + current.doctorName}
+                    initialDraft={drafts[selected] ?? ""}
+                    initialAttempt={attempts[selected]}
+                    onAttemptChange={(attempt) => setAttempts((previous) => ({ ...previous, [selected]: attempt }))}
+                    onDraftChange={(text) => setDrafts((previous) => ({ ...previous, [selected]: text }))}
+                  />
+                ) : (
+                  <div className="p-4" role="status">
+                    {recipient.isError ? (
+                      <>
+                        <p>الإرسال معطل لأن هوية المستلم غير متاحة.</p>
+                        <button className="btn-outline mt-3" onClick={() => recipient.refetch()}>إعادة المحاولة</button>
+                      </>
+                    ) : "جارٍ تحديد المستلم…"}
+                  </div>
+                )}
               </div>
             </>
           ) : (

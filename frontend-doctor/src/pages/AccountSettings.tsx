@@ -74,9 +74,12 @@ export default function AccountSettings() {
 
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
         <div>
-          <label className="label">البريد الإلكتروني</label>
+          <label htmlFor="account-email" className="label">البريد الإلكتروني</label>
           <input
             className="input"
+            id="account-email"
+            autoComplete="email"
+            dir="ltr"
             type="email"
             defaultValue={me?.email ?? ""}
             {...register("email", { required: "مطلوب" })}
@@ -88,6 +91,7 @@ export default function AccountSettings() {
 
         <Input
           label="كلمة المرور الحالية"
+          autoComplete="current-password"
           type="password"
           placeholder="••••••••"
           error={errors.currentPassword?.message}
@@ -96,6 +100,7 @@ export default function AccountSettings() {
 
         <Input
           label="كلمة المرور الجديدة (اتركها فارغة إن لم ترد تغييرها)"
+          autoComplete="new-password"
           type="password"
           placeholder="••••••••"
           error={errors.newPassword?.message}
@@ -106,6 +111,7 @@ export default function AccountSettings() {
 
         <Input
           label="تأكيد كلمة المرور الجديدة"
+          autoComplete="new-password"
           type="password"
           placeholder="••••••••"
           error={errors.confirmPassword?.message}

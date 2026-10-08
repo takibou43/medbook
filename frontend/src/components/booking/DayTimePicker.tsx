@@ -1,3 +1,4 @@
+import { timeGroups } from "../../lib/patientPresentation";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, ChevronDown, Clock, X } from "lucide-react";
@@ -78,7 +79,7 @@ export function DayTimePicker({
             onChange(null);
             setOpen(false);
           }}
-          className="inline-flex min-h-[40px] items-center gap-1 rounded-lg px-2 text-xs font-semibold text-slate-500 hover:bg-slate-100"
+          className="inline-flex min-h-[48px] items-center gap-1 rounded-lg px-2 text-xs font-semibold text-slate-500 hover:bg-slate-100"
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" /> العودة إلى أقرب موعد
         </button>
@@ -95,15 +96,15 @@ export function DayTimePicker({
       ) : dayList.length === 0 ? (
         <p className="mt-3 text-sm text-slate-500">لا توجد أيام متاحة لدى هذا الطبيب حاليًا.</p>
       ) : (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="listbox" aria-label="الأيام المتاحة">
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="الأيام المتاحة">
           {dayList.map((d) => {
             const selected = value?.date === d.date;
             return (
               <button
                 key={d.date}
                 type="button"
-                role="option"
-                aria-selected={selected}
+
+                aria-pressed={selected}
                 onClick={() => onChange({ date: d.date, startTime: null })}
                 className={`min-h-[56px] shrink-0 rounded-xl border px-3 py-2 text-center text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                   selected ? "border-primary-600 bg-primary-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-primary-300"
@@ -133,11 +134,11 @@ export function DayTimePicker({
           ) : timeList.length === 0 ? (
             <p className="mt-2 text-sm text-slate-500">لم يعد في هذا اليوم وقت متاح. اختر يومًا آخر.</p>
           ) : (
-            <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6" role="listbox" aria-label="الأوقات المتاحة">
+            <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6" role="group" aria-label="الأوقات المتاحة">
               <button
                 type="button"
-                role="option"
-                aria-selected={value.startTime === null}
+
+                aria-pressed={value.startTime === null}
                 onClick={() => onChange({ date: value.date, startTime: null })}
                 className={`col-span-4 min-h-[44px] rounded-xl border px-2 text-sm font-semibold sm:col-span-6 ${
                   value.startTime === null ? "border-primary-600 bg-primary-50 text-primary-800" : "border-slate-200 bg-white text-slate-700"
@@ -145,14 +146,17 @@ export function DayTimePicker({
               >
                 أول وقت متاح في هذا اليوم ({timeList[0]})
               </button>
-              {timeList.map((t) => {
+              {timeGroups(timeList).map(group => <details key={group.label} open={Boolean(value.startTime && group.times.includes(value.startTime)) || undefined} className="col-span-4 rounded-xl border border-slate-200 p-2 sm:col-span-6">
+                <summary className="flex min-h-[48px] cursor-pointer items-center font-semibold">{group.label} ({group.times.length} وقتًا)</summary>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {group.times.map((t) => {
                 const selected = value.startTime === t;
                 return (
                   <button
                     key={t}
                     type="button"
-                    role="option"
-                    aria-selected={selected}
+
+                    aria-pressed={selected}
                     dir="ltr"
                     onClick={() => onChange({ date: value.date, startTime: t })}
                     className={`min-h-[44px] rounded-xl border text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
@@ -163,6 +167,8 @@ export function DayTimePicker({
                   </button>
                 );
               })}
+                </div>
+              </details>)}
             </div>
           )}
         </div>

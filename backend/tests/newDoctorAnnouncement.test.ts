@@ -15,6 +15,6 @@ describe("new doctor clinic announcement", () => {
   it("keeps the independent doctor's announcement", () => {
     const announcement = newDoctorAnnouncement({ ...doctor, clinic: null });
     expect(announcement.title).toBe("طبيب جديد في ولايتك");
-    expect(announcement.message.includes("إلى مادبوك")).toBe(true);
+    expect(announcement.message.includes("إلى MedBook")).toBe(true);
   });
 });

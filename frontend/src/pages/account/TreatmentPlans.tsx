@@ -19,7 +19,8 @@ const PLAN_STATUS: Record<PatientTreatmentPlan["status"], { label: string; cls: 
 };
 const FOLLOW_UP_LABEL = { DUE: "مستحقة", SCHEDULED: "مبرمجة بموعد", COMPLETED: "تمت", DISMISSED: "—" } as const;
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("ar-DZ", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+import { arabicDate } from "../../lib/patientPresentation";
+const fmtDate = arabicDate;
 
 function SessionIcon({ status }: { status: "PLANNED" | "COMPLETED" | "CANCELLED" }) {
   if (status === "COMPLETED") return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-label="مكتملة" />;

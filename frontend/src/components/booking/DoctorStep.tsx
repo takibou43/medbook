@@ -5,6 +5,8 @@ import { api } from "../../lib/api";
 import { Doctor, NextSlot, Specialty } from "../../types";
 import { distanceToDoctor } from "../../lib/geo";
 import { doctorAddress } from "../../lib/booking";
+import { RegionFilters } from "./RegionFilters";
+import { directionsUrl } from "../../lib/patientPresentation";
 import { formatSlotLabel } from "../../lib/slotLabel";
 import { useToast } from "../ui/Toast";
 import { StepHeading, BackButton, InlineError } from "./StepParts";
@@ -42,23 +44,17 @@ function DoctorAvatar({ doctor }: { doctor: Doctor }) {
 export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, doctors, loading, error, errorMessage, onRetry, onSelect, onBack, onWilayaChange }, ref) => {
   const { showToast } = useToast();
   const [wilayaFilter, setWilayaFilter] = useState<string>("");
+  const [cityFilter, setCityFilter] = useState("");
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
 
-  // فلتر الولاية يظهر فقط إن كان أطباء هذا التخصص موزّعين على أكثر من ولاية.
-  const wilayas = useMemo(() => {
-    const map = new Map<string, Doctor["wilaya"]>();
-    for (const d of doctors) if (!map.has(d.wilaya.id)) map.set(d.wilaya.id, d.wilaya);
-    return Array.from(map.values());
-  }, [doctors]);
-
   const visible = useMemo(() => {
-    const list = wilayaFilter ? doctors.filter((d) => d.wilaya.id === wilayaFilter) : doctors;
+    const list = doctors.filter(d => (!wilayaFilter || d.wilaya.id === wilayaFilter) && (!cityFilter || d.city?.id === cityFilter));
     if (!pos) return list.map((d) => ({ doctor: d, distance: null as ReturnType<typeof distanceToDoctor> }));
     return list
       .map((d) => ({ doctor: d, distance: distanceToDoctor(d, pos) }))
       .sort((a, b) => (a.distance?.km ?? Infinity) - (b.distance?.km ?? Infinity));
-  }, [doctors, wilayaFilter, pos]);
+  }, [doctors, wilayaFilter, cityFilter, pos]);
 
   const previews = useQueries({
     queries: visible.slice(0, PREVIEW_LIMIT).map(({ doctor }) => ({
@@ -72,7 +68,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
   // خيار اختياري تمامًا: لا يُطلب إذن الموقع إلا عند الضغط، والحجز لا يتطلب GPS إطلاقًا.
   function sortByNearest() {
     if (!navigator.geolocation) {
-      showToast("متصفحك لا يدعم تحديد الموقع.", "error");
+      showToast("متصفحك لا يدعم تحديد الموقع. اختر الولاية والبلدية يدويًا.", "error");
       return;
     }
     setLocating(true);
@@ -83,7 +79,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
       },
       () => {
         setLocating(false);
-        showToast("تعذّر الوصول إلى موقعك. يمكنك اختيار الطبيب من القائمة مباشرة.", "error");
+        showToast("تعذّر الوصول إلى موقعك. اختر الولاية والبلدية يدويًا.", "error");
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
     );
@@ -130,31 +126,14 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
             </button>
           </div>
 
-          {wilayas.length > 1 && (
-            <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="تصفية حسب الولاية">
-              {[{ id: "", nameAr: "كل الولايات" }, ...wilayas].map((w) => (
-                <button
-                  type="button"
-                  key={w.id || "all"}
-                  onClick={() => {
-                    setWilayaFilter(w.id);
-                    onWilayaChange?.(w.id);
-                  }}
-                  aria-pressed={wilayaFilter === w.id}
-                  className={`min-h-[40px] rounded-full border px-3.5 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
-                    wilayaFilter === w.id ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-primary-400"
-                  }`}
-                >
-                  {w.nameAr}
-                </button>
-              ))}
-            </div>
-          )}
-
+          <RegionFilters wilayaId={wilayaFilter} cityId={cityFilter} onChange={(w, c) => { setWilayaFilter(w); setCityFilter(c); onWilayaChange?.(w); }} />
+          <button type="button" className="btn-outline mb-3" onClick={() => { setWilayaFilter(""); setCityFilter(""); setPos(null); onWilayaChange?.(""); }}>مسح الفلاتر</button>
+          {visible.length === 0 && <p className="glass p-4" role="status">لا يوجد أطباء يطابقون المنطقة المختارة. جرّب منطقة أخرى أو امسح الفلاتر.</p>}
           <ul className="space-y-3">
             {visible.map(({ doctor: d, distance }, i) => {
               const preview = i < PREVIEW_LIMIT ? previews[i] : undefined;
               const address = doctorAddress(d);
+              const directions = directionsUrl(address, d.city?.nameAr, d.wilaya.nameAr, d.latitude, d.longitude);
               const place = [d.clinic?.nameAr, d.city?.nameAr, d.wilaya.nameAr].filter(Boolean).join(" — ");
               return (
                 <li key={d.id} className="glass p-4">
@@ -168,6 +147,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
                         <span className="flex shrink-0 items-center gap-1 text-sm text-amber-600">
                           <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
                           {d.avgRating > 0 ? d.avgRating.toFixed(1) : "جديد"}
+                          {typeof d.reviewsCount === "number" && <span className="text-xs text-slate-500">({d.reviewsCount} مراجعة)</span>}
                         </span>
                       </div>
                       <p className="text-sm text-primary-700">{d.specialty.nameAr}</p>
@@ -186,7 +166,18 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                  {(d.bio || d.languages?.length || d.yearsExperience > 0 || d.consultationFee != null) && <details className="mt-3 rounded-xl border border-slate-200 p-3 text-sm">
+                    <summary className="min-h-[48px] cursor-pointer font-semibold text-primary-700">معلومات الطبيب</summary>
+                    {d.bio && <p className="mt-2 whitespace-pre-line break-words text-slate-600">{d.bio}</p>}
+                    {d.yearsExperience > 0 && <p className="mt-2">الخبرة: {d.yearsExperience} سنوات</p>}
+                    {d.languages?.length > 0 && <p className="mt-2">اللغات: {d.languages.join("، ")}</p>}
+                    {d.consultationFee != null && Number.isFinite(d.consultationFee) && <p className="mt-2">سعر الاستشارة المسجّل: {d.consultationFee.toLocaleString("ar-DZ")} دج</p>}
+                  </details>}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {(d.clinic?.phone || d.phone) && <a className="btn-outline" href={`tel:${d.clinic?.phone || d.phone}`}>اتصل بالعيادة</a>}
+                    {directions && <a className="btn-outline" href={directions} target="_blank" rel="noopener noreferrer">الاتجاهات</a>}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
                     <p className="min-w-0 text-xs font-semibold" aria-live="polite">
                       {preview?.isLoading ? (
                         <span className="text-slate-400">جارٍ التحقق من التوفر...</span>

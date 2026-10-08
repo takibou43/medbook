@@ -1,5 +1,5 @@
 import { useAdminListParams } from "../../hooks/useAdminListParams";
-
+import { AdminResults } from "../../components/admin/AdminUI";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { api, apiErrorMessage } from "../../lib/api";
@@ -7,14 +7,8 @@ import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
 import { Input } from "../../components/ui/Input";
 import { Pagination } from "../../components/ui/Pagination";
 
-const FILTERS = [
-  { key: "all", label: "الكل" },
-  { key: "today", label: "مواعيد اليوم" },
-  { key: "completed", label: "المكتملة" },
-  { key: "cancelled", label: "الملغاة" },
-] as const;
-
-const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
+const FILTERS = [{ key: "all", label: "الكل" }, { key: "today", label: "مواعيد اليوم" }, { key: "completed", label: "المكتملة" }, { key: "cancelled", label: "الملغاة" }] as const;
+const STATUS: Record<string, { text: string; cls: string }> = {
   PENDING: { text: "قيد الانتظار", cls: "bg-slate-100 text-slate-700" },
   CONFIRMED: { text: "مؤكد", cls: "bg-blue-100 text-blue-700" },
   IN_PROGRESS: { text: "جارٍ", cls: "bg-primary-100 text-primary-700" },
@@ -23,78 +17,47 @@ const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   CANCELLED: { text: "ملغى", cls: "bg-red-100 text-red-700" },
   NO_SHOW: { text: "لم يحضر", cls: "bg-orange-100 text-orange-700" },
 };
+interface Person { firstName: string; lastName: string }
+interface Row { id: string; date: string; startTime: string; status: string; doctor: Person; patient?: Person; familyMember?: Person; familyMemberId?: string; guestFirstName?: string; guestLastName?: string }
+const personName = (p: Person) => [p.firstName, p.lastName].join(" ");
+const beneficiary = (a: Row) => a.familyMember ? personName(a.familyMember) : a.familyMemberId ? "فرد عائلة (الاسم غير متاح)" : a.patient ? personName(a.patient) : [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ") || "—";
+const dateLabel = (date: string) => new Date(date).toLocaleDateString("ar-DZ", { timeZone: "UTC" });
+const badge = (a: Row) => { const state = STATUS[a.status] ?? { text: a.status, cls: "bg-slate-100 text-slate-700" }; return <span className={clsx("badge", state.cls)}>{state.text}</span>; };
 
 export default function AdminAppointments() {
-  const { params, q, setQ, search: dq, page, setPage, update } = useAdminListParams();
+  const { params, q, setQ, search, page, setPage, update, clear } = useAdminListParams();
   const id = params.get("id");
   const filter = FILTERS.find((f) => f.key === params.get("filter"))?.key ?? "all";
-
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["admin-appointments", filter, dq, page, id],
-    queryFn: async ({ signal }) => (await api.get("/admin/appointments", { signal, params: { id: id || undefined, filter, q: dq || undefined, page } })).data.data,
+  const filtered = !!(q || id || filter !== "all");
+  const query = useQuery({
+    queryKey: ["admin-appointments", filter, search, page, id],
+    queryFn: async ({ signal }) => (await api.get("/admin/appointments", { signal, params: { id: id || undefined, filter, q: search || undefined, page } })).data.data as { items: Row[]; total: number; page: number; totalPages: number },
   });
-
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-extrabold text-slate-900">المواعيد</h1>
-      {id && <p className="text-sm text-primary-700" role="status">عرض الموعد المحدد من الرابط</p>}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
-          {FILTERS.map((f) => (
-            <button
-              key={f.key}
-              onClick={() => {
-                update("filter", f.key === "all" ? "" : f.key);
-
-              }}
-              className={clsx("rounded-lg px-3 py-1.5 text-sm font-semibold transition", filter === f.key ? "bg-white text-primary-700 shadow-sm" : "text-slate-600 hover:text-slate-900")}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <Input label="بحث باسم الطبيب أو المستفيد" placeholder="بحث باسم الطبيب أو المريض..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
+  return <div className="space-y-5">
+    <header><h1 className="text-2xl font-extrabold text-slate-900">المواعيد</h1><p className="mt-1 text-sm text-slate-600">تابع الطبيب والمستفيد وحالة كل موعد.</p></header>
+    {id && <p className="text-sm text-primary-700" role="status">عرض الموعد المحدد من الرابط</p>}
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1" aria-label="تصفية المواعيد">
+        {FILTERS.map((f) => <button key={f.key} type="button" aria-pressed={filter === f.key} onClick={() => update("filter", f.key === "all" ? "" : f.key)} className={clsx("min-h-11 rounded-lg px-3 py-1.5 text-sm font-semibold", filter === f.key ? "bg-white text-primary-700 shadow-sm" : "text-slate-600 hover:text-slate-900")}>{f.label}</button>)}
       </div>
-
-      {isLoading ? (
-        <Spinner />
-      ) : isError ? (
-        <ErrorState message={apiErrorMessage(error)} />
-      ) : data && data.items.length > 0 ? (
-        <>
-          <div className="card overflow-x-auto p-0">
-            <table className="w-full text-right text-sm">
-              <thead className="bg-slate-50 text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">التاريخ</th>
-                  <th className="px-4 py-3 font-semibold">الوقت</th>
-                  <th className="px-4 py-3 font-semibold">الطبيب</th>
-                  <th className="px-4 py-3 font-semibold">المريض</th>
-                  <th className="px-4 py-3 font-semibold">الحالة</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {data.items.map((a: any) => {
-                  const st = STATUS_LABEL[a.status] ?? { text: a.status, cls: "bg-slate-100 text-slate-700" };
-                  const patient = a.familyMember ? `${a.familyMember.firstName} ${a.familyMember.lastName}` : a.familyMemberId ? "فرد عائلة (الاسم غير متاح)" : a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : `${a.guestFirstName ?? ""} ${a.guestLastName ?? ""}`.trim() || "—";
-                  return (
-                    <tr key={a.id} className={clsx("hover:bg-slate-50", id === a.id && "bg-primary-50")}>
-                      <td className="px-4 py-3 text-slate-700">{new Date(a.date).toLocaleDateString("ar-DZ", { timeZone: "UTC" })}</td>
-                      <td className="px-4 py-3 text-slate-600" dir="ltr">{a.startTime}</td>
-                      <td className="px-4 py-3 text-slate-700">د. {a.doctor.firstName} {a.doctor.lastName}</td>
-                      <td className="px-4 py-3 text-slate-600" dir="auto">{patient}</td>
-                      <td className="px-4 py-3"><span className={clsx("badge", st.cls)}>{st.text}</span></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <Pagination page={data.page} totalPages={data.totalPages} onChange={setPage} />
-        </>
-      ) : (
-        <EmptyState title="لا توجد مواعيد" description="لا مواعيد مطابقة لهذا الفلتر." />
-      )}
+      <Input label="بحث باسم الطبيب أو المستفيد" placeholder="الاسم..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
     </div>
-  );
+    <AdminResults total={query.data?.total} filtered={filtered} onClear={clear} />
+    {query.isLoading ? <Spinner /> : query.isError ? <ErrorState message={apiErrorMessage(query.error)} onRetry={() => void query.refetch()} /> : query.data?.items.length ? <>
+      <div className="space-y-3 md:hidden">
+        {query.data.items.map((a) => <article key={a.id} aria-label={"موعد " + beneficiary(a)} className={clsx("card space-y-3 p-4", a.id === id && "ring-2 ring-primary-400")}>
+          <div className="flex items-start justify-between gap-3"><h2 className="min-w-0 break-words font-bold text-slate-900"><bdi>{beneficiary(a)}</bdi></h2>{badge(a)}</div>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
+            <dt className="text-slate-600">الطبيب</dt><dd className="min-w-0 break-words text-slate-800"><bdi>د. {personName(a.doctor)}</bdi></dd>
+            <dt className="text-slate-600">التاريخ</dt><dd className="text-slate-800">{dateLabel(a.date)}</dd>
+            <dt className="text-slate-600">الوقت</dt><dd className="text-slate-800"><bdi dir="ltr">{a.startTime}</bdi></dd>
+          </dl>
+        </article>)}
+      </div>
+      <div className="card hidden overflow-x-auto p-0 md:block"><table className="w-full text-right text-sm"><thead className="bg-slate-50 text-slate-600"><tr>{["التاريخ", "الوقت", "الطبيب", "المستفيد", "الحالة"].map((label) => <th key={label} className="px-4 py-3 font-semibold">{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
+        {query.data.items.map((a) => <tr key={a.id} className={clsx("hover:bg-slate-50", id === a.id && "bg-primary-50")}><td className="whitespace-nowrap px-4 py-3">{dateLabel(a.date)}</td><td className="px-4 py-3"><bdi dir="ltr">{a.startTime}</bdi></td><td className="px-4 py-3"><bdi>د. {personName(a.doctor)}</bdi></td><td className="px-4 py-3"><bdi>{beneficiary(a)}</bdi></td><td className="px-4 py-3">{badge(a)}</td></tr>)}
+      </tbody></table></div>
+      <Pagination page={query.data.page} totalPages={query.data.totalPages} onChange={setPage} />
+    </> : <EmptyState title={filtered ? "لا نتائج مطابقة" : "لا توجد مواعيد"} description={filtered ? "جرّب تغيير البحث أو مسح الفلاتر." : "ستظهر المواعيد هنا عند تسجيلها."} />}
+  </div>;
 }

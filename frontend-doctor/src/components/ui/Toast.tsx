@@ -44,9 +44,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed bottom-4 left-4 z-[100] flex w-full max-w-sm flex-col gap-2">
+      <div className="fixed bottom-4 left-4 z-[100] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2">
         {toasts.map((t) => (
-          <div key={t.id} className={`flex items-start gap-2 rounded-xl border p-3 shadow-card ${STYLES[t.kind]}`}>
+          <div key={t.id} role={t.kind === "error" ? "alert" : "status"} className={`flex items-start gap-2 rounded-xl border p-3 shadow-card ${STYLES[t.kind]}`}>
             {ICONS[t.kind]}
             {t.href ? (
               <button
@@ -62,7 +62,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             ) : (
               <p className="flex-1 text-sm text-slate-700">{t.message}</p>
             )}
-            <button onClick={() => dismiss(t.id)} className="text-slate-400 hover:text-slate-600">
+            <button aria-label="إغلاق الإشعار" title="إغلاق الإشعار" onClick={() => dismiss(t.id)} className="flex min-h-11 min-w-11 items-center justify-center text-slate-600 hover:text-slate-800">
               <X className="h-4 w-4" />
             </button>
           </div>

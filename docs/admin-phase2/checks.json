@@ -1,0 +1,10 @@
+{
+  "userAuthorizedPublication": true,
+  "browserPassed": 17,
+  "backendAndSchemaDiff": [],
+  "frontendTests": 65,
+  "build": "passed",
+  "typecheck": "passed",
+  "realAdminWrites": false,
+  "browserFailed": 0
+}

@@ -1,15 +1,16 @@
+import { AdminResults, AdminActions } from "../../components/admin/AdminUI";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Plus } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
-import { Spinner, EmptyState } from "../../components/ui/States";
+import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Modal } from "../../components/ui/Modal";
 import { useToast } from "../../components/ui/Toast";
 
 export default function AdminWilayas() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["admin-wilayas"],
     queryFn: async () => (await api.get("/admin/wilayas")).data.data,
   });
@@ -83,24 +84,27 @@ export default function AdminWilayas() {
         </Button>
       </div>
 
+      <AdminResults total={data?.length} />
       {isLoading ? (
         <Spinner />
+      ) : isError ? (
+        <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />
       ) : data && data.length > 0 ? (
         <div className="space-y-3">
           {data.map((w: any) => (
             <div key={w.id} className="card p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-start justify-between gap-3">
                 <p className="font-bold text-slate-800">
                   {w.code} — {w.nameAr}
                 </p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => setCityModal(w.id)}>
                     <Plus className="h-4 w-4" />
                     إضافة بلدية
                   </Button>
-                  <Button variant="danger" onClick={() => removeWilaya(w.id)}>
-                    حذف
-                  </Button>
+                  <AdminActions label={"ولاية " + w.nameAr}><Button variant="danger" onClick={() => removeWilaya(w.id)}>
+                    حذف الولاية
+                  </Button>{w.cities?.map((c: any) => <button key={c.id} aria-label={`حذف بلدية ${c.nameAr} من ولاية ${w.nameAr}`} title={`حذف بلدية ${c.nameAr}`} onClick={() => removeCity(c.id)} className="btn-ghost justify-start text-red-600"><Trash2 className="h-4 w-4" aria-hidden />حذف بلدية {c.nameAr}</button>)}</AdminActions>
                 </div>
               </div>
               {w.cities?.length > 0 && (
@@ -108,9 +112,6 @@ export default function AdminWilayas() {
                   {w.cities.map((c: any) => (
                     <span key={c.id} className="badge flex items-center gap-1 bg-slate-100 text-slate-700">
                       {c.nameAr}
-                      <button aria-label={`حذف بلدية ${c.nameAr} من ولاية ${w.nameAr}`} title={`حذف بلدية ${c.nameAr}`} onClick={() => removeCity(c.id)}>
-                        <Trash2 className="h-3 w-3 text-red-500" />
-                      </button>
                     </span>
                   ))}
                 </div>

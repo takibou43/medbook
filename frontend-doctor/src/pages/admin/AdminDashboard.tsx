@@ -6,7 +6,7 @@ import { Users, Stethoscope, Building2, CalendarDays, CalendarClock, CheckCircle
 import clsx from "clsx";
 import { api, apiErrorMessage } from "../../lib/api";
 import { StatCard } from "../../components/StatCard";
-import { Spinner } from "../../components/ui/States";
+import { Spinner, ErrorState } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/Toast";
 import { AppointmentsChart } from "../../components/AppointmentsChart";
@@ -24,7 +24,7 @@ const STATE_STYLE: Record<SystemCheck["state"], { dot: string; text: string }> =
 
 function GlobalSearch() {
   const { q, setQ, search: dq } = useAdminListParams();
-  const { data, isFetching, isError } = useQuery({
+  const { data, isFetching, isError, refetch } = useQuery({
     queryKey: ["admin-search", dq],
     enabled: dq.length >= 2,
     queryFn: async ({ signal }) => (await api.get("/admin/search", { signal, params: { q: dq } })).data.data,
@@ -38,7 +38,7 @@ function GlobalSearch() {
       {dq.length >= 2 && q.trim() === dq && (
         <div className="absolute z-20 mt-2 max-h-96 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
           {isFetching && <p className="p-3 text-sm text-slate-500">جارٍ البحث...</p>}
-          {isError && <p className="p-3 text-sm text-red-600">تعذّر البحث. حاول مرة أخرى.</p>}
+          {isError && <p className="p-3 text-sm text-red-600">تعذّر البحث. <button className="btn-ghost" onClick={() => void refetch()}>إعادة المحاولة</button></p>}
           {empty && <p className="p-3 text-sm text-slate-500">لا نتائج مطابقة.</p>}
           {data?.doctors.map((d: any) => (
             <Link key={d.id} to={`/admin/doctors?id=${encodeURIComponent(d.id)}`} className="block rounded-lg px-3 py-2 text-sm hover:bg-slate-50">
@@ -92,7 +92,7 @@ function QuickActions({ pending, unread }: { pending: number; unread: number }) 
 }
 
 export default function AdminDashboard() {
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["admin-stats"],
     queryFn: async () => (await api.get("/admin/stats")).data.data,
   });
@@ -129,7 +129,7 @@ export default function AdminDashboard() {
     }
   }
 
-  if (isLoading) return <Spinner />;
+  if (isLoading || isError) return <div className="space-y-5"><h1 className="text-2xl font-extrabold text-slate-900">لوحة تحكم الإدارة</h1>{isLoading ? <Spinner /> : <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />}</div>;
 
   return (
     <div className="space-y-6">
@@ -153,15 +153,15 @@ export default function AdminDashboard() {
       <AppointmentsChart />
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Link to={unread.data?.latest ? `/admin/messages?doctor=${unread.data.latest.doctorId}` : "/admin/messages"} className="card block space-y-2 p-4 transition hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md sm:p-5">
+        <div className="card block space-y-2 p-4 transition hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md sm:p-5">
           <h2 className="flex items-center gap-2 font-bold text-slate-800">
             <MessageSquare className="h-5 w-5 text-primary-600" />
-            الرسائل
+            <Link to={unread.data?.latest ? `/admin/messages?doctor=${unread.data.latest.doctorId}` : "/admin/messages"} className="hover:underline">الرسائل</Link>
           </h2>
           {unread.isLoading ? (
             <p className="text-sm text-slate-500">جارٍ التحميل...</p>
           ) : unread.isError ? (
-            <p className="text-sm text-red-600">تعذّر تحميل الرسائل.</p>
+            <ErrorState message={apiErrorMessage(unread.error)} onRetry={() => void unread.refetch()} />
           ) : (
             <>
               <p className="text-2xl font-extrabold text-slate-900">
@@ -179,7 +179,7 @@ export default function AdminDashboard() {
               )}
             </>
           )}
-        </Link>
+        </div>
 
         <div className="card space-y-3 p-4 sm:p-5">
           <div className="flex items-center justify-between">
@@ -194,7 +194,7 @@ export default function AdminDashboard() {
           {status.isLoading ? (
             <p className="text-sm text-slate-500">جارٍ الفحص...</p>
           ) : status.isError ? (
-            <p className="text-sm text-red-600">تعذّر الاتصال بالخادم لفحص الحالة.</p>
+            <ErrorState message={apiErrorMessage(status.error)} onRetry={() => void status.refetch()} />
           ) : (
             <ul className="space-y-2">
               {status.data?.checks.map((c) => (
@@ -218,7 +218,7 @@ export default function AdminDashboard() {
         {activity.isLoading ? (
           <p className="text-sm text-slate-500">جارٍ التحميل...</p>
         ) : activity.isError ? (
-          <p className="text-sm text-red-600">تعذّر تحميل النشاطات.</p>
+          <ErrorState message={apiErrorMessage(activity.error)} onRetry={() => void activity.refetch()} />
         ) : activity.data && activity.data.length > 0 ? (
           <ul className="divide-y divide-slate-100">
             {activity.data.map((a) => (

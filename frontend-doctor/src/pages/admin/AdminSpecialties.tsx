@@ -1,15 +1,16 @@
+import { AdminResults, AdminActions } from "../../components/admin/AdminUI";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Plus } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
-import { Spinner, EmptyState } from "../../components/ui/States";
+import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Modal } from "../../components/ui/Modal";
 import { useToast } from "../../components/ui/Toast";
 
 export default function AdminSpecialties() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["admin-specialties"],
     queryFn: async () => (await api.get("/admin/specialties")).data.data,
   });
@@ -59,19 +60,25 @@ export default function AdminSpecialties() {
         </Button>
       </div>
 
+      <AdminResults total={data?.length} />
       {isLoading ? (
         <Spinner />
+      ) : isError ? (
+        <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />
       ) : data && data.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.map((s: any) => (
-            <div key={s.id} className="card flex items-center justify-between p-4">
+            <div key={s.id} className="card flex flex-wrap items-start justify-between gap-3 p-4">
               <div>
                 <p className="font-bold text-slate-800">{s.nameAr}</p>
                 {s.description && <p className="text-xs text-slate-500">{s.description}</p>}
               </div>
-              <button aria-label={`حذف تخصص ${s.nameAr}`} title={`حذف تخصص ${s.nameAr}`} onClick={() => remove(s.id)} className="rounded-lg p-2 text-red-500 hover:bg-red-50">
+              <AdminActions label={"تخصص " + s.nameAr}>
+              <button aria-label={`حذف تخصص ${s.nameAr}`} title={`حذف تخصص ${s.nameAr}`} onClick={() => remove(s.id)} className="btn-ghost justify-start text-red-600">
                 <Trash2 className="h-4 w-4" />
+                حذف التخصص
               </button>
+              </AdminActions>
             </div>
           ))}
         </div>

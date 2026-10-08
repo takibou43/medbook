@@ -1,7 +1,9 @@
+import { useAdminListParams } from "../../hooks/useAdminListParams";
+import { AdminResults } from "../../components/admin/AdminUI";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../../lib/api";
-import { Spinner, EmptyState } from "../../components/ui/States";
+import { api, apiErrorMessage } from "../../lib/api";
+import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
 import { Input } from "../../components/ui/Input";
 import { Pagination } from "../../components/ui/Pagination";
@@ -26,16 +28,17 @@ interface BlockRow {
 const fmt = (d: string | null) => (d ? new Date(d).toLocaleString("ar-DZ", { dateStyle: "medium", timeStyle: "short" }) : "—");
 
 export default function AdminPatientBlocks() {
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState<"active" | "all">("active");
-  const [page, setPage] = useState(1);
+  const { params, q, setQ, search, page, setPage, update, clear } = useAdminListParams();
+  const status = params.get("status") === "all" ? "all" : "active";
+  const setStatus = (value: string) => update("status", value);
   const [target, setTarget] = useState<BlockTarget | null>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["admin-patient-blocks", q, status, page],
-    queryFn: async () =>
-      (await api.get("/admin/patient-blocks", { params: { q: q.trim() || undefined, status, page } })).data.data as {
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ["admin-patient-blocks", search, status, page],
+    queryFn: async ({ signal }) =>
+      (await api.get("/admin/patient-blocks", { signal, params: { q: search || undefined, status, page } })).data.data as {
         items: BlockRow[];
+        total: number;
         page: number;
         totalPages: number;
       },
@@ -49,15 +52,18 @@ export default function AdminPatientBlocks() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Input label="بحث عن مريض محظور" placeholder="بحث بالاسم أو البريد أو الهاتف..." value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="max-w-xs" />
-        <select aria-label="حالة الحظر" className="input max-w-[180px]" value={status} onChange={(e) => { setStatus(e.target.value as "active" | "all"); setPage(1); }}>
+        <Input label="بحث عن مريض محظور" placeholder="بحث بالاسم أو البريد أو الهاتف..." value={q} onChange={(e) => { setQ(e.target.value); }} className="max-w-xs" />
+        <select aria-label="حالة الحظر" className="input max-w-[180px]" value={status} onChange={(e) => { setStatus(e.target.value); }}>
           <option value="active">المحظورون حاليًا</option>
           <option value="all">كل السجل (مع الملغى)</option>
         </select>
       </div>
 
+      <AdminResults total={data?.total} filtered={!!q || status !== "active"} onClear={clear} />
       {isLoading ? (
         <Spinner />
+      ) : isError ? (
+        <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />
       ) : data && data.items.length > 0 ? (
         <>
           <div className="card overflow-x-auto p-0">
@@ -126,7 +132,7 @@ export default function AdminPatientBlocks() {
           <Pagination page={data.page} totalPages={data.totalPages} onChange={setPage} />
         </>
       ) : (
-        <EmptyState title={status === "active" ? "لا يوجد مرضى محظورون حاليًا" : "لا يوجد سجل حظر"} />
+        <EmptyState title={q ? "لا نتائج مطابقة" : status === "active" ? "لا يوجد مرضى محظورون حاليًا" : "لا يوجد سجل حظر"} />
       )}
 
       <BlockPatientDialog target={target} mode="unblock" onClose={() => setTarget(null)} />

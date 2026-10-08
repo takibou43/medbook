@@ -24,13 +24,14 @@
 
 الخادم: `backend/src/lib/newDoctorAnnouncement.ts`, `backend/src/modules/notifications/notifications.service.ts`.
 
-التحقق: `frontend/tests/patientPresentation.test.ts`, `frontend/tests/patient-ux-fixture.mjs` وهذه الأدلة.
+التحقق: `frontend/tests/patientPresentation.test.ts`, `frontend/tests/patient-ux-fixture.mjs`, `backend/tests/newDoctorAnnouncement.test.ts` وهذه الأدلة.
 
 ## التحقق المحلي
 
 - `frontend: npm run build` نجح؛ `npm test`: 25 ناجحًا، صفر فشل أو تخطي.
 - `backend: npm ci --include=dev`, `npm run prisma:generate`, `npm run build` نجحت بتبعيات مستقلة وDATABASE_URL محلي وهمي، دون اتصال قاعدة أو db push.
-- `npx vitest run tests/newDoctorAreaNotifications.test.ts`: اختباران ناجحان، دون إرسال Push.
+- `npx vitest run tests/newDoctorAnnouncement.test.ts tests/newDoctorAreaNotifications.test.ts`: أربعة اختبارات ناجحة، دون إرسال Push.
+- التشغيل الأول لـ CI نجح في 876 اختبار خادم وفشل توقع واحد لاسم «مادبوك» القديم؛ جرى تحديث التوقع إلى الاسم الموحد MedBook وإعادة الفحص الكامل قبل الدمج. اختبار الحمل الاختياري مستثنى صراحة في إعداد CI.
 - `git diff --check` ناجح.
 - البيئة المحلية Node 24؛ CI يستخدم Node 22 حسب إعداد المشروع ويختبر الخادم على PostgreSQL مؤقت منفصل، بما في ذلك الحجز والصلاحيات.
 

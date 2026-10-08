@@ -73,6 +73,7 @@ export default function AccountSettings() {
       <ProfilesCard />
 
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
+        <section className="space-y-3" aria-labelledby="change-email"><h2 id="change-email" className="text-lg font-bold">تغيير البريد الإلكتروني</h2>
         <div>
           <label htmlFor="account-email" className="label">البريد الإلكتروني</label>
           <input
@@ -82,12 +83,13 @@ export default function AccountSettings() {
             dir="ltr"
             type="email"
             defaultValue={me?.email ?? ""}
-            {...register("email", { required: "مطلوب" })}
+            {...register("email", { required: "مطلوب", pattern:{value:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,message:"أدخل بريدًا إلكترونيًا صالحًا."} })}
           />
           {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
         </div>
 
-        <hr className="border-slate-200" />
+        </section>
+        <section className="space-y-3 border-t border-slate-200 pt-4" aria-labelledby="change-password"><h2 id="change-password" className="text-lg font-bold">تغيير كلمة المرور</h2>
 
         <Input
           label="كلمة المرور الحالية"
@@ -120,8 +122,9 @@ export default function AccountSettings() {
           })}
         />
 
+        </section>
         <p className="text-xs text-slate-500">
-          عند تغيير كلمة المرور سيتم إنهاء كل الجلسات المفتوحة، وستحتاج لتسجيل الدخول من جديد.
+          عند تغيير البريد أو كلمة المرور سيتم إنهاء كل الجلسات المفتوحة، وستحتاج لتسجيل الدخول من جديد.
         </p>
 
         <Button type="submit" loading={saving}>

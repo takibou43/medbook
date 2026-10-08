@@ -302,6 +302,9 @@ export async function listReferralsAdmin(params: { status?: string; page?: numbe
     }),
     prisma.doctorReferral.count({ where }),
   ]);
-  return { items, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+  const rejected=items.filter(r=>r.status==='REJECTED').map(r=>r.referred.id);
+  const logs=rejected.length?await prisma.auditLog.findMany({where:{entity:'Doctor',entityId:{in:rejected},action:'SET_DOCTOR_VERIFICATION'},select:{entityId:true,meta:true,createdAt:true},orderBy:{createdAt:'desc'}}):[];
+  const enriched=items.map(r=>{const log=logs.find(l=>l.entityId===r.referred.id&&(l.meta as any)?.status==='REJECTED');return {...r,rejectionReason:(log?.meta as any)?.reason??null,rejectionAt:log?.createdAt??null};});
+  return { items:enriched, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
 }
 

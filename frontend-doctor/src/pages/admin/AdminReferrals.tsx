@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useAdminListParams } from "../../hooks/useAdminListParams";
 import { AdminResults } from "../../components/admin/AdminUI";
 import { useQuery } from "@tanstack/react-query";
@@ -72,9 +73,9 @@ export default function AdminReferrals() {
                   <tr key={r.id}>
                     <td className="px-4 py-3 font-semibold text-slate-800">د. {r.referrer.firstName} {r.referrer.lastName}</td>
                     <td className="px-4 py-3 text-slate-700">د. {r.referred.firstName} {r.referred.lastName}</td>
-                    <td className="px-4 py-3"><span className={clsx("rounded-full px-2 py-0.5 text-xs font-semibold", STATUS[r.status].cls)}>{STATUS[r.status].label}</span></td>
-                    <td className="px-4 py-3 text-slate-600">{day(r.createdAt)}</td>
-                    <td className="px-4 py-3 text-slate-600">{day(r.rewardedAt)}</td>
+                    <td className="px-4 py-3"><span className={clsx("rounded-full px-2 py-0.5 text-xs font-semibold", STATUS[r.status].cls)}>{STATUS[r.status].label}</span>{r.status==="REJECTED"&&<p className="mt-2 text-xs">السبب: {r.rejectionReason??"غير مسجل"} · {day(r.rejectionAt)}</p>}</td>
+                    <td className="px-4 py-3 text-slate-600">{day(r.createdAt)}<p className="text-xs">التوثيق: {day(r.qualifiedAt)}</p></td>
+                    <td className="px-4 py-3 text-slate-600">{day(r.rewardedAt)}<p className="text-xs">المكافأة: {r.rewardDays} يومًا</p>{r.rewardClinicId&&<Link className="text-primary-700 underline" to={"/admin/clinics?id="+r.rewardClinicId}>اشتراك العيادة المستفيد</Link>}</td>
                     <td className="px-4 py-3 text-slate-600">{day(r.referrer.subscriptionExpiresAt)}</td>
                   </tr>
                 ))}

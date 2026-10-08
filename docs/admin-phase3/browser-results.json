@@ -1,0 +1,129 @@
+{
+  "results": [
+    {
+      "name": "dashboard shows chart range, numeric alternative and truthful Push status; no send on recheck",
+      "status": "passed"
+    },
+    {
+      "name": "appointment filters and details preserve actual family beneficiary",
+      "status": "passed"
+    },
+    {
+      "name": "user action preview names account and impact, requires reason and cancellation writes nothing",
+      "status": "passed"
+    },
+    {
+      "name": "failed account action retains reason; duplicate confirm causes one mocked write",
+      "status": "passed"
+    },
+    {
+      "name": "doctor separates account, verification, clinic subscription, details and rejection history",
+      "status": "passed"
+    },
+    {
+      "name": "clinic explains actual doctors vs paid capacity and monthly amount; saves only after reviewed summary",
+      "status": "passed"
+    },
+    {
+      "name": "specialty search and edit use PATCH and retain ID; used deletion stays protected",
+      "status": "passed"
+    },
+    {
+      "name": "geography selects a wilaya, adds city with context, edits by ID; linked delete failure retains record",
+      "status": "passed"
+    },
+    {
+      "name": "reviews keep distinct legitimate appointments and filter rating; delete requires reason and audit payload",
+      "status": "passed"
+    },
+    {
+      "name": "blocks show source, operator and preserved booking policy; referrals show rejection reason without reward action",
+      "status": "passed"
+    },
+    {
+      "name": "account email/password separated; mismatch prevents request without changing real credentials",
+      "status": "passed"
+    },
+    {
+      "name": "maintenance starts with preview and no domain-based delete action",
+      "status": "passed"
+    },
+    {
+      "name": "all main improved sections fit width 360",
+      "status": "passed"
+    },
+    {
+      "name": "all main improved sections fit width 390",
+      "status": "passed"
+    },
+    {
+      "name": "all main improved sections fit width 768",
+      "status": "passed"
+    },
+    {
+      "name": "all main improved sections fit width 1280",
+      "status": "passed"
+    },
+    {
+      "name": "no JavaScript errors",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "writes": [
+    {
+      "method": "PATCH",
+      "path": "/api/admin/users/33333333-3333-4333-8333-333333333333/deactivate",
+      "body": {
+        "reason": "سبب تجريبي"
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/clinics/admin/99999999-9999-4999-8999-999999999999",
+      "body": {
+        "verificationStatus": "VERIFIED",
+        "subscriptionStatus": "ACTIVE",
+        "paidDoctorCount": 6,
+        "subscriptionExpiresAt": "2027-10-01T23:59:59.999Z",
+        "expectedSnapshot": "fixture-v1"
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/specialties/66666666-6666-4666-8666-666666666666",
+      "body": {
+        "nameAr": "طب القلب والأوعية",
+        "nameFr": "Cardiologie",
+        "description": "أمراض القلب"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/wilayas/77777777-7777-4777-8777-777777777777/cities",
+      "body": {
+        "nameAr": "بلدية جديدة"
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/cities/88888888-8888-4888-8888-888888888888",
+      "body": {
+        "nameAr": "فرجيوة الجديدة"
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/cities/88888888-8888-4888-8888-888888888888",
+      "body": {}
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/reviews/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "body": {
+        "reason": "مخالفة تجريبية واضحة"
+      }
+    }
+  ],
+  "externalRequests": "blocked; API fixtures only"
+}

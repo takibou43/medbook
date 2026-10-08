@@ -1,6 +1,7 @@
+import { previewDemoData, purgeReviewedDemoData } from "./adminMaintenance.service";
 import { Router } from "express";
 import { z } from "zod";
-import { Role, VerificationStatus, SubscriptionStatus } from "@prisma/client";
+import { Role, VerificationStatus, SubscriptionStatus, AppointmentStatus } from "@prisma/client";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -37,8 +38,8 @@ const updateWilayaSchema = z
     nameFr: z.string().trim().max(100).nullable().optional(),
   })
   .strict("يحتوي الطلب على حقول غير مسموح بها.");
-const verifyDoctorSchema = z.object({ status: z.nativeEnum(VerificationStatus) }).strict("يحتوي الطلب على حقول غير مسموح بها.");
-const emptyBody = z.object({}).strict("يحتوي الطلب على حقول غير مسموح بها.");
+const verifyDoctorSchema = z.object({ status: z.nativeEnum(VerificationStatus), reason: z.string().trim().max(500).optional() }).strict("يحتوي الطلب على حقول غير مسموح بها.");
+const emptyBody = z.object({reason:z.string().trim().max(500).optional()}).strict("يحتوي الطلب على حقول غير مسموح بها.");
 
 // ---- مخططات معاملات القوائم (GET) — صارمة: قيم محدودة وأي معامل غير متوقَّع يُرفض بـ400 ----
 const pageParam = z.coerce.number().int("رقم الصفحة يجب أن يكون عددًا صحيحًا").min(1).max(1000);
@@ -87,12 +88,14 @@ router.get(
     query: z.object({
       id: z.string().uuid().optional(),
       filter: z.enum(["all", "today", "completed", "cancelled"]).default("all"),
+      doctorId:z.string().uuid().optional(), status:z.nativeEnum(AppointmentStatus).optional(), from:z.string().date().optional(),to:z.string().date().optional(),
       q: z.string().max(100).optional(),
       page: z.coerce.number().int().min(1).optional(),
       pageSize: z.coerce.number().int().min(1).max(50).optional(),
     }),
   }),
   asyncHandler(async (req, res) => {
+    if(req.query.from&&req.query.to&&String(req.query.from)>String(req.query.to))throw ApiError.badRequest("نطاق التاريخ غير صحيح.");
     res.json({ success: true, data: await service.listAppointmentsAdmin(req.query as any) });
   })
 );
@@ -105,16 +108,9 @@ router.get(
   asyncHandler(async (req, res) => res.json({ success: true, data: await service.globalSearch((req.query as any).q) }))
 );
 
-// ---- Maintenance ----
-// حذف البيانات التجريبية فقط (حسابات seed) — لا تمسّ المستخدمين الحقيقيين ولا البيانات المرجعية.
-router.post(
-  "/maintenance/purge-demo-data",
-  asyncHandler(async (req, res) => {
-    const result = await service.purgeDemoData();
-    await service.logAction(req.user!.id, "PURGE_DEMO_DATA", "System", "-", result);
-    res.json({ success: true, message: "تم حذف البيانات التجريبية.", data: result });
-  })
-);
+// ---- Explicit reviewed maintenance scope ----
+router.get("/maintenance/demo-preview",asyncHandler(async(_req,res)=>res.json({success:true,data:await previewDemoData()})));
+router.post("/maintenance/purge-demo-data",validate({body:z.object({records:z.array(z.object({id:z.string().uuid(),version:z.string().datetime()}).strict()).min(1).max(100),reason:z.string().trim().min(3).max(500).optional()}).strict()}),asyncHandler(async(req,res)=>res.json({success:true,data:await purgeReviewedDemoData(req.body.records,req.user!.id,req.body.reason)})));
 
 // ---- Users ----
 router.get(
@@ -140,8 +136,7 @@ router.patch(
   "/users/:id/activate",
   validate({ params: idParams, body: emptyBody }),
   asyncHandler(async (req, res) => {
-    const user = await service.setUserActive(req.params.id, true);
-    await service.logAction(req.user!.id, "ACTIVATE_USER", "User", req.params.id);
+    const user = await service.setUserActive(req.params.id, true, req.user!.id, req.body.reason);
     res.json({ success: true, data: user });
   })
 );
@@ -150,17 +145,16 @@ router.patch(
   "/users/:id/deactivate",
   validate({ params: idParams, body: emptyBody }),
   asyncHandler(async (req, res) => {
-    const user = await service.setUserActive(req.params.id, false);
-    await service.logAction(req.user!.id, "DEACTIVATE_USER", "User", req.params.id);
+    const user = await service.setUserActive(req.params.id, false, req.user!.id, req.body.reason);
     res.json({ success: true, data: user });
   })
 );
 
 router.delete(
   "/users/:id",
+  validate({params:idParams,body:emptyBody}),
   asyncHandler(async (req, res) => {
-    await service.deleteUser(req.params.id, req.user!.id);
-    await service.logAction(req.user!.id, "DELETE_USER", "User", req.params.id);
+    await service.deleteUser(req.params.id, req.user!.id, req.body.reason);
     res.json({ success: true, message: "تم حذف المستخدم." });
   })
 );
@@ -215,7 +209,7 @@ router.patch(
   validate({ params: idParams, body: verifyDoctorSchema }),
   asyncHandler(async (req, res) => {
     const doctor = await service.setDoctorVerification(req.params.id, req.body.status, req.user!.id);
-    await service.logAction(req.user!.id, "SET_DOCTOR_VERIFICATION", "Doctor", req.params.id, { status: req.body.status });
+    await service.logAction(req.user!.id, "SET_DOCTOR_VERIFICATION", "Doctor", req.params.id, { status: req.body.status, reason: req.body.reason });
     res.json({ success: true, data: doctor });
   })
 );
@@ -231,6 +225,7 @@ router.patch(
   })
 );
 
+router.get("/doctors/:id/history",validate({params:idParams}),asyncHandler(async(req,res)=>res.json({success:true,data:await service.doctorReviewHistory(req.params.id)})));
 // ---- إحالات الأطباء (عرض فقط — المكافأة تُمنح تلقائيًا عند التوثيق، ولا زر مكافأة يدوي) ----
 const referralsQuery = z
   .object({
@@ -254,7 +249,7 @@ router.get(
 );
 router.post(
   "/specialties",
-  validate({ body: z.object({ nameAr: z.string().min(2), nameFr: z.string().optional(), icon: z.string().optional(), description: z.string().optional() }) }),
+  validate({ body: z.object({ nameAr: z.string().trim().min(2).max(100), nameFr: z.string().trim().max(100).optional(), icon: z.string().max(100).optional(), description: z.string().max(1000).optional() }).strict() }),
   asyncHandler(async (req, res) => {
     const created = await service.specialtiesAdmin.create(req.body);
     res.status(201).json({ success: true, data: created });
@@ -270,6 +265,7 @@ router.patch(
 );
 router.delete(
   "/specialties/:id",
+  validate({params:idParams}),
   asyncHandler(async (req, res) => {
     await service.specialtiesAdmin.remove(req.params.id);
     res.json({ success: true, message: "تم الحذف." });
@@ -283,7 +279,7 @@ router.get(
 );
 router.post(
   "/wilayas",
-  validate({ body: z.object({ code: z.string(), nameAr: z.string(), nameFr: z.string().optional() }) }),
+  validate({ body: z.object({ code: z.string().trim().min(1).max(10), nameAr: z.string().trim().min(2).max(100), nameFr: z.string().trim().max(100).optional() }).strict() }),
   asyncHandler(async (req, res) => {
     const created = await service.wilayasAdmin.create(req.body);
     res.status(201).json({ success: true, data: created });
@@ -299,6 +295,7 @@ router.patch(
 );
 router.delete(
   "/wilayas/:id",
+  validate({params:idParams}),
   asyncHandler(async (req, res) => {
     await service.wilayasAdmin.remove(req.params.id);
     res.json({ success: true, message: "تم الحذف." });
@@ -306,7 +303,7 @@ router.delete(
 );
 router.post(
   "/wilayas/:id/cities",
-  validate({ body: z.object({ nameAr: z.string().min(2) }) }),
+  validate({ params: idParams, body: z.object({ nameAr: z.string().trim().min(2).max(100) }).strict() }),
   asyncHandler(async (req, res) => {
     const created = await service.wilayasAdmin.addCity(req.params.id, req.body.nameAr);
     res.status(201).json({ success: true, data: created });
@@ -315,7 +312,7 @@ router.post(
 // إضافة دفعة بلديات لولاية واحدة — تُستخدم لتعبئة البيانات المرجعية (بلديات الجزائر) دفعة واحدة.
 router.post(
   "/wilayas/:id/cities/bulk",
-  validate({ body: z.object({ names: z.array(z.string().min(2)).min(1).max(200) }) }),
+  validate({ params:idParams, body: z.object({ names: z.array(z.string().trim().min(2).max(100)).min(1).max(200) }).strict() }),
   asyncHandler(async (req, res) => {
     const result = await service.wilayasAdmin.addCitiesBulk(req.params.id, req.body.names);
     res.status(201).json({ success: true, data: result });
@@ -323,21 +320,26 @@ router.post(
 );
 router.delete(
   "/cities/:id",
+  validate({params:idParams}),
   asyncHandler(async (req, res) => {
     await service.wilayasAdmin.removeCity(req.params.id);
     res.json({ success: true, message: "تم الحذف." });
   })
 );
 
+router.patch("/cities/:id",validate({params:idParams,body:z.object({nameAr:z.string().trim().min(2).max(100)}).strict()}),asyncHandler(async(req,res)=>res.json({success:true,data:await service.wilayasAdmin.updateCity(req.params.id,req.body.nameAr)})));
+
 // ---- Reviews moderation ----
 router.get(
   "/reviews",
-  asyncHandler(async (_req, res) => res.json({ success: true, data: await service.listAllReviews() }))
+  validate({query:z.object({q:searchParam.optional(),doctorId:z.string().uuid().optional(),rating:z.coerce.number().int().min(1).max(5).optional(),from:z.string().date().optional(),to:z.string().date().optional(),page:pageParam.optional(),pageSize:pageSizeParam.optional()}).strict()}),
+  asyncHandler(async (req, res) => {if(req.query.from&&req.query.to&&String(req.query.from)>String(req.query.to))throw ApiError.badRequest("نطاق التاريخ غير صحيح.");res.json({ success: true, data: await service.listAllReviews(req.query as any) });})
 );
 router.delete(
   "/reviews/:id",
+  validate({params:idParams,body:z.object({reason:z.string().trim().min(3).max(500)}).strict()}),
   asyncHandler(async (req, res) => {
-    await service.deleteReview(req.params.id);
+    await service.deleteReview(req.params.id,req.user!.id,req.body.reason);
     res.json({ success: true, message: "تم حذف التقييم." });
   })
 );

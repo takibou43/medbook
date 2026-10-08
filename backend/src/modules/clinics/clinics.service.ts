@@ -337,26 +337,32 @@ export async function publicClinic(id: string) {
   if (!clinic) throw ApiError.notFound("العيادة غير موجودة أو غير متاحة للحجز.");
   return { ...clinic, doctors: clinic.doctors.map(withPublicFee) };
 }
-export async function adminListClinics() {
-  const clinics = await prisma.clinic.findMany({ where: { ownerId: { not: null } }, include: { owner: { select: { email: true } }, _count: { select: { doctors: true } } }, orderBy: { createdAt: "desc" }, take: 100 });
-  return clinics.map(c => ({ ...c, ...clinicReferralBilling(c._count.doctors, c.referralDiscountUntil) }));
+export async function adminListClinics(params:{page?:number;q?:string;id?:string;verificationStatus?:VerificationStatus;subscriptionStatus?:SubscriptionStatus}={}) {
+ const page=params.page??1;
+ const where:Prisma.ClinicWhereInput={ownerId:{not:null},...(params.id?{id:params.id}:{}),...(params.verificationStatus?{verificationStatus:params.verificationStatus}:{}),...(params.subscriptionStatus?{subscriptionStatus:params.subscriptionStatus}:{}),...(params.q?{OR:[{nameAr:{contains:params.q,mode:"insensitive"}},{owner:{email:{contains:params.q,mode:"insensitive"}}}]}:{})};
+ const [clinics,total]=await Promise.all([prisma.clinic.findMany({where,include:{owner:{select:{email:true}},doctors:{select:{id:true,firstName:true,lastName:true}},_count:{select:{doctors:true}}},orderBy:[{createdAt:"desc"},{id:"desc"}],take:params.page?20:100,skip:params.page?(page-1)*20:0}),prisma.clinic.count({where})]);
+ const items=clinics.map(c=>({...c,revision:clinicAdminRevision(c,c._count.doctors),doctorPrice:CLINIC_DOCTOR_MONTHLY_DZD,...clinicReferralBilling(c._count.doctors,c.referralDiscountUntil)}));
+ return params.page?{items,total,page,totalPages:Math.max(1,Math.ceil(total/20))}:items;
 }
+export function clinicAdminRevision(c:{verificationStatus:string;subscriptionStatus:string;subscriptionExpiresAt:Date|null;paidDoctorCount:number;referralDiscountUntil:Date|null;pendingReferralDays:number},count:number){return JSON.stringify([c.verificationStatus,c.subscriptionStatus,c.subscriptionExpiresAt?.toISOString()??null,c.paidDoctorCount,c.referralDiscountUntil?.toISOString()??null,c.pendingReferralDays,count]);}
 export async function adminUpdateClinic(id: string, data: {
-  verificationStatus?: VerificationStatus; subscriptionStatus?: SubscriptionStatus; subscriptionExpiresAt?: Date | null; paidDoctorCount?: number;
+  verificationStatus?: VerificationStatus; subscriptionStatus?: SubscriptionStatus; subscriptionExpiresAt?: Date | null; paidDoctorCount?: number; expectedSnapshot?:string;
 }) {
   if (!Object.keys(data).length) throw ApiError.badRequest("لا يوجد تغيير.");
   const result = await prisma.$transaction(async tx => {
     await lockClinic(tx, id);
     const clinic = await tx.clinic.findUnique({ where: { id }, include: { owner: { select: { isActive: true } } } });
     if (!clinic?.ownerId) throw ApiError.notFound("العيادة غير موجودة.");
+    const {expectedSnapshot: _version,...changes}=data;
     const count = await tx.doctor.count({ where: { clinicId: id } });
+    if(data.expectedSnapshot&&clinicAdminRevision(clinic,count)!==data.expectedSnapshot)throw ApiError.conflict("تغيرت العيادة منذ فتحها. أعد تحميلها ومراجعة التغييرات.");
     const status = data.subscriptionStatus ?? clinic.subscriptionStatus;
     const expires = data.subscriptionExpiresAt === undefined ? clinic.subscriptionExpiresAt : data.subscriptionExpiresAt;
     const paidCount = data.paidDoctorCount ?? clinic.paidDoctorCount;
     if (status === SubscriptionStatus.ACTIVE && (!expires || expires <= new Date() || paidCount < count || paidCount < 1)) {
       throw ApiError.badRequest("تفعيل الاشتراك يتطلب تاريخ انتهاء مستقبليًا وعددًا مدفوعًا يشمل جميع أطباء العيادة.");
     }
-    const updated = await tx.clinic.update({ where: { id }, data });
+    const updated = await tx.clinic.update({ where: { id }, data:changes });
     const rewardData = activatePendingClinicRewards(updated);
     const finalClinic = Object.keys(rewardData).length ? await tx.clinic.update({ where: { id }, data: rewardData }) : updated;
     const now = new Date();

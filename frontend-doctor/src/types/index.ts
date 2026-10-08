@@ -227,6 +227,7 @@ export interface MyReferrals {
 }
 
 export interface AdminReferral {
+  rejectionReason?:string|null;rejectionAt?:string|null;rewardClinicId?:string|null;
   id: string;
   status: DoctorReferralStatus;
   referralCodeUsed: string;

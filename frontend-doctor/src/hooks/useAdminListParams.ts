@@ -32,7 +32,7 @@ export function useAdminListParams() {
     setQ("");
     setParams((old) => {
       const next = new URLSearchParams(old);
-      ["q", "page", "id", "filter", "status", "role"].forEach((key) => next.delete(key));
+      ["q", "page", "id", "filter", "status", "role", "from", "to", "doctorId", "rating", "verificationStatus", "subscriptionStatus", "wilaya"].forEach((key) => next.delete(key));
       return next;
     });
   }

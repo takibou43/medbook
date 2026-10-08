@@ -29,9 +29,9 @@ export function AppointmentsChart() {
   const [range, setRange] = useState<Range>("7d");
   const [hover, setHover] = useState<number | null>(null);
 
-  const { data, isLoading, isError, error, isFetching } = useQuery({
+  const { data, isLoading, isError, error, isFetching, refetch } = useQuery({
     queryKey: ["admin-series", range],
-    queryFn: async () => (await api.get("/admin/stats/series", { params: { range } })).data.data as { total: number; points: Point[] },
+    queryFn: async () => (await api.get("/admin/stats/series", { params: { range } })).data.data as { total: number; from:string; to:string; points: Point[] },
   });
 
   const geo = useMemo(() => {
@@ -83,10 +83,11 @@ export function AppointmentsChart() {
         </div>
       </div>
 
+      {data && <p className="text-sm text-slate-600">الفترة: {data.from} إلى {data.to} · المجموع: {data.total.toLocaleString("ar-DZ")}</p>}
       {isLoading ? (
         <Spinner />
       ) : isError ? (
-        <ErrorState message={apiErrorMessage(error)} />
+        <ErrorState message={apiErrorMessage(error)} onRetry={()=>void refetch()} />
       ) : data && data.total === 0 ? (
         <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-300 text-sm text-slate-500">لا توجد مواعيد في هذه الفترة</div>
       ) : (
@@ -161,6 +162,7 @@ export function AppointmentsChart() {
           )}
         </div>
       )}
+      {data && <details className="mt-3"><summary className="btn-outline cursor-pointer">عرض الأرقام اليومية</summary><div className="mt-2 overflow-x-auto"><table className="w-full text-right text-sm"><caption className="sr-only">أعداد المواعيد بحسب اليوم والحالة</caption><thead><tr>{['التاريخ','الإجمالي','مكتملة','ملغاة','لم يحضر'].map(t=><th key={t} className="p-2">{t}</th>)}</tr></thead><tbody>{(data.points??[]).map(p=><tr key={p.date}><th className="p-2">{p.date}</th><td>{p.total}</td><td>{p.completed}</td><td>{p.cancelled}</td><td>{p.noShow}</td></tr>)}</tbody></table></div></details>}
     </div>
   );
 }

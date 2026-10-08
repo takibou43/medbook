@@ -36,6 +36,7 @@ const DoctorPatients = lazy(() => import("./pages/doctor/DoctorPatients"));
 const DoctorReviews = lazy(() => import("./pages/doctor/DoctorReviews"));
 const DoctorProfileSettings = lazy(() => import("./pages/doctor/DoctorProfileSettings"));
 const AssistantManagement = lazy(() => import("./pages/doctor/AssistantManagement"));
+const AdminMaintenance = lazy(()=>import("./pages/admin/AdminMaintenance"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminPatientBlocks = lazy(() => import("./pages/admin/AdminPatientBlocks"));
@@ -204,6 +205,7 @@ export default function App() {
           <Route path="/admin/specialties" element={<AdminSpecialties />} />
           <Route path="/admin/wilayas" element={<AdminWilayas />} />
           <Route path="/admin/reviews" element={<AdminReviews />} />
+          <Route path="/admin/maintenance" element={<AdminMaintenance />} />
           <Route path="/admin/account" element={<AccountSettings />} />
         </Route>
       </Route>

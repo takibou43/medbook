@@ -1,3 +1,5 @@
+import { useAdminConfirm } from "../../components/admin/AdminConfirm";
+import { useAuth } from "../../context/AuthContext";
 import { AdminResults, AdminActions } from "../../components/admin/AdminUI";
 import { useAdminListParams } from "../../hooks/useAdminListParams";
 import { useState } from "react";
@@ -15,6 +17,7 @@ import { BlockPatientDialog, BlockTarget } from "../../components/BlockPatientDi
 const ROLE_LABELS: Record<Role, string> = { PATIENT: "مريض", DOCTOR: "طبيب", ADMIN: "إدارة", ASSISTANT: "مساعد", CLINIC_OWNER: "صاحب عيادة" };
 
 export default function AdminUsers() {
+  const {user:me}=useAuth(); const confirmation=useAdminConfirm();
   const { params, q, setQ, search, page, setPage, update, clear } = useAdminListParams();
   const id = params.get("id");
   const role = params.get("role") && params.get("role")! in ROLE_LABELS ? params.get("role") as Role : "";
@@ -28,32 +31,14 @@ export default function AdminUsers() {
     queryFn: async ({ signal }) => (await api.get("/admin/users", { signal, params: { id: id || undefined, q: search || undefined, role: role || undefined, page } })).data.data,
   });
 
-  async function toggleActive(id: string, isActive: boolean) {
-    try {
-      await api.patch(`/admin/users/${id}/${isActive ? "deactivate" : "activate"}`);
-      showToast(isActive ? "تم تعطيل الحساب." : "تم تفعيل الحساب.", "success");
-      qc.invalidateQueries({ queryKey: ["admin-users"] });
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-    }
-  }
-
-  async function remove(id: string) {
-    if (!confirm("هل أنت متأكد من حذف هذا المستخدم؟ لا يمكن التراجع عن هذا الإجراء.")) return;
-    try {
-      await api.delete(`/admin/users/${id}`);
-      showToast("تم الحذف.", "success");
-      qc.invalidateQueries({ queryKey: ["admin-users"] });
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-    }
-  }
+  function toggleActive(u:any){confirmation.ask({title:u.isActive?'تعطيل الحساب':'تفعيل الحساب',record:u.email,reasonRequired:true,impact:u.isActive?'يمنع الدخول إلى الحساب؛ تبقى الملفات والمواعيد والاشتراكات محفوظة.':'يعيد إتاحة الدخول دون تغيير حالة حظر الحجوزات أو توثيق الطبيب أو الاشتراك.',action:async reason=>{await api.patch('/admin/users/'+u.id+'/'+(u.isActive?'deactivate':'activate'),{reason});showToast(u.isActive?'تم تعطيل الحساب.':'تم تفعيل الحساب.','success');await qc.invalidateQueries({queryKey:['admin-users']});}});}
+  function remove(u:any){confirmation.ask({title:'حذف الحساب',record:u.email,reasonRequired:true,impact:'الحذف نهائي ولا توجد استعادة. قد يمنعه الخادم عند وجود عيادة أو سجلات مرتبطة؛ يشمل الملفات المرتبطة وفق القيود الحالية.',action:async reason=>{await api.delete('/admin/users/'+u.id,{data:{reason}});showToast('تم الحذف.','success');await qc.invalidateQueries({queryKey:['admin-users']});}});}
 
   const actions = (u: any) => (<AdminActions label={"المستخدم " + u.email}>
-                        <Button variant="outline" onClick={() => toggleActive(u.id, u.isActive)}>
+                        <Button variant="outline" disabled={u.id===me?.id && u.isActive} onClick={() => toggleActive(u)}>
                           {u.isActive ? "تعطيل" : "تفعيل"}
                         </Button>
-                        {u.role === "PATIENT" && u.patient && (
+                        {u.patient && (
                           <Button
                             variant="outline"
                             onClick={() =>
@@ -66,7 +51,7 @@ export default function AdminUsers() {
                             {u.patient.blocks?.length > 0 ? "رفع الحظر" : "حظر المريض"}
                           </Button>
                         )}
-                        <Button variant="danger" onClick={() => remove(u.id)}>
+                        <Button variant="danger" disabled={u.id===me?.id} onClick={() => remove(u)}>
                           حذف
                         </Button>
                       </AdminActions>);
@@ -83,7 +68,7 @@ export default function AdminUsers() {
           <option value="PATIENT">مريض</option>
           <option value="DOCTOR">طبيب</option>
           <option value="ASSISTANT">مساعد</option>
-          <option value="ADMIN">إدارة</option>
+          <option value="ADMIN">إدارة</option><option value="CLINIC_OWNER">صاحب عيادة</option>
         </select>
       </div>
 
@@ -97,7 +82,8 @@ export default function AdminUsers() {
         <>
           <div className="space-y-3 md:hidden">
             {data.items.map((u: any) => <article key={u.id} aria-label={"حساب " + u.email} className="card space-y-3 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3"><h2 className="min-w-[140px] flex-1 break-words font-bold text-slate-900"><bdi>{[u.patient?.firstName ?? u.doctor?.firstName, u.patient?.lastName ?? u.doctor?.lastName].filter(Boolean).join(" ") || u.email}</bdi></h2>{actions(u)}</div>
+              <div className="flex flex-wrap items-start justify-between gap-3"><h2 className="min-w-[140px] flex-1 break-words font-bold text-slate-900"><bdi>{[u.patient?.firstName ?? u.doctor?.firstName ?? u.assistant?.firstName, u.patient?.lastName ?? u.doctor?.lastName ?? u.assistant?.lastName].filter(Boolean).join(" ") || u.email}</bdi></h2>{actions(u)}</div>
+              <p className="text-xs text-slate-600">{u.patient&&"ملف مريض "}{u.doctor&&" · ملف طبيب"}{u.assistant&&" · ملف مساعد"}</p>{(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic)&&<p className="text-xs text-slate-600">العيادة: {(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic).nameAr}</p>}
               <p className="break-all text-sm text-slate-600"><bdi dir="ltr">{u.email}</bdi></p>
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm"><dt className="text-slate-600">الهاتف</dt><dd><bdi dir="ltr">{u.phone ?? "—"}</bdi></dd><dt className="text-slate-600">الدور</dt><dd>{ROLE_LABELS[u.role as Role]}</dd></dl>
               <div className="flex flex-wrap gap-2"><span className={"badge " + (u.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>{u.isActive ? "مفعّل" : "معطّل"}</span>{u.patient?.blocks?.length > 0 && <span className="badge bg-red-100 text-red-700">محظور من الحجز</span>}</div>
@@ -117,7 +103,7 @@ export default function AdminUsers() {
               <tbody className="divide-y divide-slate-100">
                 {data.items.map((u: any) => (
                   <tr key={u.id} className={id === u.id ? "bg-primary-50" : undefined}>
-                    <td className="px-4 py-3 text-slate-700" dir="ltr">{u.email}</td>
+                    <td className="px-4 py-3 text-slate-700"><p className="font-bold"><bdi>{[u.patient?.firstName??u.doctor?.firstName??u.assistant?.firstName,u.patient?.lastName??u.doctor?.lastName??u.assistant?.lastName].filter(Boolean).join(" ")||"—"}</bdi></p><bdi dir="ltr">{u.email}</bdi><p className="text-xs">{u.patient&&"ملف مريض "}{u.doctor&&" · ملف طبيب"}{u.assistant&&" · ملف مساعد"}</p>{(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic)&&<p className="text-xs">العيادة: {(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic).nameAr}</p>}</td>
                     <td className="px-4 py-3 text-slate-600" dir="ltr">{u.phone ?? "—"}</td>
                     <td className="px-4 py-3 text-slate-600">{ROLE_LABELS[u.role as Role]}</td>
                     <td className="px-4 py-3">
@@ -140,6 +126,7 @@ export default function AdminUsers() {
         <EmptyState title={!!(q || id || role) ? "لا نتائج مطابقة" : "لا يوجد مستخدمون"} description={!!(q || id || role) ? "جرّب تغيير البحث أو مسح الفلاتر." : undefined} />
       )}
 
+      {confirmation.dialog}
       <BlockPatientDialog target={blockTarget?.t ?? null} mode={blockTarget?.mode ?? "block"} onClose={() => setBlockTarget(null)} />
     </div>
   );

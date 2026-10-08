@@ -1,3 +1,4 @@
+import { changeUserAccess, saveCatalog, removeCatalog } from "./adminSafety.service";
 import { Prisma, Role, VerificationStatus, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -56,7 +57,8 @@ export async function listUsers(params: { id?: string; role?: Role; q?: string; 
                 include: {
                   // حالة الحظر السارية فقط (لعرض زر حظر/إلغاء حظر في قائمة المستخدمين).
                   patient: { include: { blocks: { where: { activePatientId: { not: null } }, select: { id: true, blockedAt: true } } } },
-                  doctor: { include: { specialty: true } },
+                  doctor: { include: { specialty: true, clinic: { select: { id: true, nameAr: true } } } },
+                  assistant: { include: { clinic: { select: { id:true, nameAr:true } }, doctor: { select: { firstName:true,lastName:true,clinic: {select:{id:true,nameAr:true}} } } } },
                 },
                 orderBy: { createdAt: "desc" },
                 skip: (page - 1) * pageSize,
@@ -70,82 +72,8 @@ export async function listUsers(params: { id?: string; role?: Role; q?: string; 
   return { items: safeItems, total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
 }
 
-export async function setUserActive(userId: string, isActive: boolean) {
-    // لا نُرجع تجزئة كلمة المرور أبدًا (حتى للإدارة).
-    const { passwordHash: _omit, ...user } = await prisma.user.update({ where: { id: userId }, data: { isActive } });
-    return user;
-}
-
-export async function deleteUser(userId: string, actingAdminId?: string) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw ApiError.notFound("المستخدم غير موجود.");
-    if (await prisma.clinic.findUnique({ where: { ownerId: userId }, select: { id: true } }))
-      throw ApiError.conflict("الحساب يملك عيادة. عطّل الحساب بدل حذفه للحفاظ على بيانات العيادة.");
-
-  if (actingAdminId && userId === actingAdminId) {
-        throw ApiError.badRequest("لا يمكنك حذف حسابك الخاص.");
-  }
-    if (user.role === Role.ADMIN) {
-          const admins = await prisma.user.count({ where: { role: Role.ADMIN } });
-          if (admins <= 1) throw ApiError.badRequest("لا يمكن حذف آخر حساب إدارة في المنصة.");
-    }
-
-  try {
-    await prisma.user.delete({ where: { id: userId } });
-  } catch (err) {
-    // سجلات طبية مرتبطة (أفراد عائلة/خطط علاج بقيد RESTRICT): لا نحذفها ضمنيًا — 409 واضح بدل 500.
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
-      throw ApiError.conflict("لا يمكن حذف هذا الحساب لارتباطه بسجلات طبية (أفراد عائلة أو خطط علاج). عطّل الحساب بدل حذفه.");
-    }
-    throw err;
-  }
-}
-
-export async function purgeDemoData() {
-    const demoUsers = await prisma.user.findMany({
-          where: { OR: [{ email: { startsWith: "dr." } }, { email: { startsWith: "patient." } }], AND: { email: { endsWith: "@medbook.dz" } } },
-          select: { id: true, role: true },
-    });
-    const userIds = demoUsers.map((u) => u.id);
-    if (userIds.length === 0) return { users: 0, doctors: 0, patients: 0, appointments: 0, reviews: 0, clinics: 0 };
-
-  const doctors = await prisma.doctor.findMany({ where: { userId: { in: userIds } }, select: { id: true } });
-    const patients = await prisma.patient.findMany({ where: { userId: { in: userIds } }, select: { id: true } });
-    const doctorIds = doctors.map((d) => d.id);
-    const patientIds = patients.map((p) => p.id);
-
-  // بيانات الميزات الجديدة المرتبطة بحسابات التجربة فقط (قبل المواعيد والمرضى بسبب قيود RESTRICT).
-  const demoPlanWhere = { OR: [{ doctorId: { in: doctorIds } }, { patientId: { in: patientIds } }] };
-  await prisma.dentalFollowUp.deleteMany({ where: { treatmentPlan: demoPlanWhere } });
-  await prisma.dentalTreatmentSession.deleteMany({ where: { treatmentPlan: demoPlanWhere } });
-  await prisma.appointment.updateMany({ where: { treatmentPlan: demoPlanWhere }, data: { treatmentPlanId: null, treatmentSessionId: null } });
-  await prisma.dentalTreatmentPlan.deleteMany({ where: demoPlanWhere });
-  await prisma.doctorReferral.deleteMany({ where: { OR: [{ referrerDoctorId: { in: doctorIds } }, { referredDoctorId: { in: doctorIds } }] } });
-
-  const reviews = await prisma.review.deleteMany({
-        where: { OR: [{ doctorId: { in: doctorIds } }, { patientId: { in: patientIds } }] },
-  });
-    const appointments = await prisma.appointment.deleteMany({
-          where: { OR: [{ doctorId: { in: doctorIds } }, { patientId: { in: patientIds } }] },
-    });
-    await prisma.familyMember.deleteMany({ where: { ownerPatientId: { in: patientIds } } });
-    await prisma.doctorSchedule.deleteMany({ where: { doctorId: { in: doctorIds } } });
-    await prisma.notification.deleteMany({ where: { userId: { in: userIds } } });
-    await prisma.doctor.deleteMany({ where: { id: { in: doctorIds } } });
-    await prisma.patient.deleteMany({ where: { id: { in: patientIds } } });
-    const users = await prisma.user.deleteMany({ where: { id: { in: userIds } } });
-
-  const clinics = await prisma.clinic.deleteMany({ where: { ownerId: null, doctors: { none: {} } } });
-
-  return {
-        users: users.count,
-        doctors: doctorIds.length,
-        patients: patientIds.length,
-        appointments: appointments.count,
-        reviews: reviews.count,
-        clinics: clinics.count,
-  };
-}
+export const setUserActive=(id:string,active:boolean,actor?:string,reason?:string)=>changeUserAccess(id,active,actor,reason);
+export const deleteUser=(id:string,actor?:string,reason?:string)=>changeUserAccess(id,null,actor,reason);
 
 export async function createAdminUser(email: string, password: string, phone?: string) {
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -275,49 +203,48 @@ export async function updateDoctorAdmin(
 // ---------------- Specialties CRUD ----------------
 
 export const specialtiesAdmin = {
-    list: () => prisma.specialty.findMany({ orderBy: { nameAr: "asc" } }),
-    create: (data: { nameAr: string; nameFr?: string; icon?: string; description?: string }) => prisma.specialty.create({ data }),
+    list: () => prisma.specialty.findMany({ orderBy: { nameAr: "asc" }, include:{_count:{select:{doctors:true}}} }),
+    create: (data: { nameAr: string; nameFr?: string; icon?: string; description?: string }) => saveCatalog("specialty", null, data),
     update: (id: string, data: Partial<{ nameAr: string; nameFr: string; icon: string; description: string }>) =>
-          prisma.specialty.update({ where: { id }, data }),
-    remove: (id: string) => prisma.specialty.delete({ where: { id } }),
+          saveCatalog("specialty", id, data),
+    remove: (id: string) => removeCatalog("specialty", id),
 };
 
 // ---------------- Wilayas / Cities CRUD ----------------
 
 export const wilayasAdmin = {
-    list: () => prisma.wilaya.findMany({ orderBy: { nameAr: "asc" }, include: { cities: true } }),
-    create: (data: { code: string; nameAr: string; nameFr?: string }) => prisma.wilaya.create({ data }),
-    update: (id: string, data: Partial<{ code: string; nameAr: string; nameFr: string }>) => prisma.wilaya.update({ where: { id }, data }),
-    remove: (id: string) => prisma.wilaya.delete({ where: { id } }),
-    addCity: (wilayaId: string, nameAr: string) => prisma.city.create({ data: { wilayaId, nameAr } }),
-    addCitiesBulk: async (wilayaId: string, names: string[]) => {
-          const wilaya = await prisma.wilaya.findUnique({ where: { id: wilayaId } });
+    list: () => prisma.wilaya.findMany({ orderBy: { nameAr: "asc" }, include: { cities: {orderBy:{nameAr:"asc"},include:{_count:{select:{doctors:true,patients:true,clinics:true}}}},_count:{select:{doctors:true,clinics:true}} } }),
+    create: (data: { code: string; nameAr: string; nameFr?: string }) => saveCatalog("wilaya", null, data),
+    update: (id: string, data: Partial<{ code: string; nameAr: string; nameFr: string }>) => saveCatalog("wilaya", id, data),
+    remove: (id: string) => removeCatalog("wilaya", id),
+    addCity: (wilayaId: string, nameAr: string) => saveCatalog("city", null, {wilayaId,nameAr}),
+    addCitiesBulk: async (wilayaId: string, names: string[]) => prisma.$transaction(async tx => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(724002)`;
+          const wilaya = await tx.wilaya.findUnique({ where: { id: wilayaId } });
           if (!wilaya) throw ApiError.notFound("الولاية غير موجودة.");
-          const existing = await prisma.city.findMany({ where: { wilayaId }, select: { nameAr: true } });
-          const existingNames = new Set(existing.map((c) => c.nameAr));
-          const toCreate = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean))).filter((n) => !existingNames.has(n));
+          const existing = await tx.city.findMany({ where: { wilayaId }, select: { nameAr: true } });
+          const existingNames = new Set(existing.map((c) => c.nameAr.trim().replace(/\s+/g,' ').toLocaleLowerCase()));
+          const toCreate = Array.from(new Set(names.map((n) => n.trim().replace(/\s+/g,' ')).filter(Boolean))).filter((n) => !existingNames.has(n.toLocaleLowerCase()));
           if (toCreate.length > 0) {
-                  await prisma.city.createMany({ data: toCreate.map((nameAr) => ({ wilayaId, nameAr })) });
+                  await tx.city.createMany({ data: toCreate.map((nameAr) => ({ wilayaId, nameAr })) });
           }
           return { added: toCreate.length, skipped: names.length - toCreate.length, total: existingNames.size + toCreate.length };
-    },
-    removeCity: (id: string) => prisma.city.delete({ where: { id } }),
+    }),
+    updateCity: (id:string,nameAr:string)=>saveCatalog("city",id,{nameAr}),
+    removeCity: (id: string) => removeCatalog("city", id),
 };
 
 // ---------------- Reviews moderation ----------------
 
-export async function listAllReviews() {
-    return prisma.review.findMany({
-          include: {
-                  doctor: { select: { firstName: true, lastName: true } },
-                  patient: { select: { firstName: true, lastName: true } },
-          },
-          orderBy: { createdAt: "desc" },
-          take: 200,
-    });
+export async function listAllReviews(params:{q?:string;doctorId?:string;rating?:number;from?:string;to?:string;page?:number;pageSize?:number}={}) {
+ const page=params.page??1,pageSize=params.pageSize??(params.page?20:200);
+ const where:Prisma.ReviewWhereInput={...(params.doctorId?{doctorId:params.doctorId}:{}),...(params.rating?{rating:params.rating}:{}),...(params.q?{OR:[{comment:{contains:params.q,mode:"insensitive"}},{doctor:{OR:[{firstName:{contains:params.q,mode:"insensitive"}},{lastName:{contains:params.q,mode:"insensitive"}}]}}]}:{})};
+ if(params.from||params.to)where.createdAt={...(params.from?{gte:new Date(params.from+'T00:00:00+01:00')}:{}),...(params.to?{lte:new Date(params.to+'T23:59:59.999+01:00')}: {})};
+ const [items,total]=await Promise.all([prisma.review.findMany({where,select:{id:true,appointmentId:true,doctorId:true,rating:true,comment:true,createdAt:true,doctor:{select:{firstName:true,lastName:true}},patient:{select:{firstName:true,lastName:true}}},orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*pageSize,take:pageSize}),prisma.review.count({where})]);
+ return params.page?{items,total,page,pageSize,totalPages:Math.max(1,Math.ceil(total/pageSize))}:items;
 }
 
-export async function deleteReview(reviewId: string) {
+export async function deleteReview(reviewId: string, actor?:string, reason?:string) {
     const review = await prisma.review.findUnique({ where: { id: reviewId } });
     if (!review) throw ApiError.notFound("التقييم غير موجود.");
     // نفس إعادة الحساب المستعملة عند إنشاء تقييم (تحت قفل صف الطبيب) — لا متوسط قديم عند التزامن.
@@ -325,6 +252,7 @@ export async function deleteReview(reviewId: string) {
           await lockDoctorRow(tx, review.doctorId);
           await tx.review.delete({ where: { id: reviewId } });
           await recalcDoctorRating(tx, review.doctorId);
+          if(actor)await tx.auditLog.create({data:{userId:actor,action:"DELETE_REVIEW",entity:"Review",entityId:reviewId,meta:{reason,appointmentId:review.appointmentId,rating:review.rating}}});
     });
 }
 
@@ -388,7 +316,7 @@ export async function getAppointmentsSeries(range: SeriesRange) {
 
 export type AppointmentFilter = "all" | "today" | "completed" | "cancelled";
 
-export async function listAppointmentsAdmin(params: { id?: string; filter?: AppointmentFilter; q?: string; page?: number; pageSize?: number }) {
+export async function listAppointmentsAdmin(params: { id?: string; filter?: AppointmentFilter; q?: string; page?: number; pageSize?: number; doctorId?:string; status?:Prisma.AppointmentWhereInput["status"]; from?:string;to?:string }) {
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(50, Math.max(1, params.pageSize ?? 20));
   const where: Prisma.AppointmentWhereInput = params.id ? { id: params.id } : {};
@@ -400,6 +328,9 @@ export async function listAppointmentsAdmin(params: { id?: string; filter?: Appo
   } else if (params.filter === "completed") where.status = "COMPLETED";
   else if (params.filter === "cancelled") where.status = "CANCELLED";
 
+  if(params.doctorId)where.doctorId=params.doctorId;
+  if(params.status)where.AND=[{status:params.status}];
+  if(params.from||params.to)where.AND=[...(Array.isArray(where.AND)?where.AND:[]),{date:{...(params.from?{gte:new Date(params.from+"T00:00:00Z")}:{}),...(params.to?{lte:new Date(params.to+"T23:59:59.999Z")}: {})}}];
   const q = params.q?.trim();
   if (q) {
     where.OR = [
@@ -407,6 +338,7 @@ export async function listAppointmentsAdmin(params: { id?: string; filter?: Appo
       { guestFirstName: { contains: q, mode: "insensitive" } },
       { guestLastName: { contains: q, mode: "insensitive" } },
       { patient: { OR: [{ firstName: { contains: q, mode: "insensitive" } }, { lastName: { contains: q, mode: "insensitive" } }] } },
+      { familyMember: { OR: [{ firstName: { contains:q,mode:"insensitive" } },{lastName:{contains:q,mode:"insensitive"}}] } },
     ];
   }
 
@@ -424,7 +356,7 @@ export async function listAppointmentsAdmin(params: { id?: string; filter?: Appo
         familyMemberId: true,
         familyMember: { select: { firstName: true, lastName: true } },
         patient: { select: { firstName: true, lastName: true } },
-        doctor: { select: { id: true, firstName: true, lastName: true } },
+        doctor: { select: { id: true, firstName: true, lastName: true, clinic: {select:{id:true,nameAr:true}} } },
       },
       orderBy: [{ date: "desc" }, { startTime: "desc" }],
       skip: (page - 1) * pageSize,
@@ -559,8 +491,8 @@ export async function getSystemStatus(): Promise<{ checkedAt: string; checks: Sy
   checks.push({
     key: "push",
     label: "إشعارات المتصفح",
-    state: env.push.vapidPublicKey && env.push.vapidPrivateKey ? "ok" : "off",
-    detail: env.push.vapidPublicKey && env.push.vapidPrivateKey ? "مفعّلة على الخادم" : "غير مُفعّلة (مفاتيح VAPID غير مضبوطة)",
+    state: env.push.vapidPublicKey && env.push.vapidPrivateKey ? "warn" : "off",
+    detail: env.push.vapidPublicKey && env.push.vapidPrivateKey ? "مُهيّأة على الخادم — لم يُتحقق من التسليم إلى الأجهزة. إعادة الفحص لا ترسل إشعارًا." : "غير مُفعّلة (مفاتيح VAPID غير مضبوطة)",
   });
 
   if (dbOk) {
@@ -573,7 +505,7 @@ export async function getSystemStatus(): Promise<{ checkedAt: string; checks: Sy
         key: "bookings",
         label: "الحجوزات",
         state: "ok",
-        detail: last ? `${last24h} حجز خلال آخر 24 ساعة — آخر حجز ${last.createdAt.toISOString()}` : "لا توجد حجوزات بعد",
+        detail: last ? `${last24h} حجز خلال آخر 24 ساعة — آخر حجز ${last.createdAt.toLocaleString("ar-DZ",{timeZone:"Africa/Algiers"})}` : "لا توجد حجوزات بعد",
       });
     } catch {
       checks.push({ key: "bookings", label: "الحجوزات", state: "error", detail: "تعذّر قراءة بيانات الحجوزات" });
@@ -603,7 +535,7 @@ export async function globalSearch(qRaw: string) {
       select: { id: true, firstName: true, lastName: true, user: { select: { id: true, phone: true } } },
     }),
     prisma.appointment.findMany({
-      where: { OR: [ci("guestFirstName"), ci("guestLastName"), { patient: { OR: [ci("firstName"), ci("lastName")] } }] },
+      where: { OR: [ci("guestFirstName"), ci("guestLastName"), { patient: { OR: [ci("firstName"), ci("lastName")] } }, {familyMember:{OR:[ci("firstName"),ci("lastName")]}}] },
       orderBy: { date: "desc" },
       take: 5,
       select: {
@@ -635,3 +567,5 @@ export async function globalSearch(qRaw: string) {
   };
 }
 
+
+export async function doctorReviewHistory(id:string){const rows=await prisma.auditLog.findMany({where:{entity:"Doctor",entityId:id,action:"SET_DOCTOR_VERIFICATION"},select:{id:true,createdAt:true,meta:true},orderBy:{createdAt:"desc"},take:10});return rows.map(r=>({id:r.id,at:r.createdAt,status:(r.meta as any)?.status,reason:(r.meta as any)?.reason??null}));}

@@ -1,14 +1,16 @@
+import { loadAdminDoctorOptions } from '../../components/admin/doctorOptions';
 import { useAdminListParams } from "../../hooks/useAdminListParams";
 import { AdminResults } from "../../components/admin/AdminUI";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { api, apiErrorMessage } from "../../lib/api";
 import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
-import { Input } from "../../components/ui/Input";
+import { Input, Select } from "../../components/ui/Input";
 import { Pagination } from "../../components/ui/Pagination";
 
 const FILTERS = [{ key: "all", label: "الكل" }, { key: "today", label: "مواعيد اليوم" }, { key: "completed", label: "المكتملة" }, { key: "cancelled", label: "الملغاة" }] as const;
 const STATUS: Record<string, { text: string; cls: string }> = {
+  RESCHEDULE_REQUIRED: {text:"يحتاج إعادة ترتيب",cls:"bg-amber-100 text-amber-700"},
   PENDING: { text: "قيد الانتظار", cls: "bg-slate-100 text-slate-700" },
   CONFIRMED: { text: "مؤكد", cls: "bg-blue-100 text-blue-700" },
   IN_PROGRESS: { text: "جارٍ", cls: "bg-primary-100 text-primary-700" },
@@ -17,7 +19,7 @@ const STATUS: Record<string, { text: string; cls: string }> = {
   CANCELLED: { text: "ملغى", cls: "bg-red-100 text-red-700" },
   NO_SHOW: { text: "لم يحضر", cls: "bg-orange-100 text-orange-700" },
 };
-interface Person { firstName: string; lastName: string }
+interface Person { firstName: string; lastName: string; clinic?:{id:string;nameAr:string}|null }
 interface Row { id: string; date: string; startTime: string; status: string; doctor: Person; patient?: Person; familyMember?: Person; familyMemberId?: string; guestFirstName?: string; guestLastName?: string }
 const personName = (p: Person) => [p.firstName, p.lastName].join(" ");
 const beneficiary = (a: Row) => a.familyMember ? personName(a.familyMember) : a.familyMemberId ? "فرد عائلة (الاسم غير متاح)" : a.patient ? personName(a.patient) : [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ") || "—";
@@ -28,10 +30,12 @@ export default function AdminAppointments() {
   const { params, q, setQ, search, page, setPage, update, clear } = useAdminListParams();
   const id = params.get("id");
   const filter = FILTERS.find((f) => f.key === params.get("filter"))?.key ?? "all";
-  const filtered = !!(q || id || filter !== "all");
+  const from=params.get("from")??"",to=params.get("to")??"",doctorId=params.get("doctorId")??"",status=params.get("status")??"";
+  const doctors=useQuery({queryKey:["admin-doctor-options"],queryFn:({signal})=>loadAdminDoctorOptions(signal)});
+  const filtered = !!(q || id || filter !== "all" || from || to || doctorId || status);
   const query = useQuery({
-    queryKey: ["admin-appointments", filter, search, page, id],
-    queryFn: async ({ signal }) => (await api.get("/admin/appointments", { signal, params: { id: id || undefined, filter, q: search || undefined, page } })).data.data as { items: Row[]; total: number; page: number; totalPages: number },
+    queryKey: ["admin-appointments", filter, search, page, id, from,to,doctorId,status],
+    queryFn: async ({ signal }) => (await api.get("/admin/appointments", { signal, params: { id: id || undefined, filter, q: search || undefined, from:from||undefined,to:to||undefined,doctorId:doctorId||undefined,status:status||undefined,page } })).data.data as { items: Row[]; total: number; page: number; totalPages: number },
   });
   return <div className="space-y-5">
     <header><h1 className="text-2xl font-extrabold text-slate-900">المواعيد</h1><p className="mt-1 text-sm text-slate-600">تابع الطبيب والمستفيد وحالة كل موعد.</p></header>
@@ -42,6 +46,7 @@ export default function AdminAppointments() {
       </div>
       <Input label="بحث باسم الطبيب أو المستفيد" placeholder="الاسم..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
     </div>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Select label="طبيب الموعد" value={doctorId} onChange={e=>update('doctorId',e.target.value)}><option value="">كل الأطباء</option>{(doctors.data?.items??[]).map((d:any)=><option key={d.id} value={d.id}>د. {d.firstName} {d.lastName}</option>)}</Select><Select label="حالة الموعد" value={status} onChange={e=>update('status',e.target.value)}><option value="">كل الحالات</option>{Object.entries(STATUS).map(([k,v])=><option key={k} value={k}>{v.text}</option>)}</Select><Input label="من تاريخ" type="date" value={from} onChange={e=>update('from',e.target.value)}/><Input label="إلى تاريخ" min={from||undefined} type="date" value={to} onChange={e=>update('to',e.target.value)}/></div>
     <AdminResults total={query.data?.total} filtered={filtered} onClear={clear} />
     {query.isLoading ? <Spinner /> : query.isError ? <ErrorState message={apiErrorMessage(query.error)} onRetry={() => void query.refetch()} /> : query.data?.items.length ? <>
       <div className="space-y-3 md:hidden">
@@ -51,11 +56,12 @@ export default function AdminAppointments() {
             <dt className="text-slate-600">الطبيب</dt><dd className="min-w-0 break-words text-slate-800"><bdi>د. {personName(a.doctor)}</bdi></dd>
             <dt className="text-slate-600">التاريخ</dt><dd className="text-slate-800">{dateLabel(a.date)}</dd>
             <dt className="text-slate-600">الوقت</dt><dd className="text-slate-800"><bdi dir="ltr">{a.startTime}</bdi></dd>
+            <dt className="text-slate-600">العيادة</dt><dd>{a.doctor.clinic?.nameAr??"طبيب مستقل"}</dd>
           </dl>
         </article>)}
       </div>
       <div className="card hidden overflow-x-auto p-0 md:block"><table className="w-full text-right text-sm"><thead className="bg-slate-50 text-slate-600"><tr>{["التاريخ", "الوقت", "الطبيب", "المستفيد", "الحالة"].map((label) => <th key={label} className="px-4 py-3 font-semibold">{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">
-        {query.data.items.map((a) => <tr key={a.id} className={clsx("hover:bg-slate-50", id === a.id && "bg-primary-50")}><td className="whitespace-nowrap px-4 py-3">{dateLabel(a.date)}</td><td className="px-4 py-3"><bdi dir="ltr">{a.startTime}</bdi></td><td className="px-4 py-3"><bdi>د. {personName(a.doctor)}</bdi></td><td className="px-4 py-3"><bdi>{beneficiary(a)}</bdi></td><td className="px-4 py-3">{badge(a)}</td></tr>)}
+        {query.data.items.map((a) => <tr key={a.id} className={clsx("hover:bg-slate-50", id === a.id && "bg-primary-50")}><td className="whitespace-nowrap px-4 py-3">{dateLabel(a.date)}</td><td className="px-4 py-3"><bdi dir="ltr">{a.startTime}</bdi></td><td className="px-4 py-3"><bdi>د. {personName(a.doctor)}</bdi></td><td className="px-4 py-3"><bdi>{beneficiary(a)}</bdi></td><td className="px-4 py-3">{badge(a)}<details className="mt-2"><summary className="cursor-pointer text-primary-700">تفاصيل الموعد</summary><p className="mt-2">المستفيد: {beneficiary(a)} · العيادة: {a.doctor.clinic?.nameAr??"طبيب مستقل"}</p></details></td></tr>)}
       </tbody></table></div>
       <Pagination page={query.data.page} totalPages={query.data.totalPages} onChange={setPage} />
     </> : <EmptyState title={filtered ? "لا نتائج مطابقة" : "لا توجد مواعيد"} description={filtered ? "جرّب تغيير البحث أو مسح الفلاتر." : "ستظهر المواعيد هنا عند تسجيلها."} />}

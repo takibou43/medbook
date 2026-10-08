@@ -1,14 +1,11 @@
 import { useAdminListParams } from "../../hooks/useAdminListParams";
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Users, Stethoscope, Building2, CalendarDays, CalendarClock, CheckCircle2, XCircle, ShieldAlert, Trash2, MessageSquare, UserPlus, Search, Activity, RefreshCw } from "lucide-react";
+import { Users, Stethoscope, Building2, CalendarDays, CalendarClock, CheckCircle2, XCircle, ShieldAlert, MessageSquare, UserPlus, Search, Activity, RefreshCw } from "lucide-react";
 import clsx from "clsx";
 import { api, apiErrorMessage } from "../../lib/api";
 import { StatCard } from "../../components/StatCard";
 import { Spinner, ErrorState } from "../../components/ui/States";
-import { Button } from "../../components/ui/Button";
-import { useToast } from "../../components/ui/Toast";
 import { AppointmentsChart } from "../../components/AppointmentsChart";
 import { useAdminUnread, timeAgo } from "../../hooks/useMessaging";
 
@@ -77,7 +74,7 @@ function QuickActions({ pending, unread }: { pending: number; unread: number }) 
   ];
   return (
     <div className="card p-4 sm:p-5">
-      <h2 className="mb-3 font-bold text-slate-800">إجراءات سريعة</h2>
+      <h2 className="mb-3 font-bold text-slate-800">يحتاج متابعة ووصول سريع</h2>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {actions.map((a) => (
           <Link key={a.to} to={a.to} className="relative flex flex-col items-center gap-2 rounded-xl border border-slate-200 p-3 text-center text-xs font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:border-primary-300 hover:bg-primary-50 hover:shadow-sm sm:text-sm">
@@ -109,26 +106,6 @@ export default function AdminDashboard() {
     refetchInterval: 60_000,
   });
 
-  const { showToast } = useToast();
-  const [purging, setPurging] = useState(false);
-  const [purgeResult, setPurgeResult] = useState<Record<string, number> | null>(null);
-
-  // يحذف فقط حسابات seed.ts التجريبية (بريد ينتهي بـ dr.*/patient.*@medbook.dz) — لا يمسّ
-  // أي مستخدم حقيقي إطلاقًا. انظر purgeDemoData في admin.service.ts للنطاق الدقيق.
-  async function purgeDemoData() {
-    if (!confirm("سيتم حذف كل حسابات المستخدمين والأطباء التجريبية (seed) نهائيًا. هذا الإجراء لا يمكن التراجع عنه. متابعة؟")) return;
-    setPurging(true);
-    try {
-      const res = await api.post("/admin/maintenance/purge-demo-data");
-      setPurgeResult(res.data.data);
-      showToast("تم حذف البيانات التجريبية.", "success");
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-    } finally {
-      setPurging(false);
-    }
-  }
-
   if (isLoading || isError) return <div className="space-y-5"><h1 className="text-2xl font-extrabold text-slate-900">لوحة تحكم الإدارة</h1>{isLoading ? <Spinner /> : <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />}</div>;
 
   return (
@@ -150,6 +127,7 @@ export default function AdminDashboard() {
 
       <QuickActions pending={stats?.pendingVerification ?? 0} unread={unread.data?.unread ?? 0} />
 
+      <p className="text-sm text-slate-600">مواعيد اليوم تشمل جميع الحالات، بما فيها الملغاة.</p>
       <AppointmentsChart />
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -191,6 +169,7 @@ export default function AdminDashboard() {
               <RefreshCw className={clsx("h-4 w-4", status.isFetching && "animate-spin")} />
             </button>
           </div>
+          {status.data?.checkedAt && <p className="text-xs text-slate-600">آخر فحص: {new Date(status.data.checkedAt).toLocaleString("ar-DZ")}. لا يرسل الفحص SMS أو إشعارات.</p>}
           {status.isLoading ? (
             <p className="text-sm text-slate-500">جارٍ الفحص...</p>
           ) : status.isError ? (
@@ -238,24 +217,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      <div className="card space-y-3 p-5">
-        <h2 className="flex items-center gap-2 font-bold text-slate-800">
-          <Trash2 className="h-5 w-5 text-red-500" />
-          صيانة — تنظيف البيانات التجريبية
-        </h2>
-        <p className="text-sm text-slate-500">
-          يحذف نهائيًا حسابات وبيانات seed.ts التجريبية فقط (أطباء ومرضى بعناوين بريد تنتهي بـ @medbook.dz). لا يمسّ هذا أي مستخدم حقيقي.
-        </p>
-        <Button variant="danger" loading={purging} onClick={purgeDemoData}>
-          حذف البيانات التجريبية
-        </Button>
-        {purgeResult && (
-          <p className="text-sm text-slate-600">
-            تم حذف: {purgeResult.users} مستخدم، {purgeResult.doctors} طبيب، {purgeResult.patients} مريض، {purgeResult.appointments} موعد،{" "}
-            {purgeResult.reviews} تقييم، {purgeResult.clinics} عيادة.
-          </p>
-        )}
-      </div>
+      <Link to="/admin/maintenance" className="btn-outline">صيانة البيانات التجريبية</Link>
     </div>
   );
 }

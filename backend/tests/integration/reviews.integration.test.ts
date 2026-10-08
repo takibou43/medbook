@@ -321,7 +321,7 @@ describe.skipIf(!TEST_URL)("تقييم الطبيب (PostgreSQL حقيقي)", ()
     let d = await db.doctor.findUnique({ where: { id: docB.doctorId } });
     expect(d!.reviewsCount).toBe(5);
     expect(d!.avgRating).toBeCloseTo(16 / 5, 5);
-    expect((await call("DELETE", `/api/admin/reviews/${created.data.id}`, undefined, adminToken)).status).toBe(200);
+    expect((await call("DELETE", `/api/admin/reviews/${created.data.id}`, {reason:"تقييم تجريبي يخالف سياسة الإشراف"}, adminToken)).status).toBe(200);
     d = await db.doctor.findUnique({ where: { id: docB.doctorId } });
     expect(d!.reviewsCount).toBe(4);
     expect(d!.avgRating).toBeCloseTo(3.75, 5);

@@ -1,164 +1,28 @@
-import { AdminResults, AdminActions } from "../../components/admin/AdminUI";
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2, Plus } from "lucide-react";
-import { api, apiErrorMessage } from "../../lib/api";
-import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
-import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
-import { Modal } from "../../components/ui/Modal";
-import { useToast } from "../../components/ui/Toast";
-
-export default function AdminWilayas() {
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["admin-wilayas"],
-    queryFn: async () => (await api.get("/admin/wilayas")).data.data,
-  });
-  const { showToast } = useToast();
-  const qc = useQueryClient();
-
-  const [open, setOpen] = useState(false);
-  const [code, setCode] = useState("");
-  const [nameAr, setNameAr] = useState("");
-  const [cityModal, setCityModal] = useState<string | null>(null);
-  const [cityName, setCityName] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function createWilaya() {
-    if (!code || !nameAr) return showToast("الرمز والاسم مطلوبان.", "error");
-    setSaving(true);
-    try {
-      await api.post("/admin/wilayas", { code, nameAr });
-      showToast("تمت الإضافة.", "success");
-      setOpen(false);
-      setCode("");
-      setNameAr("");
-      qc.invalidateQueries({ queryKey: ["admin-wilayas"] });
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function removeWilaya(id: string) {
-    if (!confirm("حذف هذه الولاية وكل بلدياتها؟")) return;
-    try {
-      await api.delete(`/admin/wilayas/${id}`);
-      showToast("تم الحذف.", "success");
-      qc.invalidateQueries({ queryKey: ["admin-wilayas"] });
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-    }
-  }
-
-  async function addCity() {
-    if (!cityModal || !cityName.trim()) return;
-    try {
-      await api.post(`/admin/wilayas/${cityModal}/cities`, { nameAr: cityName });
-      showToast("تمت إضافة البلدية.", "success");
-      setCityName("");
-      setCityModal(null);
-      qc.invalidateQueries({ queryKey: ["admin-wilayas"] });
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-    }
-  }
-
-  async function removeCity(id: string) {
-    try {
-      await api.delete(`/admin/cities/${id}`);
-      qc.invalidateQueries({ queryKey: ["admin-wilayas"] });
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold text-slate-900">إدارة الولايات والبلديات</h1>
-        <Button onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" />
-          إضافة ولاية
-        </Button>
-      </div>
-
-      <AdminResults total={data?.length} />
-      {isLoading ? (
-        <Spinner />
-      ) : isError ? (
-        <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />
-      ) : data && data.length > 0 ? (
-        <div className="space-y-3">
-          {data.map((w: any) => (
-            <div key={w.id} className="card p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <p className="font-bold text-slate-800">
-                  {w.code} — {w.nameAr}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => setCityModal(w.id)}>
-                    <Plus className="h-4 w-4" />
-                    إضافة بلدية
-                  </Button>
-                  <AdminActions label={"ولاية " + w.nameAr}><Button variant="danger" onClick={() => removeWilaya(w.id)}>
-                    حذف الولاية
-                  </Button>{w.cities?.map((c: any) => <button key={c.id} aria-label={`حذف بلدية ${c.nameAr} من ولاية ${w.nameAr}`} title={`حذف بلدية ${c.nameAr}`} onClick={() => removeCity(c.id)} className="btn-ghost justify-start text-red-600"><Trash2 className="h-4 w-4" aria-hidden />حذف بلدية {c.nameAr}</button>)}</AdminActions>
-                </div>
-              </div>
-              {w.cities?.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {w.cities.map((c: any) => (
-                    <span key={c.id} className="badge flex items-center gap-1 bg-slate-100 text-slate-700">
-                      {c.nameAr}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState title="لا توجد ولايات" />
-      )}
-
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="إضافة ولاية"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              إلغاء
-            </Button>
-            <Button onClick={createWilaya} loading={saving}>
-              إضافة
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <Input label="الرمز (مثال: 16)" value={code} onChange={(e) => setCode(e.target.value)} />
-          <Input label="اسم الولاية" value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
-        </div>
-      </Modal>
-
-      <Modal
-        open={!!cityModal}
-        onClose={() => setCityModal(null)}
-        title={`إضافة بلدية — ${data?.find((w: any) => w.id === cityModal)?.nameAr ?? ""}`}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setCityModal(null)}>
-              إلغاء
-            </Button>
-            <Button onClick={addCity}>إضافة</Button>
-          </>
-        }
-      >
-        <Input label="اسم البلدية" value={cityName} onChange={(e) => setCityName(e.target.value)} />
-      </Modal>
-    </div>
-  );
+import { useState } from 'react';
+import { useQuery,useQueryClient } from '@tanstack/react-query';
+import { api,apiErrorMessage } from '../../lib/api';
+import { useAdminListParams } from '../../hooks/useAdminListParams';
+import { AdminActions,AdminResults } from '../../components/admin/AdminUI';
+import { useAdminConfirm } from '../../components/admin/AdminConfirm';
+import { Input,Select } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
+import { Spinner,EmptyState,ErrorState } from '../../components/ui/States';
+import { useToast } from '../../components/ui/Toast';
+type City={id:string;nameAr:string;_count?:{doctors:number;patients:number;clinics:number}};
+type Wilaya={id:string;code:string;nameAr:string;nameFr?:string;cities:City[];_count?:{doctors:number;clinics:number}};
+type Editor={kind:'wilaya'|'city';wilaya?:Wilaya;record?:Wilaya|City};
+export default function AdminWilayas(){
+ const qc=useQueryClient(),{showToast}=useToast(),confirmation=useAdminConfirm(),{params,q,setQ,update,clear}=useAdminListParams();
+ const query=useQuery({queryKey:['admin-wilayas'],queryFn:async()=>(await api.get('/admin/wilayas')).data.data as Wilaya[]});
+ const [editor,setEditor]=useState<Editor|null>(null),[name,setName]=useState(''),[code,setCode]=useState(''),[saving,setSaving]=useState(false),[error,setError]=useState('');
+ const needle=q.trim().toLocaleLowerCase(),sort=params.get('sort')==='name'?'name':'code';
+ const rows=(query.data??[]).filter(w=>[w.nameAr,w.nameFr,w.code,...w.cities.map(c=>c.nameAr)].some(n=>n?.toLocaleLowerCase().includes(needle))).sort((a,b)=>sort==='code'?a.code.localeCompare(b.code,undefined,{numeric:true}):a.nameAr.localeCompare(b.nameAr,'ar'));
+ const selected=query.data?.find(w=>w.id===params.get('wilaya'));
+ function edit(next:Editor){setEditor(next);setName(next.record?.nameAr??'');setCode(next.kind==='wilaya'?(next.record as Wilaya)?.code??'':'');setError('');}
+ async function save(){if(!editor||saving)return;let value=name.trim().replace(/\s+/g,' ');if(value.length<2||value.length>100||(editor.kind==='wilaya'&&!code.trim())){setError('أدخل اسمًا صالحًا والرمز عند تعديل الولاية.');return;}setSaving(true);setError('');try{if(editor.kind==='wilaya'){const body={nameAr:value,code:code.trim()};if(editor.record)await api.patch('/admin/wilayas/'+editor.record.id,body);else await api.post('/admin/wilayas',body);}else if(editor.record)await api.patch('/admin/cities/'+editor.record.id,{nameAr:value});else await api.post('/admin/wilayas/'+editor.wilaya!.id+'/cities',{nameAr:value});showToast(editor.record?'تم حفظ الاسم مع الحفاظ على المعرف والعلاقات.':'تمت الإضافة.','success');setEditor(null);await qc.invalidateQueries({queryKey:['admin-wilayas']});}catch(e){setError(apiErrorMessage(e));}finally{setSaving(false);}}
+ function remove(kind:'wilaya'|'city',record:Wilaya|City){confirmation.ask({title:kind==='wilaya'?'حذف الولاية':'حذف البلدية',record:record.nameAr,impact:kind==='wilaya'?'يحذف الولاية وبلدياتها غير المستخدمة نهائيًا. تمنع العناوين والملفات المرتبطة الحذف.':'حذف نهائي؛ تمنع العناوين والملفات المرتبطة الحذف.',action:async()=>{await api.delete('/admin/'+(kind==='wilaya'?'wilayas/':'cities/')+record.id);await qc.invalidateQueries({queryKey:['admin-wilayas']});showToast('تم الحذف.','success');}});}
+ return <div className="space-y-5"><header className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-extrabold">إدارة الولايات والبلديات</h1><Button onClick={()=>edit({kind:'wilaya'})}>إضافة ولاية</Button></header><div className="flex flex-wrap items-end gap-3"><Input label="بحث عن ولاية أو بلدية" value={q} onChange={e=>setQ(e.target.value)} className="max-w-sm"/><Select label="ترتيب الولايات" value={sort} onChange={e=>update('sort',e.target.value)}><option value="code">بالرمز</option><option value="name">بالاسم</option></Select></div><AdminResults total={rows.length} filtered={!!q} onClear={clear}/>{query.isLoading?<Spinner/>:query.isError?<ErrorState message={apiErrorMessage(query.error)} onRetry={()=>void query.refetch()}/>:rows.length?<div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{rows.map(w=><button key={w.id} onClick={()=>update('wilaya',selected?.id===w.id?'':w.id)} aria-expanded={selected?.id===w.id} className={'card flex min-h-11 items-center justify-between gap-2 p-3 text-right '+(selected?.id===w.id?'border-primary-500 bg-primary-50':'')}><span>{w.code} — {w.nameAr}</span><span className="text-xs text-slate-600">{w.cities.length} بلدية</span></button>)}</div>:<EmptyState title={q?'لا نتائج مطابقة':'لا توجد ولايات'}/>}
+ {selected&&<section className="card space-y-4 p-4" aria-label={'بلديات ولاية '+selected.nameAr}><header className="flex flex-wrap items-start justify-between gap-3"><h2 className="text-lg font-bold">{selected.code} — {selected.nameAr}</h2><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={()=>edit({kind:'city',wilaya:selected})}>إضافة بلدية</Button><AdminActions label={'ولاية '+selected.nameAr}><Button variant="outline" onClick={()=>edit({kind:'wilaya',record:selected})}>تعديل الولاية</Button><Button variant="danger" onClick={()=>remove('wilaya',selected)}>حذف الولاية</Button></AdminActions></div></header><p className="text-sm text-slate-600">عدد البلديات: {selected.cities.length}</p><div className="space-y-2">{selected.cities.filter(c=>!needle||selected.nameAr.includes(needle)||c.nameAr.toLocaleLowerCase().includes(needle)).map(c=><div key={c.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border p-3"><span>{c.nameAr}</span><AdminActions label={'بلدية '+c.nameAr}><Button variant="outline" onClick={()=>edit({kind:'city',wilaya:selected,record:c})}>تعديل البلدية</Button><Button variant="danger" aria-label={'حذف بلدية '+c.nameAr+' من ولاية '+selected.nameAr} onClick={()=>remove('city',c)}>حذف البلدية</Button></AdminActions></div>)}</div></section>}
+ <Modal open={!!editor} onClose={()=>{if(!saving)setEditor(null);}} title={editor?.kind==='city'?`${editor.record?'تعديل':'إضافة'} بلدية — ${editor.wilaya?.nameAr}`:`${editor?.record?'تعديل':'إضافة'} ولاية`} footer={<><Button variant="outline" disabled={saving} onClick={()=>setEditor(null)}>إلغاء</Button><Button loading={saving} onClick={()=>void save()}>{editor?.record?'حفظ التعديل':'إضافة'}</Button></>}><div className="space-y-3">{editor?.kind==='wilaya'&&<Input label="رمز الولاية" maxLength={10} value={code} onChange={e=>setCode(e.target.value)}/>}<Input label={editor?.kind==='wilaya'?'اسم الولاية':'اسم البلدية'} maxLength={100} value={name} onChange={e=>setName(e.target.value)}/>{error&&<p role="alert" className="text-red-700">{error}</p>}</div></Modal>{confirmation.dialog}</div>;
 }

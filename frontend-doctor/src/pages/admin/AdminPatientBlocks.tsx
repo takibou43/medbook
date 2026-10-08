@@ -59,6 +59,7 @@ export default function AdminPatientBlocks() {
         </select>
       </div>
 
+      <p className="text-sm text-slate-600">نطاق الحظر: منع الحجوزات الجديدة فقط؛ يبقى الحساب والمواعيد السابقة محفوظة.</p>
       <AdminResults total={data?.total} filtered={!!q || status !== "active"} onClear={clear} />
       {isLoading ? (
         <Spinner />

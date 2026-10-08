@@ -1,0 +1,61 @@
+{
+  "source": "prisma/algeria_communes.json",
+  "wilayas": 58,
+  "total": 1541,
+  "issues": [
+    {
+      "wilaya": "10",
+      "type": "spacing",
+      "name": "آث  منصور",
+      "suggested": "آث منصور"
+    },
+    {
+      "wilaya": "14",
+      "type": "spacing",
+      "name": "زمالة  الأمير عبد القادر",
+      "suggested": "زمالة الأمير عبد القادر"
+    },
+    {
+      "wilaya": "15",
+      "type": "spacing",
+      "name": "أيت  أومالو",
+      "suggested": "أيت أومالو"
+    },
+    {
+      "wilaya": "18",
+      "type": "spacing",
+      "name": "بودريعة بني  ياجيس",
+      "suggested": "بودريعة بني ياجيس"
+    },
+    {
+      "wilaya": "27",
+      "type": "parenthesis",
+      "name": "الحسيان (بني ياحي"
+    },
+    {
+      "wilaya": "39",
+      "type": "spacing",
+      "name": "بن  قشة",
+      "suggested": "بن قشة"
+    },
+    {
+      "wilaya": "43",
+      "type": "spacing",
+      "name": " عين البيضاء أحريش",
+      "suggested": "عين البيضاء أحريش"
+    },
+    {
+      "wilaya": "48",
+      "type": "spacing",
+      "name": "سيدي  خطاب",
+      "suggested": "سيدي خطاب"
+    },
+    {
+      "wilaya": "51",
+      "type": "spacing",
+      "name": "سيدي  خالد",
+      "suggested": "سيدي خالد"
+    }
+  ],
+  "productionChanged": false
+}

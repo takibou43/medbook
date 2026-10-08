@@ -94,8 +94,8 @@ const h = vi.hoisted(() => {
       ),
       update: vi.fn(async ({ where, data }: any) => Object.assign(s.doctors.find((d) => d.id === where.id), data)),
     },
-    specialty: { update: vi.fn(async ({ where, data }: any) => ({ id: where.id, ...data })) },
-    wilaya: { update: vi.fn(async ({ where, data }: any) => ({ id: where.id, ...data })) },
+    specialty: { findUnique:vi.fn(async({where}:any)=>({id:where.id,nameAr:'طب عام'})),findFirst:vi.fn(async()=>null),update: vi.fn(async ({ where, data }: any) => ({ id: where.id, ...data })) },
+    wilaya: { findUnique:vi.fn(async({where}:any)=>({id:where.id,nameAr:'ميلة',code:'43'})),findFirst:vi.fn(async()=>null),update: vi.fn(async ({ where, data }: any) => ({ id: where.id, ...data })) },
     user: {
       findMany: vi.fn(async () => s.users.map(({ passwordHash: _p, ...u }) => u)),
       count: vi.fn(async () => s.users.length),
@@ -116,6 +116,8 @@ const h = vi.hoisted(() => {
     },
     auditLog: { create: vi.fn(async ({ data }: any) => (s.audit.push(data), data)) },
   };
+  db.$queryRaw=vi.fn(async()=>[]);
+  db.$executeRaw=vi.fn(async()=>1);
   db.$transaction = vi.fn(async (work: (tx: typeof db) => unknown) => work(db));
   return { s, db, DOCTOR, future };
 });

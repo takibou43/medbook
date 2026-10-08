@@ -1,111 +1,23 @@
-import { AdminResults, AdminActions } from "../../components/admin/AdminUI";
-import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2, Plus } from "lucide-react";
-import { api, apiErrorMessage } from "../../lib/api";
-import { Spinner, EmptyState, ErrorState } from "../../components/ui/States";
-import { Button } from "../../components/ui/Button";
-import { Input } from "../../components/ui/Input";
-import { Modal } from "../../components/ui/Modal";
-import { useToast } from "../../components/ui/Toast";
-
-export default function AdminSpecialties() {
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ["admin-specialties"],
-    queryFn: async () => (await api.get("/admin/specialties")).data.data,
-  });
-  const { showToast } = useToast();
-  const qc = useQueryClient();
-
-  const [open, setOpen] = useState(false);
-  const [nameAr, setNameAr] = useState("");
-  const [description, setDescription] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  async function create() {
-    if (!nameAr.trim()) return showToast("اسم التخصص مطلوب.", "error");
-    setSaving(true);
-    try {
-      await api.post("/admin/specialties", { nameAr, description: description || undefined });
-      showToast("تمت الإضافة.", "success");
-      setOpen(false);
-      setNameAr("");
-      setDescription("");
-      qc.invalidateQueries({ queryKey: ["admin-specialties"] });
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function remove(id: string) {
-    if (!confirm("حذف هذا التخصص؟")) return;
-    try {
-      await api.delete(`/admin/specialties/${id}`);
-      showToast("تم الحذف.", "success");
-      qc.invalidateQueries({ queryKey: ["admin-specialties"] });
-    } catch (err) {
-      showToast(apiErrorMessage(err), "error");
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-extrabold text-slate-900">إدارة التخصصات</h1>
-        <Button onClick={() => setOpen(true)}>
-          <Plus className="h-4 w-4" />
-          إضافة تخصص
-        </Button>
-      </div>
-
-      <AdminResults total={data?.length} />
-      {isLoading ? (
-        <Spinner />
-      ) : isError ? (
-        <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />
-      ) : data && data.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {data.map((s: any) => (
-            <div key={s.id} className="card flex flex-wrap items-start justify-between gap-3 p-4">
-              <div>
-                <p className="font-bold text-slate-800">{s.nameAr}</p>
-                {s.description && <p className="text-xs text-slate-500">{s.description}</p>}
-              </div>
-              <AdminActions label={"تخصص " + s.nameAr}>
-              <button aria-label={`حذف تخصص ${s.nameAr}`} title={`حذف تخصص ${s.nameAr}`} onClick={() => remove(s.id)} className="btn-ghost justify-start text-red-600">
-                <Trash2 className="h-4 w-4" />
-                حذف التخصص
-              </button>
-              </AdminActions>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState title="لا توجد تخصصات" />
-      )}
-
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title="إضافة تخصص جديد"
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              إلغاء
-            </Button>
-            <Button onClick={create} loading={saving}>
-              إضافة
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <Input label="اسم التخصص" value={nameAr} onChange={(e) => setNameAr(e.target.value)} />
-          <Input label="الوصف (اختياري)" value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-      </Modal>
-    </div>
-  );
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { api,apiErrorMessage } from '../../lib/api';
+import { AdminActions,AdminResults } from '../../components/admin/AdminUI';
+import { useAdminConfirm } from '../../components/admin/AdminConfirm';
+import { useAdminListParams } from '../../hooks/useAdminListParams';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
+import { Spinner,EmptyState,ErrorState } from '../../components/ui/States';
+import { useToast } from '../../components/ui/Toast';
+type Specialty={id:string;nameAr:string;nameFr?:string|null;description?:string|null;_count?:{doctors:number}};
+export default function AdminSpecialties(){
+ const qc=useQueryClient(),{showToast}=useToast(),confirmation=useAdminConfirm(),{q,setQ,clear}=useAdminListParams();
+ const query=useQuery({queryKey:['admin-specialties'],queryFn:async()=>(await api.get('/admin/specialties')).data.data as Specialty[]});
+ const [editing,setEditing]=useState<Specialty|null|undefined>(),[nameAr,setName]=useState(''),[nameFr,setFrench]=useState(''),[description,setDescription]=useState(''),[saving,setSaving]=useState(false),[error,setError]=useState('');
+ const rows=(query.data??[]).filter(s=>[s.nameAr,s.nameFr].some(t=>t?.toLocaleLowerCase().includes(q.trim().toLocaleLowerCase())));
+ function edit(s:Specialty|null){setEditing(s);setName(s?.nameAr??'');setFrench(s?.nameFr??'');setDescription(s?.description??'');setError('');}
+ async function save(){if(saving)return;const name=nameAr.trim().replace(/\s+/g,' ');if(name.length<2||name.length>100){setError('اسم التخصص من حرفين إلى 100 حرف.');return;}setSaving(true);setError('');try{const body={nameAr:name,nameFr:nameFr.trim(),description:description.trim()};if(editing)await api.patch('/admin/specialties/'+editing.id,body);else await api.post('/admin/specialties',body);showToast(editing?'تم تعديل التخصص مع حفظ معرفه.':'تمت الإضافة.','success');setEditing(undefined);await qc.invalidateQueries({queryKey:['admin-specialties']});}catch(e){setError(apiErrorMessage(e));}finally{setSaving(false);}}
+ function remove(s:Specialty){confirmation.ask({title:'حذف التخصص',record:s.nameAr,impact:`يرتبط به ${s._count?.doctors??0} طبيب. الحذف نهائي؛ يمنع الخادم حذف التخصص المستخدم.`,action:async()=>{await api.delete('/admin/specialties/'+s.id);showToast('تم حذف التخصص.','success');await qc.invalidateQueries({queryKey:['admin-specialties']});}});}
+ return <div className="space-y-5"><header className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-extrabold">إدارة التخصصات</h1><Button onClick={()=>edit(null)}>إضافة تخصص</Button></header><Input label="بحث عن تخصص" value={q} onChange={e=>setQ(e.target.value)} className="max-w-sm"/><AdminResults total={rows.length} filtered={!!q} onClear={clear}/>{query.isLoading?<Spinner/>:query.isError?<ErrorState message={apiErrorMessage(query.error)} onRetry={()=>void query.refetch()}/>:rows.length?<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{rows.map(s=><article key={s.id} className="card space-y-3 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-bold"><bdi>{s.nameAr}</bdi></h2>{s.nameFr&&<p className="text-sm text-slate-600"><bdi>{s.nameFr}</bdi></p>}</div><AdminActions label={'تخصص '+s.nameAr}><Button variant="outline" onClick={()=>edit(s)}>تعديل التخصص</Button><Button variant="danger" aria-label={'حذف تخصص '+s.nameAr} disabled={!!s._count?.doctors} onClick={()=>remove(s)}>حذف التخصص</Button></AdminActions></div>{s.description&&<p className="text-sm text-slate-600">{s.description}</p>}<p className="text-xs text-slate-600">الأطباء المرتبطون: {s._count?.doctors??'—'}</p></article>)}</div>:<EmptyState title={q?'لا نتائج مطابقة':'لا توجد تخصصات'}/>}
+ <Modal open={editing!==undefined} onClose={()=>{if(!saving)setEditing(undefined);}} title={editing?'تعديل تخصص '+editing.nameAr:'إضافة تخصص جديد'} footer={<><Button variant="outline" disabled={saving} onClick={()=>setEditing(undefined)}>إلغاء</Button><Button loading={saving} onClick={()=>void save()}>{editing?'حفظ التعديل':'إضافة'}</Button></>}><div className="space-y-3"><Input label="اسم التخصص" value={nameAr} maxLength={100} onChange={e=>setName(e.target.value)}/><Input label="الاسم الفرنسي (اختياري)" value={nameFr} maxLength={100} onChange={e=>setFrench(e.target.value)}/><Input label="الوصف (اختياري)" value={description} maxLength={1000} onChange={e=>setDescription(e.target.value)}/>{error&&<p role="alert" className="text-red-700">{error}</p>}</div></Modal>{confirmation.dialog}</div>;
 }

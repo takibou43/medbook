@@ -46,10 +46,10 @@ router.patch("/mine/doctors/:id/assistants/:assistantId", ...owner, validate({
 }), asyncHandler(async (req, res) => {
   send(res, await service.setOwnClinicAssistantActive(req.user!.id, req.params.id, req.params.assistantId, req.body.isActive));
 }));
-router.get("/admin/list", authenticate, authorize(Role.ADMIN), asyncHandler(async (_req, res) => send(res, await service.adminListClinics())));
+router.get("/admin/list", authenticate, authorize(Role.ADMIN), validate({query:z.object({page:z.coerce.number().int().min(1).max(1000).optional(),q:z.string().trim().max(100).optional(),id:z.string().uuid().optional(),verificationStatus:z.nativeEnum(VerificationStatus).optional(),subscriptionStatus:z.nativeEnum(SubscriptionStatus).optional()}).strict()}), asyncHandler(async (req, res) => send(res, await service.adminListClinics(req.query as any))));
 router.patch("/admin/:id", authenticate, authorize(Role.ADMIN), validate({ params: clinicIdParams, body: z.object({
   verificationStatus: z.nativeEnum(VerificationStatus).optional(), subscriptionStatus: z.nativeEnum(SubscriptionStatus).optional(),
-  subscriptionExpiresAt: z.coerce.date().nullable().optional(), paidDoctorCount: z.number().int().min(0).max(1000).optional(),
+  expectedSnapshot:z.string().max(1000).optional(), subscriptionExpiresAt: z.coerce.date().nullable().optional(), paidDoctorCount: z.number().int().min(0).max(1000).optional(),
 }).strict() }), asyncHandler(async (req, res) => send(res, await service.adminUpdateClinic(req.params.id, req.body))));
 router.get("/:id", validate({ params: clinicIdParams }), asyncHandler(async (req, res) => send(res, await service.publicClinic(req.params.id))));
 export default router;

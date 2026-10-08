@@ -1,0 +1,73 @@
+{
+  "results": [
+    {
+      "name": "search retains recipient name and specialty",
+      "status": "passed"
+    },
+    {
+      "name": "drafts stay with each recipient",
+      "status": "passed"
+    },
+    {
+      "name": "failed send retains text and retry key; duplicate submit sends once",
+      "status": "passed"
+    },
+    {
+      "name": "deep links, reload, back and forward agree with selected record",
+      "status": "passed"
+    },
+    {
+      "name": "search and pagination survive reload and browser history",
+      "status": "passed"
+    },
+    {
+      "name": "global search opens the exact doctor, patient account and appointment",
+      "status": "passed"
+    },
+    {
+      "name": "clinics card and activity links identify their destinations",
+      "status": "passed"
+    },
+    {
+      "name": "review stars are a named image and deletion identifies the review",
+      "status": "passed"
+    },
+    {
+      "name": "city modal includes wilaya, Escape closes it and restores focus",
+      "status": "passed"
+    },
+    {
+      "name": "email has a real label and LTR direction",
+      "status": "passed"
+    },
+    {
+      "name": "message viewport 360 and mobile return",
+      "status": "passed"
+    },
+    {
+      "name": "message viewport 390 and mobile return",
+      "status": "passed"
+    },
+    {
+      "name": "message viewport 768 and mobile return",
+      "status": "passed"
+    },
+    {
+      "name": "message viewport 1280 and mobile return",
+      "status": "passed"
+    },
+    {
+      "name": "network failure preserves draft; editing a failed draft creates a new retry key",
+      "status": "passed"
+    },
+    {
+      "name": "late search cannot replace the newest results",
+      "status": "passed"
+    },
+    {
+      "name": "unknown recipient disables composer",
+      "status": "passed"
+    }
+  ],
+  "errors": []
+}

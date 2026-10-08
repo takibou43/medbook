@@ -49,10 +49,11 @@ const searchParam = z
   .max(100, "نص البحث طويل جدًا")
   .transform((v) => (v === "" ? undefined : v));
 const listUsersQuery = z
-  .object({ role: z.nativeEnum(Role).optional(), q: searchParam.optional(), page: pageParam.optional(), pageSize: pageSizeParam.optional() })
+  .object({ id: z.string().uuid().optional(), role: z.nativeEnum(Role).optional(), q: searchParam.optional(), page: pageParam.optional(), pageSize: pageSizeParam.optional() })
   .strict("يحتوي الطلب على حقول غير مسموح بها.");
 const listDoctorsQuery = z
   .object({
+    id: z.string().uuid().optional(),
     verificationStatus: z.nativeEnum(VerificationStatus).optional(),
     q: searchParam.optional(),
     page: pageParam.optional(),
@@ -84,6 +85,7 @@ router.get(
   "/appointments",
   validate({
     query: z.object({
+      id: z.string().uuid().optional(),
       filter: z.enum(["all", "today", "completed", "cancelled"]).default("all"),
       q: z.string().max(100).optional(),
       page: z.coerce.number().int().min(1).optional(),

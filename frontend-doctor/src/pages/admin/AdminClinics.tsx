@@ -32,7 +32,7 @@ export default function AdminClinics() {
     {query.data?.map(c => <form key={`${c.id}-${c.subscriptionExpiresAt}-${c.verificationStatus}-${c.subscriptionStatus}-${c.paidDoctorCount}`} onSubmit={e => void save(e, c.id)} className="card space-y-4 p-5">
       <h2 className="text-lg font-bold">{c.nameAr}</h2><p>{c.address}</p><p dir="ltr">{c.owner.email}</p>
       <p>{c._count.doctors} أطباء · المبلغ الشهري الحالي: <b>{c.monthlyTotal.toLocaleString("ar-DZ")} دج</b></p>
-      {c.discountedDoctorCount > 0 && <p className="text-emerald-700">مكافأة الإحالة: تُحسب تكلفة {c.billedDoctorCount} أطباء بدل {c._count.doctors} حتى {c.referralDiscountUntil?.slice(0, 10)}.</p>}
+      {c.discountedDoctorCount > 0 && <p className="text-emerald-700">مكافأة الإحالة: تُحسب تكلفة {c.billedDoctorCount} أطباء بدل {c._count.doctors} حتى {c.referralDiscountUntil ? new Date(c.referralDiscountUntil).toLocaleDateString("ar-DZ", { timeZone: "UTC" }) : "—"}.</p>}
       {c.pendingReferralDays > 0 && <p>خصم محفوظ لمدة {c.pendingReferralDays} يومًا، يبدأ عند تفعيل اشتراك العيادة.</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         <Select name="verificationStatus" label="مراجعة العيادة" defaultValue={c.verificationStatus}><option value="PENDING">قيد المراجعة</option><option value="VERIFIED">موثّقة</option><option value="REJECTED">مرفوضة</option></Select>

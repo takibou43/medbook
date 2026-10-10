@@ -260,6 +260,7 @@ model Clinic {
 // ---------------- Patients & Doctors ----------------
 
 model Patient {
+  guestIdentityClaim GuestIdentityClaim?
   id        String    @id @default(uuid())
   userId    String    @unique
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -279,6 +280,23 @@ model Patient {
 
   @@index([cityId])
   @@map("patients")
+}
+
+model GuestIdentityClaim {
+  id String @id @default(uuid())
+  patientId String @unique
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  phone String
+  firstName String
+  lastName String
+  codeHash String
+  expiresAt DateTime
+  attempts Int @default(0)
+  verifiedAt DateTime?
+  lastSentAt DateTime @default(now())
+  sentCount Int @default(0)
+  @@index([phone, lastSentAt])
+  @@map("guest_identity_claims")
 }
 
 model ClinicDoctorInvite {
@@ -387,6 +405,8 @@ model PatientBlock {
   @@map("patient_blocks")
 }
 model Doctor {
+  dutyEndsAt DateTime?
+  queueRequestedAt DateTime?
   // A delegation belongs to this exact clinic; changing clinics never carries it over.
   clinicManagerForId String?
   clinicPermissions String[] @default([])
@@ -460,6 +480,7 @@ model Doctor {
 // الـ Backend مباشرة (انظر resolveActingDoctorId في backend/src/lib/actingDoctor.ts)،
 // وليس فقط إخفاءه في الواجهة.
 model Assistant {
+  shiftEndsAt DateTime?
   allDoctors Boolean @default(true)
   allowedDoctorIds String[] @default([])
   clinicId String?
@@ -530,7 +551,19 @@ model DoctorSchedule {
 
 // ---------------- Appointments ----------------
 
+enum UrgencyStatus {
+  NONE
+  REQUESTED
+  APPROVED
+  DECLINED
+}
+
 model Appointment {
+  urgencyStatus UrgencyStatus @default(NONE)
+  urgencyReason String?
+  urgencyRequestedAt DateTime?
+  urgencyDecidedAt DateTime?
+  urgencyDecidedBy String?
   id        String   @id @default(uuid())
   patientId String?
   patient   Patient? @relation(fields: [patientId], references: [id])

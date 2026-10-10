@@ -1,3 +1,7 @@
+import { UrgencyRequests } from "../UrgencyRequests";
+import { GuestBooking } from "../GuestBooking";
+import { GuestClaimReview } from "../GuestClaimReview";
+import { ShiftControl } from "../ShiftControl";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale";
 import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
@@ -340,6 +344,10 @@ export function DashboardLayout({
 
         {/* min-w-0 + overflow-x-hidden: خط دفاع أخير حتى لا يُخرج أي عنصر عريض الصفحة عن عرض الشاشة. */}
         <main className={clsx("min-w-0 flex-1 overflow-x-hidden p-4 md:p-8 md:ps-5", contentClassName, dailyNavigation && "pb-24 md:pb-8")}>
+          <ShiftControl />
+          {user?.role === "DOCTOR" && <GuestBooking />}
+          {(user?.role === "DOCTOR" || user?.role === "ASSISTANT") && <GuestClaimReview />}
+          {user?.role === "DOCTOR" && <UrgencyRequests />}
           <Outlet />
         </main>
         {dailyNavigation && (

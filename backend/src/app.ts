@@ -1,3 +1,4 @@
+import shiftsRoutes from "./modules/shifts/shifts.routes";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -30,6 +31,7 @@ import assistantContextRoutes from "./modules/assistants/assistantContext.routes
 import assistantsPublicRoutes from "./modules/assistants/assistants.public.routes";
 import { adminMessagesRouter, doctorMessagesRouter } from "./modules/messaging/messaging.routes";
 import { patientAuthRouter, patientAccountRouter, patientNotificationsRouter } from "./modules/patientAuth/patientAuth.routes";
+import { guestIdentityRouter, guestClaimReviewRouter } from "./modules/patientAuth/guestIdentity.routes";
 import internalRemindersRoutes from "./modules/reminders/reminders.routes";
 import familyRoutes from "./modules/family/family.routes";
 import { doctorTreatmentRouter, patientTreatmentRouter } from "./modules/treatment/treatment.routes";
@@ -92,10 +94,13 @@ export function createApp() {
   // خطط علاج الأسنان + «برمجة موعد عودة» (طبيب فقط، المصادقة لكل مسار فتمرّ بقية الطلبات إلى doctorSelfRoutes).
   app.use("/api/doctor", doctorTreatmentRouter);
   app.use("/api/doctor", doctorSelfRoutes);
+  app.use("/api/shifts", shiftsRoutes);
   app.use("/api/appointments", appointmentsRoutes);
   // حساب المريض (تسجيل/دخول/مواعيدي/إشعارات) — قبل "/api/patient" الأعم لأن ذاك يفرض المصادقة
   // على كل ما تحته فكان سيرفض طلب تسجيل الدخول نفسه.
   app.use("/api/patient/auth", patientAuthRouter);
+  app.use("/api/patient/guest-identity", guestIdentityRouter);
+  app.use("/api/guest-claims", guestClaimReviewRouter);
   app.use("/api/patient/account", patientAccountRouter);
   app.use("/api/patient/notifications", patientNotificationsRouter);
   // الحساب العائلي وخطط العلاج (قراءة) — قبل "/api/patient" الأعم.

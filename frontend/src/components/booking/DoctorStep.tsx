@@ -143,6 +143,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
                     <DoctorAvatar doctor={d} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
+                        <p className="mb-1 text-xs text-emerald-700">{t(d.dutyEndsAt && new Date(d.dutyEndsAt) > new Date() ? "الطبيب متواجد الآن" : "خارج المداومة")}</p>
                         <p className="font-bold leading-snug text-slate-900">{t("د. ")}{d.firstName} {d.lastName}
                         </p>
                         <span className="flex shrink-0 items-center gap-1 text-sm text-amber-600">

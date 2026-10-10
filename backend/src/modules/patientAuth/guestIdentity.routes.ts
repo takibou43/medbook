@@ -1,0 +1,17 @@
+import { Router } from "express";
+import { z } from "zod";
+import { Role } from "@prisma/client";
+import { authenticate, authorize } from "../../middleware/auth";
+import { authLimiter } from "../../middleware/rateLimiter";
+import { validate } from "../../middleware/validate";
+import { asyncHandler } from "../../utils/asyncHandler";
+import * as service from "./guestIdentity.service";
+export const guestIdentityRouter = Router();
+guestIdentityRouter.use(authenticate, authorize(Role.PATIENT));
+guestIdentityRouter.get("/", asyncHandler(async (req, res) => { res.json({ success: true, data: await service.identityState(req.user!.id) }); }));
+guestIdentityRouter.post("/code", authLimiter, asyncHandler(async (req, res) => { res.json({ success: true, data: await service.sendIdentityCode(req.user!.id) }); }));
+guestIdentityRouter.post("/verify", authLimiter, validate({ body: z.object({ code: z.string().regex(/^\d{6}$/) }).strict() }), asyncHandler(async (req, res) => { res.json({ success: true, data: await service.verifyIdentityCode(req.user!.id, req.body.code) }); }));
+export const guestClaimReviewRouter = Router();
+guestClaimReviewRouter.use(authenticate, authorize(Role.DOCTOR, Role.ASSISTANT));
+guestClaimReviewRouter.get("/", asyncHandler(async (req, res) => { res.json({ success: true, data: await service.guestClaimCandidates(req.user!.id, req.user!.role) }); }));
+guestClaimReviewRouter.post("/confirm", validate({ body: z.object({ claimId: z.string().uuid(), appointmentId: z.string().uuid(), identityConfirmed: z.literal(true) }).strict() }), asyncHandler(async (req, res) => { res.json({ success: true, data: await service.confirmGuestClaim(req.user!.id, req.user!.role, req.body.claimId, req.body.appointmentId) }); }));

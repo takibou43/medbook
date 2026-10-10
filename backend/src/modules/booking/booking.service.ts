@@ -681,7 +681,7 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
       date: { gte: today, lte: endOfDay },
       status: { in: DAY_QUEUE_STATUSES },
     },
-    select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true },
+    select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true, arrivedAt: true, urgencyStatus: true },
     orderBy: [{ startTime: "asc" }],
   });
 

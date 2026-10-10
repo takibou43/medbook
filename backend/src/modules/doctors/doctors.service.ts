@@ -34,6 +34,7 @@ export interface DoctorSearchFilters {
  */
 export const PUBLIC_DOCTOR_SELECT = {
   id: true,
+  dutyEndsAt: true,
   firstName: true,
   lastName: true,
   specialtyId: true,

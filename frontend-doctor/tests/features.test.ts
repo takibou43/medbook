@@ -12,9 +12,12 @@ test("doctor sees the correct beneficiary name (family member with relationship,
   assert.equal(beneficiaryText({ patient: { firstName: "سارة", lastName: "ع" } } as any), "سارة ع");
 });
 
-test("follow-up button only for account patients and non-cancelled appointments", () => {
+test("follow-up requires an account or complete guest identity and a non-cancelled appointment", () => {
   assert.equal(canScheduleFollowUp({ patientId: "p", status: "COMPLETED" } as any), true);
   assert.equal(canScheduleFollowUp({ patientId: null, status: "COMPLETED" } as any), false);
+  assert.equal(canScheduleFollowUp({ patientId: null, status: "COMPLETED", guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: "0550000000" }), true);
+  assert.equal(canScheduleFollowUp({ patientId: null, status: "COMPLETED", guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: " " }), false);
+  assert.equal(canScheduleFollowUp({ patientId: null, status: "CANCELLED", guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: "0550000000" }), false);
   assert.equal(canScheduleFollowUp({ patientId: "p", status: "CANCELLED" } as any), false);
 });
 

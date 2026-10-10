@@ -124,6 +124,7 @@ export default function DoctorHome() {
     setPendingFocusId(focusId);
     setFollowUpCtx({
       parentAppointmentId: a.id,
+      hasAccount: Boolean(a.patientId),
       beneficiaryName: beneficiaryName(a),
       // فرد العائلة يبقى هو المستفيد من موعد العودة، وصاحب الحساب خيار صريح منفصل.
       familyMemberId: a.familyMemberId ?? a.beneficiary?.familyMemberId ?? null,
@@ -193,7 +194,7 @@ export default function DoctorHome() {
               ضغطة Enter مكررة يجب ألا تُنهي كشفًا وتنادي مريضًا ثم تُنهيه بالتتابع. */}
           <section ref={registerTrigger("current-card")} tabIndex={-1} className="card p-4 outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:p-5" aria-label={t("المريض الحالي")}>
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-bold text-slate-900">{t("المريض الحالي")}</h2>
+              <h2 className="text-lg font-bold text-slate-900">{t(queue.data?.awaitingAssistant ? "في انتظار تأكيد المساعد" : "المريض الحالي")}</h2>
               {current && <span className="badge bg-sky-100 text-sky-700">{t("قيد الكشف")}</span>}
             </div>
 
@@ -245,7 +246,7 @@ export default function DoctorHome() {
                 loading={callNext.isPending}
                 disabled={busy || queue.isPending || queue.isError || !canCallNext}
                 aria-describedby="call-next-hint"
-                onClick={() => run(async () => { await callNext.mutateAsync(); }, t("تمت مناداة المريض التالي."), "current-card")}
+                onClick={() => run(async () => { await callNext.mutateAsync(); }, t("تم إرسال طلب النداء."), "current-card")}
               >{t("نادي المريض التالي ")}<ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </Button>
               )}
@@ -258,7 +259,7 @@ export default function DoctorHome() {
                 : t("ينادى المريض الأول في ترتيب الطابور أدناه.")}
             </p>}
             {current && !canScheduleFollowUp(current) && (
-              <p id="follow-up-hint" className="mt-2 text-xs text-slate-500">{t("جدولة موعد آخر تتطلب حساب مريض مرتبطًا بالحجز. ")}</p>
+              <p id="follow-up-hint" className="mt-2 text-xs text-slate-500">{t("أكمل اسم المريض ولقبه ورقم هاتفه قبل برمجة المتابعة.")}</p>
             )}
           </section>
 

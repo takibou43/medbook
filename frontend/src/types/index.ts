@@ -126,6 +126,7 @@ export interface Clinic {
 }
 
 export interface Doctor {
+  dutyEndsAt?: string | null;
   id: string;
   firstName: string;
   lastName: string;

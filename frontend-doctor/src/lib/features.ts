@@ -32,9 +32,9 @@ export function isDentalSpecialty(s: { nameAr?: string | null; nameFr?: string |
   return /(dent|stomato|odonto|orthodont)/i.test(fr);
 }
 
-/** هل يمكن برمجة موعد عودة انطلاقًا من هذا الموعد؟ (مريض بحساب + غير ملغى). */
-export function canScheduleFollowUp(a: Pick<Appointment, "patientId" | "status">): boolean {
-  return Boolean(a.patientId) && a.status !== "CANCELLED";
+/** A registered beneficiary or a guest with complete identity may receive follow-up. */
+export function canScheduleFollowUp(a: Pick<Appointment, "patientId" | "status" | "guestFirstName" | "guestLastName" | "guestPhone">): boolean {
+  return a.status !== "CANCELLED" && Boolean(a.patientId || (a.guestFirstName?.trim() && a.guestLastName?.trim() && a.guestPhone?.trim()));
 }
 
 export const REFERRAL_STATUS_LABELS: Record<DoctorReferralStatus, string> = {

@@ -99,6 +99,8 @@ export interface Review {
 }
 
 export interface Appointment {
+  urgencyStatus?: "NONE" | "REQUESTED" | "APPROVED" | "DECLINED";
+  urgencyReason?: string | null;
   id: string;
   doctorId: string;
   patientId?: string | null;

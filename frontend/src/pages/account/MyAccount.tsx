@@ -10,6 +10,7 @@ import { api, apiErrorMessage } from "../../lib/api";
 import { disablePatientPush } from "../../lib/patientPush";
 import { ReminderCard } from "../../components/account/ReminderCard";
 import { ProfilesCard } from "../../components/account/ProfilesCard";
+import { GuestIdentity } from "../../components/account/GuestIdentity";
 import { RateDoctorForm, RatePrompt, StarsDisplay, canRate, readDismissed, saveDismissed } from "../../components/account/RateDoctor";
 import { AppointmentStatusBadge } from "../../components/ui/Badge";
 import { Spinner } from "../../components/ui/States";
@@ -331,6 +332,8 @@ export default function MyAccount() {
             <p className="mt-1">{t("آخر تحديث: ")}{new Date(currentCache.savedAt).toLocaleString(getLocale())}</p>
           </div>
         )}
+
+        {!isOffline && <GuestIdentity userId={user.id} />}
 
         {!isOffline && (familyMembers?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-2" role="group" aria-label={t("عرض مواعيد")}>

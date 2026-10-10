@@ -11,6 +11,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { addMonthsDay, algeriaDay } from "../lib/features";
 
 export interface FollowUpContext {
+  hasAccount?: boolean;
   /** الموعد الأصلي (لنفس الطبيب ولمريض بحساب) — مرجع العلاقة العلاجية. */
   parentAppointmentId: string;
   /** اسم المستفيد في الموعد الأصلي كما يُعرض. */
@@ -76,7 +77,7 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
         })
       ).data,
     onSuccess: () => {
-      showToast(t("تمت برمجة موعد العودة وإشعار المريض داخل MedBook."), "success");
+      showToast(t(ctx?.hasAccount === false ? "تمت برمجة موعد العودة للمريض دون حساب." : "تمت برمجة موعد العودة وإشعار المريض داخل MedBook."), "success");
       qc.invalidateQueries({ queryKey: ["appointments"] });
       qc.invalidateQueries({ queryKey: ["treatment-plan"] });
       qc.invalidateQueries({ queryKey: ["treatment-plans"] });
@@ -182,7 +183,7 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
             </>
           )}
         </div>
-        <p className="text-xs text-slate-500">{t("سيُشعَر المريض داخل MedBook، ويستطيع إلغاء الموعد من حسابه.")}</p>
+        <p className="text-xs text-slate-500">{t(ctx?.hasAccount === false ? "يُحفظ الموعد بالاسم واللقب والهاتف. أخبر المريض بتفاصيله من العيادة." : "سيُشعَر المريض داخل MedBook، ويستطيع إلغاء الموعد من حسابه.")}</p>
       </div>
     </Modal>
   );

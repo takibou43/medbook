@@ -11,7 +11,7 @@ describe("attendance responsibility (mocked database)", () => {
     db.assistant.findFirst.mockResolvedValue(null);
     expect(await attendanceResponsibility("user-1")).toEqual({ hasActiveAssistant: false });
     expect(db.assistant.findFirst).toHaveBeenCalledWith({
-      where: { isActive: true, user: { isActive: true }, OR: [{ doctorId: "doctor-1", clinicId: null }] },
+      where: { isActive: true, shiftEndsAt: { gt: expect.any(Date) }, user: { isActive: true }, OR: [{ doctorId: "doctor-1", clinicId: null }] },
       select: { id: true },
     });
   });
@@ -20,7 +20,7 @@ describe("attendance responsibility (mocked database)", () => {
     db.assistant.findFirst.mockResolvedValue({ id: "assistant-1" });
     expect(await attendanceResponsibility("user-1")).toEqual({ hasActiveAssistant: true });
     expect(db.assistant.findFirst).toHaveBeenCalledWith({
-      where: { isActive: true, user: { isActive: true }, OR: [
+      where: { isActive: true, shiftEndsAt: { gt: expect.any(Date) }, user: { isActive: true }, OR: [
         { doctorId: "doctor-1", clinicId: null },
         { clinicId: "clinic-1", OR: [{ allDoctors: true }, { allDoctors: false, allowedDoctorIds: { has: "doctor-1" } }] },
       ] },

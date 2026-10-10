@@ -1,0 +1,23 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+const m = vi.hoisted(() => ({ patient: { findUnique: vi.fn() }, guestIdentityClaim: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn(), upsert: vi.fn(), aggregate: vi.fn() }, appointment: { findUnique: vi.fn(), updateMany: vi.fn() }, sms: vi.fn() }));
+vi.mock("../src/lib/prisma", () => { const db = { ...m, $executeRaw: vi.fn(), $transaction: async (f: any) => f(db) }; return { prisma: db }; });
+vi.mock("../src/config/env", () => ({ env: { jwtSecret: "test-only-secret" } }));
+vi.mock("../src/lib/sms", () => ({ sendSms: m.sms }));
+vi.mock("../src/lib/actingDoctor", () => ({ resolveActingDoctorId: vi.fn(async () => "d") }));
+vi.mock("../src/lib/doctorLock", () => ({ lockDoctorCalls: vi.fn() }));
+vi.mock("../src/lib/audit", () => ({ writeAudit: vi.fn() }));
+vi.mock("../src/modules/shifts/shifts.service", () => ({ assertReception: vi.fn() }));
+import { confirmGuestClaim, identityPhone, sendIdentityCode, verifyIdentityCode } from "../src/modules/patientAuth/guestIdentity.service";
+import { Role } from "@prisma/client";
+const patient = { id: "p", firstName: "Ahmed", lastName: "Test", user: { phone: "0550000000" } };
+const claim = () => ({ id: "c", patientId: "p", patient, phone: "0550000000", firstName: "Ahmed", lastName: "Test", expiresAt: new Date(Date.now() + 600000), verifiedAt: null, attempts: 0, codeHash: "a".repeat(64), lastSentAt: new Date(0), sentCount: 0 });
+describe("guest identity protection", () => {
+  beforeEach(() => { vi.clearAllMocks(); m.patient.findUnique.mockResolvedValue(patient); m.guestIdentityClaim.findUnique.mockResolvedValue(claim()); m.guestIdentityClaim.aggregate.mockResolvedValue({ _sum: { sentCount: 0 } }); m.sms.mockResolvedValue({ success: true }); m.appointment.findUnique.mockResolvedValue({ id: "a", doctorId: "d", patientId: null, familyMemberId: null, guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: "0550000000" }); m.appointment.updateMany.mockResolvedValue({ count: 1 }); });
+  it("normalizes Algerian phone formats and rejects invalid numbers", () => { expect(identityPhone("+213 550000000")).toBe("0550000000"); expect(identityPhone("123")).toBeNull(); });
+  it("counts failed attempts without granting verification", async () => { await expect(verifyIdentityCode("u", "123456")).rejects.toThrow(); expect(m.guestIdentityClaim.update).toHaveBeenCalledWith({ where: { id: "c" }, data: { attempts: { increment: 1 } } }); });
+  it.each([{ attempts: 5 }, { expiresAt: new Date(0) }, { phone: "0660000000" }])("rejects expired, exhausted or changed identity: %j", async change => { m.guestIdentityClaim.findUnique.mockResolvedValue({ ...claim(), ...change }); await expect(verifyIdentityCode("u", "123456")).rejects.toThrow(); expect(m.guestIdentityClaim.update).not.toHaveBeenCalled(); });
+  it("enforces phone-wide send limits without contacting SMS provider", async () => { m.guestIdentityClaim.aggregate.mockResolvedValue({ _sum: { sentCount: 5 } }); await expect(sendIdentityCode("u")).rejects.toThrow(); expect(m.sms).not.toHaveBeenCalled(); });
+  it("invalidates the code if SMS delivery fails", async () => { m.sms.mockResolvedValue({ success: false }); await expect(sendIdentityCode("u")).rejects.toThrow(); expect(m.guestIdentityClaim.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { codeHash: "", expiresAt: new Date(0) } })); });
+  it.each([{ familyMemberId: "child" }, { doctorId: "other" }, { guestFirstName: "Child" }, { patientId: "other" }])("refuses unrelated or already owned records: %j", async change => { m.guestIdentityClaim.findUnique.mockResolvedValue({ ...claim(), verifiedAt: new Date() }); const a = await m.appointment.findUnique(); m.appointment.findUnique.mockResolvedValue({ ...a, ...change }); await expect(confirmGuestClaim("u", Role.DOCTOR, "c", "a")).rejects.toThrow(); expect(m.appointment.updateMany).not.toHaveBeenCalled(); });
+  it("links only the explicitly confirmed matching record", async () => { m.guestIdentityClaim.findUnique.mockResolvedValue({ ...claim(), verifiedAt: new Date() }); await expect(confirmGuestClaim("u", Role.DOCTOR, "c", "a")).resolves.toEqual({ linked: true }); expect(m.appointment.updateMany).toHaveBeenCalledWith({ where: { id: "a", patientId: null, familyMemberId: null }, data: { patientId: "p" } }); });
+});

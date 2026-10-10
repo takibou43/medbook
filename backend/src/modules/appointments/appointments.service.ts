@@ -1,3 +1,6 @@
+import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
+import { firstPresent, presentQueueOrder } from "../../lib/presentQueue";
+import { assertReception, hasOnDutyAssistant } from "../shifts/shifts.service";
 import { algeriaDayStart } from "../../lib/doctorQueue";
 import { assertNotOwnDoctor } from "../../lib/accountProfiles";
 import { singleFlight } from "../../lib/singleFlight";
@@ -13,7 +16,7 @@ import { lockDoctorCalls, DoctorQueueBusyError } from "../../lib/doctorLock";
 import { reserveRequestedOrNextSlot, slotMinutesFor, NoSlotAvailableError, SlotRaceExhaustedError } from "../../lib/slotAssign";
 import { CreateAppointmentInput } from "./appointments.schema";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
-import { latePenaltyFor, pickNext, projectQueueOrder } from "../../lib/queueOrder";
+import { latePenaltyFor } from "../../lib/queueOrder";
 import { assertPatientCanBook, evaluateAutoBlockSafe } from "../patientBlocks/patientBlocks.service";
 import { RELEASE_SLOT_DATA } from "../../lib/slotOccupancy";
 import { appointmentNotificationTag } from "../../lib/appointmentExpiry";
@@ -188,6 +191,7 @@ export async function autoExpireStaleAppointments(doctorId: string) {
   });
 
   const due = candidates.filter((a) => {
+    if (a.date >= algeriaTodayUTCMidnight() || a.status === AppointmentStatus.IN_PROGRESS) return false;
     const closing = closingTimeForDate(a.date, doctor.schedules);
     // يوم بلا فترات عمل معروفة لذلك التاريخ: لا نتركه معلّقًا للأبد، نعتبره منتهيًا بنهاية اليوم.
     return closing ? isPast(a.date, closing) : isPast(a.date, "23:59");
@@ -381,6 +385,7 @@ export function canTransition(role: Role, from: AppointmentStatus, to: Appointme
 }
 
 export async function updateStatus(userId: string, role: Role, appointmentId: string, newStatus: AppointmentStatus) {
+  if (newStatus === AppointmentStatus.IN_PROGRESS) return callSpecificPatient(userId, appointmentId, role as Role);
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
     include: { doctor: true, patient: true },
@@ -430,9 +435,6 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
   } else if (newStatus === AppointmentStatus.NO_SHOW) {
     extraData.calledAt = null;
     extraData.arrivedAt = null;
-  } else if (newStatus === AppointmentStatus.IN_PROGRESS) {
-    extraData.calledAt = new Date();
-    extraData.callCount = { increment: 1 };
   }
 
   // انتقال ذرّي (compare-and-swap): نكتب فقط إن كانت الحالة ما زالت كما قرأناها. طلبان متزامنان
@@ -443,17 +445,7 @@ export async function updateStatus(userId: string, role: Role, appointmentId: st
     // تغيير الحالة + مزامنة متابعة خطة الأسنان المرتبطة (إن وُجدت) في معاملة واحدة: إلغاء موعد العودة
     // يعيد المتابعة إلى DUE، واكتماله يجعلها COMPLETED — لا حالة وسيطة غير متسقة.
     updated = await prisma.$transaction(async (tx) => {
-      if (newStatus === AppointmentStatus.IN_PROGRESS) {
-        await lockDoctorCalls(tx, appointment.doctorId);
-        const inProgress = await tx.appointment.findFirst({
-          where: { doctorId: appointment.doctorId, date: appointment.date, status: AppointmentStatus.IN_PROGRESS },
-          select: { id: true },
-        });
-        if (inProgress) {
-          if (inProgress.id === appointmentId) throw ApiError.conflict("تغيّرت حالة الموعد للتو. حدّث الصفحة وأعد المحاولة.");
-          throw ApiError.badRequest("هناك مريض بالداخل الآن. أنهِ موعده أو سجّله متأخرًا قبل مناداة غيره.");
-        }
-      }
+      if (newStatus === AppointmentStatus.LATE || newStatus === AppointmentStatus.NO_SHOW) await assertReception(userId, role, appointment.doctorId, tx);
       const row = await tx.appointment.update({
         where: { id: appointmentId, status: appointment.status },
         data: { status: newStatus, ...extraData },
@@ -652,12 +644,11 @@ async function readDoctorQueue(doctorId: string) {
   await autoExpireStaleAppointments(doctorId);
 
   const today = todayRangeUTC();
-  const [appointments, sessionEstimate, todayByStatus] = await Promise.all([
+  const [appointments, sessionEstimate, todayByStatus, duty] = await Promise.all([
     prisma.appointment.findMany({
       where: {
         doctorId,
-        date: today,
-        status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE, AppointmentStatus.IN_PROGRESS] },
+        OR: [{ date: today, status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] } }, { status: AppointmentStatus.IN_PROGRESS }],
       },
       include: QUEUE_INCLUDE,
       orderBy: [{ startTime: "asc" }],
@@ -665,6 +656,7 @@ async function readDoctorQueue(doctorId: string) {
     estimateSessionDetails(doctorId),
     // ملخص مواعيد اليوم حسب الحالة — لتمييز الحالة الفارغة: لا مواعيد اليوم / لا منتظرين / اكتملت المواعيد.
     prisma.appointment.groupBy({ by: ["status"], where: { doctorId, date: today }, _count: { _all: true } }),
+    prisma.doctor.findUniqueOrThrow({ where: { id: doctorId }, select: { queueRequestedAt: true, dutyEndsAt: true } }),
   ]);
   const countOf = (st: AppointmentStatus) => todayByStatus.find((r) => r.status === st)?._count._all ?? 0;
   const todaySummary = {
@@ -678,11 +670,12 @@ async function readDoctorQueue(doctorId: string) {
 
   // ordered: الترتيب الفعلي المتوقع للمناداة (المنتظرون والمتأخرون معًا) بنفس قواعد callNextPatient —
   // حقل إضافي، والحقول السابقة (waiting/late) باقية كما هي لأي واجهة قديمة.
-  const ordered = projectQueueOrder(
+  const ordered = presentQueueOrder(
     appointments.filter((a) => a.status === AppointmentStatus.CONFIRMED || a.status === AppointmentStatus.LATE)
   ).map((a, i) => ({ ...a, position: i + 1 }));
 
   return {
+    awaitingAssistant: !!duty.queueRequestedAt && !!duty.dutyEndsAt && duty.dutyEndsAt > new Date(),
     date: algeriaTodayUTCMidnight().toISOString().slice(0, 10),
     current: appointments.find((a) => a.status === AppointmentStatus.IN_PROGRESS) ?? null,
     waiting: appointments.filter((a) => a.status === AppointmentStatus.CONFIRMED),
@@ -709,48 +702,25 @@ async function readDoctorQueue(doctorId: string) {
  */
 export async function callNextPatient(doctorUserId: string, role: Role) {
   const doctor = await requireDoctor(doctorUserId, role);
-  const date = todayRangeUTC();
-
-  // القراءة ("هل بالداخل مريض؟" ثم "من التالي؟") والكتابة (IN_PROGRESS) داخل معاملة واحدة تحت قفل
-  // مناداة هذا الطبيب: بلا القفل كان طلبان متزامنان يجتازان الفحص معًا فيصير مريضان "بالداخل".
-  return prisma.$transaction(
-    async (tx) => {
-      await lockDoctorCalls(tx, doctor.id);
-
-      const inProgress = await tx.appointment.findFirst({
-        where: { doctorId: doctor.id, date, status: AppointmentStatus.IN_PROGRESS },
-      });
-      if (inProgress) {
-        throw ApiError.badRequest("هناك مريض بالداخل الآن. أنهِ موعده أو سجّله متأخرًا قبل مناداة التالي.");
-      }
-
-      const queue = await tx.appointment.findMany({
-        where: {
-          doctorId: doctor.id,
-          date,
-          status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] },
-        },
-        orderBy: [{ startTime: "asc" }],
-      });
-
-      // نفس قاعدة الترتيب المعروضة للطبيب وللمريض (lib/queueOrder.ts): متأخر نفد رصيده أولًا، ثم حسب
-      // وقت الموعد، وإن لم يبق إلا متأخرون فأقلهم رصيدًا — فلا يعلق الطابور أبدًا.
-      const next = pickNext(queue);
-      if (!next) throw ApiError.badRequest("لا يوجد مريض في الانتظار اليوم.");
-
-      const called = await tx.appointment.update({
-        where: { id: next.id },
-        data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date(), callCount: { increment: 1 } },
-        include: QUEUE_INCLUDE,
-      });
-      await tx.appointment.updateMany({
-        where: { doctorId: doctor.id, date, status: AppointmentStatus.LATE, skipCredits: { gt: 0 }, NOT: { id: next.id } },
-        data: { skipCredits: { decrement: 1 } },
-      });
-      return called;
-    },
-    { maxWait: 10000, timeout: 15000 }
-  );
+  if (role === Role.ASSISTANT) throw ApiError.forbidden("تأكيد الإدخال يتم من زر المريض بعد طلب الطبيب.");
+  return prisma.$transaction(async tx => {
+    await lockDoctorCalls(tx, doctor.id);
+    const profile = await tx.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
+    if (!profile.dutyEndsAt || profile.dutyEndsAt <= new Date()) throw ApiError.badRequest("ابدأ المداومة أولًا.");
+    if (await tx.appointment.findFirst({ where: { doctorId: doctor.id, status: AppointmentStatus.IN_PROGRESS } }))
+      throw ApiError.conflict("هناك مريض بالداخل الآن.");
+    if (await hasOnDutyAssistant(doctor.id, tx)) {
+      await tx.doctor.update({ where: { id: doctor.id }, data: { queueRequestedAt: profile.queueRequestedAt ?? new Date() } });
+      return { awaitingAssistant: true };
+    }
+    const rows = await tx.appointment.findMany({ where: { doctorId: doctor.id, date: todayRangeUTC(), status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] } } });
+    const next = firstPresent(rows);
+    if (!next) throw ApiError.badRequest("لا يوجد مريض حاضر. سجّل الحضور أولًا.");
+    const called = await tx.appointment.update({ where: { id: next.id }, data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date(), callCount: { increment: 1 }, skipCredits: 0 }, include: QUEUE_INCLUDE });
+    await tx.doctor.update({ where: { id: doctor.id }, data: { queueRequestedAt: null } });
+    await writeAudit({ userId: doctorUserId, action: "PATIENT_ADMITTED", entity: "Appointment", entityId: next.id }, tx);
+    return called;
+  }, { maxWait: 10000, timeout: 15000 });
 }
 
 /**
@@ -784,12 +754,14 @@ export async function markAsLate(doctorUserId: string, appointmentId: string, ro
   let result: { appointment: Awaited<ReturnType<typeof loadQueueAppointment>>; event: { id: string } } | null = null;
   try {
     result = await prisma.$transaction(async (tx) => {
+      await lockDoctorCalls(tx, doctor.id);
+      await assertReception(doctorUserId, role, doctor.id, tx);
       // compare-and-swap: نكتب فقط إن لم تتغير الحالة ولا العدّاد منذ القراءة. طلبان متزامنان لنفس
       // الموعد: واحد فقط يجد count = 1، والآخر يُعامَل كتكرار. القيد الفريد (appointmentId, sequence)
       // على جدول الأحداث حاجز ثانٍ على مستوى قاعدة البيانات.
       const swapped = await tx.appointment.updateMany({
         where: { id: appointmentId, status: appointment.status, deferredCount: appointment.deferredCount },
-        data: { status: AppointmentStatus.LATE, skipCredits: penalty, deferredCount: sequence },
+        data: { status: AppointmentStatus.LATE, skipCredits: penalty, deferredCount: sequence, arrivedAt: null },
       });
       if (swapped.count !== 1) return null;
       const event = await tx.appointmentLateEvent.create({
@@ -842,42 +814,21 @@ function loadQueueAppointment(id: string, db: Prisma.TransactionClient = prisma)
  */
 export async function callSpecificPatient(doctorUserId: string, appointmentId: string, role: Role) {
   const doctor = await requireDoctor(doctorUserId, role);
-  const date = todayRangeUTC();
-
-  // نفس قفل المناداة أعلاه: فحص "لا مريض بالداخل" والكتابة ذرّيان بالنسبة لأي مناداة أخرى لنفس الطبيب.
-  return prisma.$transaction(
-    async (tx) => {
-      await lockDoctorCalls(tx, doctor.id);
-
-      const inProgress = await tx.appointment.findFirst({
-        where: { doctorId: doctor.id, date, status: AppointmentStatus.IN_PROGRESS },
-      });
-      if (inProgress) {
-        throw ApiError.badRequest("هناك مريض بالداخل الآن. أنهِ موعده أو سجّله متأخرًا قبل مناداة غيره.");
-      }
-
-      const appointment = await tx.appointment.findUnique({ where: { id: appointmentId } });
-      if (!appointment) throw ApiError.notFound("الموعد غير موجود.");
-      if (appointment.doctorId !== doctor.id) throw ApiError.forbidden();
-
-      const callable: AppointmentStatus[] = [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE];
-      if (!callable.includes(appointment.status)) {
-        throw ApiError.badRequest("لا يمكن مناداة هذا الموعد في حالته الحالية.");
-      }
-
-      const called = await tx.appointment.update({
-        where: { id: appointmentId },
-        data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date(), callCount: { increment: 1 }, skipCredits: 0 },
-        include: QUEUE_INCLUDE,
-      });
-      await tx.appointment.updateMany({
-        where: { doctorId: doctor.id, date, status: AppointmentStatus.LATE, skipCredits: { gt: 0 }, NOT: { id: appointmentId } },
-        data: { skipCredits: { decrement: 1 } },
-      });
-      return called;
-    },
-    { maxWait: 10000, timeout: 15000 }
-  );
+  return prisma.$transaction(async tx => {
+    await lockDoctorCalls(tx, doctor.id);
+    await assertReception(doctorUserId, role, doctor.id, tx);
+    const profile = await tx.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
+    if (!profile.dutyEndsAt || profile.dutyEndsAt <= new Date()) throw ApiError.badRequest("الطبيب خارج المداومة.");
+    if (role === Role.ASSISTANT && !profile.queueRequestedAt) throw ApiError.badRequest("انتظر طلب الطبيب للمريض التالي.");
+    if (await tx.appointment.findFirst({ where: { doctorId: doctor.id, status: AppointmentStatus.IN_PROGRESS } })) throw ApiError.conflict("هناك مريض بالداخل الآن.");
+    const rows = await tx.appointment.findMany({ where: { doctorId: doctor.id, date: todayRangeUTC(), status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] } } });
+    const next = firstPresent(rows);
+    if (!next || next.id !== appointmentId) throw ApiError.conflict("يجب إدخال أول مريض حاضر حسب وقت الموعد. حدّث القائمة.");
+    const called = await tx.appointment.update({ where: { id: next.id }, data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date(), callCount: { increment: 1 }, skipCredits: 0 }, include: QUEUE_INCLUDE });
+    await tx.doctor.update({ where: { id: doctor.id }, data: { queueRequestedAt: null } });
+    await writeAudit({ userId: doctorUserId, action: "PATIENT_ADMITTED", entity: "Appointment", entityId: next.id }, tx);
+    return called;
+  }, { maxWait: 10000, timeout: 15000 });
 }
 
 /**
@@ -886,20 +837,15 @@ export async function callSpecificPatient(doctorUserId: string, appointmentId: s
  */
 export async function markPatientArrived(doctorUserId: string, appointmentId: string, role: Role) {
   const doctor = await requireDoctor(doctorUserId, role);
-
-  const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
-  if (!appointment) throw ApiError.notFound("الموعد غير موجود.");
-  if (appointment.doctorId !== doctor.id) throw ApiError.forbidden();
-
-  const allowed: AppointmentStatus[] = [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE];
-  if (!allowed.includes(appointment.status)) {
-    throw ApiError.badRequest("لا يمكن تسجيل الوصول في هذه الحالة الحالية.");
-  }
-
-  return prisma.appointment.update({
-    where: { id: appointmentId },
-    data: { arrivedAt: new Date() },
-    include: QUEUE_INCLUDE,
+  return prisma.$transaction(async tx => {
+    await lockDoctorCalls(tx, doctor.id);
+    await assertReception(doctorUserId, role, doctor.id, tx);
+    const appointment = await tx.appointment.findUnique({ where: { id: appointmentId } });
+    if (!appointment || appointment.doctorId !== doctor.id) throw ApiError.notFound("الموعد غير موجود.");
+    if (appointment.date.toISOString().slice(0,10) !== algeriaTodayUTCMidnight().toISOString().slice(0,10)) throw ApiError.badRequest("الحضور لمواعيد اليوم فقط.");
+    if (![AppointmentStatus.CONFIRMED, AppointmentStatus.LATE].includes(appointment.status as any)) throw ApiError.badRequest("لا يمكن تسجيل الحضور في هذه الحالة.");
+    const updated = await tx.appointment.update({ where: { id: appointmentId }, data: { arrivedAt: appointment.arrivedAt ?? new Date(), skipCredits: 0 }, include: QUEUE_INCLUDE });
+    if (!appointment.arrivedAt) await writeAudit({ userId: doctorUserId, action: "PATIENT_ARRIVED", entity: "Appointment", entityId: appointmentId }, tx);
+    return updated;
   });
 }
-import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";

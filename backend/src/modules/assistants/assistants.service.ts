@@ -83,6 +83,7 @@ export async function attendanceResponsibility(doctorUserId: string) {
   const assistant = await prisma.assistant.findFirst({
     where: {
       isActive: true,
+      shiftEndsAt: { gt: new Date() },
       user: { isActive: true },
       OR: [
         { doctorId, clinicId: null },

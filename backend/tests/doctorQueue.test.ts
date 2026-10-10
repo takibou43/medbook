@@ -16,9 +16,9 @@ describe("locateInQueue", () => {
     expect(locateInQueue(q, "Z").waiting).toBe(false);
   });
 
-  it("LATE يتراجع بحسب رصيده (نفس projectQueueOrder) ويبقى داخل الطابور", () => {
+  it("المتأخر يحتفظ بترتيب ساعة موعده دون عقوبة تخط", () => {
     const q = [row("L", "15:00", "LATE", { skipCredits: 2 }), row("B", "15:10", "CONFIRMED"), row("C", "15:20", "CONFIRMED"), row("D", "15:30", "CONFIRMED")];
-    expect(locateInQueue(q, "L")).toMatchObject({ waiting: true, index: 2 });
+    expect(locateInQueue(q, "L")).toMatchObject({ waiting: true, index: 0 });
   });
 });
 

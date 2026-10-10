@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, forwardRef, ReactNode, useId } from "react";
 import clsx from "clsx";
 
@@ -10,17 +12,18 @@ interface FieldWrapperProps {
 }
 
 export function FieldWrapper({ label, error, htmlFor, children }: FieldWrapperProps) {
+  useLanguage();
   return (
     <div>
       {label && (
         <label className="label" htmlFor={htmlFor}>
-          {label}
+          {t(label ?? "")}
         </label>
       )}
       {children}
       {error && (
         <p id={htmlFor ? `${htmlFor}-error` : undefined} role="alert" className="mt-1 text-xs text-red-600">
-          {error}
+          {t(error ?? "")}
         </p>
       )}
     </div>
@@ -33,10 +36,11 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, className, id, ...rest }, ref) => {
+  useLanguage();
   const autoId = useId();
   const fieldId = id ?? autoId;
   return (
-    <FieldWrapper label={label} error={error} htmlFor={fieldId}>
+    <FieldWrapper label={t(label ?? "")} error={t(error ?? "")} htmlFor={fieldId}>
       <input
         ref={ref}
         id={fieldId}
@@ -56,13 +60,13 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   children: ReactNode;
 }
 
-export const Select = forwardRef<HTMLSelectElement, SelectProps>(({ label, error, className, children, ...rest }, ref) => (
-  <FieldWrapper label={label} error={error}>
+export const Select = forwardRef<HTMLSelectElement, SelectProps>(({ label, error, className, children, ...rest }, ref) => { useLanguage(); return (
+  <FieldWrapper label={t(label ?? "")} error={t(error ?? "")}>
     <select ref={ref} className={clsx("input", error && "border-red-400", className)} {...rest}>
       {children}
     </select>
   </FieldWrapper>
-));
+); });
 Select.displayName = "Select";
 
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -70,9 +74,9 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: string;
 }
 
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({ label, error, className, ...rest }, ref) => (
-  <FieldWrapper label={label} error={error}>
-    <textarea ref={ref} className={clsx("input min-h-[100px] resize-y", error && "border-red-400", className)} {...rest} />
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({ label, error, className, ...rest }, ref) => { useLanguage(); return (
+  <FieldWrapper label={t(label ?? "")} error={t(error ?? "")}>
+    <textarea dir="auto" ref={ref} className={clsx("input min-h-[100px] resize-y", error && "border-red-400", className)} {...rest} />
   </FieldWrapper>
-));
+); });
 Textarea.displayName = "Textarea";

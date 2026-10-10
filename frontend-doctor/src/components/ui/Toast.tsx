@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { useNavigate } from "react-router-dom";
 import { createContext, useCallback, useContext, useState, ReactNode } from "react";
 import { CheckCircle2, XCircle, Info, X } from "lucide-react";
@@ -30,6 +32,7 @@ const STYLES: Record<ToastKind, string> = {
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  useLanguage();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const navigate = useNavigate();
 
@@ -44,25 +47,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed bottom-4 left-4 z-[100] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2">
-        {toasts.map((t) => (
-          <div key={t.id} role={t.kind === "error" ? "alert" : "status"} className={`flex items-start gap-2 rounded-xl border p-3 shadow-card ${STYLES[t.kind]}`}>
-            {ICONS[t.kind]}
-            {t.href ? (
+      <div className="fixed bottom-4 end-4 z-[100] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2">
+        {toasts.map((toast) => (
+          <div key={toast.id} role={toast.kind === "error" ? "alert" : "status"} className={`flex items-start gap-2 rounded-xl border p-3 shadow-card ${STYLES[toast.kind]}`}>
+            {ICONS[toast.kind]}
+            {toast.href ? (
               <button
                 type="button"
                 onClick={() => {
-                  dismiss(t.id);
-                  navigate(t.href!);
+                  dismiss(toast.id);
+                  navigate(toast.href!);
                 }}
                 className="flex-1 cursor-pointer text-start text-sm font-medium text-slate-700 underline-offset-2 hover:underline"
               >
-                {t.message}
+                {toast.message}
               </button>
             ) : (
-              <p className="flex-1 text-sm text-slate-700">{t.message}</p>
+              <p className="flex-1 text-sm text-slate-700">{toast.message}</p>
             )}
-            <button aria-label="إغلاق الإشعار" title="إغلاق الإشعار" onClick={() => dismiss(t.id)} className="flex min-h-11 min-w-11 items-center justify-center text-slate-600 hover:text-slate-800">
+            <button aria-label={t("إغلاق الإشعار")} title={t("إغلاق الإشعار")} onClick={() => dismiss(toast.id)} className="flex min-h-11 min-w-11 items-center justify-center text-slate-600 hover:text-slate-800">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -74,6 +77,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 export function useToast() {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast يجب أن يُستخدم داخل ToastProvider");
+  if (!ctx) throw new Error(t("useToast يجب أن يُستخدم داخل ToastProvider"));
   return ctx;
 }

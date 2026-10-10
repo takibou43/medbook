@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, BellOff } from "lucide-react";
@@ -26,7 +28,7 @@ function patientName(a: Appointment) {
   const relationship = a.beneficiary?.relationship ?? a.familyMember?.relationship;
   return `${beneficiaryName(a)}${relationship ? ` (${RELATIONSHIP_LABELS[relationship]})` : ""}`;
 }
-function doctorName(d: DoctorQueue["doctor"]) { return `د. ${d.firstName} ${d.lastName}`; }
+function doctorName(d: DoctorQueue["doctor"]) { return t("د. {0} {1}", { "0": d.firstName, "1": d.lastName }); }
 function chime(context: AudioContext | null) {
   if (!context) return;
   void context.resume().then(() => {
@@ -45,6 +47,7 @@ function chime(context: AudioContext | null) {
 }
 
 export default function AssistantBoard({ appointmentsView = false }: { appointmentsView?: boolean }) {
+  useLanguage();
   const live = useLiveUpdates();
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -85,10 +88,10 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     if (!queues.data) return;
     const rows = queues.data.map(row => ({ doctorId: row.doctor.id, current: row.queue.current }));
     const calls = newlyCalled(rows, previous.current);
-    if (calls.length) showToast(`نداء جديد: ${calls.map(call => {
+    if (calls.length) showToast(t("نداء جديد: {0}", { "0": calls.map(call => {
       const doctor = queues.data.find(row => row.doctor.id === call.doctorId)!.doctor;
       return `${patientName(call.current!)} — ${doctorName(doctor)}`;
-    }).join("؛ ")}`, "info");
+    }).join("؛ ") }), "info");
     if (calls.length && sound) chime(audio.current);
     previous.current = callSignatures(rows);
   }, [queues.data, sound, showToast]);
@@ -106,7 +109,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   });
   function update(appointment: Appointment, kind: "arrived" | "late" | AppointmentStatus) {
     if (advancing.current || action.isPending) return;
-    if ((kind === "CANCELLED" || kind === "NO_SHOW") && !window.confirm(kind === "CANCELLED" ? "هل تريد إلغاء هذا الموعد؟" : "هل تريد تسجيل عدم حضور هذا المريض؟")) return;
+    if ((kind === "CANCELLED" || kind === "NO_SHOW") && !window.confirm(kind === "CANCELLED" ? t("هل تريد إلغاء هذا الموعد؟") : t("هل تريد تسجيل عدم حضور هذا المريض؟"))) return;
     action.mutate({ appointment, kind });
   }
   const advance = useMutation({
@@ -126,11 +129,11 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
         else delete next[appointment.doctorId];
         return next;
       });
-      if (result.kind === "retry") showToast(`أُجّل الموعد دون حذفه، لكن تعذّر نداء التالي: ${apiErrorMessage(result.error)}`, "error");
-      else if (result.kind === "empty") showToast("أُجّل الموعد دون حذفه. لا يوجد مريض آخر في الطابور.", "info");
-      else showToast(`${result.kind === "called" ? "نودي على" : "يوجد نداء حالي لـ"} ${patientName(result.appointment)}. الموعد السابق باقٍ دون حذف.`, "success");
+      if (result.kind === "retry") showToast(t("أُجّل الموعد دون حذفه، لكن تعذّر نداء التالي: {0}", { "0": apiErrorMessage(result.error) }), "error");
+      else if (result.kind === "empty") showToast(t("أُجّل الموعد دون حذفه. لا يوجد مريض آخر في الطابور."), "info");
+      else showToast(t("{0} {1}. الموعد السابق باقٍ دون حذف.", { "0": result.kind === "called" ? "نودي على" : "يوجد نداء حالي لـ", "1": patientName(result.appointment) }), "success");
     },
-    onError: error => showToast(apiErrorMessage(error, "تعذّر تأجيل الموعد؛ لم يتم نداء التالي."), "error"),
+    onError: error => showToast(apiErrorMessage(error, t("تعذّر تأجيل الموعد؛ لم يتم نداء التالي.")), "error"),
     onSettled: () => { void qc.invalidateQueries({ queryKey: ["assistant-queues"] }); void qc.invalidateQueries({ queryKey: ["assistant-appointments"] }); },
   });
   async function deferAndAdvance(appointment: Appointment, retry = false) {
@@ -147,13 +150,13 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       setDialog({ appointment: a, mode, target: { id: a.id, patientName: patientName(a), doctorName: d ? `${d.firstName} ${d.lastName}` : undefined, phone: a.patient?.user?.phone ?? a.guestPhone, date: a.date, startTime: a.startTime, alreadyNoShow: a.status === "NO_SHOW" } });
     };
     return <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
-      {a.status === "PENDING" && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CONFIRMED")}>تأكيد</Button>}
-      {(a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt && a.date.slice(0, 10) === today && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "arrived")}>وصل المريض</Button>}
-      {canMarkUnanswered(a) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => setMissedCall(a)}>تأجيل ونداء التالي</Button>}
-      {canMarkLate(a, today) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "late")}>متأخر</Button>}
-      {canSendAttendanceMessage(a) && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => openDialog("call")}>إرسال رسالة</Button>}
+      {a.status === "PENDING" && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CONFIRMED")}>{t("تأكيد")}</Button>}
+      {(a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt && a.date.slice(0, 10) === today && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "arrived")}>{t("وصل المريض")}</Button>}
+      {canMarkUnanswered(a) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => setMissedCall(a)}>{t("تأجيل ونداء التالي")}</Button>}
+      {canMarkLate(a, today) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "late")}>{t("متأخر")}</Button>}
+      {canSendAttendanceMessage(a) && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => openDialog("call")}>{t("إرسال رسالة")}</Button>}
       {rules.note && <p className="text-xs text-slate-600">{rules.note}</p>}
-      {(a.status === "PENDING" || a.status === "CONFIRMED") && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CANCELLED")}>إلغاء الموعد</Button>}
+      {(a.status === "PENDING" || a.status === "CONFIRMED") && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CANCELLED")}>{t("إلغاء الموعد")}</Button>}
     </div>;
   }
   if (queues.isPending) return <Spinner />;
@@ -170,54 +173,53 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   const connected = receptionConnection(queues.dataUpdatedAt, appointments.dataUpdatedAt, queues.isError || appointments.isError, now);
   const rows = (items: BoardAppointment[]) => <ol className="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
     {items.map(a => <li key={a.id} className={`grid grid-cols-2 items-center gap-x-3 gap-y-2 px-4 py-3 lg:grid-cols-[5rem_1.3fr_1fr_11rem_1.5fr] ${a.status === "IN_PROGRESS" ? "bg-green-50/50" : ""}`}>
-      <span dir="ltr" className="text-right text-sm tabular-nums">{receptionTime(a.startTime)}</span>
+      <span dir="ltr" className="text-start text-sm tabular-nums">{receptionTime(a.startTime)}</span>
       <span className="break-words font-semibold">{patientName(a)}</span>
       <span className="text-sm text-slate-700">{doctorName(a.doctor)}</span>
-      <div><span className={`inline-block rounded-lg px-2 py-1 text-xs font-semibold ${a.status === "IN_PROGRESS" || a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") ? "bg-green-100 text-green-900" : "bg-slate-100 text-slate-800"}`}>{receptionLabel(a)}</span>{a.status === "IN_PROGRESS" && a.calledAt && <span className="mt-1 block text-xs text-slate-700"><bdi dir="ltr">{callTime(a.calledAt)}</bdi> — {callAge(a.calledAt, now)}</span>}{a.notes?.startsWith(WALK_IN_NOTE) && <span className="mt-1 block text-xs text-slate-600">حضر بدون موعد</span>}</div>
+      <div><span className={`inline-block rounded-lg px-2 py-1 text-xs font-semibold ${a.status === "IN_PROGRESS" || a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") ? "bg-green-100 text-green-900" : "bg-slate-100 text-slate-800"}`}>{receptionLabel(a)}</span>{a.status === "IN_PROGRESS" && a.calledAt && <span className="mt-1 block text-xs text-slate-700"><bdi dir="ltr">{callTime(a.calledAt)}</bdi> — {callAge(a.calledAt, now)}</span>}{a.notes?.startsWith(WALK_IN_NOTE) && <span className="mt-1 block text-xs text-slate-600">{t("حضر بدون موعد")}</span>}</div>
       <div className="col-span-2 lg:col-span-1">{actions(a)}</div>
     </li>)}
   </ol>;
   return <div className="space-y-5">
-    <Modal open={Boolean(missedCall)} onClose={() => { if (!advancing.current) setMissedCall(null); }} title="تجاوز النداء دون حذف الموعد" footer={<Button loading={advance.isPending} onClick={() => { if (missedCall) void deferAndAdvance(missedCall); }}>تأجيل المريض ونداء التالي</Button>}>
-      <p className="text-slate-800">{missedCall && patientName(missedCall)} لم يستجب للنداء. يبقى موعده في قائمة المتأخرين وفق ترتيب الطابور الحالي، ويُنادى المريض التالي لدى الطبيب نفسه.</p>
-      <p className="mt-3 text-sm text-slate-700">استخدم هذا الإجراء فقط إن لم يبدأ المريض الكشف. لن يُسجَّل غياب نهائي ولن تُفتح الرسائل.</p>
+    <Modal open={Boolean(missedCall)} onClose={() => { if (!advancing.current) setMissedCall(null); }} title={t("تجاوز النداء دون حذف الموعد")} footer={<Button loading={advance.isPending} onClick={() => { if (missedCall) void deferAndAdvance(missedCall); }}>{t("تأجيل المريض ونداء التالي")}</Button>}>
+      <p className="text-slate-800">{missedCall && patientName(missedCall)}{t(" لم يستجب للنداء. يبقى موعده في قائمة المتأخرين وفق ترتيب الطابور الحالي، ويُنادى المريض التالي لدى الطبيب نفسه.")}</p>
+      <p className="mt-3 text-sm text-slate-700">{t("استخدم هذا الإجراء فقط إن لم يبدأ المريض الكشف. لن يُسجَّل غياب نهائي ولن تُفتح الرسائل.")}</p>
     </Modal>
-    {Object.values(advanceRetries).map(appointment => <div key={appointment.doctorId} role="alert" className="card p-4 text-slate-800"><p>تم تأجيل {patientName(appointment)} دون حذف موعده، لكن نداء التالي لم يتأكد.</p><Button className="mt-2 min-h-11" loading={advance.isPending} onClick={() => void deferAndAdvance(appointment, true)}>إعادة محاولة نداء التالي</Button></div>)}
+    {Object.values(advanceRetries).map(appointment => <div key={appointment.doctorId} role="alert" className="card p-4 text-slate-800"><p>{t("تم تأجيل ")}{patientName(appointment)}{t(" دون حذف موعده، لكن نداء التالي لم يتأكد.")}</p><Button className="mt-2 min-h-11" loading={advance.isPending} onClick={() => void deferAndAdvance(appointment, true)}>{t("إعادة محاولة نداء التالي")}</Button></div>)}
     <NoShowSmsDialog target={dialog?.target ?? null} mode={dialog?.mode} onClose={() => setDialog(null)} />
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h1 className="text-2xl font-bold">{appointmentsView ? "مواعيد الأطباء" : "الطابور"}</h1><p className="mt-1 text-sm text-slate-600">المواعيد والنداءات في قائمة واحدة، دون تكرار المريض.</p></div>
+      <div><h1 className="text-2xl font-bold">{appointmentsView ? t("مواعيد الأطباء") : t("الطابور")}</h1><p className="mt-1 text-sm text-slate-600">{t("المواعيد والنداءات في قائمة واحدة، دون تكرار المريض.")}</p></div>
       <Button variant="outline" onClick={() => {
-        if (!sound) { try { audio.current ??= new AudioContext(); chime(audio.current); } catch { showToast("المتصفح لا يدعم التنبيه الصوتي.", "error"); return; } }
+        if (!sound) { try { audio.current ??= new AudioContext(); chime(audio.current); } catch { showToast(t("المتصفح لا يدعم التنبيه الصوتي."), "error"); return; } }
         setSound(value => !value);
-      }}>{sound ? <Bell /> : <BellOff />}{sound ? "إيقاف الصوت" : "تفعيل صوت النداء"}</Button>
+      }}>{sound ? <Bell /> : <BellOff />}{sound ? t("إيقاف الصوت") : t("تفعيل صوت النداء")}</Button>
     </div>
-    {queues.isSuccess && !doctorQueues.length && <p className="card p-5">لا يوجد أطباء مرتبطون بك حاليًا. تواصل مع مالك العيادة.</p>}
-    {!appointmentsView && <section className="flex flex-wrap items-center justify-between gap-3" aria-label="المدخول اليومي وإضافة مريض">
-      <p className="card min-w-[14rem] flex-1 p-4 text-sm text-slate-700">المدخول اليومي
-        <strong className="mt-1 block text-2xl text-slate-900">{income.isSuccess ? <><bdi dir="ltr" className="tabular-nums">{income.data.totalDzd.toLocaleString("en-US")}</bdi> دج</> : income.isError ? "—" : "…"}</strong>
-        <span className="text-xs text-slate-600">{income.isSuccess ? `${income.data.completedCount} كشف مكتمل اليوم` : income.isError ? "تعذّر تحميل المدخول." : "جارٍ التحميل"}</span>
+    {queues.isSuccess && !doctorQueues.length && <p className="card p-5">{t("لا يوجد أطباء مرتبطون بك حاليًا. تواصل مع مالك العيادة.")}</p>}
+    {!appointmentsView && <section className="flex flex-wrap items-center justify-between gap-3" aria-label={t("المدخول اليومي وإضافة مريض")}>
+      <p className="card min-w-[14rem] flex-1 p-4 text-sm text-slate-700">{t("المدخول اليومي ")}<strong className="mt-1 block text-2xl text-slate-900">{income.isSuccess ? <><bdi dir="ltr" className="tabular-nums">{income.data.totalDzd.toLocaleString("en-US")}</bdi>{t(" دج")}</> : income.isError ? "—" : "…"}</strong>
+        <span className="text-xs text-slate-600">{income.isSuccess ? t("{0} كشف مكتمل اليوم", { "0": income.data.completedCount }) : income.isError ? t("تعذّر تحميل المدخول.") : t("جارٍ التحميل")}</span>
       </p>
       <WalkInPanel doctors={doctorQueues.map(row => row.doctor)} />
     </section>}
-    {appointmentsView && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="أعداد النتائج بعد التصفية">
-      {[["النتائج", list.length], ["وصل — ينتظر", list.filter(a => a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE")).length], ["تم نداؤه", list.filter(canMarkUnanswered).length], ["مكتمل", completed.length]].map(([label, count]) => <p key={label} className="card p-3 text-sm text-slate-700">{label}<strong className="mt-1 block text-xl text-slate-900">{count}</strong></p>)}
+    {appointmentsView && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label={t("أعداد النتائج بعد التصفية")}>
+      {[[t("النتائج"), list.length], [t("وصل — ينتظر"), list.filter(a => a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE")).length], [t("تم نداؤه"), list.filter(canMarkUnanswered).length], [t("مكتمل"), completed.length]].map(([label, count]) => <p key={label} className="card p-3 text-sm text-slate-700">{t(label ?? "")}<strong className="mt-1 block text-xl text-slate-900">{count}</strong></p>)}
     </div>}
-    {appointmentsView && <section className="card grid gap-3 p-4 sm:grid-cols-3" aria-label="مرشحات الطابور">
-      {appointmentsView && <label className="text-sm font-semibold text-slate-700">تاريخ المواعيد<input className="input mt-1 block min-h-11 w-full" dir="ltr" type="date" value={date} onChange={e => { if (e.target.value) setDate(e.target.value); }} /></label>}
-      <label className="text-sm font-semibold text-slate-700">الطبيب<select className="input mt-1 min-h-11 w-full" value={filter.doctorId} onChange={e => setFilter(f => ({ ...f, doctorId: e.target.value }))}><option value="">كل الأطباء</option>{doctorQueues.map(({ doctor }) => <option key={doctor.id} value={doctor.id}>{doctorName(doctor)}</option>)}</select></label>
-      <label className="text-sm font-semibold text-slate-700">الحالة<select className="input mt-1 min-h-11 w-full" value={filter.status} onChange={e => setFilter(f => ({ ...f, status: e.target.value }))}><option value="">كل الحالات</option><option value="ARRIVED">وصل — ينتظر</option>{Object.entries(RECEPTION_STATUSES).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label>
-      <label className="text-sm font-semibold text-slate-700">البحث باسم المريض<input type="search" className="input mt-1 min-h-11 w-full" value={filter.search} onChange={e => setFilter(f => ({ ...f, search: e.target.value }))} placeholder="اكتب الاسم" /></label>
-      {(filter.doctorId || filter.status || filter.search) && <Button variant="ghost" onClick={() => setFilter({ doctorId: "", status: "", search: "" })}>مسح المرشحات</Button>}
+    {appointmentsView && <section className="card grid gap-3 p-4 sm:grid-cols-3" aria-label={t("مرشحات الطابور")}>
+      {appointmentsView && <label className="text-sm font-semibold text-slate-700">{t("تاريخ المواعيد")}<input className="input mt-1 block min-h-11 w-full" dir="ltr" type="date" value={date} onChange={e => { if (e.target.value) setDate(e.target.value); }} /></label>}
+      <label className="text-sm font-semibold text-slate-700">{t("الطبيب")}<select className="input mt-1 min-h-11 w-full" value={filter.doctorId} onChange={e => setFilter(f => ({ ...f, doctorId: e.target.value }))}><option value="">{t("كل الأطباء")}</option>{doctorQueues.map(({ doctor }) => <option key={doctor.id} value={doctor.id}>{doctorName(doctor)}</option>)}</select></label>
+      <label className="text-sm font-semibold text-slate-700">{t("الحالة")}<select className="input mt-1 min-h-11 w-full" value={filter.status} onChange={e => setFilter(f => ({ ...f, status: e.target.value }))}><option value="">{t("كل الحالات")}</option><option value="ARRIVED">{t("وصل — ينتظر")}</option>{Object.entries(RECEPTION_STATUSES).map(([status, label]) => <option key={status} value={status}>{t(label ?? "")}</option>)}</select></label>
+      <label className="text-sm font-semibold text-slate-700">{t("البحث باسم المريض")}<input type="search" className="input mt-1 min-h-11 w-full" value={filter.search} onChange={e => setFilter(f => ({ ...f, search: e.target.value }))} placeholder={t("اكتب الاسم")} /></label>
+      {(filter.doctorId || filter.status || filter.search) && <Button variant="ghost" onClick={() => setFilter({ doctorId: "", status: "", search: "" })}>{t("مسح المرشحات")}</Button>}
     </section>}
-    <section aria-label="قائمة المواعيد الموحدة" className="space-y-3">
-      <h2 className="text-lg font-bold">{appointmentsView ? "المواعيد" : "مواعيد اليوم والطابور"}</h2>
-      <p className="text-sm text-slate-700">مرتبة وفق طابور كل طبيب. النداء لا يؤكد بدء الكشف.</p>
+    <section aria-label={t("قائمة المواعيد الموحدة")} className="space-y-3">
+      <h2 className="text-lg font-bold">{appointmentsView ? t("المواعيد") : t("مواعيد اليوم والطابور")}</h2>
+      <p className="text-sm text-slate-700">{t("مرتبة وفق طابور كل طبيب. النداء لا يؤكد بدء الكشف.")}</p>
       {appointments.isPending ? <Spinner /> : <>
-        {!list.length ? <p className="card p-5">لا توجد مواعيد تطابق المرشحات في هذا اليوم.</p> : <>
+        {!list.length ? <p className="card p-5">{t("لا توجد مواعيد تطابق المرشحات في هذا اليوم.")}</p> : <>
           {visible.length > 0 && rows(visible)}
         </>}
       </>}
     </section>
-    <div role="status" className="flex flex-wrap items-center gap-3 text-sm text-slate-700"><span>{connected}</span>{!connected.startsWith("متصل") && <Button variant="outline" disabled={queues.isFetching || appointments.isFetching} onClick={() => { void queues.refetch(); void appointments.refetch(); }}>إعادة المحاولة</Button>}</div>
+    <div role="status" className="flex flex-wrap items-center gap-3 text-sm text-slate-700"><span>{connected}</span>{!connected.startsWith(t("متصل")) && <Button variant="outline" disabled={queues.isFetching || appointments.isFetching} onClick={() => { void queues.refetch(); void appointments.refetch(); }}>{t("إعادة المحاولة")}</Button>}</div>
   </div>;
 }

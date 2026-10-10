@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t, catalogName } from "../../i18n/locale.ts";
 import { forwardRef } from "react";
 import { Search } from "lucide-react";
 import { EmptyState } from "../ui/States";
@@ -25,18 +27,16 @@ interface Props {
 
 // الخطوة 1: "اختر التخصص". التخصصات وأعدادها مشتقّة من الأطباء الموثّقين الفعليين المعروضين للمريض
 // (لا قائمة ثابتة ولا تخصصات وهمية) — فلا يظهر تخصص إلا إذا كان فيه طبيب حقيقي يستطيع المريض حجزه.
-export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, loading, error, errorMessage, onRetry, onSelect, onOpenSearch }, ref) => (
+export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, loading, error, errorMessage, onRetry, onSelect, onOpenSearch }, ref) => { useLanguage(); return (
   <section aria-labelledby="step-specialty-title">
-    <StepHeading ref={ref} id="step-specialty-title" hint="اختر التخصص الذي تحتاجه، ثم الطبيب المناسب.">
-      اختر التخصص
-    </StepHeading>
+    <StepHeading ref={ref} id="step-specialty-title" hint={t("اختر التخصص الذي تحتاجه، ثم الطبيب المناسب.")}>{t("اختر التخصص ")}</StepHeading>
 
     {loading ? (
       <SpecialtyGridSkeleton />
     ) : error ? (
-      <InlineError title="تعذّر تحميل التخصصات." message={errorMessage ?? "أعد المحاولة بعد قليل."} onRetry={onRetry} />
+      <InlineError title={t("تعذّر تحميل التخصصات.")} message={errorMessage ?? t("أعد المحاولة بعد قليل.")} onRetry={onRetry} />
     ) : options.length === 0 ? (
-      <EmptyState title="لا يوجد أطباء مسجلون حاليًا" description="سيُفتح الحجز فور اشتراك أطباء جدد." />
+      <EmptyState title={t("لا يوجد أطباء مسجلون حاليًا")} description={t("سيُفتح الحجز فور اشتراك أطباء جدد.")} />
     ) : (
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {options.map(({ specialty, doctorsCount }) => {
@@ -50,7 +50,7 @@ export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, l
                 <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-50 text-primary-600">
                   <SpecialtyIcon specialty={specialty} />
                 </span>
-                <span className="text-sm font-bold leading-snug text-slate-800">{specialty.nameAr}</span>
+                <span className="text-sm font-bold leading-snug text-slate-800">{catalogName(specialty)}</span>
                 <span className="text-xs text-slate-500">{doctorsCountLabel(doctorsCount)}</span>
               </button>
             </li>
@@ -67,11 +67,9 @@ export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, l
           onClick={onOpenSearch}
           className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-slate-600 underline-offset-4 transition hover:text-primary-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
-          <Search className="h-4 w-4" aria-hidden="true" />
-          تبحث عن طبيب معين؟
-        </button>
+          <Search className="h-4 w-4" aria-hidden="true" />{t("تبحث عن طبيب معين؟ ")}</button>
       </div>
     )}
   </section>
-));
+); });
 SpecialtyStep.displayName = "SpecialtyStep";

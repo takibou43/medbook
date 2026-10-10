@@ -55,6 +55,13 @@
 
   // ---- هل المستخدم يكتب في نموذج؟ (أي إدخال منذ آخر انتقال بين الصفحات) ----
   var dirty = false;
+  var composing = false;
+  document.addEventListener("compositionstart", function () { composing = true; dirty = true; }, true);
+  document.addEventListener("compositionend", function () { composing = false; }, true);
+  function editingField() {
+    var active = document.activeElement;
+    return composing || !!(active && (active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)));
+  }
   document.addEventListener("input", function () { dirty = true; }, true);
 
   var HIDDEN_LONG_MS = 6 * 60 * 60 * 1000; // مخفي 6 ساعات فأكثر = تُرك غالبًا؛ لا نُبقيه على نسخة قديمة
@@ -67,7 +74,7 @@
     return document.documentElement.getAttribute("data-mb-busy") === "1";
   }
   function isSafe(reason) {
-    if (inflight > 0) return false;
+    if (inflight > 0 || editingField()) return false;
     if (reason === "hidden") {
       var longAway = hiddenAt && Date.now() - hiddenAt >= HIDDEN_LONG_MS;
       if (!longAway && (dirty || busyPage())) return false;

@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, forwardRef, ReactNode, useId } from "react";
 import clsx from "clsx";
 
@@ -14,22 +16,23 @@ interface FieldWrapperProps {
 }
 
 export function FieldWrapper({ label, error, htmlFor, errorId, hint, hintId, children }: FieldWrapperProps) {
+  useLanguage();
   return (
     <div>
       {label && (
         <label className="label" htmlFor={htmlFor}>
-          {label}
+          {t(label ?? "")}
         </label>
       )}
       {children}
       {hint && (
         <p id={hintId} className="mt-1 text-xs leading-5 text-slate-600">
-          {hint}
+          {t(hint ?? "")}
         </p>
       )}
       {error && (
         <p id={errorId} role="alert" className="mt-1 text-xs text-red-700">
-          {error}
+          {t(error ?? "")}
         </p>
       )}
     </div>
@@ -53,9 +56,10 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, hint, className, id, ...rest }, ref) => {
+  useLanguage();
   const ids = useFieldIds(id, error, hint);
   return (
-    <FieldWrapper label={label} error={error} hint={hint} htmlFor={ids.fieldId} errorId={ids.errorId} hintId={ids.hintId}>
+    <FieldWrapper label={t(label ?? "")} error={t(error ?? "")} hint={t(hint ?? "")} htmlFor={ids.fieldId} errorId={ids.errorId} hintId={ids.hintId}>
       <input
         ref={ref}
         id={ids.fieldId}
@@ -77,9 +81,10 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(({ label, error, hint, className, children, id, ...rest }, ref) => {
+  useLanguage();
   const ids = useFieldIds(id, error, hint);
   return (
-    <FieldWrapper label={label} error={error} hint={hint} htmlFor={ids.fieldId} errorId={ids.errorId} hintId={ids.hintId}>
+    <FieldWrapper label={t(label ?? "")} error={t(error ?? "")} hint={t(hint ?? "")} htmlFor={ids.fieldId} errorId={ids.errorId} hintId={ids.hintId}>
       <select
         ref={ref}
         id={ids.fieldId}
@@ -102,9 +107,10 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({ label, error, hint, className, id, ...rest }, ref) => {
+  useLanguage();
   const ids = useFieldIds(id, error, hint);
   return (
-    <FieldWrapper label={label} error={error} hint={hint} htmlFor={ids.fieldId} errorId={ids.errorId} hintId={ids.hintId}>
+    <FieldWrapper label={t(label ?? "")} error={t(error ?? "")} hint={t(hint ?? "")} htmlFor={ids.fieldId} errorId={ids.errorId} hintId={ids.hintId}>
       <textarea
         ref={ref}
         id={ids.fieldId}

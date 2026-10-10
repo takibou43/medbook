@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t } from "../i18n/locale.ts";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -15,6 +17,7 @@ interface FormValues {
 }
 
 export default function Login() {
+  useLanguage();
   const { login, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -37,19 +40,19 @@ export default function Login() {
       }
       // مريض يسجّل دخوله هنا: يبقى بجلسته ويرى صفحة «قدّم كطبيب» لإضافة ملف الطبيب إلى حسابه نفسه.
       if (user.role === "PATIENT") {
-        showToast("تم تسجيل الدخول. أكمل بيانات الطبيب لتقديم طلبك.", "success");
+        showToast(t("تم تسجيل الدخول. أكمل بيانات الطبيب لتقديم طلبك."), "success");
         navigate("/apply");
         return;
       }
       if (user.role !== "DOCTOR" && user.role !== "ADMIN" && user.role !== "ASSISTANT" && user.role !== "CLINIC_OWNER") {
-        showToast("هذا الموقع مخصص لحسابات الأطباء والمساعدين والإدارة فقط.", "error");
+        showToast(t("هذا الموقع مخصص لحسابات الأطباء والمساعدين والإدارة فقط."), "error");
         await logout();
         return;
       }
-      showToast("تم تسجيل الدخول بنجاح.", "success");
+      showToast(t("تم تسجيل الدخول بنجاح."), "success");
       navigate(user.role === "ADMIN" ? "/admin" : user.role === "CLINIC_OWNER" ? "/clinic" : "/");
     } catch (err) {
-      showToast(apiErrorMessage(err, "بيانات الدخول غير صحيحة."), "error");
+      showToast(apiErrorMessage(err, t("بيانات الدخول غير صحيحة.")), "error");
     } finally {
       setLoading(false);
     }
@@ -60,28 +63,21 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center">
           <Logo className="mb-2 h-14 w-14" />
-          <h1 className="text-xl font-extrabold text-slate-900">تسجيل دخول الأطباء والعيادات والإدارة</h1>
-          <p className="mt-1 text-center text-sm text-slate-500">لوحة تحكم الطبيب والإدارة — إدارة المواعيد وجدول العمل والمرضى والمنصة.</p>
+          <h1 className="text-xl font-extrabold text-slate-900">{t("تسجيل دخول الأطباء والعيادات والإدارة")}</h1>
+          <p className="mt-1 text-center text-sm text-slate-500">{t("لوحة تحكم الطبيب والإدارة — إدارة المواعيد وجدول العمل والمرضى والمنصة.")}</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
-          <Input label="البريد الإلكتروني" type="email" placeholder="you@example.com" error={errors.email?.message} {...register("email", { required: "البريد الإلكتروني مطلوب" })} />
-          <Input label="كلمة المرور" type="password" placeholder="••••••••" error={errors.password?.message} {...register("password", { required: "كلمة المرور مطلوبة" })} />
-          <Button type="submit" className="w-full" loading={loading}>
-            تسجيل الدخول
-          </Button>
+          <Input label={t("البريد الإلكتروني")} type="email" placeholder="you@example.com" error={errors.email?.message} {...register("email", { required: t("البريد الإلكتروني مطلوب") })} />
+          <Input label={t("كلمة المرور")} type="password" placeholder="••••••••" error={errors.password?.message} {...register("password", { required: t("كلمة المرور مطلوبة") })} />
+          <Button type="submit" className="w-full" loading={loading}>{t("تسجيل الدخول ")}</Button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-slate-600">
-          ليس لديك حساب طبيب؟{" "}
-          <a href="/register" className="font-semibold text-primary-700 hover:underline">
-            انضم كطبيب
-          </a>
+        <p className="mt-4 text-center text-sm text-slate-600">{t("ليس لديك حساب طبيب؟")}{" "}
+          <a href="/register" className="font-semibold text-primary-700 hover:underline">{t("انضم كطبيب ")}</a>
         </p>
-        <p className="mt-2 text-center text-xs leading-5 text-slate-500">
-          لديك حساب مريض في MedBook؟ سجّل الدخول هنا بنفس البريد وكلمة المرور، ثم قدّم طلبك كطبيب من داخل حسابك دون إنشاء حساب آخر.
-        </p>
-        <p className="mt-2 text-center text-sm text-slate-600"><a href="/register/clinic" className="font-semibold text-primary-700 hover:underline">إنشاء حساب صاحب عيادة</a></p>
+        <p className="mt-2 text-center text-xs leading-5 text-slate-500">{t("لديك حساب مريض في MedBook؟ سجّل الدخول هنا بنفس البريد وكلمة المرور، ثم قدّم طلبك كطبيب من داخل حسابك دون إنشاء حساب آخر. ")}</p>
+        <p className="mt-2 text-center text-sm text-slate-600"><a href="/register/clinic" className="font-semibold text-primary-700 hover:underline">{t("إنشاء حساب صاحب عيادة")}</a></p>
       </div>
     </div>
   );

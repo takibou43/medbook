@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale.ts";
 /**
  * منطق نموذج «تسجيل مريض حضر» في شاشة الاستقبال — دوال نقية قابلة للاختبار.
  * الخادم (POST /appointments/walk-in) هو المرجع: هذه الفحوص لتوجيه المساعد مبكرًا فقط.
@@ -28,13 +29,13 @@ export function validateWalkIn(f: WalkInForm): WalkInErrors {
   const e: WalkInErrors = {};
   const first = f.firstName.trim();
   const last = f.lastName.trim();
-  if (first.length < 2) e.firstName = "الاسم قصير جدًا.";
-  else if (first.length > 60) e.firstName = "الاسم طويل جدًا.";
-  if (last.length < 2) e.lastName = "اللقب قصير جدًا.";
-  else if (last.length > 60) e.lastName = "اللقب طويل جدًا.";
-  if (!ALGERIAN_PHONE_RE.test(normalizePhone(f.phone))) e.phone = "رقم هاتف جزائري غير صالح (مثال: 0551234567).";
-  if (f.startTime && !TIME_RE.test(f.startTime)) e.startTime = "اختر وقتًا من القائمة.";
-  if (f.notes.trim().length > 1000) e.notes = "الملاحظات طويلة جدًا.";
+  if (first.length < 2) e.firstName = t("الاسم قصير جدًا.");
+  else if (first.length > 60) e.firstName = t("الاسم طويل جدًا.");
+  if (last.length < 2) e.lastName = t("اللقب قصير جدًا.");
+  else if (last.length > 60) e.lastName = t("اللقب طويل جدًا.");
+  if (!ALGERIAN_PHONE_RE.test(normalizePhone(f.phone))) e.phone = t("رقم هاتف جزائري غير صالح (مثال: 0551234567).");
+  if (f.startTime && !TIME_RE.test(f.startTime)) e.startTime = t("اختر وقتًا من القائمة.");
+  if (f.notes.trim().length > 1000) e.notes = t("الملاحظات طويلة جدًا.");
   return e;
 }
 

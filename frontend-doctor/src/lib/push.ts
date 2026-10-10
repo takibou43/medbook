@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale.ts";
 import { api } from "./api";
 
 // مفتاح VAPID العام يصل بصيغة base64url، وواجهة PushManager تطلبه بايتات خامًا.
@@ -34,19 +35,19 @@ export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
   if (!pushSupported()) {
     return {
       ok: false,
-      reason: "متصفحك لا يدعم إشعارات المتصفح. على آيفون أضِف الموقع إلى الشاشة الرئيسية ثم أعد المحاولة.",
+      reason: t("متصفحك لا يدعم إشعارات المتصفح. على آيفون أضِف الموقع إلى الشاشة الرئيسية ثم أعد المحاولة."),
     };
   }
 
   const res = await api.get<{ data: { publicKey: string; enabled: boolean } }>("/push/public-key");
   const { publicKey, enabled } = res.data.data;
   if (!enabled || !publicKey) {
-    return { ok: false, reason: "الإشعارات غير مفعّلة على الخادم بعد." };
+    return { ok: false, reason: t("الإشعارات غير مفعّلة على الخادم بعد.") };
   }
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
-    return { ok: false, reason: "لم تُمنح صلاحية الإشعارات. يمكنك تفعيلها من إعدادات الموقع في المتصفح." };
+    return { ok: false, reason: t("لم تُمنح صلاحية الإشعارات. يمكنك تفعيلها من إعدادات الموقع في المتصفح.") };
   }
 
   const reg = await navigator.serviceWorker.ready;
@@ -60,7 +61,7 @@ export async function enablePush(): Promise<{ ok: boolean; reason?: string }> {
 
   const json = subscription.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-    return { ok: false, reason: "تعذّر إنشاء اشتراك صالح للإشعارات." };
+    return { ok: false, reason: t("تعذّر إنشاء اشتراك صالح للإشعارات.") };
   }
 
   await api.post("/push/subscribe", {

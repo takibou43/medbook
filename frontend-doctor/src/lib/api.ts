@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale.ts";
 import axios from "axios";
 
 export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
@@ -103,7 +104,7 @@ export function classifyApiError(error: unknown): { kind: ApiErrorKind; status?:
   return { kind: "network" };
 }
 
-export function apiErrorMessage(error: unknown, fallback = "حدث خطأ غير متوقع."): string {
+export function apiErrorMessage(error: unknown, fallback = t("حدث خطأ غير متوقع.")): string {
   const anyErr = error as any;
   const { kind } = classifyApiError(error);
   if (kind !== "other") return API_MESSAGES[kind];

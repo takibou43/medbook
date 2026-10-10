@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -51,15 +53,17 @@ const SORTS: { value: Sort; label: string }[] = [
 ];
 const PAGE_SIZE = 25;
 
-const fullName = (p: PatientRow) => `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim() || "مريض بدون اسم";
+const fullName = (p: PatientRow) => `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim() || t("مريض بدون اسم");
 
 function LastVisit({ v }: { v: VisitRef | null }) {
-  if (!v) return <span className="text-slate-500">لا توجد زيارة مكتملة</span>;
+  useLanguage();
+  if (!v) return <span className="text-slate-500">{t("لا توجد زيارة مكتملة")}</span>;
   return <span>{formatDayAr(v.date, { weekday: false })}</span>;
 }
 
 function NextAppt({ v }: { v: VisitRef | null }) {
-  if (!v) return <span className="text-slate-500">لا يوجد موعد قادم</span>;
+  useLanguage();
+  if (!v) return <span className="text-slate-500">{t("لا يوجد موعد قادم")}</span>;
   return (
     <span>
       {relativeDayAr(v.date)} · <span className="ltr-nums">{v.startTime}</span>
@@ -68,13 +72,14 @@ function NextAppt({ v }: { v: VisitRef | null }) {
 }
 
 function Tags({ p }: { p: PatientRow }) {
+  useLanguage();
   return (
     <>
-      {p.isGuest && <span className="badge bg-slate-100 text-slate-700">بدون حساب</span>}
+      {p.isGuest && <span className="badge bg-slate-100 text-slate-700">{t("بدون حساب")}</span>}
       {p.familyMemberId && p.beneficiary?.relationship && (
         <span className="badge bg-primary-50 text-primary-800">
-          {RELATIONSHIP_LABELS[p.beneficiary.relationship as keyof typeof RELATIONSHIP_LABELS]}
-          {p.accountHolderName ? ` — حساب ${p.accountHolderName}` : ""}
+          {t(RELATIONSHIP_LABELS[p.beneficiary.relationship as keyof typeof RELATIONSHIP_LABELS] ?? "")}
+          {p.accountHolderName ? t(" — حساب {0}", { "0": p.accountHolderName }) : ""}
         </span>
       )}
     </>
@@ -82,6 +87,7 @@ function Tags({ p }: { p: PatientRow }) {
 }
 
 export default function DoctorPatients() {
+  useLanguage();
   // البحث والفرز والصفحة في الرابط حتى تبقى عند الرجوع من صفحة أخرى.
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
@@ -131,11 +137,11 @@ export default function DoctorPatients() {
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-2">
-        <h1 className="text-2xl font-extrabold text-slate-900">المرضى</h1>
+        <h1 className="text-2xl font-extrabold text-slate-900">{t("المرضى")}</h1>
         {data && (
           <p className="text-sm text-slate-600" aria-live="polite">
-            {data.total} {q ? "نتيجة" : "مريضًا"}
-            {isFetching ? " · جارٍ التحديث..." : ""}
+            {data.total} {q ? t("نتيجة") : t("مريضًا")}
+            {isFetching ? t(" · جارٍ التحديث...") : ""}
           </p>
         )}
       </header>
@@ -144,27 +150,23 @@ export default function DoctorPatients() {
 
       <div className="card grid gap-3 p-3 sm:grid-cols-[1fr_auto] sm:p-4">
         <div className="relative">
-          <label htmlFor="patients-search" className="sr-only">
-            بحث بالاسم أو الهاتف
-          </label>
-          <Search className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+          <label htmlFor="patients-search" className="sr-only">{t("بحث بالاسم أو الهاتف ")}</label>
+          <Search className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
           <input
             id="patients-search"
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ابحث بالاسم أو رقم الهاتف..."
-            className="input pr-10"
+            placeholder={t("ابحث بالاسم أو رقم الهاتف...")}
+            className="input ps-10"
           />
         </div>
         <div className="flex items-center gap-2">
-          <label htmlFor="patients-sort" className="shrink-0 text-sm font-medium text-slate-700">
-            الترتيب
-          </label>
+          <label htmlFor="patients-sort" className="shrink-0 text-sm font-medium text-slate-700">{t("الترتيب ")}</label>
           <select id="patients-sort" className="input sm:w-64" value={sort} onChange={(e) => setParam({ sort: e.target.value as Sort, page: 1 })}>
             {SORTS.map((s) => (
               <option key={s.value} value={s.value}>
-                {s.label}
+                {t(s.label)}
               </option>
             ))}
           </select>
@@ -172,11 +174,11 @@ export default function DoctorPatients() {
       </div>
 
       {isLoading && !data ? (
-        <SkeletonRows rows={6} label="جارٍ تحميل المرضى..." />
+        <SkeletonRows rows={6} label={t("جارٍ تحميل المرضى...")} />
       ) : isError && !data ? (
-        <ErrorState message={apiErrorMessage(error, "تعذّر تحميل قائمة المرضى.")} onRetry={() => void refetch()} />
+        <ErrorState message={apiErrorMessage(error, t("تعذّر تحميل قائمة المرضى."))} onRetry={() => void refetch()} />
       ) : items.length === 0 ? (
-        <EmptyState title={q ? "لا نتائج مطابقة للبحث" : "لا يوجد مرضى بعد"} description={q ? "تحقق من الاسم أو الرقم." : undefined} />
+        <EmptyState title={q ? t("لا نتائج مطابقة للبحث") : t("لا يوجد مرضى بعد")} description={q ? t("تحقق من الاسم أو الرقم.") : undefined} />
       ) : (
         <div className={clsx("transition-opacity", isFetching && "opacity-80")}>
           {/* الهاتف: بطاقات مختصرة، والتفاصيل والإجراءات داخل مساحة قابلة للفتح */}
@@ -188,20 +190,20 @@ export default function DoctorPatients() {
                   <Tags p={p} />
                 </div>
                 {p.phone && (
-                  <a href={`tel:${p.phone}`} className="mt-1 inline-flex items-center gap-1.5 text-sm text-slate-700" aria-label={`اتصال بـ${fullName(p)}`}>
+                  <a href={`tel:${p.phone}`} className="mt-1 inline-flex items-center gap-1.5 text-sm text-slate-700" aria-label={t("اتصال بـ{0}", { "0": fullName(p) })}>
                     <Phone className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
                     <span className="ltr-nums">{p.phone}</span>
                   </a>
                 )}
                 <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
                   <div className="min-w-0 rounded-xl bg-slate-50 p-2">
-                    <dt className="text-xs text-slate-600">آخر زيارة مكتملة</dt>
+                    <dt className="text-xs text-slate-600">{t("آخر زيارة مكتملة")}</dt>
                     <dd className="truncate font-semibold text-slate-800">
                       <LastVisit v={p.lastCompletedVisit} />
                     </dd>
                   </div>
                   <div className="min-w-0 rounded-xl bg-slate-50 p-2">
-                    <dt className="text-xs text-slate-600">الموعد القادم</dt>
+                    <dt className="text-xs text-slate-600">{t("الموعد القادم")}</dt>
                     <dd className="truncate font-semibold text-slate-800">
                       <NextAppt v={p.nextAppointment} />
                     </dd>
@@ -209,21 +211,18 @@ export default function DoctorPatients() {
                 </dl>
                 <details className="group mt-2">
                   <summary className="flex items-center gap-1 rounded-lg py-1 text-sm font-semibold text-primary-700">
-                    <ChevronDown className="h-4 w-4 transition group-open:rotate-180" aria-hidden="true" /> التفاصيل والإجراءات
-                  </summary>
+                    <ChevronDown className="h-4 w-4 transition group-open:rotate-180" aria-hidden="true" />{t(" التفاصيل والإجراءات ")}</summary>
                   <div className="mt-2 space-y-2 border-t border-slate-100 pt-2 text-sm text-slate-700">
-                    <p>عدد المواعيد: {p.totalAppointments}</p>
+                    <p>{t("عدد المواعيد: ")}{p.totalAppointments}</p>
                     {p.email && (
-                      <p className="min-w-0 truncate">
-                        البريد: <span className="ltr-nums">{p.email}</span>
+                      <p className="min-w-0 truncate">{t("البريد: ")}<span className="ltr-nums">{p.email}</span>
                       </p>
                     )}
                     {p.lastAppointmentId ? (
                       <Button variant="outline" className="w-full" onClick={() => followUp(p)}>
-                        <CalendarPlus className="h-4 w-4" aria-hidden="true" /> برمجة موعد عودة
-                      </Button>
+                        <CalendarPlus className="h-4 w-4" aria-hidden="true" />{t(" برمجة موعد عودة ")}</Button>
                     ) : (
-                      <p className="text-xs text-slate-600">برمجة موعد عودة متاحة للمرضى أصحاب الحسابات فقط.</p>
+                      <p className="text-xs text-slate-600">{t("برمجة موعد عودة متاحة للمرضى أصحاب الحسابات فقط.")}</p>
                     )}
                   </div>
                 </details>
@@ -233,17 +232,17 @@ export default function DoctorPatients() {
 
           {/* الحاسوب: جدول */}
           <div className="card hidden overflow-x-auto p-0 md:block">
-            <table className="w-full text-right text-sm">
-              <caption className="sr-only">قائمة المرضى</caption>
+            <table className="w-full text-start text-sm">
+              <caption className="sr-only">{t("قائمة المرضى")}</caption>
               <thead className="bg-slate-50 text-slate-700">
                 <tr>
-                  <th scope="col" className="px-4 py-3 font-semibold">الاسم</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">الهاتف</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">آخر زيارة مكتملة</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">الموعد القادم</th>
-                  <th scope="col" className="px-4 py-3 font-semibold">المواعيد</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{t("الاسم")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{t("الهاتف")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{t("آخر زيارة مكتملة")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{t("الموعد القادم")}</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">{t("المواعيد")}</th>
                   <th scope="col" className="px-4 py-3 font-semibold">
-                    <span className="sr-only">إجراءات</span>
+                    <span className="sr-only">{t("إجراءات")}</span>
                   </th>
                 </tr>
               </thead>
@@ -268,8 +267,7 @@ export default function DoctorPatients() {
                     <td className="px-4 py-3">
                       {p.lastAppointmentId && (
                         <Button variant="outline" className="whitespace-nowrap" onClick={() => followUp(p)}>
-                          <CalendarPlus className="h-4 w-4" aria-hidden="true" /> برمجة موعد عودة
-                        </Button>
+                          <CalendarPlus className="h-4 w-4" aria-hidden="true" />{t(" برمجة موعد عودة ")}</Button>
                       )}
                     </td>
                   </tr>

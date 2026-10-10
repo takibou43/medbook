@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale.ts";
 import type { AppointmentStatus, Role } from "../types/index.ts";
 
 /**
@@ -62,7 +63,7 @@ const AR_WEEKDAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأ
 export function formatDayAr(day: string, opts: { weekday?: boolean; year?: boolean } = {}): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return "";
   const d = new Date(day + "T00:00:00Z");
-  const parts = [opts.weekday === false ? "" : AR_WEEKDAYS[d.getUTCDay()], String(d.getUTCDate()), AR_MONTHS[d.getUTCMonth()]];
+  const parts = [opts.weekday === false ? "" : t(AR_WEEKDAYS[d.getUTCDay()]), String(d.getUTCDate()), t(AR_MONTHS[d.getUTCMonth()])];
   if (opts.year !== false) parts.push(String(d.getUTCFullYear()));
   return parts.filter(Boolean).join(" ");
 }
@@ -70,9 +71,9 @@ export function formatDayAr(day: string, opts: { weekday?: boolean; year?: boole
 /** "اليوم" / "غدًا" / "أمس" أو التاريخ الكامل. */
 export function relativeDayAr(day: string, now = Date.now()): string {
   const today = algeriaToday(now);
-  if (day === today) return "اليوم";
-  if (day === shiftDay(today, 1)) return "غدًا";
-  if (day === shiftDay(today, -1)) return "أمس";
+  if (day === today) return t("اليوم");
+  if (day === shiftDay(today, 1)) return t("غدًا");
+  if (day === shiftDay(today, -1)) return t("أمس");
   return formatDayAr(day, { year: day.slice(0, 4) !== today.slice(0, 4) });
 }
 
@@ -189,7 +190,7 @@ export function appointmentActions(
   const day = appointmentDay(a.date);
   const today = algeriaToday(now);
   if (day > today) {
-    return { complete: HIDDEN, noShow: HIDDEN, note: "تسجيل الحضور أو الغياب يتاح يوم الموعد." };
+    return { complete: HIDDEN, noShow: HIDDEN, note: t("تسجيل الحضور أو الغياب يتاح يوم الموعد.") };
   }
 
   const calledToday = day === today && (a.status === "IN_PROGRESS" || a.status === "LATE");
@@ -199,11 +200,11 @@ export function appointmentActions(
       ? HIDDEN
       : started || calledToday
         ? { visible: true, enabled: true }
-        : { visible: true, enabled: false, reason: `لا يمكن إنهاء الموعد قبل وقته (${a.startTime}) ما لم يُستدعَ المريض.` };
+        : { visible: true, enabled: false, reason: t("لا يمكن إنهاء الموعد قبل وقته ({0}) ما لم يُستدعَ المريض.", { "0": a.startTime }) };
   const noShow: ActionState =
     started || calledToday
       ? { visible: true, enabled: true }
-      : { visible: true, enabled: false, reason: `لا يمكن تسجيل الغياب قبل وقت الموعد (${a.startTime}).` };
+      : { visible: true, enabled: false, reason: t("لا يمكن تسجيل الغياب قبل وقت الموعد ({0}).", { "0": a.startTime }) };
   return { complete, noShow };
 }
 
@@ -211,25 +212,25 @@ export function appointmentActions(
 
 /** "طبيب واحد" / "طبيبان" / "3 أطباء" / "11 طبيبًا". */
 export function doctorsCountAr(n: number): string {
-  if (n === 0) return "لا أطباء";
-  if (n === 1) return "طبيب واحد";
-  if (n === 2) return "طبيبان";
-  if (n >= 3 && n <= 10) return `${n} أطباء`;
-  return `${n} طبيبًا`;
+  if (n === 0) return t("لا أطباء");
+  if (n === 1) return t("طبيب واحد");
+  if (n === 2) return t("طبيبان");
+  if (n >= 3 && n <= 10) return t("{0} أطباء", { "0": n });
+  return t("{0} طبيبًا", { "0": n });
 }
 
 /** "موعد واحد" / "موعدان" / "3 مواعيد" / "11 موعدًا". */
 export function appointmentsCountAr(n: number): string {
-  if (n === 0) return "لا مواعيد";
-  if (n === 1) return "موعد واحد";
-  if (n === 2) return "موعدان";
-  if (n >= 3 && n <= 10) return `${n} مواعيد`;
-  return `${n} موعدًا`;
+  if (n === 0) return t("لا مواعيد");
+  if (n === 1) return t("موعد واحد");
+  if (n === 2) return t("موعدان");
+  if (n >= 3 && n <= 10) return t("{0} مواعيد", { "0": n });
+  return t("{0} موعدًا", { "0": n });
 }
 
 /** مبلغ بالدينار بأرقام مقروءة: "4 000 دج". */
 export function formatDzd(value: number | null | undefined): string {
-  return `${Math.round(value ?? 0).toLocaleString("fr-DZ").replace(/ | /g, " ")} دج`;
+  return t("{0} دج", { "0": Math.round(value ?? 0).toLocaleString("fr-DZ").replace(/ | /g, " ") });
 }
 
 // ---------------- سعر الموعد ونسبة الطبيب في العيادة ----------------
@@ -248,14 +249,14 @@ export function clinicSharePercentOf(doctorSharePercent: number | null | undefin
 
 /** "80%" أو "غير محددة". */
 export function formatPercent(value: number | null | undefined): string {
-  return value == null ? "غير محددة" : `${value}%`;
+  return value == null ? t("غير محددة") : `${value}%`;
 }
 
 /** مثال حي بالدينار: "من كل موعد: الطبيب 1 600 دج · العيادة 400 دج". */
 export function termsExampleAr(priceDzd: number | null | undefined, doctorSharePercent: number | null | undefined): string | null {
   if (priceDzd == null || doctorSharePercent == null) return null;
   const { doctorDzd, clinicDzd } = splitDzd(priceDzd, doctorSharePercent);
-  return `من كل موعد بسعر ${formatDzd(priceDzd)}: الطبيب ${formatDzd(doctorDzd)} · العيادة ${formatDzd(clinicDzd)}`;
+  return t("من كل موعد بسعر {0}: الطبيب {1} · العيادة {2}", { "0": formatDzd(priceDzd), "1": formatDzd(doctorDzd), "2": formatDzd(clinicDzd) });
 }
 
 export type TermsFormResult =
@@ -266,7 +267,7 @@ export type TermsFormResult =
 export function parseTermsForm(priceText: string, shareText: string): TermsFormResult {
   const price = priceText.trim();
   const share = shareText.trim();
-  if (!/^\d{1,8}$/.test(price) || Number(price) > 10_000_000) return { ok: false, error: "سعر الموعد يجب أن يكون عددًا صحيحًا موجبًا بالدينار." };
-  if (!/^\d{1,3}$/.test(share) || Number(share) > 100) return { ok: false, error: "نسبة الطبيب يجب أن تكون عددًا صحيحًا بين 0 و100." };
+  if (!/^\d{1,8}$/.test(price) || Number(price) > 10_000_000) return { ok: false, error: t("سعر الموعد يجب أن يكون عددًا صحيحًا موجبًا بالدينار.") };
+  if (!/^\d{1,3}$/.test(share) || Number(share) > 100) return { ok: false, error: t("نسبة الطبيب يجب أن تكون عددًا صحيحًا بين 0 و100.") };
   return { ok: true, value: { appointmentPriceDzd: Number(price), doctorSharePercent: Number(share) } };
 }

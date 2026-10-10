@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t, getLanguage } from "../../i18n/locale.ts";
 import { useId, useRef } from "react";
 import { CalendarDays, X } from "lucide-react";
 import clsx from "clsx";
@@ -12,7 +14,7 @@ export function DateField({
   label,
   value,
   onChange,
-  placeholder = "اختر تاريخًا",
+  placeholder = t("اختر تاريخًا"),
   min,
   max,
   className,
@@ -29,12 +31,13 @@ export function DateField({
   hideLabel?: boolean;
   clearable?: boolean;
 }) {
+  useLanguage();
   const id = `d${useId().replace(/:/g, "")}`;
   const ref = useRef<HTMLInputElement>(null);
   return (
     <div className={className}>
       <label htmlFor={id} className={hideLabel ? "sr-only" : "label"}>
-        {label}
+        {t(label ?? "")}
       </label>
       <div className="relative rounded-xl border border-slate-300 bg-white transition focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-100">
         <div aria-hidden="true" className="pointer-events-none flex min-h-[42px] items-center gap-2 px-3.5 py-2 text-sm">
@@ -47,7 +50,7 @@ export function DateField({
           ref={ref}
           id={id}
           type="date"
-          lang="ar"
+          lang={getLanguage()}
           value={value ?? ""}
           min={min}
           max={max}
@@ -66,8 +69,8 @@ export function DateField({
           <button
             type="button"
             onClick={() => onChange(undefined)}
-            className="absolute left-1.5 top-1/2 z-10 -translate-y-1/2 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
-            aria-label={`مسح ${label}`}
+            className="absolute end-1.5 top-1/2 z-10 -translate-y-1/2 rounded-lg p-1.5 text-slate-500 hover:bg-slate-100"
+            aria-label={t("مسح {0}", { "0": label })}
           >
             <X className="h-3.5 w-3.5" />
           </button>

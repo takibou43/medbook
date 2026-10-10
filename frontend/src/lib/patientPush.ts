@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale.ts";
 import { api } from "./api";
 
 // إشعارات المتصفح لحساب المريض (تذكير قبل الموعد بساعة وقبل 5 دقائق).
@@ -44,16 +45,16 @@ export async function getPushState(): Promise<PushState> {
  */
 export async function enablePatientPush(): Promise<{ ok: boolean; reason?: string }> {
   if (!pushSupported()) {
-    return { ok: false, reason: "متصفحك لا يدعم الإشعارات. على آيفون: أضِف الموقع إلى الشاشة الرئيسية ثم افتحه منها." };
+    return { ok: false, reason: t("متصفحك لا يدعم الإشعارات. على آيفون: أضِف الموقع إلى الشاشة الرئيسية ثم افتحه منها.") };
   }
 
   const res = await api.get<{ data: { publicKey: string; enabled: boolean } }>("/push/public-key");
   const { publicKey, enabled } = res.data.data;
-  if (!enabled || !publicKey) return { ok: false, reason: "الإشعارات غير مفعّلة على الخادم بعد." };
+  if (!enabled || !publicKey) return { ok: false, reason: t("الإشعارات غير مفعّلة على الخادم بعد.") };
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") {
-    return { ok: false, reason: "لم تُمنح صلاحية الإشعارات. يمكنك السماح بها من إعدادات الموقع في المتصفح ثم المحاولة مجددًا." };
+    return { ok: false, reason: t("لم تُمنح صلاحية الإشعارات. يمكنك السماح بها من إعدادات الموقع في المتصفح ثم المحاولة مجددًا.") };
   }
 
   const reg = await navigator.serviceWorker.ready;
@@ -63,7 +64,7 @@ export async function enablePatientPush(): Promise<{ ok: boolean; reason?: strin
 
   const json = subscription.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
   if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
-    return { ok: false, reason: "تعذّر إنشاء اشتراك صالح للإشعارات." };
+    return { ok: false, reason: t("تعذّر إنشاء اشتراك صالح للإشعارات.") };
   }
 
   await api.post("/patient/notifications/subscribe", {

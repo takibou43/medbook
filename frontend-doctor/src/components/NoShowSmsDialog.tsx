@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t } from "../i18n/locale.ts";
 import { useEffect, useState } from "react";
 import { Copy, Info, MessageSquare } from "lucide-react";
 import { Modal } from "./ui/Modal";
@@ -39,6 +41,7 @@ interface Props {
 const NO_PHONE_MESSAGE = "لا يوجد رقم هاتف صالح لهذا المريض.";
 
 export function NoShowSmsDialog({ target, mode = "call", onClose }: Props) {
+  useLanguage();
   const { user } = useAuth();
   const { showToast } = useToast();
   const [sent, setSent] = useState(false);
@@ -80,7 +83,7 @@ export function NoShowSmsDialog({ target, mode = "call", onClose }: Props) {
 
   async function copy(value: string, label: string) {
     const ok = await copyText(value);
-    showToast(ok ? `تم نسخ ${label}.` : `تعذّر النسخ — انسخه يدويًا.`, ok ? "success" : "error");
+    showToast(ok ? t("تم نسخ {0}.", { "0": label }) : `تعذّر النسخ — انسخه يدويًا.`, ok ? "success" : "error");
   }
 
   async function confirm() {
@@ -100,7 +103,7 @@ export function NoShowSmsDialog({ target, mode = "call", onClose }: Props) {
         // حاسوب: لا تطبيق رسائل هنا — ننسخ النص ولا ندّعي أن الرسالة أُرسلت.
         const ok = await copyText(message);
         showToast(
-          ok ? "تم نسخ الرسالة — أرسلها من هاتفك (لم تُرسل بعد)." : "انسخ الرقم والرسالة وأرسلهما من هاتفك.",
+          ok ? t("تم نسخ الرسالة — أرسلها من هاتفك (لم تُرسل بعد).") : t("انسخ الرقم والرسالة وأرسلهما من هاتفك."),
           ok ? "success" : "error"
         );
       }
@@ -115,20 +118,15 @@ export function NoShowSmsDialog({ target, mode = "call", onClose }: Props) {
     <Modal
       open
       onClose={onClose}
-      title="إرسال رسالة"
+      title={t("إرسال رسالة")}
       footer={
         sent ? (
-          <Button variant="outline" onClick={onClose}>
-            إغلاق
-          </Button>
+          <Button variant="outline" onClick={onClose}>{t("إغلاق ")}</Button>
         ) : (
           <>
-            <Button variant="ghost" onClick={onClose} disabled={busy}>
-              إلغاء
-            </Button>
+            <Button variant="ghost" onClick={onClose} disabled={busy}>{t("إلغاء ")}</Button>
             <Button loading={busy} onClick={confirm}>
-              <MessageSquare className="ml-1.5 h-4 w-4" /> فتح الرسائل
-            </Button>
+              <MessageSquare className="me-1.5 h-4 w-4" />{t(" فتح الرسائل ")}</Button>
           </>
         )
       }
@@ -137,7 +135,7 @@ export function NoShowSmsDialog({ target, mode = "call", onClose }: Props) {
         <div className="rounded-xl bg-slate-50 p-3">
           <p className="font-bold text-slate-800">{target.patientName}</p>
           <p className="text-slate-500">
-            {dateLabel || "بلا تاريخ"}
+            {dateLabel || t("بلا تاريخ")}
             {target.startTime ? ` — ${target.startTime}` : ""}
           </p>
           {phone ? (
@@ -150,14 +148,10 @@ export function NoShowSmsDialog({ target, mode = "call", onClose }: Props) {
         </div>
 
         <p className="flex items-start gap-1.5 rounded-xl bg-emerald-50 p-3 text-emerald-800">
-            <Info className="mt-0.5 h-4 w-4 shrink-0" />
-            سيتم فتح تطبيق الرسائل برسالة قابلة للتعديل. الموعد يبقى كما هو دون تغيير حالته.
-        </p>
+            <Info className="mt-0.5 h-4 w-4 shrink-0" />{t("سيتم فتح تطبيق الرسائل برسالة قابلة للتعديل. الموعد يبقى كما هو دون تغيير حالته. ")}</p>
 
         <div>
-          <label className="label" htmlFor="sms-message">
-            نص الرسالة (يمكنك تعديله)
-          </label>
+          <label className="label" htmlFor="sms-message">{t("نص الرسالة (يمكنك تعديله) ")}</label>
           <textarea
             id="sms-message"
             className="input min-h-[7rem] leading-6"
@@ -170,26 +164,19 @@ export function NoShowSmsDialog({ target, mode = "call", onClose }: Props) {
           <>
             {!phone ? (
               <p className="rounded-xl bg-amber-50 p-3 text-amber-800">
-                {NO_PHONE_MESSAGE} يمكنك نسخ نص الرسالة واستعماله يدويًا.
-              </p>
+                {NO_PHONE_MESSAGE}{t(" يمكنك نسخ نص الرسالة واستعماله يدويًا. ")}</p>
             ) : mobile ? (
               <a href={smsHref!} className="btn-primary w-full justify-center">
-                <MessageSquare className="ml-1.5 h-4 w-4" /> فتح تطبيق الرسائل
-              </a>
+                <MessageSquare className="me-1.5 h-4 w-4" />{t(" فتح تطبيق الرسائل ")}</a>
             ) : (
-              <p className="rounded-xl bg-slate-100 p-3 text-slate-600">
-                أنت على حاسوب — لا يمكن فتح تطبيق الرسائل من هنا ولم تُرسل أي رسالة. انسخ الرقم والرسالة وأرسلهما
-                من هاتفك.
-              </p>
+              <p className="rounded-xl bg-slate-100 p-3 text-slate-600">{t("أنت على حاسوب — لا يمكن فتح تطبيق الرسائل من هنا ولم تُرسل أي رسالة. انسخ الرقم والرسالة وأرسلهما من هاتفك. ")}</p>
             )}
 
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" disabled={!phone} onClick={() => copy(phone ?? "", "رقم الهاتف")}>
-                <Copy className="ml-1.5 h-4 w-4" /> نسخ رقم الهاتف
-              </Button>
-              <Button variant="outline" onClick={() => copy(message, "الرسالة")}>
-                <Copy className="ml-1.5 h-4 w-4" /> نسخ الرسالة
-              </Button>
+              <Button variant="outline" disabled={!phone} onClick={() => copy(phone ?? "", t("رقم الهاتف"))}>
+                <Copy className="me-1.5 h-4 w-4" />{t(" نسخ رقم الهاتف ")}</Button>
+              <Button variant="outline" onClick={() => copy(message, t("الرسالة"))}>
+                <Copy className="me-1.5 h-4 w-4" />{t(" نسخ الرسالة ")}</Button>
             </div>
           </>
         )}

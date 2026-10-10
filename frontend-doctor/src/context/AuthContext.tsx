@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t } from "../i18n/locale.ts";
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { api, setAccessToken, getAccessToken, classifyApiError, ApiErrorKind } from "../lib/api";
 import { User } from "../types";
@@ -29,6 +31,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  useLanguage();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionError, setSessionError] = useState(false);
@@ -151,6 +154,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth يجب أن يُستخدم داخل AuthProvider");
+  if (!ctx) throw new Error(t("useAuth يجب أن يُستخدم داخل AuthProvider"));
   return ctx;
 }

@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale.ts";
 import { Component, type ReactNode } from "react";
 import { Button } from "./ui/Button";
 
@@ -12,9 +13,9 @@ export class PageLoadBoundary extends Component<{ children: ReactNode }, { faile
   render() {
     if (!this.state.failed) return this.props.children;
     return (
-      <div className="container-app py-10 text-center" role="alert" dir="rtl">
-        <p className="mb-4">تعذّر فتح الصفحة. تحقق من اتصال الإنترنت ثم أعد المحاولة.</p>
-        <Button onClick={() => window.location.reload()}>إعادة تحميل الصفحة</Button>
+      <div className="container-app py-10 text-center" role="alert">
+        <p className="mb-4">{t("تعذّر فتح الصفحة. تحقق من اتصال الإنترنت ثم أعد المحاولة.")}</p>
+        <Button onClick={() => window.location.reload()}>{t("إعادة تحميل الصفحة")}</Button>
       </div>
     );
   }

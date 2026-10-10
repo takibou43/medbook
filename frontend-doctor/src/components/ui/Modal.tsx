@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { ReactNode, useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -13,12 +15,13 @@ interface ModalProps {
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Modal({ open, onClose, title, children, footer }: ModalProps) {
+  useLanguage();
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !e.isComposing && e.keyCode !== 229) onClose();
       // حصر Tab داخل النافذة حتى لا ينتقل التركيز إلى الصفحة خلفها.
       if (e.key === "Tab" && dialogRef.current) {
         const els = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE));
@@ -50,10 +53,10 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} tabIndex={-1} className="relative z-10 max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl outline-none">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} tabIndex={-1} className="relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 shadow-xl outline-none">
         <div className="mb-4 flex items-center justify-between">
-          {title && <h3 id={titleId} className="text-lg font-bold text-slate-900">{title}</h3>}
-          <button type="button" aria-label="إغلاق" title="إغلاق النافذة" onClick={onClose} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-primary-400">
+          {title && <h3 id={titleId} className="text-lg font-bold text-slate-900">{t(title ?? "")}</h3>}
+          <button type="button" aria-label={t("إغلاق")} title={t("إغلاق النافذة")} onClick={onClose} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-primary-400">
             <X className="h-5 w-5" />
           </button>
         </div>

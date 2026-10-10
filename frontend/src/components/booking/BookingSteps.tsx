@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { Check } from "lucide-react";
 import clsx from "clsx";
 
@@ -14,10 +16,11 @@ export const BOOKING_STEPS: { id: StepId; label: string }[] = [
 // شريط الخطوات: المرحلة الحالية لا تُميَّز باللون وحده — بل بالرقم داخل دائرة مؤطَّرة، والمكتملة بعلامة ✓،
 // والقادمة بدائرة فارغة، مع نص مخفي للقارئات الشاشية يذكر حالة كل خطوة (aria-current="step" للحالية).
 export function BookingSteps({ current }: { current: StepId }) {
+  useLanguage();
   const currentIndex = BOOKING_STEPS.findIndex((s) => s.id === current);
 
   return (
-    <nav aria-label="مراحل الحجز" className="mb-6">
+    <nav aria-label={t("مراحل الحجز")} className="mb-6">
       <ol className="flex items-start">
         {BOOKING_STEPS.map((step, i) => {
           const done = i < currentIndex;
@@ -47,8 +50,8 @@ export function BookingSteps({ current }: { current: StepId }) {
                   active ? "text-primary-700" : done ? "text-slate-600" : "text-slate-400"
                 )}
               >
-                {step.label}
-                <span className="sr-only">{done ? " (مكتملة)" : active ? " (المرحلة الحالية)" : " (قادمة)"}</span>
+                {t(step.label)}
+                <span className="sr-only">{done ? t(" (مكتملة)") : active ? t(" (المرحلة الحالية)") : t(" (قادمة)")}</span>
               </span>
             </li>
           );

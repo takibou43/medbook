@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { createContext, useCallback, useContext, useState, ReactNode } from "react";
 import { CheckCircle2, XCircle, Info, X } from "lucide-react";
 
@@ -27,6 +29,7 @@ const STYLES: Record<ToastKind, string> = {
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  useLanguage();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const showToast = useCallback((message: string, kind: ToastKind = "info") => {
@@ -40,12 +43,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed bottom-4 left-4 z-[100] flex w-full max-w-sm flex-col gap-2">
-        {toasts.map((t) => (
-          <div key={t.id} className={`flex items-start gap-2 rounded-xl border p-3 shadow-card ${STYLES[t.kind]}`}>
-            {ICONS[t.kind]}
-            <p className="flex-1 text-sm text-slate-700">{t.message}</p>
-            <button onClick={() => dismiss(t.id)} className="text-slate-400 hover:text-slate-600">
+      <div className="fixed bottom-4 end-4 z-[100] flex w-full max-w-sm flex-col gap-2">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`flex items-start gap-2 rounded-xl border p-3 shadow-card ${STYLES[toast.kind]}`}>
+            {ICONS[toast.kind]}
+            <p className="flex-1 text-sm text-slate-700">{toast.message}</p>
+            <button onClick={() => dismiss(toast.id)} className="text-slate-400 hover:text-slate-600">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -57,6 +60,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 export function useToast() {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast يجب أن يُستخدم داخل ToastProvider");
+  if (!ctx) throw new Error(t("useToast يجب أن يُستخدم داخل ToastProvider"));
   return ctx;
 }

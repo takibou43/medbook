@@ -1,3 +1,5 @@
+import { useLanguage } from "./i18n/LanguageRoot";
+import { t } from "./i18n/locale.ts";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
 import { Spinner } from "./components/ui/States";
@@ -81,11 +83,13 @@ const doctorMainNav = [
 
 /** الرئيسية: لوحة التحكم الجديدة للطبيب؛ المساعد يبقى على الرئيسية الحالية حتى المرحلة ج. */
 function HomeRoute() {
+  useLanguage();
   const { user } = useAuth();
   return user?.role === "ASSISTANT" ? <AssistantBoard /> : <DoctorHome />;
 }
 
 function AppointmentsRoute() {
+  useLanguage();
   const { user } = useAuth();
   return user?.role === "ASSISTANT" ? <AssistantBoard appointmentsView /> : <DoctorAppointments />;
 }
@@ -96,22 +100,23 @@ function AppointmentsRoute() {
  * فقط حتى لو كانت محميّة أصلًا على مستوى المسار (ProtectedRoute) والخادم معًا.
  */
 function DoctorAreaLayout() {
+  useLanguage();
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
   useEffect(() => {
-    document.title = isAssistant ? "MedBook — لوحة المساعد" : "MedBook — لوحة تحكم الطبيب";
+    document.title = isAssistant ? t("MedBook — لوحة المساعد") : t("MedBook — لوحة تحكم الطبيب");
   }, [isAssistant]);
   // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
   const unread = useDoctorUnread(!isAssistant && !!user);
-  useUnreadToast(unread.data?.unread, () => "رسالة جديدة من الإدارة", "/messages?focus=unread");
+  useUnreadToast(unread.data?.unread, () => t("رسالة جديدة من الإدارة"), "/messages?focus=unread");
   const items = isAssistant
     ? sharedNav
     : doctorMainNav.map((i) => (i.to === "/settings" ? { ...i, badge: unread.data?.unread } : i));
 
   return (
     <DashboardLayout
-      title={isAssistant ? "لوحة المساعد" : "لوحة الطبيب"}
-      subtitle={isAssistant ? "إدارة المواعيد والطابور لأطباء العيادة" : undefined}
+      title={isAssistant ? t("لوحة المساعد") : t("لوحة الطبيب")}
+      subtitle={isAssistant ? t("إدارة المواعيد والطابور لأطباء العيادة") : undefined}
       items={items}
       dailyNavigation
       settingsStart={isAssistant ? undefined : doctorMainNav.length}
@@ -136,13 +141,15 @@ const adminNav = [
 ];
 
 function AdminAreaLayout() {
+  useLanguage();
   const unread = useAdminUnread();
-  useUnreadToast(unread.data?.unread, () => `رسالة جديدة من ${unread.data?.latest ? `د. ${unread.data.latest.doctorName}` : "طبيب"}`);
+  useUnreadToast(unread.data?.unread, () => t("رسالة جديدة من {0}", { "0": unread.data?.latest ? `د. ${unread.data.latest.doctorName}` : "طبيب" }));
   const items = adminNav.map((i) => (i.to === "/admin/messages" ? { ...i, badge: unread.data?.unread } : i));
-  return <DashboardLayout title="لوحة الإدارة" contentClassName="admin-page" items={items} />;
+  return <DashboardLayout title={t("لوحة الإدارة")} contentClassName="admin-page" items={items} />;
 }
 
 export default function App() {
+  useLanguage();
   return (
     <PageLoadBoundary>
     <Suspense fallback={<Spinner />}>
@@ -158,9 +165,9 @@ export default function App() {
       <Route path="/assistant/accept/:token" element={<AssistantAcceptInvite />} />
       <Route element={<ProtectedRoute allow={["CLINIC_OWNER", "DOCTOR"]} />}>
         <Route element={<ClinicAccessRoute />}>
-        <Route element={<DashboardLayout title="إدارة العيادة" items={[
-          { to: "/clinic", label: "العيادة والأطباء", icon: Building2, end: true },
-          { to: "/clinic/account", label: "إعدادات الحساب", icon: KeyRound },
+        <Route element={<DashboardLayout title={t("إدارة العيادة")} items={[
+          { to: "/clinic", label: t("العيادة والأطباء"), icon: Building2, end: true },
+          { to: "/clinic/account", label: t("إعدادات الحساب"), icon: KeyRound },
           ...(useClinicDoctorNav()),
         ]} />}>
           <Route path="/clinic" element={<ClinicManagement />} />
@@ -221,15 +228,17 @@ export default function App() {
 
 function useClinicDoctorNav() {
   const { user } = useAuth();
-  return user?.role === "DOCTOR" ? [{ to: "/", label: "لوحتي كطبيب", icon: Stethoscope, end: true }] : [];
+  return user?.role === "DOCTOR" ? [{ to: "/", label: t("لوحتي كطبيب"), icon: Stethoscope, end: true }] : [];
 }
 
 function ClinicAccessRoute() {
+  useLanguage();
   const { user } = useAuth();
   return canOpenClinic(user) ? <Outlet /> : <Navigate to="/" replace />;
 }
 
 function AssistantManagementRoute() {
+  useLanguage();
   const { user } = useAuth();
   return user?.doctor?.clinic ? <Navigate to={canManageClinic(user) ? "/clinic" : "/"} replace /> : <AssistantManagement />;
 }

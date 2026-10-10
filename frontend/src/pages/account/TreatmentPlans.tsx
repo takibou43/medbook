@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t, getLocale } from "../../i18n/locale.ts";
 import { Link, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -23,12 +25,14 @@ import { arabicDate } from "../../lib/patientPresentation";
 const fmtDate = arabicDate;
 
 function SessionIcon({ status }: { status: "PLANNED" | "COMPLETED" | "CANCELLED" }) {
-  if (status === "COMPLETED") return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-label="مكتملة" />;
-  if (status === "CANCELLED") return <XCircle className="h-4 w-4 shrink-0 text-slate-400" aria-label="ملغاة" />;
-  return <CircleDashed className="h-4 w-4 shrink-0 text-slate-400" aria-label="مخطّطة" />;
+  useLanguage();
+  if (status === "COMPLETED") return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-label={t("مكتملة")} />;
+  if (status === "CANCELLED") return <XCircle className="h-4 w-4 shrink-0 text-slate-400" aria-label={t("ملغاة")} />;
+  return <CircleDashed className="h-4 w-4 shrink-0 text-slate-400" aria-label={t("مخطّطة")} />;
 }
 
 export default function TreatmentPlans() {
+  useLanguage();
   const { user, loading } = useAuth();
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["patient-treatment-plans"],
@@ -37,31 +41,29 @@ export default function TreatmentPlans() {
     retry: false,
   });
 
-  if (loading) return <Spinner label="جارٍ التحميل..." />;
+  if (loading) return <Spinner label={t("جارٍ التحميل...")} />;
   if (!user) return <Navigate to="/account/login?redirect=%2Faccount%2Ftreatment-plans" replace />;
 
   return (
     <div className="container-app py-8">
       <div className="mx-auto max-w-xl space-y-5">
         <Link to="/account" className="inline-flex min-h-[44px] items-center gap-1.5 text-sm font-semibold text-primary-700">
-          <ArrowRight className="h-4 w-4" aria-hidden="true" /> العودة إلى حسابي
-        </Link>
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />{t(" العودة إلى حسابي ")}</Link>
         <div className="glass p-5">
           <h1 className="flex items-center gap-2 text-xl font-extrabold text-slate-900">
-            <ClipboardList className="h-5 w-5" aria-hidden="true" /> خطط العلاج
-          </h1>
-          <p className="mt-1 text-sm text-slate-600">خطط العلاج التي وضعها طبيب الأسنان لك ولأفراد عائلتك، ومواعيد المتابعة القادمة.</p>
+            <ClipboardList className="h-5 w-5" aria-hidden="true" />{t(" خطط العلاج ")}</h1>
+          <p className="mt-1 text-sm text-slate-600">{t("خطط العلاج التي وضعها طبيب الأسنان لك ولأفراد عائلتك، ومواعيد المتابعة القادمة.")}</p>
         </div>
 
         {isLoading ? (
-          <Spinner label="جارٍ تحميل الخطط..." />
+          <Spinner label={t("جارٍ تحميل الخطط...")} />
         ) : isError ? (
           <div className="glass p-4 text-sm text-red-600" role="alert">
-            {apiErrorMessage(error, "تعذّر تحميل خطط العلاج.")}{" "}
-            <button type="button" className="font-semibold underline" onClick={() => refetch()}>إعادة المحاولة</button>
+            {apiErrorMessage(error, t("تعذّر تحميل خطط العلاج."))}{" "}
+            <button type="button" className="font-semibold underline" onClick={() => refetch()}>{t("إعادة المحاولة")}</button>
           </div>
         ) : (data ?? []).length === 0 ? (
-          <p className="glass p-4 text-sm text-slate-500">لا توجد خطط علاج بعد. تظهر هنا عندما يضع لك طبيب الأسنان خطة متعددة الجلسات.</p>
+          <p className="glass p-4 text-sm text-slate-500">{t("لا توجد خطط علاج بعد. تظهر هنا عندما يضع لك طبيب الأسنان خطة متعددة الجلسات.")}</p>
         ) : (
           <ul className="space-y-4">
             {data!.map((p) => {
@@ -72,16 +74,14 @@ export default function TreatmentPlans() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-bold text-slate-900">{p.title}</p>
-                      <p className="text-xs text-slate-500">
-                        د. {p.doctor.firstName} {p.doctor.lastName} · {beneficiaryLabel(p.beneficiary)}
+                      <p className="text-xs text-slate-500">{t("د. ")}{p.doctor.firstName} {p.doctor.lastName} · {beneficiaryLabel(p.beneficiary)}
                       </p>
                     </div>
-                    <span className={clsx("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold", PLAN_STATUS[p.status].cls)}>{PLAN_STATUS[p.status].label}</span>
+                    <span className={clsx("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold", PLAN_STATUS[p.status].cls)}>{t(PLAN_STATUS[p.status].label)}</span>
                   </div>
                   {p.description && <p className="mt-2 whitespace-pre-line break-words text-sm text-slate-600">{p.description}</p>}
-                  <p className="mt-2 text-xs text-slate-500">
-                    الجلسات: {done} من {p.sessions.length || p.estimatedSessions || 0}
-                    {p.estimatedTotalCost != null && <> · التكلفة التقديرية: {p.estimatedTotalCost.toLocaleString("ar-DZ")} دج</>}
+                  <p className="mt-2 text-xs text-slate-500">{t("الجلسات: ")}{done}{t(" من ")}{p.sessions.length || p.estimatedSessions || 0}
+                    {p.estimatedTotalCost != null && <>{t(" · التكلفة التقديرية: ")}{p.estimatedTotalCost.toLocaleString(getLocale())}{t(" دج")}</>}
                   </p>
                   {p.sessions.length > 0 && (
                     <ol className="mt-3 space-y-1.5">
@@ -96,14 +96,13 @@ export default function TreatmentPlans() {
                   )}
                   {nextFollowUp && (
                     <p className="mt-3 flex items-center gap-1.5 rounded-xl bg-amber-50 p-2.5 text-sm text-amber-900">
-                      <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      متابعة {FOLLOW_UP_LABEL[nextFollowUp.status]}:{" "}
+                      <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />{t("متابعة ")}{t(FOLLOW_UP_LABEL[nextFollowUp.status])}:{" "}
                       {nextFollowUp.appointment ? (
                         <Link to={`/account?appointment=${nextFollowUp.appointment.id}`} className="font-semibold underline">
-                          {fmtDate(nextFollowUp.appointment.date)} الساعة {nextFollowUp.appointment.startTime}
+                          {fmtDate(nextFollowUp.appointment.date)}{t(" الساعة ")}{nextFollowUp.appointment.startTime}
                         </Link>
                       ) : (
-                        <span className="font-semibold">حوالي {fmtDate(nextFollowUp.dueDate)}</span>
+                        <span className="font-semibold">{t("حوالي ")}{fmtDate(nextFollowUp.dueDate)}</span>
                       )}
                     </p>
                   )}

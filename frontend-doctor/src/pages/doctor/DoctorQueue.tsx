@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { canSendAttendanceMessage } from "../../lib/assistantReception";
 import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useEffect, useRef, useState } from "react";
@@ -20,7 +22,7 @@ function patientName(a: Appointment): string {
   if (a.familyMember) return `${a.familyMember.firstName} ${a.familyMember.lastName} (${RELATIONSHIP_LABELS[a.familyMember.relationship]})`;
   if (a.patient) return a.patient.firstName + " " + a.patient.lastName;
   const guest = [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ").trim();
-  return guest || "مريض بدون اسم";
+  return guest || t("مريض بدون اسم");
 }
 
 function patientPhone(a: Appointment): string | null {
@@ -29,19 +31,19 @@ function patientPhone(a: Appointment): string | null {
 
 // "مريض واحد" / "مريضان" / "3 مرضى" / "11 مريضًا" — عدد المرضى الذين يمرّون قبل المتأخر.
 function patientsCount(n: number): string {
-  if (n === 1) return "مريض واحد";
-  if (n === 2) return "مريضين";
-  if (n >= 3 && n <= 10) return `${n} مرضى`;
-  return `${n} مريضًا`;
+  if (n === 1) return t("مريض واحد");
+  if (n === 2) return t("مريضين");
+  if (n >= 3 && n <= 10) return t("{0} مرضى", { "0": n });
+  return t("{0} مريضًا", { "0": n });
 }
 
 // رسالة ما بعد «متأخر» من رد الخادم نفسه: كم مركزًا تراجع فعلًا (2 أول مرة، ثم 4)، أو أن الضغطة تكرار.
 function lateToast(res: unknown): string {
   const r = res as { duplicate?: boolean; lateEvent?: { penalty: number; sequence: number } | null } | undefined;
-  if (r?.duplicate) return "مسجَّل متأخرًا مسبقًا — لم يُحتسب تأخير إضافي.";
+  if (r?.duplicate) return t("مسجَّل متأخرًا مسبقًا — لم يُحتسب تأخير إضافي.");
   const penalty = r?.lateEvent?.penalty ?? 2;
   const seq = r?.lateEvent?.sequence;
-  return `لم يُسجَّل غيابًا — بقي في الطابور ويعود دوره بعد ${patientsCount(penalty)}${seq && seq > 1 ? ` (التأخير رقم ${seq})` : ""}.`;
+  return t("لم يُسجَّل غيابًا — بقي في الطابور ويعود دوره بعد {0}{1}.", { "0": patientsCount(penalty), "1": seq && seq > 1 ? ` (التأخير رقم ${seq})` : "" });
 }
 
 // تنبيه صوتي قصير (نغمتان) بلا ملفات صوت — قد يمنعه المتصفح قبل أول لمسة للصفحة، فنتجاهل الفشل بصمت.
@@ -79,6 +81,7 @@ const CALL_BANNER_MS = 20000;
 const SELF_ACTION_GRACE_MS = 8000;
 
 export default function DoctorQueue() {
+  useLanguage();
   const { showToast } = useToast();
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
@@ -160,18 +163,18 @@ export default function DoctorQueue() {
       if (pushOn) {
         await disablePush();
         setPushOn(false);
-        showToast("تم إيقاف الإشعارات على هذا الجهاز.", "success");
+        showToast(t("تم إيقاف الإشعارات على هذا الجهاز."), "success");
       } else {
         const result = await enablePush();
         if (result.ok) {
           setPushOn(true);
-          showToast("تم تفعيل الإشعارات على هذا الجهاز ✅", "success");
+          showToast(t("تم تفعيل الإشعارات على هذا الجهاز ✅"), "success");
         } else {
-          showToast(result.reason ?? "تعذّر تفعيل الإشعارات.", "error");
+          showToast(result.reason ?? t("تعذّر تفعيل الإشعارات."), "error");
         }
       }
     } catch (err) {
-      showToast(apiErrorMessage(err, "تعذّر تغيير حالة الإشعارات."), "error");
+      showToast(apiErrorMessage(err, t("تعذّر تغيير حالة الإشعارات.")), "error");
     } finally {
       setPushBusy(false);
     }
@@ -187,7 +190,7 @@ export default function DoctorQueue() {
     }
   }
 
-  if (isLoading && !data) return <Spinner label="جارٍ تحميل طابور اليوم..." />;
+  if (isLoading && !data) return <Spinner label={t("جارٍ تحميل طابور اليوم...")} />;
 
   const current = data?.current ?? null;
   const waiting = data?.waiting ?? [];
@@ -206,16 +209,13 @@ export default function DoctorQueue() {
       <NoShowSmsDialog target={noShowTarget} mode="call" onClose={() => setNoShowTarget(null)} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-extrabold text-slate-900">طابور اليوم</h1>
+          <h1 className="text-xl font-extrabold text-slate-900">{t("طابور اليوم")}</h1>
           <p className="text-sm text-slate-600" aria-live="polite">
-            {waiting.length} في الانتظار · {late.length} متأخرون
-            {summary ? ` · ${summary.completed} مكتملة من ${summary.total}` : ""}
-            {isFetching ? " · جارٍ التحديث..." : ""}
+            {waiting.length}{t(" في الانتظار · ")}{late.length}{t(" متأخرون ")}{summary ? t(" · {0} مكتملة من {1}", { "0": summary.completed, "1": summary.total }) : ""}
+            {isFetching ? t(" · جارٍ التحديث...") : ""}
           </p>
           {avgSessionMinutes !== null && (
-            <p className="mt-0.5 text-xs text-slate-600">
-              متوسط مدة الجلسة: ~{avgSessionMinutes} دقيقة (من آخر {data?.estimatedDurationSamples ?? ""} جلسات مكتملة)
-            </p>
+            <p className="mt-0.5 text-xs text-slate-600">{t("متوسط مدة الجلسة: ~")}{avgSessionMinutes}{t(" دقيقة (من آخر ")}{data?.estimatedDurationSamples ?? ""}{t(" جلسات مكتملة) ")}</p>
           )}
         </div>
 
@@ -232,7 +232,7 @@ export default function DoctorQueue() {
             }
           >
             {pushOn ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
-            {pushOn ? "الإشعارات مفعّلة" : "تفعيل الإشعارات"}
+            {pushOn ? t("الإشعارات مفعّلة") : t("تفعيل الإشعارات")}
           </button>
         )}
       </div>
@@ -245,13 +245,13 @@ export default function DoctorQueue() {
         >
           <Megaphone className="h-7 w-7 shrink-0 text-amber-600" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold text-amber-700">الطبيب نادى الآن على</p>
+            <p className="text-xs font-bold text-amber-700">{t("الطبيب نادى الآن على")}</p>
             <p className="truncate text-xl font-extrabold text-slate-900">{callBanner.name}</p>
-            <p className="text-xs text-slate-600">موعده {callBanner.time} · إن لم يكن موجودًا اضغط «متأخر» للانتقال إلى التالي</p>
+            <p className="text-xs text-slate-600">{t("موعده ")}{callBanner.time}{t(" · إن لم يكن موجودًا اضغط «متأخر» للانتقال إلى التالي")}</p>
           </div>
           <button
             type="button"
-            aria-label="إخفاء تنبيه النداء"
+            aria-label={t("إخفاء تنبيه النداء")}
             onClick={() => setCallBanner(null)}
             className="rounded-lg p-1 text-slate-500 hover:bg-amber-100"
           >
@@ -263,10 +263,9 @@ export default function DoctorQueue() {
       {/* المريض الجالس الآن أمام الطبيب */}
       {current ? (
         <Card className="border-primary-200 bg-primary-50">
-          <p className="text-xs font-semibold text-primary-700">المريض الحالي</p>
+          <p className="text-xs font-semibold text-primary-700">{t("المريض الحالي")}</p>
           <p className="mt-1 text-2xl font-extrabold text-slate-900">{patientName(current)}</p>
-          <p className="text-sm text-slate-600">
-            موعده {current.startTime}
+          <p className="text-sm text-slate-600">{t("موعده ")}{current.startTime}
             {patientPhone(current) ? <> · <span className="ltr-nums">{patientPhone(current)}</span></> : null}
           </p>
 
@@ -276,17 +275,16 @@ export default function DoctorQueue() {
               <Button
                 loading={finish.isPending}
                 disabled={busy}
-                onClick={() => run(finish.mutateAsync(current.id), "تم إنهاء الموعد.", "تعذّر إنهاء الموعد.")}
+                onClick={() => run(finish.mutateAsync(current.id), t("تم إنهاء الموعد."), t("تعذّر إنهاء الموعد."))}
               >
-                <CheckCircle2 className="ml-1.5 h-4 w-4" /> أنهى الموعد
-              </Button>
+                <CheckCircle2 className="me-1.5 h-4 w-4" />{t(" أنهى الموعد ")}</Button>
             )}
             {canManageAttendance && <Button
               variant="outline"
               className={isAssistant ? "col-span-2" : undefined}
               loading={markLate.isPending || callNext.isPending}
               disabled={busy}
-              title="غير موجود — يُسجَّل متأخرًا ويُنادى المريض التالي مباشرة"
+              title={t("غير موجود — يُسجَّل متأخرًا ويُنادى المريض التالي مباشرة")}
               onClick={async () => {
                 markSelfAction();
                 // هل بقي في الطابور غير هذا المريض؟ إن لم يبق أحد لا نناديه هو نفسه من جديد.
@@ -295,7 +293,7 @@ export default function DoctorQueue() {
                 try {
                   res = await markLate.mutateAsync(current.id);
                 } catch (err) {
-                  showToast(apiErrorMessage(err, "تعذّر تسجيله كمتأخر."), "error");
+                  showToast(apiErrorMessage(err, t("تعذّر تسجيله كمتأخر.")), "error");
                   return;
                 }
                 // المريض التالي يجب أن يكون شخصًا آخر: منتظر عادي، أو متأخر آخر رصيده أقل من رصيد هذا المريض الآن.
@@ -311,58 +309,55 @@ export default function DoctorQueue() {
                   const next = (await callNext.mutateAsync()) as Appointment | undefined;
                   setCallBanner(null);
                   showToast(
-                    "سُجّل متأخرًا — " + (next ? "تمت مناداة التالي: " + patientName(next) : "تمت مناداة المريض التالي."),
+                    t("سُجّل متأخرًا — ") + (next ? t("تمت مناداة التالي: ") + patientName(next) : t("تمت مناداة المريض التالي.")),
                     "success"
                   );
                 } catch (err) {
-                  showToast(lateToast(res) + " " + apiErrorMessage(err, "تعذّرت مناداة التالي تلقائيًا — اضغط «نادِ المريض التالي»."), "error");
+                  showToast(lateToast(res) + " " + apiErrorMessage(err, t("تعذّرت مناداة التالي تلقائيًا — اضغط «نادِ المريض التالي».")), "error");
                 }
               }}
             >
-              <Clock3 className="ml-1.5 h-4 w-4" /> متأخر
-            </Button>}
+              <Clock3 className="me-1.5 h-4 w-4" />{t(" متأخر ")}</Button>}
             {/* نودي عليه فلم يحضر: رسالة جاهزة من هاتف المساعد + بقاؤه في المتابعة.
                 لا تسجيل غياب نهائي هنا — ذلك يحدث وحده عند انتهاء دوام الطبيب. */}
             {canManageAttendance && canSendAttendanceMessage(current) && <Button
               variant="outline"
               className="col-span-2 border-red-200 text-red-600 hover:bg-red-50"
               disabled={busy}
-              title="لم يستجب للنداء — إشعاره برسالة دون تسجيل غياب نهائي"
+              title={t("لم يستجب للنداء — إشعاره برسالة دون تسجيل غياب نهائي")}
               onClick={() => openNoShow(current)}
             >
-              <UserX className="ml-1.5 h-4 w-4" /> إرسال رسالة
-            </Button>}
+              <UserX className="me-1.5 h-4 w-4" />{t(" إرسال رسالة ")}</Button>}
           </div>
         </Card>
       ) : (
         <Card className="text-center">
-          <p className="text-sm text-slate-600">لا يوجد مريض بالداخل الآن.</p>
+          <p className="text-sm text-slate-600">{t("لا يوجد مريض بالداخل الآن.")}</p>
           <Button
             className="mt-3 w-full"
             loading={callNext.isPending}
             disabled={busy || (waiting.length === 0 && late.length === 0)}
-            onClick={() => run(callNext.mutateAsync(), "تمت مناداة المريض التالي.", "تعذّرت مناداة المريض التالي.")}
+            onClick={() => run(callNext.mutateAsync(), t("تمت مناداة المريض التالي."), t("تعذّرت مناداة المريض التالي."))}
           >
-            <PhoneCall className="ml-1.5 h-4 w-4" /> نادِ المريض التالي
-          </Button>
+            <PhoneCall className="me-1.5 h-4 w-4" />{t(" نادِ المريض التالي ")}</Button>
         </Card>
       )}
 
       {/* قائمة الانتظار بالترتيب */}
       <div>
         <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-slate-700">
-          <Users className="h-4 w-4" /> في الانتظار ({queueList.length})
+          <Users className="h-4 w-4" />{t(" في الانتظار (")}{queueList.length})
         </p>
         {queueList.length === 0 ? (
           summary && summary.total === 0 ? (
-            <EmptyState title="لا توجد مواعيد اليوم" />
+            <EmptyState title={t("لا توجد مواعيد اليوم")} />
           ) : summary && !current && summary.completed + summary.noShow + summary.cancelled === summary.total ? (
             <EmptyState
-              title="اكتملت مواعيد اليوم"
-              description={`${summary.completed} مكتملة${summary.noShow ? ` · ${summary.noShow} لم يحضروا` : ""}${summary.cancelled ? ` · ${summary.cancelled} ملغاة` : ""}`}
+              title={t("اكتملت مواعيد اليوم")}
+              description={t("{0} مكتملة{1}{2}", { "0": summary.completed, "1": summary.noShow ? ` · ${summary.noShow} لم يحضروا` : "", "2": summary.cancelled ? ` · ${summary.cancelled} ملغاة` : "" })}
             />
           ) : (
-            <EmptyState title="لا يوجد منتظرون الآن" description={summary?.pending ? `${summary.pending} بانتظار التأكيد.` : undefined} />
+            <EmptyState title={t("لا يوجد منتظرون الآن")} description={summary?.pending ? t("{0} بانتظار التأكيد.", { "0": summary.pending }) : undefined} />
           )
         ) : (
           <div className="space-y-2">
@@ -384,30 +379,27 @@ export default function DoctorQueue() {
                     <p className="flex flex-wrap items-center gap-1.5 font-semibold text-slate-800">
                       {patientName(a)}
                       {isLate && (
-                        <span className="rounded-md bg-amber-200 px-1.5 py-0.5 text-[11px] font-bold text-amber-900">
-                          متأخر — ليس غيابًا نهائيًا
-                        </span>
+                        <span className="rounded-md bg-amber-200 px-1.5 py-0.5 text-[11px] font-bold text-amber-900">{t("متأخر — ليس غيابًا نهائيًا ")}</span>
                       )}
                     </p>
                     <p className={"text-xs " + (isLate ? "text-amber-700" : "text-slate-500")}>
                       {a.startTime}
-                      {isLate && (remaining > 0 ? " · يعود دوره بعد " + patientsCount(remaining) : " · دوره التالي مباشرة")}
-                      {isLate && a.deferredCount ? " · تأخّر " + a.deferredCount + " مرة" : ""}
+                      {isLate && (remaining > 0 ? t(" · يعود دوره بعد ") + patientsCount(remaining) : t(" · دوره التالي مباشرة"))}
+                      {isLate && a.deferredCount ? t(" · تأخّر ") + a.deferredCount + t(" مرة") : ""}
                     </p>
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   {a.arrivedAt ? (
                     <span className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-emerald-600">
-                      <UserCheck className="h-4 w-4" /> وصل
-                    </span>
+                      <UserCheck className="h-4 w-4" />{t(" وصل ")}</span>
                   ) : (
                     <button
                       type="button"
                       disabled={busy}
-                      title="تسجيل وصول المريض إلى العيادة"
-                      aria-label={`تسجيل وصول ${patientName(a)}`}
-                      onClick={() => run(markArrived.mutateAsync(a.id), "تم تسجيل وصوله.", "تعذّر تسجيل وصوله.")}
+                      title={t("تسجيل وصول المريض إلى العيادة")}
+                      aria-label={t("تسجيل وصول {0}", { "0": patientName(a) })}
+                      onClick={() => run(markArrived.mutateAsync(a.id), t("تم تسجيل وصوله."), t("تعذّر تسجيل وصوله."))}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 disabled:opacity-40"
                     >
                       <UserCheck className="h-4 w-4" />
@@ -416,17 +408,17 @@ export default function DoctorQueue() {
                   <button
                     type="button"
                     disabled={busy || Boolean(current)}
-                    onClick={() => run(callPatient.mutateAsync(a.id), "تمت مناداته.", "تعذّرت مناداته.")}
+                    onClick={() => run(callPatient.mutateAsync(a.id), t("تمت مناداته."), t("تعذّرت مناداته."))}
                     className="rounded-lg px-2 py-1 text-xs font-semibold text-primary-600 transition hover:bg-primary-50 disabled:opacity-40"
                   >
-                    {isLate ? "نادِه الآن" : "نادِه"}
+                    {isLate ? t("نادِه الآن") : t("نادِه")}
                   </button>
                   {canManageAttendance && canSendAttendanceMessage(a) && (
                     <button
                       type="button"
                       disabled={busy}
-                      title="إرسال رسالة"
-                      aria-label={`إشعار ${patientName(a)} برسالة`}
+                      title={t("إرسال رسالة")}
+                      aria-label={t("إشعار {0} برسالة", { "0": patientName(a) })}
                       onClick={() => openNoShow(a)}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-white disabled:opacity-40"
                     >
@@ -445,7 +437,7 @@ export default function DoctorQueue() {
       {!ordered && late.length > 0 && (
         <div>
           <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-amber-700">
-            <Clock3 className="h-4 w-4" /> متأخرون ({late.length})
+            <Clock3 className="h-4 w-4" />{t(" متأخرون (")}{late.length})
           </p>
           <div className="space-y-2">
             {late.map((a) => {
@@ -455,24 +447,22 @@ export default function DoctorQueue() {
                   <div>
                     <p className="font-semibold text-slate-800">{patientName(a)}</p>
                     <p className="text-xs text-amber-700">
-                      {remaining > 0 ? "يعود دوره بعد " + patientsCount(remaining) : "دوره التالي مباشرة"}
-                      {a.deferredCount ? " · تأجّل " + a.deferredCount + " مرة" : ""}
+                      {remaining > 0 ? t("يعود دوره بعد ") + patientsCount(remaining) : t("دوره التالي مباشرة")}
+                      {a.deferredCount ? t(" · تأجّل ") + a.deferredCount + t(" مرة") : ""}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <button
                       type="button"
                       disabled={busy || Boolean(current)}
-                      onClick={() => run(callPatient.mutateAsync(a.id), "تمت مناداته.", "تعذّرت مناداته.")}
+                      onClick={() => run(callPatient.mutateAsync(a.id), t("تمت مناداته."), t("تعذّرت مناداته."))}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-primary-600 transition hover:bg-white disabled:opacity-40"
-                    >
-                      نادِه الآن
-                    </button>
+                    >{t("نادِه الآن ")}</button>
                     {canManageAttendance && canSendAttendanceMessage(a) && <button
                       type="button"
                       disabled={busy}
-                      title="إرسال رسالة"
-                      aria-label={`إشعار ${patientName(a)} برسالة`}
+                      title={t("إرسال رسالة")}
+                      aria-label={t("إشعار {0} برسالة", { "0": patientName(a) })}
                       onClick={() => openNoShow(a)}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-white disabled:opacity-40"
                     >

@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale.ts";
 import type { Appointment, AppointmentStatus } from "../types";
 
 export const RECEPTION_STATUSES: Record<AppointmentStatus, string> = {
@@ -7,9 +8,9 @@ export const RECEPTION_STATUSES: Record<AppointmentStatus, string> = {
 };
 export type ReceptionFilter = { doctorId: string; status: string; search: string };
 export function receptionLabel(a: Appointment) {
-  if ((a.status === "CONFIRMED" || a.status === "LATE") && a.arrivedAt) return "وصل — ينتظر";
+  if ((a.status === "CONFIRMED" || a.status === "LATE") && a.arrivedAt) return t("وصل — ينتظر");
   // IN_PROGRESS is written by calling, not by a distinct examination-start event.
-  if (a.status === "IN_PROGRESS" && !a.calledAt) return "قيد المتابعة — توقيت النداء غير متاح";
+  if (a.status === "IN_PROGRESS" && !a.calledAt) return t("قيد المتابعة — توقيت النداء غير متاح");
   return RECEPTION_STATUSES[a.status];
 }
 export function canMarkUnanswered(a: Appointment) {
@@ -55,12 +56,12 @@ export function callAge(value: string, now: number) {
   const time = Date.parse(value);
   if (!Number.isFinite(time)) return null;
   const minutes = Math.max(0, Math.floor((now - time) / 60000));
-  return minutes === 0 ? "نودي منذ أقل من دقيقة" : `نودي منذ ${minutes} دقيقة`;
+  return minutes === 0 ? t("نودي منذ أقل من دقيقة") : t("نودي منذ {0} دقيقة", { "0": minutes });
 }
 export function receptionConnection(queueAt: number, appointmentsAt: number, failed: boolean, now: number) {
-  if (failed) return "انقطع التحديث — البيانات المعروضة قديمة";
-  if (!queueAt || !appointmentsAt) return "جارٍ الاتصال…";
+  if (failed) return t("انقطع التحديث — البيانات المعروضة قديمة");
+  if (!queueAt || !appointmentsAt) return t("جارٍ الاتصال…");
   const seconds = Math.max(0, Math.floor((now - Math.min(queueAt, appointmentsAt)) / 1000));
-  if (seconds > 60) return "التحديث متأخر — تحقق من الاتصال";
-  return `متصل — آخر تحديث منذ ${seconds} ثانية`;
+  if (seconds > 60) return t("التحديث متأخر — تحقق من الاتصال");
+  return t("متصل — آخر تحديث منذ {0} ثانية", { "0": seconds });
 }

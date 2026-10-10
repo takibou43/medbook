@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t } from "../i18n/locale.ts";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
@@ -18,6 +20,7 @@ interface FormValues {
 }
 
 export default function AccountSettings() {
+  useLanguage();
   const { data: me, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["me-account"],
     queryFn: async () => (await api.get("/auth/me")).data.data,
@@ -39,7 +42,7 @@ export default function AccountSettings() {
     if (values.newPassword) payload.newPassword = values.newPassword;
 
     if (!payload.email && !payload.newPassword) {
-      showToast("لا يوجد أي تغيير لحفظه.", "error");
+      showToast(t("لا يوجد أي تغيير لحفظه."), "error");
       return;
     }
 
@@ -48,34 +51,32 @@ export default function AccountSettings() {
       await api.patch("/auth/account", payload);
       if (payload.newPassword || payload.email) {
         // تغيير كلمة المرور أو البريد يُبطل الجلسات الحالية — نُخرج المستخدم ليدخل ببياناته الجديدة.
-        showToast("تم تحديث بيانات الحساب. الرجاء تسجيل الدخول من جديد.", "success");
+        showToast(t("تم تحديث بيانات الحساب. الرجاء تسجيل الدخول من جديد."), "success");
         await logout();
         navigate("/login");
       }
     } catch (err) {
-      showToast(apiErrorMessage(err, "تعذّر تحديث بيانات الحساب."), "error");
+      showToast(apiErrorMessage(err, t("تعذّر تحديث بيانات الحساب.")), "error");
     } finally {
       setSaving(false);
     }
   }
 
-  if (isLoading || isError) return <div className="space-y-5"><h1 className="text-2xl font-extrabold text-slate-900">إعدادات الحساب</h1>{isLoading ? <Spinner /> : <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />}</div>;
+  if (isLoading || isError) return <div className="space-y-5"><h1 className="text-2xl font-extrabold text-slate-900">{t("إعدادات الحساب")}</h1>{isLoading ? <Spinner /> : <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />}</div>;
 
   return (
     <div className="max-w-xl space-y-6">
       <div>
-        <h1 className="text-2xl font-extrabold text-slate-900">إعدادات الحساب</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          غيّر بريدك الإلكتروني أو كلمة مرورك. كلمة المرور الحالية مطلوبة لتأكيد هويتك.
-        </p>
+        <h1 className="text-2xl font-extrabold text-slate-900">{t("إعدادات الحساب")}</h1>
+        <p className="mt-1 text-sm text-slate-500">{t("غيّر بريدك الإلكتروني أو كلمة مرورك. كلمة المرور الحالية مطلوبة لتأكيد هويتك. ")}</p>
       </div>
 
       <ProfilesCard />
 
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
-        <section className="space-y-3" aria-labelledby="change-email"><h2 id="change-email" className="text-lg font-bold">تغيير البريد الإلكتروني</h2>
+        <section className="space-y-3" aria-labelledby="change-email"><h2 id="change-email" className="text-lg font-bold">{t("تغيير البريد الإلكتروني")}</h2>
         <div>
-          <label htmlFor="account-email" className="label">البريد الإلكتروني</label>
+          <label htmlFor="account-email" className="label">{t("البريد الإلكتروني")}</label>
           <input
             className="input"
             id="account-email"
@@ -83,53 +84,49 @@ export default function AccountSettings() {
             dir="ltr"
             type="email"
             defaultValue={me?.email ?? ""}
-            {...register("email", { required: "مطلوب", pattern:{value:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,message:"أدخل بريدًا إلكترونيًا صالحًا."} })}
+            {...register("email", { required: t("مطلوب"), pattern:{value:/^[^\s@]+@[^\s@]+\.[^\s@]+$/,message:t("أدخل بريدًا إلكترونيًا صالحًا.")} })}
           />
           {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email.message}</p>}
         </div>
 
         </section>
-        <section className="space-y-3 border-t border-slate-200 pt-4" aria-labelledby="change-password"><h2 id="change-password" className="text-lg font-bold">تغيير كلمة المرور</h2>
+        <section className="space-y-3 border-t border-slate-200 pt-4" aria-labelledby="change-password"><h2 id="change-password" className="text-lg font-bold">{t("تغيير كلمة المرور")}</h2>
 
         <Input
-          label="كلمة المرور الحالية"
+          label={t("كلمة المرور الحالية")}
           autoComplete="current-password"
           type="password"
           placeholder="••••••••"
           error={errors.currentPassword?.message}
-          {...register("currentPassword", { required: "مطلوب لتأكيد التغيير" })}
+          {...register("currentPassword", { required: t("مطلوب لتأكيد التغيير") })}
         />
 
         <Input
-          label="كلمة المرور الجديدة (اتركها فارغة إن لم ترد تغييرها)"
+          label={t("كلمة المرور الجديدة (اتركها فارغة إن لم ترد تغييرها)")}
           autoComplete="new-password"
           type="password"
           placeholder="••••••••"
           error={errors.newPassword?.message}
           {...register("newPassword", {
-            minLength: { value: 8, message: "8 خانات على الأقل" },
+            minLength: { value: 8, message: t("8 خانات على الأقل") },
           })}
         />
 
         <Input
-          label="تأكيد كلمة المرور الجديدة"
+          label={t("تأكيد كلمة المرور الجديدة")}
           autoComplete="new-password"
           type="password"
           placeholder="••••••••"
           error={errors.confirmPassword?.message}
           {...register("confirmPassword", {
-            validate: (v) => !watch("newPassword") || v === watch("newPassword") || "كلمتا المرور غير متطابقتين",
+            validate: (v) => !watch("newPassword") || v === watch("newPassword") || t("كلمتا المرور غير متطابقتين"),
           })}
         />
 
         </section>
-        <p className="text-xs text-slate-500">
-          عند تغيير البريد أو كلمة المرور سيتم إنهاء كل الجلسات المفتوحة، وستحتاج لتسجيل الدخول من جديد.
-        </p>
+        <p className="text-xs text-slate-500">{t("عند تغيير البريد أو كلمة المرور سيتم إنهاء كل الجلسات المفتوحة، وستحتاج لتسجيل الدخول من جديد. ")}</p>
 
-        <Button type="submit" loading={saving}>
-          حفظ التغييرات
-        </Button>
+        <Button type="submit" loading={saving}>{t("حفظ التغييرات ")}</Button>
       </form>
     </div>
   );

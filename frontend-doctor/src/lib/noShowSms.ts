@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale.ts";
 // إشعار "لم يحضر" يُرسل من شريحة هاتف الطبيب نفسه عبر رابط sms: — بلا مزوّد SMS
 // خارجي ولا مفتاح API في الواجهة. كل ما هنا يعمل في المتصفح فقط.
 
@@ -52,18 +53,18 @@ export function buildNoShowMessage(parts: {
   const time = clean(parts.time);
 
   const when: string[] = [];
-  if (date) when.push(`بتاريخ ${date}`);
-  if (time) when.push(`على الساعة ${time}`);
+  if (date) when.push(t("بتاريخ {0}", { "0": date }));
+  if (time) when.push(t("على الساعة {0}", { "0": time }));
 
   return [
-    doctorName ? `MedBook - د. ${doctorName}` : "MedBook",
+    doctorName ? t("MedBook - د. {0}", { "0": doctorName }) : "MedBook",
     "",
-    patientName ? `عزيزي/عزيزتي ${patientName}،` : "عزيزي/عزيزتي المريض،",
-    `لقد حان موعدكم${doctorName ? ` مع الدكتور ${doctorName}` : ""}${when.length ? " " + when.join(" ") : ""}، ولم يتم تسجيل حضوركم.`,
+    patientName ? t("عزيزي/عزيزتي {0}،", { "0": patientName }) : t("عزيزي/عزيزتي المريض،"),
+    t("لقد حان موعدكم{0}{1}، ولم يتم تسجيل حضوركم.", { "0": doctorName ? t(" مع الدكتور {0}", { "0": doctorName }) : "", "1": when.length ? " " + when.join(" ") : "" }),
     "",
-    "إذا كنتم ترغبون في حجز موعد جديد، يرجى التواصل مع العيادة.",
+    t("إذا كنتم ترغبون في حجز موعد جديد، يرجى التواصل مع العيادة."),
     "",
-    "شكراً لتفهمكم.",
+    t("شكراً لتفهمكم."),
   ].join("\n");
 }
 
@@ -77,12 +78,12 @@ export function buildQueueCallMessage(parts: { doctorName?: string | null; patie
   const patientName = clean(parts.patientName);
 
   return [
-    doctorName ? `MedBook - د. ${doctorName}` : "MedBook",
+    doctorName ? t("MedBook - د. {0}", { "0": doctorName }) : "MedBook",
     "",
-    patientName ? `السلام عليكم ${patientName}،` : "السلام عليكم،",
-    `نحيطكم علمًا بأن دوركم لدى ${doctorName ? `د. ${doctorName}` : "الطبيب"} قد حان. يرجى التوجه إلى العيادة في أقرب وقت.`,
+    patientName ? t("السلام عليكم {0}،", { "0": patientName }) : t("السلام عليكم،"),
+    t("نحيطكم علمًا بأن دوركم لدى {0} قد حان. يرجى التوجه إلى العيادة في أقرب وقت.", { "0": doctorName ? t("د. {0}", { "0": doctorName }) : t("الطبيب") }),
     "",
-    "شكرًا لتفهمكم.",
+    t("شكرًا لتفهمكم."),
   ].join("\n");
 }
 

@@ -148,3 +148,4 @@ body {
   .glass-sidebar { background: linear-gradient(165deg, #0c3a3d 0%, #0e2c44 100%); }
 }
 
+@media (max-width: 767px) { input, select, textarea, .input { font-size: 16px; scroll-margin-block: 5rem; } } html[lang="fr"] { font-family: system-ui, sans-serif; }

@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { useState } from "react";
 import { Star, X } from "lucide-react";
 import clsx from "clsx";
@@ -17,15 +19,16 @@ export function canRate(a: MyAppointment): boolean {
 
 /** نجوم قابلة للاختيار: أزرار كبيرة مناسبة للمس، وتعمل كمجموعة اختيار (radiogroup) لقارئ الشاشة. */
 export function StarInput({ value, onChange, disabled }: { value: number; onChange: (v: number) => void; disabled?: boolean }) {
+  useLanguage();
   return (
-    <div className="flex gap-1" role="radiogroup" aria-label="عدد النجوم">
+    <div className="flex gap-1" role="radiogroup" aria-label={t("عدد النجوم")}>
       {[1, 2, 3, 4, 5].map((n) => (
         <button
           key={n}
           type="button"
           role="radio"
           aria-checked={value === n}
-          aria-label={`${n} من 5 — ${LABELS[n]}`}
+          aria-label={t("{0} من 5 — {1}", { "0": n, "1": LABELS[n] })}
           disabled={disabled}
           onClick={() => onChange(n)}
           className="flex h-11 w-11 items-center justify-center rounded-xl transition hover:bg-amber-50 disabled:opacity-60"
@@ -38,8 +41,9 @@ export function StarInput({ value, onChange, disabled }: { value: number; onChan
 }
 
 export function StarsDisplay({ value, size = "h-4 w-4" }: { value: number; size?: string }) {
+  useLanguage();
   return (
-    <span className="inline-flex items-center gap-0.5" aria-label={`${value} من 5`}>
+    <span className="inline-flex items-center gap-0.5" aria-label={t("{0} من 5", { "0": value })}>
       {[1, 2, 3, 4, 5].map((n) => (
         <Star key={n} className={clsx(size, n <= value ? "fill-amber-400 text-amber-400" : "fill-slate-200 text-slate-200")} aria-hidden="true" />
       ))}
@@ -48,6 +52,7 @@ export function StarsDisplay({ value, size = "h-4 w-4" }: { value: number; size?
 }
 
 export function RateDoctorForm({ appointment, onDone, onCancel }: { appointment: MyAppointment; onDone: () => void; onCancel?: () => void }) {
+  useLanguage();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -65,7 +70,7 @@ export function RateDoctorForm({ appointment, onDone, onCancel }: { appointment:
       const status = (err as { response?: { status?: number } })?.response?.status;
       // 409 = قُيِّم من قبل (نافذة أخرى مثلًا): نحدّث القائمة فيظهر التقييم المحفوظ بدل الخطأ.
       if (status === 409) onDone();
-      else setError(apiErrorMessage(err, "تعذّر حفظ التقييم. حاول مجددًا."));
+      else setError(apiErrorMessage(err, t("تعذّر حفظ التقييم. حاول مجددًا.")));
     } finally {
       setSubmitting(false);
     }
@@ -78,31 +83,27 @@ export function RateDoctorForm({ appointment, onDone, onCancel }: { appointment:
         <p className="mt-1 h-4 text-xs font-semibold text-amber-700">{rating > 0 ? LABELS[rating] : ""}</p>
       </div>
       <label className="block">
-        <span className="mb-1 block text-xs text-slate-600">تعليق (اختياري)</span>
+        <span className="mb-1 block text-xs text-slate-600">{t("تعليق (اختياري)")}</span>
         <textarea
           className="input min-h-[72px] resize-y"
           maxLength={COMMENT_MAX}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="شاركنا تجربتك مع الطبيب..."
+          placeholder={t("شاركنا تجربتك مع الطبيب...")}
           disabled={submitting}
         />
         <span className="mt-0.5 block text-left text-[11px] text-slate-400" dir="ltr">
           {comment.length}/{COMMENT_MAX}
         </span>
       </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600">{t(error ?? "")}</p>}
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={submit} loading={submitting} disabled={rating < 1} className="min-h-[44px] flex-1 sm:flex-none">
-          إرسال التقييم
-        </Button>
+        <Button type="button" onClick={submit} loading={submitting} disabled={rating < 1} className="min-h-[44px] flex-1 sm:flex-none">{t("إرسال التقييم ")}</Button>
         {onCancel && (
-          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting} className="min-h-[44px]">
-            لاحقًا
-          </Button>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={submitting} className="min-h-[44px]">{t("لاحقًا ")}</Button>
         )}
       </div>
-      <p className="text-[11px] text-slate-500">يمكن تقييم كل موعد مرة واحدة فقط، ولا يمكن تعديل التقييم بعد إرساله.</p>
+      <p className="text-[11px] text-slate-500">{t("يمكن تقييم كل موعد مرة واحدة فقط، ولا يمكن تعديل التقييم بعد إرساله.")}</p>
     </div>
   );
 }
@@ -112,16 +113,15 @@ export function RateDoctorForm({ appointment, onDone, onCancel }: { appointment:
  * («لاحقًا» أو ×) ويبقى خيار التقييم ظاهرًا في «المواعيد السابقة».
  */
 export function RatePrompt({ appointment, onDone, onDismiss }: { appointment: MyAppointment; onDone: () => void; onDismiss: () => void }) {
+  useLanguage();
   return (
-    <section className="glass border-amber-200 p-4 ring-1 ring-amber-200" aria-label="تقييم الطبيب">
+    <section className="glass border-amber-200 p-4 ring-1 ring-amber-200" aria-label={t("تقييم الطبيب")}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-lg font-extrabold text-slate-900">كيف تقيّم الطبيب؟</h2>
-          <p className="text-sm text-slate-600">
-            موعدك مع د. {appointment.doctor.firstName} {appointment.doctor.lastName} اكتمل.
-          </p>
+          <h2 className="text-lg font-extrabold text-slate-900">{t("كيف تقيّم الطبيب؟")}</h2>
+          <p className="text-sm text-slate-600">{t("موعدك مع د. ")}{appointment.doctor.firstName} {appointment.doctor.lastName}{t(" اكتمل. ")}</p>
         </div>
-        <button type="button" onClick={onDismiss} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="إخفاء">
+        <button type="button" onClick={onDismiss} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label={t("إخفاء")}>
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>

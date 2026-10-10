@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale.ts";
 import type { Beneficiary, FamilyMember, FamilyRelationship, MyAppointment } from "../types/index.ts";
 
 /**
@@ -24,8 +25,8 @@ export function memberFullName(m: Pick<FamilyMember, "firstName" | "lastName">):
 
 /** «ياسين بن علي (ابن/ابنة)» — ما يُعرض قبل تأكيد الحجز وفي بطاقة الموعد. */
 export function beneficiaryLabel(b: Beneficiary | null | undefined): string {
-  if (!b || b.type === "SELF") return "أنا (صاحب الحساب)";
-  return b.relationship ? `${b.name} (${RELATIONSHIP_LABELS[b.relationship]})` : b.name;
+  if (!b || b.type === "SELF") return t("أنا (صاحب الحساب)");
+  return b.relationship ? `${b.name} (${t(RELATIONSHIP_LABELS[b.relationship])})` : b.name;
 }
 
 export function isFamilyAppointment(a: Pick<MyAppointment, "beneficiary" | "familyMemberId">): boolean {
@@ -51,14 +52,14 @@ export function validateMemberForm(v: { firstName: string; lastName: string; rel
   const errors: Record<string, string> = {};
   const fn = v.firstName.trim();
   const ln = v.lastName.trim();
-  if (fn.length < 2) errors.firstName = "الاسم قصير جدًا";
-  else if (fn.length > 60) errors.firstName = "الاسم طويل جدًا";
-  if (ln.length < 2) errors.lastName = "اللقب قصير جدًا";
-  else if (ln.length > 60) errors.lastName = "اللقب طويل جدًا";
-  if (!(v.relationship in RELATIONSHIP_LABELS)) errors.relationship = "اختر صلة القرابة";
+  if (fn.length < 2) errors.firstName = t("الاسم قصير جدًا");
+  else if (fn.length > 60) errors.firstName = t("الاسم طويل جدًا");
+  if (ln.length < 2) errors.lastName = t("اللقب قصير جدًا");
+  else if (ln.length > 60) errors.lastName = t("اللقب طويل جدًا");
+  if (!(v.relationship in RELATIONSHIP_LABELS)) errors.relationship = t("اختر صلة القرابة");
   if (v.birthDate) {
     const d = new Date(v.birthDate + "T00:00:00Z");
-    if (isNaN(d.getTime()) || d.getTime() > Date.now()) errors.birthDate = "تاريخ الميلاد غير منطقي";
+    if (isNaN(d.getTime()) || d.getTime() > Date.now()) errors.birthDate = t("تاريخ الميلاد غير منطقي");
   }
   return errors;
 }

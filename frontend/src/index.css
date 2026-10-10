@@ -111,3 +111,10 @@ body {
 }
 .patient-account :where(button, a) { min-height: 48px; }
 .patient-account a { align-items: center; }
+
+/* Keep mobile text entry stable: iOS zooms inputs smaller than 16px. */
+@media (max-width: 767px) {
+  input, select, textarea, .input { font-size: 16px; }
+}
+input, textarea { scroll-margin-block: 5rem; }
+html[lang="fr"] body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }

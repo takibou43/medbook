@@ -1,3 +1,5 @@
+import { useLanguage } from "./i18n/LanguageRoot";
+import { t } from "./i18n/locale.ts";
 import { useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useToast } from "./components/ui/Toast";
@@ -12,9 +14,10 @@ import FamilyMembers from "./pages/account/FamilyMembers";
 import TreatmentPlans from "./pages/account/TreatmentPlans";
 
 export default function App() {
+  useLanguage();
   const { showToast } = useToast();
   // تنبيه «بعد 5 دقائق» والتطبيق مفتوح: رنة المنبّه الخاصة مرة واحدة + رسالة داخل الصفحة.
-  useEffect(() => installAppointmentAlarm((msg) => showToast(msg.title || (msg.kind === "QUEUE_APPROACH_ALARM" ? "دورك اقترب" : "موعدك مع الطبيب بعد 5 دقائق"), "info")), [showToast]);
+  useEffect(() => installAppointmentAlarm((msg) => showToast(msg.title || (msg.kind === "QUEUE_APPROACH_ALARM" ? t("دورك اقترب") : t("موعدك مع الطبيب بعد 5 دقائق")), "info")), [showToast]);
 
   return (
     <Routes>

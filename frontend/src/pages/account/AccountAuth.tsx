@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t, catalogName } from "../../i18n/locale.ts";
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -31,6 +33,7 @@ function safeRedirect(raw: string | null): string {
 }
 
 export default function AccountAuth() {
+  useLanguage();
   const { user, loading, login, registerPatient } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -53,10 +56,10 @@ export default function AccountAuth() {
     setError(null);
     try {
       await login(v.email.trim(), v.password);
-      showToast("تم تسجيل الدخول.", "success");
+      showToast(t("تم تسجيل الدخول."), "success");
       navigate(redirect, { replace: true });
     } catch (err) {
-      setError(apiErrorMessage(err, "البريد الإلكتروني أو كلمة المرور غير صحيحة."));
+      setError(apiErrorMessage(err, t("البريد الإلكتروني أو كلمة المرور غير صحيحة.")));
     } finally {
       setSubmitting(false);
     }
@@ -67,17 +70,17 @@ export default function AccountAuth() {
     setError(null);
     try {
       await registerPatient({ name: v.name.trim(), email: v.email.trim(), password: v.password, phone: v.phone.trim() || undefined, cityId: v.cityId });
-      showToast("تم إنشاء حسابك بنجاح.", "success");
+      showToast(t("تم إنشاء حسابك بنجاح."), "success");
       navigate(redirect, { replace: true });
     } catch (err) {
       // بريد/هاتف مسجّل: لا حساب ثانٍ ولا ربط تلقائي. نوجّه إلى تسجيل الدخول ثم إضافة الملف من داخل الحساب.
       if ((err as any)?.response?.data?.details?.code === "ACCOUNT_EXISTS") {
         loginForm.setValue("email", v.email.trim());
         setMode("login");
-        setError("هذا البريد الإلكتروني أو رقم الهاتف مسجّل بالفعل. سجّل الدخول إلى حسابك، وإن كنت طبيبًا فعّل ملف المريض من لوحة الأطباء (ملفاتي) ثم ادخل من هنا.");
+        setError(t("هذا البريد الإلكتروني أو رقم الهاتف مسجّل بالفعل. سجّل الدخول إلى حسابك، وإن كنت طبيبًا فعّل ملف المريض من لوحة الأطباء (ملفاتي) ثم ادخل من هنا."));
         return;
       }
-      setError(apiErrorMessage(err, "تعذّر إنشاء الحساب."));
+      setError(apiErrorMessage(err, t("تعذّر إنشاء الحساب.")));
     } finally {
       setSubmitting(false);
     }
@@ -92,66 +95,55 @@ export default function AccountAuth() {
   return (
     <div className="container-app py-8">
       <div className="mx-auto max-w-md">
-        <h1 className="mb-1 text-center text-2xl font-extrabold text-slate-900">حسابي في MedBook</h1>
-        <p className="mb-6 text-center text-sm text-slate-600">
-          الحجز يتطلب حسابًا بالبريد الإلكتروني — يتيح لك متابعة مواعيدك وتلقي تذكير قبل الموعد.{" "}
-          <Link to="/" className="font-semibold text-primary-700 hover:underline">
-            العودة إلى الحجز
-          </Link>
+        <h1 className="mb-1 text-center text-2xl font-extrabold text-slate-900">{t("حسابي في MedBook")}</h1>
+        <p className="mb-6 text-center text-sm text-slate-600">{t("الحجز يتطلب حسابًا بالبريد الإلكتروني — يتيح لك متابعة مواعيدك وتلقي تذكير قبل الموعد.")}{" "}
+          <Link to="/" className="font-semibold text-primary-700 hover:underline">{t("العودة إلى الحجز ")}</Link>
         </p>
 
         <div className="mb-4 flex gap-1 rounded-2xl bg-slate-100 p-1" role="tablist">
-          <button type="button" role="tab" aria-selected={mode === "login"} className={tabClass("login")} onClick={() => { setMode("login"); setError(null); }}>
-            تسجيل الدخول
-          </button>
-          <button type="button" role="tab" aria-selected={mode === "register"} className={tabClass("register")} onClick={() => { setMode("register"); setError(null); }}>
-            إنشاء حساب
-          </button>
+          <button type="button" role="tab" aria-selected={mode === "login"} className={tabClass("login")} onClick={() => { setMode("login"); setError(null); }}>{t("تسجيل الدخول ")}</button>
+          <button type="button" role="tab" aria-selected={mode === "register"} className={tabClass("register")} onClick={() => { setMode("register"); setError(null); }}>{t("إنشاء حساب ")}</button>
         </div>
 
         {mode === "login" ? (
           <form onSubmit={loginForm.handleSubmit(onLogin)} noValidate className="glass space-y-4 p-5">
-            <Input label="البريد الإلكتروني" type="email" dir="ltr" className="text-left" autoComplete="email" error={loginForm.formState.errors.email?.message} {...loginForm.register("email", EMAIL_RULE)} />
-            <Input label="كلمة المرور" type="password" dir="ltr" className="text-left" autoComplete="current-password" error={loginForm.formState.errors.password?.message} {...loginForm.register("password", { required: "كلمة المرور مطلوبة" })} />
-            {error && <p className="text-sm font-semibold text-red-600" role="alert">{error}</p>}
-            <Button type="submit" className="min-h-[48px] w-full" loading={submitting}>
-              تسجيل الدخول
-            </Button>
+            <Input label={t("البريد الإلكتروني")} type="email" dir="ltr" className="text-left" autoComplete="email" error={loginForm.formState.errors.email?.message} {...loginForm.register("email", EMAIL_RULE)} />
+            <Input label={t("كلمة المرور")} type="password" dir="ltr" className="text-left" autoComplete="current-password" error={loginForm.formState.errors.password?.message} {...loginForm.register("password", { required: t("كلمة المرور مطلوبة") })} />
+            {error && <p className="text-sm font-semibold text-red-600" role="alert">{t(error ?? "")}</p>}
+            <Button type="submit" className="min-h-[48px] w-full" loading={submitting}>{t("تسجيل الدخول ")}</Button>
           </form>
         ) : (
           <form onSubmit={registerForm.handleSubmit(onRegister)} noValidate className="glass space-y-4 p-5">
-            <Input label="الاسم واللقب" autoComplete="name" error={registerForm.formState.errors.name?.message} {...registerForm.register("name", { required: "الاسم مطلوب", minLength: { value: 2, message: "الاسم قصير جدًا" } })} />
-            <Input label="البريد الإلكتروني" type="email" dir="ltr" className="text-left" autoComplete="email" error={registerForm.formState.errors.email?.message} {...registerForm.register("email", EMAIL_RULE)} />
-            <Input label="كلمة المرور (8 خانات على الأقل)" type="password" dir="ltr" className="text-left" autoComplete="new-password" error={registerForm.formState.errors.password?.message} {...registerForm.register("password", { required: "كلمة المرور مطلوبة", minLength: { value: 8, message: "كلمة المرور يجب أن تكون 8 خانات على الأقل" } })} />
-            <Input label="رقم الهاتف (اختياري)" type="tel" inputMode="tel" dir="ltr" className="text-left" placeholder="0551234567" autoComplete="tel" error={registerForm.formState.errors.phone?.message} {...registerForm.register("phone", { pattern: { value: PHONE_REGEX, message: "رقم هاتف جزائري غير صالح (مثال: 0551234567)" } })} />
+            <Input label={t("الاسم واللقب")} autoComplete="name" error={registerForm.formState.errors.name?.message} {...registerForm.register("name", { required: t("الاسم مطلوب"), minLength: { value: 2, message: t("الاسم قصير جدًا") } })} />
+            <Input label={t("البريد الإلكتروني")} type="email" dir="ltr" className="text-left" autoComplete="email" error={registerForm.formState.errors.email?.message} {...registerForm.register("email", EMAIL_RULE)} />
+            <Input label={t("كلمة المرور (8 خانات على الأقل)")} type="password" dir="ltr" className="text-left" autoComplete="new-password" error={registerForm.formState.errors.password?.message} {...registerForm.register("password", { required: t("كلمة المرور مطلوبة"), minLength: { value: 8, message: t("كلمة المرور يجب أن تكون 8 خانات على الأقل") } })} />
+            <Input label={t("رقم الهاتف (اختياري)")} type="tel" inputMode="tel" dir="ltr" className="text-left" placeholder="0551234567" autoComplete="tel" error={registerForm.formState.errors.phone?.message} {...registerForm.register("phone", { pattern: { value: PHONE_REGEX, message: t("رقم هاتف جزائري غير صالح (مثال: 0551234567)") } })} />
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="patient-wilaya">الولاية</label>
+              <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="patient-wilaya">{t("الولاية")}</label>
               <select
                 id="patient-wilaya"
                 className="input"
                 {...registerForm.register("wilayaId", {
-                  required: "الولاية مطلوبة",
+                  required: t("الولاية مطلوبة"),
                   onChange: () => registerForm.setValue("cityId", "", { shouldValidate: true }),
                 })}
               >
-                <option value="">اختر الولاية</option>
-                {wilayas?.map((wilaya) => <option key={wilaya.id} value={wilaya.id}>{wilaya.nameAr}</option>)}
+                <option value="">{t("اختر الولاية")}</option>
+                {wilayas?.map((wilaya) => <option key={wilaya.id} value={wilaya.id}>{catalogName(wilaya)}</option>)}
               </select>
               {registerForm.formState.errors.wilayaId && <p className="mt-1 text-xs text-red-600">{registerForm.formState.errors.wilayaId.message}</p>}
             </div>
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="patient-city">البلدية</label>
-              <select id="patient-city" className="input" disabled={!selectedWilayaId} {...registerForm.register("cityId", { required: "البلدية مطلوبة" })}>
-                <option value="">اختر البلدية</option>
+              <label className="mb-1 block text-sm font-semibold text-slate-700" htmlFor="patient-city">{t("البلدية")}</label>
+              <select id="patient-city" className="input" disabled={!selectedWilayaId} {...registerForm.register("cityId", { required: t("البلدية مطلوبة") })}>
+                <option value="">{t("اختر البلدية")}</option>
                 {cities.map((city) => <option key={city.id} value={city.id}>{city.nameAr}</option>)}
               </select>
               {registerForm.formState.errors.cityId && <p className="mt-1 text-xs text-red-600">{registerForm.formState.errors.cityId.message}</p>}
-              <p className="mt-1 text-xs text-slate-500">نستعمل المنطقة لإعلامك عند انضمام طبيب جديد في ولايتك.</p>
+              <p className="mt-1 text-xs text-slate-500">{t("نستعمل المنطقة لإعلامك عند انضمام طبيب جديد في ولايتك.")}</p>
             </div>
-            {error && <p className="text-sm font-semibold text-red-600" role="alert">{error}</p>}
-            <Button type="submit" className="min-h-[48px] w-full" loading={submitting}>
-              إنشاء الحساب
-            </Button>
+            {error && <p className="text-sm font-semibold text-red-600" role="alert">{t(error ?? "")}</p>}
+            <Button type="submit" className="min-h-[48px] w-full" loading={submitting}>{t("إنشاء الحساب ")}</Button>
           </form>
         )}
       </div>

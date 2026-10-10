@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t, getLocale, getLanguage } from "../i18n/locale.ts";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -26,6 +28,7 @@ const PAD = { l: 34, r: 12, t: 12, b: 26 };
 
 /** مخطط خطي/مساحي بـSVG خالص (لا مكتبة رسوم في المشروع ولم نضف واحدة). المحور الزمني من اليسار لليمين. */
 export function AppointmentsChart() {
+  useLanguage();
   const [range, setRange] = useState<Range>("7d");
   const [hover, setHover] = useState<number | null>(null);
 
@@ -46,20 +49,19 @@ export function AppointmentsChart() {
     const area = pts.length ? `${line} L${x(pts.length - 1).toFixed(1)},${PAD.t + ih} L${x(0).toFixed(1)},${PAD.t + ih} Z` : "";
     const ticks = Array.from({ length: 5 }, (_, i) => Math.round((niceMax / 4) * i * 100) / 100).filter((v, i, a) => a.indexOf(v) === i);
     return { pts, x, y, line, area, ticks, iw };
-  }, [data]);
+  }, [data, getLanguage()]);
 
   const active = hover !== null ? geo.pts[hover] : null;
-  const fmt = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("ar-DZ", { day: "numeric", month: "short", timeZone: "UTC" });
+  const fmt = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString(getLocale(), { day: "numeric", month: "short", timeZone: "UTC" });
   const labelEvery = Math.max(1, Math.ceil(geo.pts.length / 8));
 
   return (
     <div className="card space-y-3 p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="font-bold text-slate-800">المواعيد حسب اليوم</h2>
-          <p className="text-xs text-slate-500">
-            حسب تاريخ الموعد{data ? ` — المجموع في الفترة: ${data.total}` : ""}
-            {isFetching && !isLoading ? " · يتم التحديث…" : ""}
+          <h2 className="font-bold text-slate-800">{t("المواعيد حسب اليوم")}</h2>
+          <p className="text-xs text-slate-500">{t("حسب تاريخ الموعد")}{data ? t(" — المجموع في الفترة: {0}", { "0": data.total }) : ""}
+            {isFetching && !isLoading ? t(" · يتم التحديث…") : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1" role="tablist">
@@ -77,26 +79,26 @@ export function AppointmentsChart() {
                 range === r.key ? "bg-white text-primary-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
               )}
             >
-              {r.label}
+              {t(r.label)}
             </button>
           ))}
         </div>
       </div>
 
-      {data && <p className="text-sm text-slate-600">الفترة: {data.from} إلى {data.to} · المجموع: {data.total.toLocaleString("ar-DZ")}</p>}
+      {data && <p className="text-sm text-slate-600">{t("الفترة: ")}{data.from}{t(" إلى ")}{data.to}{t(" · المجموع: ")}{data.total.toLocaleString(getLocale())}</p>}
       {isLoading ? (
         <Spinner />
       ) : isError ? (
         <ErrorState message={apiErrorMessage(error)} onRetry={()=>void refetch()} />
       ) : data && data.total === 0 ? (
-        <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-300 text-sm text-slate-500">لا توجد مواعيد في هذه الفترة</div>
+        <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-slate-300 text-sm text-slate-500">{t("لا توجد مواعيد في هذه الفترة")}</div>
       ) : (
         <div className="relative" dir="ltr">
           <svg
             viewBox={`0 0 ${W} ${H}`}
             className="h-auto w-full"
             role="img"
-            aria-label="مخطط عدد المواعيد اليومية"
+            aria-label={t("مخطط عدد المواعيد اليومية")}
             onMouseLeave={() => setHover(null)}
             onMouseMove={(e) => {
               const r = e.currentTarget.getBoundingClientRect();
@@ -149,20 +151,20 @@ export function AppointmentsChart() {
 
           {active && (
             <div
-              dir="rtl"
+
               className="pointer-events-none absolute top-0 z-10 w-44 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-2.5 text-xs shadow-lg"
               style={{ left: `${Math.min(88, Math.max(12, (geo.x(hover!) / W) * 100))}%` }}
             >
               <p className="mb-1 font-bold text-slate-800">{fmt(active.date)}</p>
-              <p className="flex justify-between text-slate-600"><span>إجمالي</span><b>{active.total}</b></p>
-              <p className="flex justify-between text-green-700"><span>مكتملة</span><b>{active.completed}</b></p>
-              <p className="flex justify-between text-red-600"><span>ملغاة</span><b>{active.cancelled}</b></p>
-              <p className="flex justify-between text-amber-700"><span>لم يحضر</span><b>{active.noShow}</b></p>
+              <p className="flex justify-between text-slate-600"><span>{t("إجمالي")}</span><b>{active.total}</b></p>
+              <p className="flex justify-between text-green-700"><span>{t("مكتملة")}</span><b>{active.completed}</b></p>
+              <p className="flex justify-between text-red-600"><span>{t("ملغاة")}</span><b>{active.cancelled}</b></p>
+              <p className="flex justify-between text-amber-700"><span>{t("لم يحضر")}</span><b>{active.noShow}</b></p>
             </div>
           )}
         </div>
       )}
-      {data && <details className="mt-3"><summary className="btn-outline cursor-pointer">عرض الأرقام اليومية</summary><div className="mt-2 overflow-x-auto"><table className="w-full text-right text-sm"><caption className="sr-only">أعداد المواعيد بحسب اليوم والحالة</caption><thead><tr>{['التاريخ','الإجمالي','مكتملة','ملغاة','لم يحضر'].map(t=><th key={t} className="p-2">{t}</th>)}</tr></thead><tbody>{(data.points??[]).map(p=><tr key={p.date}><th className="p-2">{p.date}</th><td>{p.total}</td><td>{p.completed}</td><td>{p.cancelled}</td><td>{p.noShow}</td></tr>)}</tbody></table></div></details>}
+      {data && <details className="mt-3"><summary className="btn-outline cursor-pointer">{t("عرض الأرقام اليومية")}</summary><div className="mt-2 overflow-x-auto"><table className="w-full text-start text-sm"><caption className="sr-only">{t("أعداد المواعيد بحسب اليوم والحالة")}</caption><thead><tr>{[t("التاريخ"),t("الإجمالي"),t("مكتملة"),t("ملغاة"),t("لم يحضر")].map(t=><th key={t} className="p-2">{t}</th>)}</tr></thead><tbody>{(data.points??[]).map(p=><tr key={p.date}><th className="p-2">{p.date}</th><td>{p.total}</td><td>{p.completed}</td><td>{p.cancelled}</td><td>{p.noShow}</td></tr>)}</tbody></table></div></details>}
     </div>
   );
 }

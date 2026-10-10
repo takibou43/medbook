@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t, getLanguage } from "../../i18n/locale.ts";
 import { canSendAttendanceMessage } from "../../lib/assistantReception";
 import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useEffect, useMemo, useState } from "react";
@@ -69,7 +71,7 @@ function formatTime12(startTime?: string | null): string {
   const [h, m] = startTime.split(":").map(Number);
   if (isNaN(h)) return startTime;
   const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${String(h12).padStart(2, "0")}:${String(m || 0).padStart(2, "0")} ${h < 12 ? "ص" : "م"}`;
+  return t("{0}:{1} {2}", { "0": String(h12).padStart(2, "0"), "1": String(m || 0).padStart(2, "0"), "2": h < 12 ? "ص" : "م" });
 }
 
 /** "اليوم، 06:16 م" / "أمس، 09:20 ص" / "الأربعاء 10/09، 09:20 ص" */
@@ -79,14 +81,14 @@ function formatWhen(dateStr: string, startTime?: string | null): string {
   if (!key) return time;
   const today = algeriaTodayKey();
   let day: string;
-  if (key === today) day = "اليوم";
-  else if (key === shiftDayKey(today, -1)) day = "أمس";
-  else if (key === shiftDayKey(today, 1)) day = "غدًا";
+  if (key === today) day = t("اليوم");
+  else if (key === shiftDayKey(today, -1)) day = t("أمس");
+  else if (key === shiftDayKey(today, 1)) day = t("غدًا");
   else {
     const d = new Date(key + "T00:00:00Z");
     day = `${WEEKDAYS_AR[d.getUTCDay()]} ${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
   }
-  return time ? `${day}، ${time}` : day;
+  return time ? t("{0}، {1}", { "0": day, "1": time }) : day;
 }
 
 /** هل فات وقت هذا الموعد؟ نستعملها لدفع المواعيد المنتهية إلى أسفل القائمة. */
@@ -101,7 +103,7 @@ function patientFullName(a: any): string {
   // موعد لفرد من عائلة صاحب الحساب: اسم المستفيد (لا اسم صاحب الحساب).
   if (a.beneficiary?.type === "FAMILY_MEMBER") return a.beneficiary.name;
   if (a.patient) return `${a.patient.firstName} ${a.patient.lastName}`.trim();
-  return [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ").trim() || "مريض بدون اسم";
+  return [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ").trim() || t("مريض بدون اسم");
 }
 
 function patientPhone(a: any): string | null {
@@ -119,35 +121,37 @@ function toWhatsAppNumber(phone?: string | null) {
 
 /** مؤشر نبض صغير يُغني عن شرح "تتحدّث الصفحة كل 15 ثانية". */
 function LiveIndicator({ isFetching, updatedAt }: { isFetching: boolean; updatedAt?: number }) {
+  useLanguage();
   return (
-    <span className="flex items-center gap-2 text-xs text-slate-500" title="تتحدّث الصفحة تلقائيًا">
+    <span className="flex items-center gap-2 text-xs text-slate-500" title={t("تتحدّث الصفحة تلقائيًا")}>
       <span className="relative flex h-2 w-2 shrink-0">
         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
         <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
       </span>
       {isFetching
-        ? "جارٍ التحديث..."
+        ? t("جارٍ التحديث...")
         : updatedAt
-        ? `آخر تحديث ${formatTime12(new Date(updatedAt + ALGERIA_OFFSET_MS).toISOString().slice(11, 16))}`
-        : "مباشر"}
+        ? t("آخر تحديث {0}", { "0": formatTime12(new Date(updatedAt + ALGERIA_OFFSET_MS).toISOString().slice(11, 16)) })
+        : t("مباشر")}
     </span>
   );
 }
 
 /** شارة تكرار الغياب: صفراء للتنبيه، حمراء عند تجاوز العتبة الحادة. */
 function NoShowWarningBadge({ count }: { count: number }) {
+  useLanguage();
   if (count < NO_SHOW_WARNING_THRESHOLD) return null;
   const critical = count >= NO_SHOW_CRITICAL_THRESHOLD;
   return (
     <span
-      title={`تكرر غيابه ${count} مرات سابقًا`}
+      title={t("تكرر غيابه {0} مرات سابقًا", { "0": count })}
       className={clsx(
         "badge shrink-0 gap-1 border",
         critical ? "border-red-200 bg-red-100 text-red-700" : "border-amber-200 bg-amber-100 text-amber-700"
       )}
     >
       <AlertTriangle className="h-3 w-3" />
-      {critical ? `غياب متكرر (${count})` : `تكرر غيابه (${count})`}
+      {critical ? t("غياب متكرر ({0})", { "0": count }) : t("تكرر غيابه ({0})", { "0": count })}
     </span>
   );
 }
@@ -170,15 +174,16 @@ interface CardProps {
 }
 
 function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy, pending, onFollowUp, role, canManageAttendance }: CardProps) {
+  useLanguage();
   const phone = patientPhone(a);
   const wa = toWhatsAppNumber(phone);
   const isOpen = a.status === "CONFIRMED" || a.status === "PENDING";
   const actions = appointmentActions(a, role);
 
   const reminderHref = wa
-    ? `https://wa.me/${wa}?text=${encodeURIComponent(
+    ? t("https://wa.me/{0}?text={1}", { "0": wa, "1": encodeURIComponent(
         `السلام عليكم ${patientFullName(a)}، تذكير بموعدك الطبي على الساعة ${a.startTime}. نرجو الحضور في الوقت المحدد.`
-      )}`
+      ) })
     : null;
 
   return (
@@ -196,19 +201,19 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
             {formatWhen(a.date, a.startTime)}
           </span>
           {phone ? (
-            <a href={`tel:${phone}`} className="inline-flex min-w-0 items-center gap-1.5 text-slate-600 transition hover:text-primary-700" aria-label={`اتصال بالرقم ${phone}`}>
+            <a href={`tel:${phone}`} className="inline-flex min-w-0 items-center gap-1.5 text-slate-600 transition hover:text-primary-700" aria-label={t("اتصال بالرقم {0}", { "0": phone })}>
               <Phone className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
               <span className="ltr-nums truncate">{phone}</span>
             </a>
           ) : (
-            <span className="text-slate-500">لا يوجد رقم هاتف</span>
+            <span className="text-slate-500">{t("لا يوجد رقم هاتف")}</span>
           )}
         </div>
 
         {/* وسوم ثابتة (غير قابلة للنقر) */}
         {(!a.patient || (a.patientNoShowCount ?? 0) >= NO_SHOW_WARNING_THRESHOLD) && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {!a.patient && <span className="badge shrink-0 border border-slate-200 bg-slate-50 text-slate-500">بدون حساب</span>}
+            {!a.patient && <span className="badge shrink-0 border border-slate-200 bg-slate-50 text-slate-500">{t("بدون حساب")}</span>}
             <NoShowWarningBadge count={a.patientNoShowCount ?? 0} />
           </div>
         )}
@@ -217,17 +222,17 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {a.beneficiary?.type === "FAMILY_MEMBER" && (
               <span className="badge shrink-0 border border-primary-200 bg-primary-50 text-primary-800">
-                {a.beneficiary.relationship ? RELATIONSHIP_LABELS[a.beneficiary.relationship as keyof typeof RELATIONSHIP_LABELS] : "فرد عائلة"}
-                {a.patient ? ` — حساب ${a.patient.firstName} ${a.patient.lastName}` : ""}
+                {a.beneficiary.relationship ? RELATIONSHIP_LABELS[a.beneficiary.relationship as keyof typeof RELATIONSHIP_LABELS] : t("فرد عائلة")}
+                {a.patient ? t(" — حساب {0} {1}", { "0": a.patient.firstName, "1": a.patient.lastName }) : ""}
               </span>
             )}
             {a.createdBy === "DOCTOR" && a.type === "FOLLOW_UP" && (
-              <span className="badge shrink-0 border border-amber-200 bg-amber-50 text-amber-800">موعد عودة</span>
+              <span className="badge shrink-0 border border-amber-200 bg-amber-50 text-amber-800">{t("موعد عودة")}</span>
             )}
           </div>
         )}
 
-        {a.notes && <p className="mt-2 line-clamp-2 break-words text-xs text-slate-600">ملاحظات: {a.notes}</p>}
+        {a.notes && <p className="mt-2 line-clamp-2 break-words text-xs text-slate-600">{t("ملاحظات: ")}{a.notes}</p>}
         {actions.note && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-600">
             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {actions.note}
@@ -244,11 +249,10 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
                 href={reminderHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                title="تذكير المريض عبر واتساب"
+                title={t("تذكير المريض عبر واتساب")}
                 className="btn bg-[#25D366] text-white hover:brightness-95"
               >
-                <MessageCircle className="h-4 w-4" /> تذكير
-              </a>
+                <MessageCircle className="h-4 w-4" />{t(" تذكير ")}</a>
             )}
           </>
         )}
@@ -257,31 +261,26 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
             onClick={onComplete}
             disabled={busy || !actions.complete.enabled}
             loading={pending}
-            title={actions.complete.reason ?? "المريض حضر وأنهى استشارته"}
+            title={actions.complete.reason ?? t("المريض حضر وأنهى استشارته")}
           >
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> اكتمل الموعد
-          </Button>
+            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />{t(" اكتمل الموعد ")}</Button>
         )}
         {canManageAttendance && canSendAttendanceMessage(a) && (
           <Button
             variant="outline"
             onClick={onNoShow}
             disabled={busy}
-            title="إرسال رسالة دون تغيير الموعد"
-          >
-            إرسال رسالة
-          </Button>
+            title={t("إرسال رسالة دون تغيير الموعد")}
+          >{t("إرسال رسالة ")}</Button>
         )}
         {onFollowUp && canScheduleFollowUp(a) && a.status !== "NO_SHOW" && (
-          <Button variant="outline" onClick={onFollowUp} disabled={busy} title="إنشاء موعد عودة فعلي لهذا المريض">
-            <CalendarPlus className="h-4 w-4" /> برمجة موعد عودة
-          </Button>
+          <Button variant="outline" onClick={onFollowUp} disabled={busy} title={t("إنشاء موعد عودة فعلي لهذا المريض")}>
+            <CalendarPlus className="h-4 w-4" />{t(" برمجة موعد عودة ")}</Button>
         )}
         {canManageAttendance && a.status === "NO_SHOW" && (
           <>
-            <Button onClick={onArrivedLate} disabled={busy} loading={pending} title="وصل بعد فوات موعده — أدخله الآن">
-              <UserCheck className="h-4 w-4" /> حضر متأخرًا
-            </Button>
+            <Button onClick={onArrivedLate} disabled={busy} loading={pending} title={t("وصل بعد فوات موعده — أدخله الآن")}>
+              <UserCheck className="h-4 w-4" />{t(" حضر متأخرًا ")}</Button>
           </>
         )}
       </div>
@@ -290,6 +289,7 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
 }
 
 function AppointmentsListSection({ filters, onFiltersChange }: { filters: AppointmentFilters; onFiltersChange: (f: AppointmentFilters) => void }) {
+  useLanguage();
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
   const canManageAttendance = useAttendanceActions();
@@ -341,14 +341,14 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
     return appointments
       .filter(matches)
       .sort((a: any, b: any) => Number(hasTimePassed(a.date, a.startTime)) - Number(hasTimePassed(b.date, b.startTime)));
-  }, [appointments, query]);
+  }, [appointments, query, getLanguage()]);
 
   async function changeStatus(id: string, status: AppointmentStatus, appointment?: any) {
     if (updateStatus.isPending) return; // منع الإرسال المتكرر
     setPendingId(id);
     try {
       await updateStatus.mutateAsync({ id, status });
-      showToast(status === "COMPLETED" ? "سُجّل الموعد مكتملًا." : "تم تحديث حالة الموعد.", "success");
+      showToast(status === "COMPLETED" ? t("سُجّل الموعد مكتملًا.") : t("تم تحديث حالة الموعد."), "success");
       if (status === "COMPLETED" && appointment && canScheduleFollowUp(appointment) && !isAssistant) setJustCompleted(appointment);
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
@@ -378,7 +378,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
     setPendingId(id);
     try {
       await updateStatus.mutateAsync({ id, status: "IN_PROGRESS" });
-      showToast("تم تسجيل حضوره المتأخر — هو الآن المريض الحالي.", "success");
+      showToast(t("تم تسجيل حضوره المتأخر — هو الآن المريض الحالي."), "success");
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
     } finally {
@@ -394,7 +394,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
       {/* الهيدر: العنوان + مؤشر مباشر مُختصر بدل الشرح المطوّل */}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-extrabold text-slate-900">إدارة المواعيد</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">{t("إدارة المواعيد")}</h1>
           <LiveIndicator isFetching={isFetching} updatedAt={dataUpdatedAt} />
         </div>
       </header>
@@ -402,21 +402,19 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
       {/* شريط الأدوات: بحث + فترة زمنية */}
       <div className="card space-y-3 p-3 sm:p-4">
         <div className="relative">
-          <label htmlFor="appt-search" className="sr-only">
-            بحث في المواعيد
-          </label>
-          <Search className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+          <label htmlFor="appt-search" className="sr-only">{t("بحث في المواعيد ")}</label>
+          <Search className="pointer-events-none absolute start-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
           <input
             id="appt-search"
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="ابحث باسم المريض أو رقم الهاتف..."
-            className="input pr-10"
+            placeholder={t("ابحث باسم المريض أو رقم الهاتف...")}
+            className="input ps-10"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="اختصارات التاريخ">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("اختصارات التاريخ")}>
           {PRESETS.map((p) => (
             <button
               key={p.key}
@@ -428,21 +426,21 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
                 preset === p.key ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-primary-400"
               )}
             >
-              {p.label}
+              {t(p.label)}
             </button>
           ))}
         </div>
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <DateField label="من تاريخ" value={from} max={to} onChange={(v) => setRange({ from: v, to })} />
-          <DateField label="إلى تاريخ" value={to} min={from} onChange={(v) => setRange({ from, to: v })} />
+          <DateField label={t("من تاريخ")} value={from} max={to} onChange={(v) => setRange({ from: v, to })} />
+          <DateField label={t("إلى تاريخ")} value={to} min={from} onChange={(v) => setRange({ from, to: v })} />
         </div>
       </div>
 
       {/* شرائح الحالة: سطر واحد قابل للتمرير الأفقي داخل حاويته فقط */}
       <div
         role="group"
-        aria-label="تصفية حسب الحالة"
+        aria-label={t("تصفية حسب الحالة")}
         className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {FILTERS.map((f) => (
@@ -456,7 +454,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
               filter === f.value ? "bg-primary-600 text-white shadow-sm" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
             )}
           >
-            {f.label}
+            {t(f.label)}
           </button>
         ))}
       </div>
@@ -464,14 +462,14 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
       {/* ملخص الفلاتر المفعّلة + مسحها */}
       {hasFilters && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700" aria-live="polite">
-          <span className="font-semibold">الفلاتر:</span>
+          <span className="font-semibold">{t("الفلاتر:")}</span>
           {filter !== "ALL" && <span className="badge bg-slate-100">{FILTERS.find((f) => f.value === filter)?.label}</span>}
           {(from || to) && (
             <span className="badge bg-slate-100">
               {from && to && from === to ? formatDayAr(from) : `${from ? formatDayAr(from, { weekday: false }) : "…"} ← ${to ? formatDayAr(to, { weekday: false }) : "…"}`}
             </span>
           )}
-          {query && <span className="badge bg-slate-100">بحث: {query}</span>}
+          {query && <span className="badge bg-slate-100">{t("بحث: ")}{query}</span>}
           <button
             type="button"
             onClick={() => {
@@ -480,22 +478,18 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
             }}
             className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 font-semibold text-slate-700 hover:bg-slate-200"
           >
-            <X className="h-3.5 w-3.5" aria-hidden="true" /> مسح الفلاتر
-          </button>
-          {visible && <span className="text-slate-600">· {visible.length} نتيجة</span>}
+            <X className="h-3.5 w-3.5" aria-hidden="true" />{t(" مسح الفلاتر ")}</button>
+          {visible && <span className="text-slate-600">· {visible.length}{t(" نتيجة")}</span>}
         </div>
       )}
 
       {justCompleted && (
         <div className="card flex flex-col gap-2 border-primary-200 bg-primary-50 p-3 text-sm sm:flex-row sm:items-center sm:justify-between" role="status">
-          <span>
-            اكتمل موعد <b>{patientFullName(justCompleted)}</b>. هل تريد برمجة موعد عودة؟
-          </span>
+          <span>{t("اكتمل موعد ")}<b>{patientFullName(justCompleted)}</b>{t(". هل تريد برمجة موعد عودة؟ ")}</span>
           <div className="flex gap-2">
             <Button onClick={() => { openFollowUp(justCompleted); setJustCompleted(null); }}>
-              <CalendarPlus className="h-4 w-4" /> برمجة موعد عودة
-            </Button>
-            <Button variant="ghost" onClick={() => setJustCompleted(null)}>لاحقًا</Button>
+              <CalendarPlus className="h-4 w-4" />{t(" برمجة موعد عودة ")}</Button>
+            <Button variant="ghost" onClick={() => setJustCompleted(null)}>{t("لاحقًا")}</Button>
           </div>
         </div>
       )}
@@ -503,9 +497,9 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
       <FollowUpModal open={Boolean(followUpCtx)} ctx={followUpCtx} onClose={() => setFollowUpCtx(null)} />
 
       {isLoading && !appointments ? (
-        <SkeletonRows label="جارٍ تحميل المواعيد..." />
+        <SkeletonRows label={t("جارٍ تحميل المواعيد...")} />
       ) : isError && !appointments ? (
-        <ErrorState message={apiErrorMessage(error, "تعذّر تحميل المواعيد.")} onRetry={() => void refetch()} />
+        <ErrorState message={apiErrorMessage(error, t("تعذّر تحميل المواعيد."))} onRetry={() => void refetch()} />
       ) : visible && visible.length > 0 ? (
         <div className={clsx("space-y-3 transition-opacity", isFetching && "opacity-80")} aria-busy={isFetching}>
           {visible.map((a: any) => (
@@ -525,8 +519,8 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
         </div>
       ) : (
         <EmptyState
-          title={query ? "لا نتائج مطابقة للبحث" : hasFilters ? "لا توجد مواعيد مطابقة للفلاتر" : "لا توجد مواعيد"}
-          description={hasFilters ? "جرّب مسح الفلاتر أو تغيير الفترة." : undefined}
+          title={query ? t("لا نتائج مطابقة للبحث") : hasFilters ? t("لا توجد مواعيد مطابقة للفلاتر") : t("لا توجد مواعيد")}
+          description={hasFilters ? t("جرّب مسح الفلاتر أو تغيير الفترة.") : undefined}
         />
       )}
     </div>
@@ -545,29 +539,30 @@ const APPOINTMENTS_TABS: { key: "queue" | "list"; label: string }[] = [
  * التحديث الدوري (refetchInterval) للقسم غير الظاهر تلقائيًا، بلا أي استقطاب مضاعف للخادم.
  */
 export default function DoctorAppointments() {
+  useLanguage();
   // التبويب والفلاتر محفوظة في الرابط: الدخول الطبيعي = طابور اليوم و«الكل»، وبطاقات الإحصاءات
   // تفتح «كل المواعيد» بالفلتر الصريح نفسه، ويبقى كل شيء عند التحديث أو الرجوع.
   const [searchParams, setSearchParams] = useSearchParams();
-  const filters = useMemo(() => parseAppointmentFilters(searchParams), [searchParams]);
+  const filters = useMemo(() => parseAppointmentFilters(searchParams), [searchParams, getLanguage()]);
   const update = (next: AppointmentFilters) => setSearchParams(serializeAppointmentFilters(next), { replace: true });
   const tab = filters.tab;
 
   return (
     <div className="space-y-4">
-      <div role="tablist" aria-label="أقسام المواعيد" className="flex w-fit gap-1 rounded-full bg-slate-100 p-1">
-        {APPOINTMENTS_TABS.map((t) => (
+      <div role="tablist" aria-label={t("أقسام المواعيد")} className="flex w-fit gap-1 rounded-full bg-slate-100 p-1">
+        {APPOINTMENTS_TABS.map((tabItem) => (
           <button
-            key={t.key}
+            key={tabItem.key}
             type="button"
             role="tab"
-            aria-selected={tab === t.key}
-            onClick={() => update({ ...filters, tab: t.key })}
+            aria-selected={tab === tabItem.key}
+            onClick={() => update({ ...filters, tab: tabItem.key })}
             className={clsx(
               "rounded-full px-4 py-1.5 text-sm font-semibold transition",
-              tab === t.key ? "bg-white text-primary-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
+              tab === tabItem.key ? "bg-white text-primary-700 shadow-sm" : "text-slate-600 hover:text-slate-800"
             )}
           >
-            {t.label}
+            {t(tabItem.label)}
           </button>
         ))}
       </div>

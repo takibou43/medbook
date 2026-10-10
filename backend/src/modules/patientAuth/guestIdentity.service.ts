@@ -74,9 +74,10 @@ export async function verifyIdentityCode(userId: string, code: string) {
 
 export async function guestClaimCandidates(userId: string, role: Role) {
   const doctorId = await resolveActingDoctorId(userId, role);
-  const claims = await prisma.guestIdentityClaim.findMany({ where: { verifiedAt: { not: null }, expiresAt: { gt: new Date() } }, include: { patient: { include: { user: { select: { phone: true } } } } }, take: 200 });
-  if (!claims.length) return [];
-  const appointments = await prisma.appointment.findMany({ where: { doctorId, patientId: null, familyMemberId: null, guestPhone: { in: claims.flatMap(c => [c.phone, "+213" + c.phone.slice(1), "213" + c.phone.slice(1)]) } }, select: { id: true, date: true, startTime: true, guestFirstName: true, guestLastName: true, guestPhone: true }, take: 1000 });
+  const appointments = await prisma.appointment.findMany({ where: { doctorId, patientId: null, familyMemberId: null, guestPhone: { not: null } }, select: { id: true, date: true, startTime: true, guestFirstName: true, guestLastName: true, guestPhone: true }, orderBy: { date: "desc" }, take: 1000 });
+  const phones = [...new Set(appointments.map(a => identityPhone(a.guestPhone ?? "")).filter((p): p is string => !!p))];
+  if (!phones.length) return [];
+  const claims = await prisma.guestIdentityClaim.findMany({ where: { phone: { in: phones }, verifiedAt: { not: null }, expiresAt: { gt: new Date() } }, include: { patient: { include: { user: { select: { phone: true } } } } }, take: 1000 });
   return claims.filter(c => identityPhone(c.patient.user.phone ?? "") === c.phone && identityName(c.patient.firstName) === identityName(c.firstName) && identityName(c.patient.lastName) === identityName(c.lastName))
     .map(c => ({ claimId: c.id, firstName: c.firstName, lastName: c.lastName, phone: c.phone,
       appointments: appointments.filter(a => identityPhone(a.guestPhone ?? "") === c.phone && identityName(a.guestFirstName ?? "") === identityName(c.firstName) && identityName(a.guestLastName ?? "") === identityName(c.lastName)).map(a => ({ id: a.id, date: a.date, startTime: a.startTime })) }))

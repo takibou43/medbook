@@ -3,7 +3,7 @@ import { liveUpdates } from "../lib/liveUpdates";
 
 export const liveInvalidation: RequestHandler = (req, res, next) => {
   if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method) &&
-      /^\/(appointments|booking|doctor|assistant|clinics|admin|patient)(\/|$)/.test(req.path)) {
+      /^\/(appointments|booking|doctor|assistant|clinics|admin|patient|shifts|guest-claims)(\/|$)/.test(req.path)) {
     let doctors: string[] | undefined;
     if (/^\/(appointments|booking)(\/|$)/.test(req.path)) {
       const json = res.json;

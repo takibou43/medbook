@@ -132,6 +132,7 @@ describe.skipIf(!TEST_URL)("حساب المريض + التذكيرات (PostgreS
     expect(mine.data.map((a: any) => a.id)).toContain(appt!.id);
 
     const start = reminders.appointmentStartUtc(appt!.date, appt!.startTime);
+    await db.doctor.update({ where: { id: ids.doctor }, data: { dutyEndsAt: new Date(start.getTime() + 60 * MIN) } });
     // ساعة النظام تُضبط على نفس لحظة الدورة المحاكاة: TTL/deliverBy في lib/push تُحسب من الوقت الحقيقي،
     // والموعد المحجوز آليًا يبدأ بعد دقائق فقط، فبدون هذا تصبح النتيجة مرتبطة بساعة تشغيل الاختبار.
     const cycle = async (offsetMin: number) => {

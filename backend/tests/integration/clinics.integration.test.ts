@@ -385,7 +385,10 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
     ]);
     expect(called.map(response => response.status)).toEqual([200, 200]);
     expect(called.every(r=>r.body.data.awaitingAssistant===true && !r.body.data.id)).toBe(true);
-    for(const a of [first,second]) expect((await request(app).post(`/api/appointments/${a.id}/call`).set({...headers,"X-Assistant-Doctor-Id":a.doctorId})).status).toBe(200);
+    const confirmations = await Promise.all(Array.from({ length: 10 }, () => request(app).post(`/api/appointments/${first.id}/call`).set({ ...headers, "X-Assistant-Doctor-Id": firstId })));
+    expect(confirmations.filter(r => r.status === 200)).toHaveLength(1);
+    expect(confirmations.filter(r => r.status === 409)).toHaveLength(9);
+    expect((await request(app).post(`/api/appointments/${second.id}/call`).set({ ...headers, "X-Assistant-Doctor-Id": secondId })).status).toBe(200);
     const response = await board(); expect(response.status).toBe(200);
     expect(response.body.data.map((row: { queue: { current: { id: string } } }) => row.queue.current.id).sort()).toEqual([first.id, second.id].sort());
     const all = await request(app).get(`/api/assistant/appointments?date=${today}`).set(headers);

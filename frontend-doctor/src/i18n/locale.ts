@@ -43,5 +43,5 @@ export function t(text: unknown, values?: Record<string, unknown>): unknown {
 }
 export function catalogName(item?: { nameAr: string; nameFr?: string | null } | null): string {
   if (!item) return "";
-  return language === "fr" ? item.nameFr || item.nameAr : item.nameAr;
+  return language === "fr" ? item.nameFr?.trim() || t(item.nameAr) : item.nameAr;
 }

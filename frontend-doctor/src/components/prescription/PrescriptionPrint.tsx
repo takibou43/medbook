@@ -230,21 +230,21 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
           </div>
           <div className="flex w-full items-center justify-between gap-1.5 sm:w-auto sm:justify-start">
             <div className="flex items-center rounded-xl border border-slate-200" role="group" aria-label={t("التكبير")}>
-              <button type="button" onClick={() => stepZoom(-1)} className="flex h-11 w-11 items-center justify-center text-slate-700 hover:bg-slate-100" aria-label={t("تصغير")}>
+              <button type="button" onClick={() => stepZoom(-1)} className="flex h-11 w-9 items-center justify-center text-slate-700 hover:bg-slate-100 sm:w-11" aria-label={t("تصغير")}>
                 <Minus className="h-4 w-4" aria-hidden="true" />
               </button>
               <button type="button" onClick={() => setZoom(null)} className="flex h-11 min-w-[3rem] items-center justify-center gap-1 px-1 text-xs font-semibold tabular-nums text-slate-700 hover:bg-slate-100" aria-label={t("ملاءمة العرض")} title={t("ملاءمة العرض")}>
                 {zoom === null ? <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /> : null}
                 <span dir="ltr">{Math.round(scale * 100)}%</span>
               </button>
-              <button type="button" onClick={() => stepZoom(1)} className="flex h-11 w-11 items-center justify-center text-slate-700 hover:bg-slate-100" aria-label={t("تكبير")}>
+              <button type="button" onClick={() => stepZoom(1)} className="flex h-11 w-9 items-center justify-center text-slate-700 hover:bg-slate-100 sm:w-11" aria-label={t("تكبير")}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-            <button type="button" onClick={onClose} className="btn-outline whitespace-nowrap px-3">
+            <button type="button" onClick={onClose} className="btn-outline whitespace-nowrap px-2 text-xs sm:px-3 sm:text-sm">
               <X className="h-4 w-4" aria-hidden="true" /> {t("رجوع للتعديل")}
             </button>
-            <button type="button" disabled={templateOverflow || Boolean(template && (!imageReady || imageError))} onClick={() => window.print()} className="btn-primary whitespace-nowrap px-3">
+            <button type="button" disabled={templateOverflow || Boolean(template && (!imageReady || imageError))} onClick={() => window.print()} className="btn-primary whitespace-nowrap px-2 text-xs sm:px-3 sm:text-sm">
               <Printer className="h-4 w-4" aria-hidden="true" /> {t("طباعة")}
             </button>
           </div>

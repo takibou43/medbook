@@ -1,6 +1,7 @@
+import { Modal } from "../../components/ui/Modal";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -36,7 +37,7 @@ function beneficiaryLine(p: { beneficiary: TreatmentPlanSummary["beneficiary"] }
   return b.type === "FAMILY_MEMBER" && b.relationship ? `${b.name} (${t(RELATIONSHIP_LABELS[b.relationship])})` : b.name;
 }
 
-function CreatePlanForm({ onCreated, onCancel, initialSubject = "" }: { initialSubject?: string; onCreated: (id: string) => void; onCancel: () => void }) {
+function CreatePlanForm({ onCreated, onCancel, initialSubject = "", locked = false, onBusyChange }: { locked?: boolean; onBusyChange?: (busy: boolean) => void; initialSubject?: string; onCreated: (id: string) => void; onCancel: () => void }) {
   useLanguage();
   const { showToast } = useToast();
   const [subject, setSubject] = useState(initialSubject);
@@ -66,6 +67,7 @@ function CreatePlanForm({ onCreated, onCancel, initialSubject = "" }: { initialS
     onError: (e) => showToast(apiErrorMessage(e, t("تعذّر إنشاء الخطة.")), "error"),
   });
 
+  useEffect(() => { onBusyChange?.(create.isPending); }, [create.isPending, onBusyChange]);
   return (
     <form className="card space-y-3 p-4" onSubmit={(e) => { e.preventDefault(); if (subject && title.trim().length >= 2 && candidates.data?.some(c => subject === `${c.id}|` || c.familyMembers.some(m => subject === `${c.id}|${m.id}`))) create.mutate(); }}>
       <h2 className="font-bold text-slate-900">{t("خطة علاج جديدة")}</h2>
@@ -76,7 +78,7 @@ function CreatePlanForm({ onCreated, onCancel, initialSubject = "" }: { initialS
       ) : (candidates.data?.length ?? 0) === 0 ? (
         <p className="text-sm text-slate-500">{t("لا يوجد بعد مرضى بحساب حجزوا عندك. تُنشأ الخطة لمريض سبق أن حجز لديك.")}</p>
       ) : (
-        <Select label={t("المريض / المستفيد")} value={subject} onChange={(e) => setSubject(e.target.value)} required>
+        <Select label={t("المريض / المستفيد")} value={subject} disabled={locked} onChange={(e) => setSubject(e.target.value)} required>
           <option value="">{t("اختر")}</option>
           {candidates.data!.map((c) => (
             <optgroup key={c.id} label={`${c.firstName} ${c.lastName}`}>
@@ -104,7 +106,7 @@ function CreatePlanForm({ onCreated, onCancel, initialSubject = "" }: { initialS
   );
 }
 
-function PlanDetail({ planId, onBack }: { planId: string; onBack: () => void }) {
+function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string; onBack: () => void; onSaved?: () => void; onBusyChange?: (busy: boolean) => void }) {
   useLanguage();
   const { showToast } = useToast();
   const qc = useQueryClient();
@@ -123,10 +125,11 @@ function PlanDetail({ planId, onBack }: { planId: string; onBack: () => void }) 
   };
   const run = useMutation({
     mutationFn: async (fn: () => Promise<{ data: { data: TreatmentPlanDetail } }>) => (await fn()).data.data,
-    onSuccess: (d) => refresh(d),
+    onSuccess: (d) => { refresh(d); onSaved?.(); },
     onError: (e) => showToast(apiErrorMessage(e, t("تعذّر الحفظ.")), "error"),
   });
 
+  useEffect(() => { onBusyChange?.(run.isPending); }, [run.isPending, onBusyChange]);
   if (q.isLoading) return <Spinner />;
   if (q.isError || !q.data) return <p className="card p-4 text-sm text-red-600" role="alert">{apiErrorMessage(q.error, t("تعذّر تحميل الخطة."))}</p>;
   const p = q.data;
@@ -339,4 +342,23 @@ export default function DoctorTreatmentPlans() {
       )}
     </div>
   );
+}
+
+export function CurrentPatientPlansModal({ patientId, memberId, name, onClose }: { patientId: string; memberId: string; name: string; onClose: () => void }) {
+  useLanguage();
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const plans = useQuery({ queryKey: ["treatment-plans"], queryFn: async () => (await api.get<{ data: TreatmentPlanSummary[] }>("/doctor/treatment-plans")).data.data });
+  const visible = (plans.data ?? []).filter(p => p.patientId === patientId && (p.familyMemberId ?? "") === memberId);
+  const saved = () => { qc.invalidateQueries({ queryKey: ["treatment-plans"] }); onClose(); };
+  return <Modal open onClose={() => { if (!busy) onClose(); }} title={t("خطط العلاج")}>
+    <p className="mb-4 font-semibold"><bdi>{name}</bdi></p>
+    {planId ? <PlanDetail planId={planId} onBack={() => { if (!busy) setPlanId(null); }} onSaved={saved} onBusyChange={setBusy} /> : <>
+      <CreatePlanForm initialSubject={patientId + "|" + memberId} locked onCreated={saved} onCancel={() => { if (!busy) onClose(); }} onBusyChange={setBusy} />
+      {plans.isLoading && <Spinner />}
+      {plans.isError && <p role="alert">{apiErrorMessage(plans.error, t("تعذّر تحميل الخطط."))}</p>}
+      <ul className="mt-4 space-y-2">{visible.map(p => <li key={p.id}><button type="button" className="btn-outline w-full" onClick={() => setPlanId(p.id)}>{p.title}</button></li>)}</ul>
+    </>}
+  </Modal>;
 }

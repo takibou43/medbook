@@ -128,7 +128,7 @@ export function DashboardLayout({
   }
 
   const { main, footer } = splitNavItems(items);
-  const name = accountDisplayName(user);
+  const name = accountDisplayName(user).replace(/^د\.\s*/, t("د. "));
   const account = { name, initials: initialsOf(name.replace(/^د\.\s*/, "")), role: t(roleLabel(user?.role)) };
 
   const renderNav = (compact: boolean, onNavigate?: () => void) => (

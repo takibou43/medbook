@@ -1,3 +1,4 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp } from "lucide-react";
 import { api } from "../../lib/api";
@@ -9,6 +10,7 @@ import type { BookingStats } from "../../types";
  * لا رقم ثابت في الواجهة. عند التحميل أو الفشل تُخفى البطاقة فقط — الحجز لا يتأثر.
  */
 export function BookingCounterCard({ wilayaId }: { wilayaId?: string | null }) {
+  useLanguage();
   const q = useQuery({
     queryKey: ["public-booking-stats", wilayaId ?? "national"],
     queryFn: async () =>
@@ -26,3 +28,4 @@ export function BookingCounterCard({ wilayaId }: { wilayaId?: string | null }) {
     </div>
   );
 }
+

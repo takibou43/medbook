@@ -71,7 +71,7 @@ function formatTime12(startTime?: string | null): string {
   const [h, m] = startTime.split(":").map(Number);
   if (isNaN(h)) return startTime;
   const h12 = h % 12 === 0 ? 12 : h % 12;
-  return t("{0}:{1} {2}", { "0": String(h12).padStart(2, "0"), "1": String(m || 0).padStart(2, "0"), "2": h < 12 ? "ص" : "م" });
+  return t("{0}:{1} {2}", { "0": String(h12).padStart(2, "0"), "1": String(m || 0).padStart(2, "0"), "2": h < 12 ? t("ص") : t("م") });
 }
 
 /** "اليوم، 06:16 م" / "أمس، 09:20 ص" / "الأربعاء 10/09، 09:20 ص" */

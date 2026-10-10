@@ -1620,5 +1620,16 @@
   "مخطّطة: {0}": "Prévue le {0}",
   "موعد {0} {1}": "Rendez-vous le {0} à {1}",
   "مستحقة حوالي {0}": "À prévoir vers le {0}",
-  "· متابعة {0}: {1}": "· Suivi {0} : {1}"
+  "· متابعة {0}: {1}": "· Suivi {0} : {1}",
+  "القائمة": "Menu",
+  "عام": "Général",
+  "القائمة الجانبية": "Menu latéral",
+  "توسيع القائمة الجانبية": "Développer le menu latéral",
+  "طي القائمة الجانبية": "Réduire le menu latéral",
+  "توسيع القائمة": "Développer le menu",
+  "طي القائمة": "Réduire le menu",
+  "أقسام اللوحة": "Rubriques du tableau de bord",
+  "{0} ({1} غير مقروءة)": "{0} ({1} non lus)",
+  "مدير المنصة": "Administrateur de la plateforme",
+  "مدير عيادة": "Responsable de clinique"
 }

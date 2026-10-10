@@ -100,12 +100,12 @@ function AppointmentsRoute() {
  * فقط حتى لو كانت محميّة أصلًا على مستوى المسار (ProtectedRoute) والخادم معًا.
  */
 function DoctorAreaLayout() {
-  useLanguage();
+  const language = useLanguage();
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
   useEffect(() => {
     document.title = isAssistant ? t("MedBook — لوحة المساعد") : t("MedBook — لوحة تحكم الطبيب");
-  }, [isAssistant]);
+  }, [isAssistant, language]);
   // المراسلة للطبيب فقط: لا نستعلم ولا نُظهر الرابط للمساعد (والخادم يرفضه 403 أيضًا).
   const unread = useDoctorUnread(!isAssistant && !!user);
   useUnreadToast(unread.data?.unread, () => t("رسالة جديدة من الإدارة"), "/messages?focus=unread");
@@ -143,7 +143,7 @@ const adminNav = [
 function AdminAreaLayout() {
   useLanguage();
   const unread = useAdminUnread();
-  useUnreadToast(unread.data?.unread, () => t("رسالة جديدة من {0}", { "0": unread.data?.latest ? `د. ${unread.data.latest.doctorName}` : "طبيب" }));
+  useUnreadToast(unread.data?.unread, () => t("رسالة جديدة من {0}", { "0": unread.data?.latest ? `د. ${unread.data.latest.doctorName}` : t("طبيب") }));
   const items = adminNav.map((i) => (i.to === "/admin/messages" ? { ...i, badge: unread.data?.unread } : i));
   return <DashboardLayout title={t("لوحة الإدارة")} contentClassName="admin-page" items={items} />;
 }

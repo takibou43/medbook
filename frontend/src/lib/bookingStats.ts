@@ -1,3 +1,4 @@
+import { getLanguage } from "../i18n/locale.ts";
 import type { BookingStats } from "../types/index.ts";
 
 /**
@@ -11,5 +12,12 @@ export function counterCardText(state: { data?: BookingStats | null; isError?: b
   if (!text) return null;
   // حارس إضافي: لا نعرض رقمًا دقيقًا صغيرًا حتى لو وصل خطأً من الخادم.
   if (state.data.displayCount !== null && state.data.displayCount < 10) return null;
+  if (getLanguage() === "fr") {
+    const where = state.data.scope === "WILAYA" ? " dans cette wilaya" : "";
+    if (state.data.level === "NONE") return `Prenez rendez-vous dès maintenant sur MedBook${where}`;
+    if (state.data.level === "LOW") return `Les patients ont commencé à réserver sur MedBook ce mois-ci${where}`;
+    if (state.data.level === "NUMBER" && typeof state.data.displayCount === "number") return `${state.data.displayCount} rendez-vous réservés ce mois-ci${where}`;
+  }
   return text;
 }
+

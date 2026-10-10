@@ -174,7 +174,7 @@ export function PrescriptionCard({
       <PrescriptionPreview open={Boolean(preview)} data={preview} onClose={() => setPreview(null)} />
       {templateError && <p role="alert" className="text-sm text-amber-800">{t("تعذر تحميل قالب الوصفة. أعد تحميل الصفحة للمحاولة مجددًا.")}</p>}
       {templateLoading && <p role="status" className="text-sm text-slate-600">{t("جارٍ تحميل قالب الوصفة…")}</p>}
-      {!templateLoading && !templateError && <PrescriptionTemplateEditor key={uid} value={template} onChange={setTemplate} />}
+      {!templateLoading && !templateError && <PrescriptionTemplateEditor key={uid} value={template} onChange={setTemplate} doctor={user?.doctor} />}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">

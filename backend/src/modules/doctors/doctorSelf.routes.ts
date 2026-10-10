@@ -7,7 +7,7 @@ import { ApiError } from "../../utils/ApiError";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
-import { Role } from "@prisma/client";
+import { Prisma, Role } from "@prisma/client";
 import * as service from "./doctorSelf.service";
 import * as reviewsService from "../reviews/reviews.service";
 
@@ -63,13 +63,14 @@ async function templateOwner(userId: string) {
 }
 router.get("/prescription-template", asyncHandler(async (req, res) => {
   const doctorId = await templateOwner(req.user!.id);
-  const value = await prisma.prescriptionTemplate.findUnique({ where: { doctorId }, select: { image: true, top: true, bottom: true, side: true } });
+  const value = await prisma.prescriptionTemplate.findUnique({ where: { doctorId }, select: { image: true, top: true, bottom: true, side: true, design: true } });
   res.json({ success: true, data: value });
 }));
 router.put("/prescription-template", validate({ body: prescriptionTemplateSchema }), asyncHandler(async (req, res) => {
   const doctorId = await templateOwner(req.user!.id);
   const value = prescriptionTemplateSchema.parse(req.body);
-  await prisma.prescriptionTemplate.upsert({ where: { doctorId }, create: { doctorId, ...value }, update: value });
+  const saved = { ...value, design: value.design ?? Prisma.JsonNull };
+  await prisma.prescriptionTemplate.upsert({ where: { doctorId }, create: { doctorId, ...saved }, update: saved });
   res.json({ success: true, data: value });
 }));
 router.delete("/prescription-template", asyncHandler(async (req, res) => {

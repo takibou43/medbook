@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Role } from "@prisma/client";
 const db = vi.hoisted(() => ({
   $transaction: vi.fn(),
+  doctor: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
+  assistant: { findFirst: vi.fn(), findUnique: vi.fn() },
   appointment: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
 }));
 vi.mock("../src/lib/prisma", () => ({ prisma: db }));
+vi.mock("../src/lib/audit", () => ({ writeAudit: vi.fn() }));
 vi.mock("../src/lib/actingDoctor", () => ({ resolveActingDoctorId: vi.fn(async () => "doctor") }));
 vi.mock("../src/lib/doctorLock", () => ({ lockDoctorCalls: vi.fn(), DoctorQueueBusyError: class extends Error {} }));
 import { callNextPatient, callSpecificPatient } from "../src/modules/appointments/appointments.service";
@@ -13,8 +16,11 @@ describe("successful call counter (mocked transaction)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     db.$transaction.mockImplementation(async fn => fn(db));
+    db.doctor.findUniqueOrThrow.mockResolvedValue({ dutyEndsAt: new Date(Date.now() + 60000), queueRequestedAt: new Date(), clinicId: null });
+    db.assistant.findFirst.mockResolvedValue(null);
+    db.assistant.findUnique.mockResolvedValue({ isActive: true, shiftEndsAt: new Date(Date.now() + 60000) });
     db.appointment.findFirst.mockResolvedValue(null);
-    db.appointment.findMany.mockResolvedValue([{ id: "appointment", doctorId: "doctor", status: "CONFIRMED", startTime: "09:00", skipCredits: 0 }]);
+    db.appointment.findMany.mockResolvedValue([{ id: "appointment", doctorId: "doctor", status: "CONFIRMED", startTime: "09:00", arrivedAt: new Date(), skipCredits: 0 }]);
     db.appointment.findUnique.mockResolvedValue({ id: "appointment", doctorId: "doctor", status: "LATE" });
     db.appointment.update.mockResolvedValue({ id: "appointment", callCount: 2 });
     db.appointment.updateMany.mockResolvedValue({ count: 0 });

@@ -92,7 +92,7 @@ export function DashboardLayout({
       Array.from(drawer?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? []);
     focusables()[0]?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) {
         closeMobileMenu();
         return;
       }
@@ -136,7 +136,7 @@ export function DashboardLayout({
       {!compact && !main[0]?.group && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{t("القائمة")}</p>}
       <ul className="space-y-1" role="list">
         {main.map((item, index) => (
-          <li key={t(item.to ?? "")}>
+          <li key={item.to}>
             {item.group && item.group !== main[index - 1]?.group && (
               compact
                 ? <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
@@ -159,7 +159,7 @@ export function DashboardLayout({
       <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
       {!compact && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{t("عام")}</p>}
       {footer.map((item) => (
-        <SidebarLink key={t(item.to ?? "")} item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
+        <SidebarLink key={item.to} item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
       ))}
       <div className="group relative">
         <SwitchToPatientButton
@@ -346,8 +346,8 @@ export function DashboardLayout({
           <nav aria-label={t("التنقل اليومي")} className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
             {items.slice(0, settingsStart ?? 2).map((item) => (
               <NavLink
-                key={t(item.to ?? "")}
-                to={t(item.to ?? "")}
+                key={item.to}
+                to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
                   clsx("relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-3 text-[11px]", isItemActive(item, isActive) ? "bg-primary-50 text-primary-700" : "text-slate-600")
@@ -408,7 +408,7 @@ function SidebarLink({
   return (
     <div className="group relative">
       <NavLink
-        to={t(item.to ?? "")}
+        to={item.to}
         end={item.end}
         onClick={onNavigate}
         aria-label={compact ? (badge ? t("{0} ({1} غير مقروءة)", { "0": item.label, "1": badge }) : item.label) : undefined}
@@ -441,4 +441,5 @@ function SidebarLink({
     </div>
   );
 }
+
 

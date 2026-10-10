@@ -150,53 +150,67 @@ body {
 
 @media (max-width: 767px) { input, select, textarea, .input { font-size: 16px; scroll-margin-block: 5rem; } } html[lang="fr"] { font-family: system-ui, sans-serif; }
 
-/* ===== الوصفة الطبية (PrescriptionSheet) — نفس الورقة في المعاينة والطباعة ===== */
+/* ===== الوصفة الطبية (PrescriptionSheet) — نفس الورقة في المعاينة والطباعة =====
+   أبيض/نص داكن ولمسة تركواز محدودة، واضحة بالأبيض والأسود. بلا تدرجات ولا ظلال داخل الورقة. */
 .rx-paper {
-  background: #fff;
-  border-radius: 0.75rem;
-  box-shadow: 0 10px 30px -12px rgba(2, 6, 23, 0.45);
-  padding: 14mm 14mm 12mm;
+  width: 210mm;
   min-height: 297mm;
+  padding: 16mm 15mm 14mm;
+  background: #fff;
+  transform-origin: top right;
+  box-shadow: 0 6px 24px rgba(2, 6, 23, 0.35); /* ظل الورقة في المعاينة فقط (يُلغى في الطباعة) */
 }
-@media (max-width: 640px) {
-  .rx-paper { padding: 6mm; min-height: 0; }
+[dir="ltr"] .rx-paper { transform-origin: top left; }
+.rx-sheet {
+  color: #111827;
+  font-family: "Cairo", Tahoma, sans-serif;
+  font-size: 11.5pt;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
-.rx-sheet { color: #0f172a; font-family: "Cairo", Tahoma, sans-serif; font-size: 13.5px; line-height: 1.7; }
-.rx-head { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 2px solid #187f77; }
-.rx-doctor-name { font-size: 20px; font-weight: 800; color: #166661; }
-.rx-strong { font-weight: 700; }
-.rx-muted { color: #475569; }
-.rx-contact { text-align: left; color: #334155; font-size: 12.5px; }
-.rx-title { margin: 16px 0 10px; text-align: center; font-size: 18px; font-weight: 800; letter-spacing: 0.02em; }
-.rx-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; }
-.rx-label { color: #475569; font-weight: 600; }
-.rx-table { width: 100%; margin-top: 14px; border-collapse: collapse; }
-.rx-table th { background: #eefbf9; color: #154442; font-size: 12.5px; font-weight: 700; text-align: right; padding: 7px 8px; border: 1px solid #cbd5e1; }
-.rx-table td { padding: 8px; border: 1px solid #cbd5e1; vertical-align: top; }
-.rx-table tr { break-inside: avoid; page-break-inside: avoid; }
-.rx-num { width: 2.2em; text-align: center !important; }
-.rx-med { display: block; font-size: 14.5px; }
-.rx-instr { display: block; margin-top: 2px; color: #334155; font-size: 12.5px; }
-.rx-notes { margin-top: 14px; padding: 8px 12px; border: 1px dashed #94a3b8; border-radius: 8px; break-inside: avoid; page-break-inside: avoid; }
-.rx-notes-body { white-space: pre-wrap; }
-.rx-sign { display: flex; justify-content: space-between; gap: 24px; margin-top: 36px; break-inside: avoid; page-break-inside: avoid; }
-.rx-sign-box { flex: 1; max-width: 45%; height: 34mm; border: 1px solid #94a3b8; border-radius: 8px; padding: 6px 10px; }
-@media (max-width: 640px) {
-  .rx-head { flex-direction: column; }
-  .rx-contact { text-align: right; }
-  .rx-table { font-size: 12px; }
-}
+.rx-sheet p { margin: 0; }
+.rx-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10mm; padding-bottom: 4mm; border-bottom: 0.4mm solid #187f77; }
+.rx-id { min-width: 0; }
+.rx-doctor { font-size: 18pt; font-weight: 800; line-height: 1.3; color: #0f2523; }
+.rx-specialty { margin-top: 0.5mm !important; font-size: 11pt; color: #166661; font-weight: 600; }
+.rx-clinic { font-size: 10.5pt; color: #374151; }
+.rx-contact { flex-shrink: 0; max-width: 70mm; font-size: 9.5pt; line-height: 1.55; color: #374151; text-align: left; }
+.rx-title { margin: 7mm 0 5mm; text-align: center; font-size: 14pt; font-weight: 700; letter-spacing: 0.02em; color: #111827; }
+.rx-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2mm 10mm; padding-bottom: 3mm; margin-bottom: 2mm; border-bottom: 0.2mm solid #d1d5db; }
+.rx-meta > div { display: flex; align-items: baseline; gap: 2.5mm; min-width: 0; }
+.rx-meta dt { font-size: 9.5pt; color: #6b7280; font-weight: 600; }
+.rx-meta dd { margin: 0; font-weight: 600; }
+.rx-patient { font-size: 12.5pt; font-weight: 800 !important; }
+.rx-meds { list-style: none; margin: 0; padding: 0; }
+.rx-med { display: flex; gap: 3.5mm; padding: 3.5mm 0; border-bottom: 0.2mm solid #e5e7eb; break-inside: avoid; page-break-inside: avoid; }
+.rx-med:last-child { border-bottom: 0; }
+.rx-index { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 6mm; height: 6mm; margin-top: 0.8mm; border: 0.3mm solid #187f77; border-radius: 999px; font-size: 9pt; font-weight: 700; color: #166661; }
+.rx-med-body { min-width: 0; flex: 1; }
+.rx-med-name { font-size: 12.5pt; font-weight: 800; line-height: 1.45; }
+.rx-facts { display: flex; flex-wrap: wrap; gap: 1mm 6mm; margin-top: 1mm !important; font-size: 10.5pt; }
+.rx-fact { min-width: 0; }
+.rx-fact-label { color: #6b7280; font-weight: 600; }
+.rx-instructions { margin-top: 1mm !important; font-size: 10.5pt; color: #1f2937; }
+.rx-small-title { font-size: 9.5pt; font-weight: 700; color: #6b7280; }
+.rx-notes { margin-top: 5mm; padding-top: 3mm; border-top: 0.2mm solid #d1d5db; break-inside: avoid; page-break-inside: avoid; }
+.rx-notes-body { margin-top: 1mm !important; white-space: pre-wrap; }
+.rx-sign { display: flex; justify-content: space-between; gap: 14mm; margin-top: 12mm; break-inside: avoid; page-break-inside: avoid; }
+.rx-sign-area { flex: 1; max-width: 70mm; }
+.rx-sign-line { height: 16mm; border-bottom: 0.3mm solid #9ca3af; }
+.rx-stamp-space { height: 26mm; }
 
-@page { size: A4; margin: 12mm; }
+.rx-stage { -webkit-overflow-scrolling: touch; }
+.rx-scaler { position: relative; }
+
+@page { size: A4; margin: 12mm 12mm 14mm; }
 @media print {
-  /* أثناء معاينة الوصفة: لا يُطبع إلا الورقة — تختفي الواجهة والتنقل والأزرار. */
+  /* أثناء معاينة الوصفة: لا يُطبع إلا الورقة — تختفي الواجهة والتنقل والأزرار والخلفية المعتمة. */
+  html, body.rx-printing { height: auto !important; overflow: visible !important; background: #fff !important; }
   body.rx-printing > *:not(.rx-print-root) { display: none !important; }
-  body.rx-printing { background: #fff !important; }
-  .rx-print-root { position: static !important; inset: auto !important; overflow: visible !important; background: none !important; padding: 0 !important; }
-  .rx-print-root [role="dialog"] { max-width: none !important; }
+  .rx-print-root { position: static !important; display: block !important; inset: auto !important; overflow: visible !important; background: none !important; }
+  .rx-print-root [role="dialog"], .rx-stage { display: block !important; overflow: visible !important; padding: 0 !important; }
   .rx-print-root .rx-no-print { display: none !important; }
-  .rx-paper { box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; min-height: 0 !important; }
+  .rx-scaler { width: auto !important; height: auto !important; margin: 0 !important; }
+  .rx-paper { transform: none !important; width: auto !important; min-height: 0 !important; padding: 0 !important; box-shadow: none !important; }
   .rx-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .rx-head { flex-direction: row !important; }
-  .rx-contact { text-align: left !important; }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import clsx from "clsx";
-import { AlertTriangle, Eye, FileText, Plus, RotateCcw, Trash2, UserRound } from "lucide-react";
+import { AlertTriangle, Eye, FileText, Plus, RotateCcw, X, UserRound } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import type { Appointment } from "../../types";
 import { Button } from "../ui/Button";
@@ -137,7 +137,6 @@ export function PrescriptionCard({
     setPreview({
       doctor: user?.doctor,
       patientName: draft.patientName.trim(),
-      relationship: draft.patient.relationship,
       day: algeriaToday(),
       medications: v.printable,
       notes: draft.notes,
@@ -153,9 +152,16 @@ export function PrescriptionCard({
       <PrescriptionPreview open={Boolean(preview)} data={preview} onClose={() => setPreview(null)} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id={`${formId}-title`} className="flex items-center gap-2 text-lg font-bold text-slate-900">
-          <FileText className="h-5 w-5 text-primary-600" aria-hidden="true" /> كتابة وصفة
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 id={`${formId}-title`} className="flex items-center gap-2 text-lg font-bold text-slate-900">
+            <FileText className="h-5 w-5 text-primary-600" aria-hidden="true" /> كتابة وصفة
+          </h2>
+          {draft && (
+            <span className={clsx("badge", dirty ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600")} title="الوصفة لا تُحفظ في النظام">
+              {dirty ? "مسودة غير محفوظة" : "فارغة"}
+            </span>
+          )}
+        </div>
         {draft && (
           <button type="button" onClick={changePatient} className="text-sm font-semibold text-primary-700 underline-offset-2 hover:underline">
             تغيير المريض
@@ -219,7 +225,7 @@ export function PrescriptionCard({
           aria-describedby={`${formId}-note`}
         >
           {/* المريض */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <UserRound className="h-4 w-4 text-slate-500" aria-hidden="true" />
               {draftIsCurrent ? <span className="badge bg-sky-100 text-sky-700">الاستشارة الحالية</span> : <span className="badge bg-slate-200 text-slate-700">موعد مختار</span>}
@@ -231,9 +237,9 @@ export function PrescriptionCard({
               )}
             </div>
             <label className="mt-2 block">
-              <span className="label">اسم المريض على الوصفة</span>
+              <span className="mb-1 block text-xs font-medium text-slate-600">اسم المريض على الوصفة</span>
               <input
-                className="input text-base font-bold"
+                className="input py-2 text-base font-bold"
                 value={draft.patientName}
                 onChange={(e) => patch({ patientName: e.target.value })}
                 autoComplete="off"
@@ -249,48 +255,52 @@ export function PrescriptionCard({
             )}
           </div>
 
-          {/* الأدوية */}
-          <fieldset className="space-y-3">
-            <legend className="mb-2 text-sm font-bold text-slate-800">الأدوية</legend>
-            {draft.medications.map((m, i) => (
-              <div key={m.id} className="rounded-xl border border-slate-200 p-3" role="group" aria-label={`الدواء رقم ${i + 1}`}>
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-bold text-slate-700">الدواء {i + 1}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeMed(m.id)}
-                    className="inline-flex min-h-[36px] items-center gap-1 rounded-lg px-2 text-xs font-semibold text-red-700 hover:bg-red-50"
-                    aria-label={`حذف الدواء رقم ${i + 1}`}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" /> حذف
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  {MED_FIELDS.map((f) => (
-                    <label key={f.key} className={clsx("block", f.wide && "sm:col-span-3")}>
-                      <span className="mb-1 block text-xs font-medium text-slate-600">{f.label}</span>
-                      <input
-                        className="input py-2"
-                        value={m[f.key]}
-                        placeholder={f.placeholder}
-                        onChange={(e) => updateMed(m.id, f.key, e.target.value)}
-                        autoComplete="off"
-                        spellCheck={false}
-                        data-field={f.key}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-            <Button type="button" variant="outline" onClick={() => patch({ medications: [...draft.medications, newMedication()] })}>
+          {/* الأدوية: الاسم بعرض كامل، ثم الجرعة/التكرار/المدة في صف (عمود واحد على الهاتف)، ثم التعليمات */}
+          <fieldset>
+            <legend className="mb-2 text-sm font-bold text-slate-800">الأدوية ({draft.medications.length})</legend>
+            <ol className="divide-y divide-slate-200 rounded-xl border border-slate-200">
+              {draft.medications.map((m, i) => (
+                <li key={m.id} className="p-2.5 sm:p-3" role="group" aria-label={`الدواء رقم ${i + 1}`}>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-6 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-700" aria-hidden="true">{i + 1}</span>
+                    <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
+                      {MED_FIELDS.map((f) => (
+                        <label key={f.key} className={clsx("block min-w-0", f.wide && "sm:col-span-3")}>
+                          <span className="mb-0.5 block text-xs font-medium text-slate-600">{f.label}</span>
+                          <input
+                            className={clsx("input py-2", f.key === "name" && "font-semibold")}
+                            dir="auto"
+                            value={m[f.key]}
+                            placeholder={f.placeholder}
+                            onChange={(e) => updateMed(m.id, f.key, e.target.value)}
+                            autoComplete="off"
+                            spellCheck={false}
+                            data-field={f.key}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeMed(m.id)}
+                      className="mt-5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-700"
+                      aria-label={`حذف الدواء رقم ${i + 1}`}
+                      title="حذف الدواء"
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <Button type="button" variant="outline" className="mt-2" onClick={() => patch({ medications: [...draft.medications, newMedication()] })}>
               <Plus className="h-4 w-4" aria-hidden="true" /> إضافة دواء
             </Button>
           </fieldset>
 
           <label className="block">
-            <span className="label">ملاحظات عامة</span>
-            <textarea className="input min-h-[84px]" value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} />
+            <span className="mb-1 block text-sm font-bold text-slate-800">ملاحظات عامة <span className="font-normal text-slate-500">(اختياري)</span></span>
+            <textarea className="input min-h-[64px]" dir="auto" value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} />
           </label>
 
           {errors.length > 0 && (
@@ -299,17 +309,15 @@ export function PrescriptionCard({
             </ul>
           )}
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
             <Button type="submit" className="flex-1 sm:flex-none">
               <Eye className="h-4 w-4" aria-hidden="true" /> معاينة وطباعة
             </Button>
-            <Button type="button" variant="ghost" onClick={clearAll} disabled={!dirty}>
+            <button type="button" onClick={clearAll} disabled={!dirty} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-red-700 disabled:opacity-40">
               مسح الوصفة
-            </Button>
+            </button>
           </div>
-          <p id={`${formId}-note`} className="text-xs text-slate-500">
-            لا تُحفظ الوصفة في النظام ولا تُرسل للمريض، ولا تغيّر حالة الموعد. تبقى المسودة في هذه الجلسة فقط حتى تطبعها.
-          </p>
+          <p id={`${formId}-note`} className="text-xs text-slate-500">لا تُحفظ ولا تُرسل للمريض — تُطبع فقط.</p>
         </form>
       )}
     </section>

@@ -77,7 +77,7 @@ export default function AdminMessages() {
                       {c.lastMessageAt && <span className="shrink-0 text-[11px] text-slate-400">{timeAgo(c.lastMessageAt)}</span>}
                     </div>
                     <p className="truncate text-xs text-slate-500">
-                      {c.lastMessagePreview ? t("{0}{1}", { "0": c.lastSenderRole === "ADMIN" ? "أنت: " : "", "1": c.lastMessagePreview }) : c.specialty ?? t("لا توجد رسائل بعد")}
+                      {c.lastMessagePreview ? t("{0}{1}", { "0": c.lastSenderRole === "ADMIN" ? t("أنت: ") : "", "1": c.lastMessagePreview }) : c.specialty ?? t("لا توجد رسائل بعد")}
                     </p>
                   </div>
                   {c.unread > 0 && (

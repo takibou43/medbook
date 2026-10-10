@@ -324,7 +324,7 @@ export default function DoctorHome() {
           <p role="status" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             {daysLeft > 0
-              ? t("اشتراكك المجاني ينتهي بعد {0} {1}، وبعده يتوقف ظهورك للمرضى حتى التجديد.", { "0": daysLeft, "1": daysLeft === 1 ? "يوم" : "أيام" })
+              ? t("اشتراكك المجاني ينتهي بعد {0} {1}، وبعده يتوقف ظهورك للمرضى حتى التجديد.", { "0": daysLeft, "1": daysLeft === 1 ? t("يوم") : t("أيام") })
               : t("انتهت مدة اشتراكك المجاني. تواصل مع الإدارة للتجديد والعودة إلى الظهور للمرضى.")}
           </p>
         )

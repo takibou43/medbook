@@ -91,7 +91,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     if (calls.length) showToast(t("نداء جديد: {0}", { "0": calls.map(call => {
       const doctor = queues.data.find(row => row.doctor.id === call.doctorId)!.doctor;
       return `${patientName(call.current!)} — ${doctorName(doctor)}`;
-    }).join("؛ ") }), "info");
+    }).join(t("؛ ")) }), "info");
     if (calls.length && sound) chime(audio.current);
     previous.current = callSignatures(rows);
   }, [queues.data, sound, showToast]);
@@ -131,7 +131,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       });
       if (result.kind === "retry") showToast(t("أُجّل الموعد دون حذفه، لكن تعذّر نداء التالي: {0}", { "0": apiErrorMessage(result.error) }), "error");
       else if (result.kind === "empty") showToast(t("أُجّل الموعد دون حذفه. لا يوجد مريض آخر في الطابور."), "info");
-      else showToast(t("{0} {1}. الموعد السابق باقٍ دون حذف.", { "0": result.kind === "called" ? "نودي على" : "يوجد نداء حالي لـ", "1": patientName(result.appointment) }), "success");
+      else showToast(t("{0} {1}. الموعد السابق باقٍ دون حذف.", { "0": result.kind === "called" ? t("نودي على") : t("يوجد نداء حالي لـ"), "1": patientName(result.appointment) }), "success");
     },
     onError: error => showToast(apiErrorMessage(error, t("تعذّر تأجيل الموعد؛ لم يتم نداء التالي.")), "error"),
     onSettled: () => { void qc.invalidateQueries({ queryKey: ["assistant-queues"] }); void qc.invalidateQueries({ queryKey: ["assistant-appointments"] }); },

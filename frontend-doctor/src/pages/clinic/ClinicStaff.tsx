@@ -59,7 +59,7 @@ export default function ClinicStaff({ clinicId, ownerId, isOwner, permissions, d
       {!assistants.length && <p className="text-slate-500">{t("لا يوجد مساعدون بعد.")}</p>}
       {assistants.map(a => <article key={a.id} className="space-y-3 rounded-xl border p-4">
         <div className="flex flex-wrap justify-between gap-3"><div><h3 className="font-bold">{a.firstName} {a.lastName}</h3><p dir="ltr" className="text-sm">{a.user.email}</p></div><span>{a.isActive ? t("نشط") : t("الوصول معطّل")}</span></div>
-        <p className="text-sm text-slate-600">{a.clinicId && a.allDoctors ? t("يساعد جميع أطباء العيادة") : t("الأطباء المحددون: {0}", { "0": doctors.filter(d => a.clinicId ? a.allowedDoctorIds.includes(d.id) : d.id === a.doctorId).map(d => `د. ${d.firstName} ${d.lastName}`).join("، ") || "لا يوجد طبيب متاح حاليًا" })}</p>
+        <p className="text-sm text-slate-600">{a.clinicId && a.allDoctors ? t("يساعد جميع أطباء العيادة") : t("الأطباء المحددون: {0}", { "0": doctors.filter(d => a.clinicId ? a.allowedDoctorIds.includes(d.id) : d.id === a.doctorId).map(d => `د. ${d.firstName} ${d.lastName}`).join(t("، ")) || t("لا يوجد طبيب متاح حاليًا") })}</p>
         {isOwner && a.clinicId && <details><summary className="cursor-pointer font-semibold text-primary-700">{t("تعديل الأطباء المسموحين")}</summary><form key={`${a.allDoctors}:${a.allowedDoctorIds.join(",")}`} className="mt-3 space-y-3" onSubmit={e => {
           e.preventDefault(); const form = new FormData(e.currentTarget);
           void run(async () => { await api.patch(`/clinics/mine/assistants/${a.id}/scope`, scopeFromForm(form)); });

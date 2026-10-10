@@ -46,7 +46,7 @@ export default function DoctorProfileSettings() {
   const [saving, setSaving] = useState(false);
   const [selectedWilaya, setSelectedWilaya] = useState("");
   const [locating, setLocating] = useState(false);
-  const { register, control, handleSubmit, reset, watch, setValue, formState: { dirtyFields } } = useForm<FormValues>();
+  const { register, control, handleSubmit, reset, watch, setValue, formState: { dirtyFields, errors } } = useForm<FormValues>();
 
 
   const watchedWilaya = watch("wilayaId");
@@ -150,7 +150,7 @@ export default function DoctorProfileSettings() {
 
         <Textarea label={t("نبذة تعريفية")} {...register("bio")} />
         <div className="grid grid-cols-2 gap-3">
-          <Input label={t("سنوات الخبرة")} type="number" {...register("yearsExperience")} />
+          <Input label={t("سنوات الخبرة")} type="number" min={0} step={1} error={errors.yearsExperience?.message} {...register("yearsExperience", { valueAsNumber: true, validate: value => (Number.isInteger(value) && value >= 0) || t("أدخل عددًا صحيحًا غير سالب لسنوات الخبرة.") })} />
           {priceLocked ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3" aria-label={t("سعر الموعد في العيادة")}>
               <p className="label">{t("سعر الموعد")}</p>
@@ -163,7 +163,7 @@ export default function DoctorProfileSettings() {
         {priceLocked && (
           <p className="rounded-xl bg-primary-50 p-3 text-sm text-primary-900" role="note">{t("سعر الموعد ونسبتك يحددهما مدير ")}{clinicTerms?.clinicName ? t("عيادة «{0}»", { "0": clinicTerms.clinicName }) : t("العيادة")}{t("، ولا يمكنك تعديلهما من هنا. نسبتك من قيمة الموعد: ")}<strong>{formatPercent(clinicTerms?.doctorSharePercent)}</strong>{t("، ونسبة العيادة: ")}<strong>{formatPercent(clinicTerms?.clinicSharePercent)}</strong>{t(". هذه النسبة خاصة بإيراد المواعيد ومنفصلة عن اشتراك MedBook. ")}</p>
         )}
-        <Input label={t("رقم الهاتف")} {...register("phone")} />
+        <Input label={t("رقم الهاتف")} type="tel" inputMode="tel" dir="ltr" translate="no" autoComplete="tel" {...register("phone")} />
         <Input label={t("العنوان")} {...register("address")} />
 
         <div>

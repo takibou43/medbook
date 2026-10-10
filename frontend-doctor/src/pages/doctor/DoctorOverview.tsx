@@ -272,7 +272,7 @@ export default function DoctorOverview() {
         <details open className="card p-4 sm:p-5">
           <summary className="cursor-pointer font-bold text-slate-800">{t("المزيد من الإحصاءات")}</summary>
           <div className="mt-3 grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-3">
-            <StatCard label={t("إجمالي المرضى")} value={stats?.totalPatients ?? 0} sub={t("مرضى مختلفون")} icon={Users} to="/patients" />
+            <StatCard label={t("إجمالي المرضى")} value={stats?.totalPatients ?? 0} sub={t("يشمل أفراد العائلة وسجلات الضيوف وفق قائمة المرضى")} icon={Users} to="/patients" />
             <StatCard label={t("مواعيد هذا الشهر")} value={stats?.monthlyAppointments ?? 0} icon={CalendarDays} to={appointmentsLink(stats?.monthRange)} />
             <StatCard label={t("المواعيد المكتملة")} value={stats?.completedAppointments ?? 0} icon={CheckCircle2} tone="green" to="/appointments?status=COMPLETED" />
             <StatCard label={t("المواعيد الملغاة")} value={stats?.cancelledAppointments ?? 0} icon={XCircle} tone="red" to="/appointments?status=CANCELLED" />

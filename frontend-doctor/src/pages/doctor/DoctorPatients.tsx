@@ -1,3 +1,4 @@
+import { GuestFollowUpNotice } from "../../components/GuestFollowUpNotice";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import { useEffect, useState } from "react";
@@ -186,13 +187,13 @@ export default function DoctorPatients() {
             {items.map((p, i) => (
               <li key={rowKey(p, i)} className="card p-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <h2 className="min-w-0 truncate text-base font-bold text-slate-900">{fullName(p)}</h2>
+                  <h2 className="min-w-0 truncate text-base font-bold text-slate-900"><bdi translate="no">{fullName(p)}</bdi></h2>
                   <Tags p={p} />
                 </div>
                 {p.phone && (
                   <a href={`tel:${p.phone}`} className="mt-1 inline-flex items-center gap-1.5 text-sm text-slate-700" aria-label={t("اتصال بـ{0}", { "0": fullName(p) })}>
                     <Phone className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
-                    <span className="ltr-nums">{p.phone}</span>
+                    <span className="ltr-nums" translate="no">{p.phone}</span>
                   </a>
                 )}
                 <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
@@ -222,7 +223,7 @@ export default function DoctorPatients() {
                       <Button variant="outline" className="w-full" onClick={() => followUp(p)}>
                         <CalendarPlus className="h-4 w-4" aria-hidden="true" />{t(" برمجة موعد عودة ")}</Button>
                     ) : (
-                      <p className="text-xs text-slate-600">{t("برمجة موعد عودة متاحة للمرضى أصحاب الحسابات فقط.")}</p>
+                      p.isGuest ? <GuestFollowUpNotice /> : <p className="text-xs text-slate-600">{t("لا توجد زيارة سابقة مؤهلة لبرمجة العودة.")}</p>
                     )}
                   </div>
                 </details>
@@ -251,12 +252,12 @@ export default function DoctorPatients() {
                   <tr key={rowKey(p, i)}>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1.5 font-semibold text-slate-800">
-                        {fullName(p)}
+                        <bdi translate="no">{fullName(p)}</bdi>
                         <Tags p={p} />
                       </div>
                       {p.email && <div className="ltr-nums mt-0.5 text-xs text-slate-600">{p.email}</div>}
                     </td>
-                    <td className="px-4 py-3 text-slate-700">{p.phone ? <span className="ltr-nums">{p.phone}</span> : "—"}</td>
+                    <td className="px-4 py-3 text-slate-700">{p.phone ? <span className="ltr-nums" translate="no">{p.phone}</span> : "—"}</td>
                     <td className="px-4 py-3 text-slate-700">
                       <LastVisit v={p.lastCompletedVisit} />
                     </td>
@@ -265,10 +266,10 @@ export default function DoctorPatients() {
                     </td>
                     <td className="px-4 py-3 text-slate-700">{p.totalAppointments}</td>
                     <td className="px-4 py-3">
-                      {p.lastAppointmentId && (
+                      {p.lastAppointmentId ? (
                         <Button variant="outline" className="whitespace-nowrap" onClick={() => followUp(p)}>
                           <CalendarPlus className="h-4 w-4" aria-hidden="true" />{t(" برمجة موعد عودة ")}</Button>
-                      )}
+                      ) : p.isGuest ? <GuestFollowUpNotice /> : <span className="text-xs text-slate-500">{t("لا توجد زيارة سابقة مؤهلة لبرمجة العودة.")}</span>}
                     </td>
                   </tr>
                 ))}

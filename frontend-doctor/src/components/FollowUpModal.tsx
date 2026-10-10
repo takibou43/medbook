@@ -104,7 +104,7 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
           <p className="text-slate-600">{t("المستفيد")}</p>
           <p className="text-base font-bold text-primary-900">{who}</p>
           {ctx.familyMemberId && ctx.accountHolderName && (
-            <label className="mt-2 flex items-center gap-2 text-xs text-slate-700">
+            <label className="mt-2 flex min-h-11 items-center gap-2 text-xs text-slate-700">
               <input type="checkbox" className="h-4 w-4" checked={forAccountHolder} onChange={(e) => { setForAccountHolder(e.target.checked); setConfirming(false); }} />{t("الموعد لصاحب الحساب (")}{ctx.accountHolderName}{t(") بدل فرد العائلة ")}</label>
           )}
         </div>
@@ -124,7 +124,7 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
               />
               <div className="mt-2 flex flex-wrap gap-2">
                 {[1, 3, 6].map((m) => (
-                  <button key={m} type="button" className="rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-primary-400" onClick={() => { setDate(addMonthsDay(algeriaDay(), m)); setTime(null); }}>{t("بعد ")}{m === 1 ? t("شهر") : t("{0} أشهر", { "0": m })}
+                  <button key={m} type="button" className="min-h-11 rounded-full border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-primary-400" onClick={() => { setDate(addMonthsDay(algeriaDay(), m)); setTime(null); }}>{t("بعد ")}{m === 1 ? t("شهر") : t("{0} أشهر", { "0": m })}
                   </button>
                 ))}
               </div>
@@ -145,7 +145,7 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
                       key={s}
                       type="button"
                       onClick={() => { setTime(s); setError(null); }}
-                      className={clsx("min-h-[40px] rounded-lg border text-sm font-semibold", time === s ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-primary-400")}
+                      className={clsx("min-h-[44px] rounded-lg border text-sm font-semibold", time === s ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-primary-400")}
                     >
                       {s}
                     </button>

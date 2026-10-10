@@ -1,7 +1,9 @@
+import { PlanSessionSummary } from "../../components/PlanSessionSummary";
+import { plansForBeneficiary } from "../../lib/treatmentWorkflow";
 import { Modal } from "../../components/ui/Modal";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -95,7 +97,7 @@ function CreatePlanForm({ onCreated, onCancel, initialSubject = "", locked = fal
       <Input label={t("عنوان الخطة")} placeholder={t("مثال: علاج عصب + تاج")} maxLength={120} value={title} onChange={(e) => setTitle(e.target.value)} required />
       <Textarea label={t("وصف (اختياري)")} maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} />
       <div className="grid grid-cols-2 gap-3">
-        <Input label={t("عدد الجلسات التقديري")} type="number" min={1} max={100} value={sessions} onChange={(e) => setSessions(e.target.value)} />
+        <Input hint={t("تقدير فقط؛ لا ينشئ جلسات أو حجوزات أو إشعارات. أضف الجلسات بعد إنشاء الخطة.")} label={t("عدد الجلسات التقديري")} type="number" min={1} max={100} step={1} value={sessions} onChange={(e) => setSessions(e.target.value)} />
         <Input label={t("التكلفة التقديرية (دج)")} type="number" min={0} value={cost} onChange={(e) => setCost(e.target.value)} />
       </div>
       <div className="flex gap-2">
@@ -110,6 +112,7 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
   useLanguage();
   const { showToast } = useToast();
   const qc = useQueryClient();
+  const sessionInput = useRef<HTMLInputElement>(null);
   const [sessionTitle, setSessionTitle] = useState("");
   const [sessionDate, setSessionDate] = useState("");
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
@@ -165,8 +168,10 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
           {p.estimatedSessions ? t(" · {0} جلسات تقديرًا", { "0": p.estimatedSessions }) : ""}
           {p.estimatedTotalCost != null ? t(" · {0} دج", { "0": p.estimatedTotalCost.toLocaleString("ar-DZ") }) : ""}
         </p>
+        <div className="mt-3"><PlanSessionSummary estimated={p.estimatedSessions} added={p.sessions.length} completed={p.sessions.filter(s => s.status === "COMPLETED").length} /></div>
         {active && (
           <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => { sessionInput.current?.scrollIntoView({ block: "center" }); sessionInput.current?.focus(); }}><Plus className="h-4 w-4" />{t("إضافة جلسة للخطة")}</Button>
             <Button variant="outline" onClick={() => window.confirm(t("إكمال الخطة؟ لن يمكن تعديل جلساتها بعد ذلك.")) && run.mutate(() => api.patch(`/doctor/treatment-plans/${p.id}`, { status: "COMPLETED" }))}>
               <CheckCircle2 className="h-4 w-4" />{t(" إكمال الخطة ")}</Button>
             <Button variant="ghost" onClick={() => window.confirm(t("إلغاء الخطة نهائيًا؟")) && run.mutate(() => api.patch(`/doctor/treatment-plans/${p.id}`, { status: "CANCELLED" }))}>{t("إلغاء الخطة ")}</Button>
@@ -177,7 +182,7 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
       <section className="card p-4">
         <h3 className="mb-3 font-bold text-slate-900">{t("الجلسات")}</h3>
         {p.sessions.length === 0 ? (
-          <p className="text-sm text-slate-500">{t("لا جلسات بعد.")}</p>
+          <p className="text-sm text-slate-500">{t("لم تُضف جلسات بعد. العدد التقديري لا ينشئ جلسات تلقائيًا.")}</p>
         ) : (
           <ol className="space-y-2">
             {p.sessions.map((s, i) => (
@@ -195,10 +200,10 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
                 </div>
                 {active && (
                   <div className="flex shrink-0 flex-wrap gap-1">
-                    <button type="button" aria-label={t("أعلى")} className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-slate-100 disabled:opacity-30" disabled={i === 0 || run.isPending} onClick={() => move(i, -1)}>
+                    <button type="button" aria-label={t("أعلى")} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-slate-100 disabled:opacity-30" disabled={i === 0 || run.isPending} onClick={() => move(i, -1)}>
                       <ArrowUp className="h-4 w-4" />
                     </button>
-                    <button type="button" aria-label={t("أسفل")} className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-slate-100 disabled:opacity-30" disabled={i === p.sessions.length - 1 || run.isPending} onClick={() => move(i, 1)}>
+                    <button type="button" aria-label={t("أسفل")} className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-slate-100 disabled:opacity-30" disabled={i === p.sessions.length - 1 || run.isPending} onClick={() => move(i, 1)}>
                       <ArrowDown className="h-4 w-4" />
                     </button>
                     {s.status === "PLANNED" && (
@@ -208,7 +213,7 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
                       <Button
                         variant="outline"
                         onClick={() =>
-                          setFollowUpCtx({ parentAppointmentId: anchorAppointmentId, beneficiaryName: p.beneficiary.name, treatmentPlanId: p.id, treatmentSessionId: s.id, suggestedDate: s.plannedDate?.slice(0, 10) })
+                          setFollowUpCtx({ parentAppointmentId: anchorAppointmentId, beneficiaryName: p.beneficiary.name, familyMemberId: p.familyMemberId ?? null, treatmentPlanId: p.id, treatmentSessionId: s.id, suggestedDate: s.plannedDate?.slice(0, 10) })
                         }
                       >
                         <CalendarPlus className="h-4 w-4" />{t(" برمجة موعد عودة ")}</Button>
@@ -221,7 +226,7 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
         )}
         {active && (
           <form
-            className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end"
+            className="mt-3 grid grid-cols-1 items-end gap-3 sm:grid-cols-2"
             onSubmit={(e) => {
               e.preventDefault();
               if (sessionTitle.trim().length < 2) return;
@@ -230,11 +235,12 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
               });
             }}
           >
-            <div className="flex-1"><Input label={t("جلسة جديدة")} placeholder={t("مثال: حشو الضرس 36")} maxLength={120} value={sessionTitle} onChange={(e) => setSessionTitle(e.target.value)} /></div>
-            <Input label={t("تاريخ مخطّط (اختياري)")} type="date" dir="ltr" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} />
-            <Button type="submit" loading={run.isPending}><Plus className="h-4 w-4" />{t(" إضافة")}</Button>
+            <div className="min-w-0 sm:col-span-2"><Input ref={sessionInput} label={t("جلسة جديدة")} placeholder={t("مثال: حشو الضرس 36")} maxLength={120} value={sessionTitle} onChange={(e) => setSessionTitle(e.target.value)} required minLength={2} /></div>
+            <Input label={t("تاريخ مقترح للجلسة (لا يحجز موعدًا)")} type="date" dir="ltr" value={sessionDate} onChange={(e) => setSessionDate(e.target.value)} />
+            <Button type="submit" loading={run.isPending} disabled={sessionTitle.trim().length < 2}><Plus className="h-4 w-4" />{t("إضافة الجلسة")}</Button>
           </form>
         )}
+        {active && <p className="mt-2 text-xs text-slate-600">{t("إضافة الجلسة لا تحجز موعدًا ولا ترسل إشعارًا. بعد إضافتها، استخدم «برمجة موعد عودة» لاختيار التاريخ والوقت وتأكيد الحجز.")}</p>}
         {!anchorAppointmentId && active && (
           <p className="mt-2 text-xs text-slate-500">{t("لا يوجد موعد سابق لهذا المستفيد عندك، لذلك لا يمكن برمجة موعد عودة من هنا بعد.")}</p>
         )}
@@ -330,7 +336,7 @@ export default function DoctorTreatmentPlans() {
                       <span className={clsx("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold", PLAN_STATUS[p.status].cls)}>{t(PLAN_STATUS[p.status].label)}</span>
                     </span>
                     <span className="text-sm text-slate-500">{beneficiaryLine(p)}</span>
-                    <span className="text-xs text-slate-500">{t("الجلسات: ")}{p.completedSessions}/{p.sessionsCount}
+                    <span className="text-xs text-slate-500"><PlanSessionSummary estimated={p.estimatedSessions} added={p.sessionsCount} completed={p.completedSessions} />
                       {p.nextFollowUp ? t(" · متابعة {0}: {1}", { "0": FOLLOW_UP_STATUS[p.nextFollowUp.status].label, "1": day(p.nextFollowUp.dueDate) }) : ""}
                     </span>
                   </button>
@@ -350,12 +356,13 @@ export function CurrentPatientPlansModal({ patientId, memberId, name, onClose }:
   const [busy, setBusy] = useState(false);
   const [planId, setPlanId] = useState<string | null>(null);
   const plans = useQuery({ queryKey: ["treatment-plans"], queryFn: async () => (await api.get<{ data: TreatmentPlanSummary[] }>("/doctor/treatment-plans")).data.data });
-  const visible = (plans.data ?? []).filter(p => p.patientId === patientId && (p.familyMemberId ?? "") === memberId);
-  const saved = () => { qc.invalidateQueries({ queryKey: ["treatment-plans"] }); onClose(); };
+  const visible = plansForBeneficiary(plans.data ?? [], patientId, memberId);
+  const saved = () => { qc.invalidateQueries({ queryKey: ["treatment-plans"] }); };
+  const created = (id: string) => { saved(); setPlanId(id); };
   return <Modal open onClose={() => { if (!busy) onClose(); }} title={t("خطط العلاج")}>
     <p className="mb-4 font-semibold"><bdi>{name}</bdi></p>
     {planId ? <PlanDetail planId={planId} onBack={() => { if (!busy) setPlanId(null); }} onSaved={saved} onBusyChange={setBusy} /> : <>
-      <CreatePlanForm initialSubject={patientId + "|" + memberId} locked onCreated={saved} onCancel={() => { if (!busy) onClose(); }} onBusyChange={setBusy} />
+      <CreatePlanForm initialSubject={patientId + "|" + memberId} locked onCreated={created} onCancel={() => { if (!busy) onClose(); }} onBusyChange={setBusy} />
       {plans.isLoading && <Spinner />}
       {plans.isError && <p role="alert">{apiErrorMessage(plans.error, t("تعذّر تحميل الخطط."))}</p>}
       <ul className="mt-4 space-y-2">{visible.map(p => <li key={p.id}><button type="button" className="btn-outline w-full" onClick={() => setPlanId(p.id)}>{p.title}</button></li>)}</ul>

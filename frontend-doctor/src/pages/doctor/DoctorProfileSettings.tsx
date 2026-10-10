@@ -46,8 +46,9 @@ export default function DoctorProfileSettings() {
   const [saving, setSaving] = useState(false);
   const [selectedWilaya, setSelectedWilaya] = useState("");
   const [locating, setLocating] = useState(false);
-  const { register, handleSubmit, reset, watch, setValue } = useForm<FormValues>();
+  const { register, handleSubmit, reset, watch, setValue, formState: { dirtyFields } } = useForm<FormValues>();
 
+  const specialtyName = watch("specialtyName") ?? "";
   const watchedWilaya = watch("wilayaId");
   const watchedLat = watch("latitude");
   const watchedLng = watch("longitude");
@@ -126,7 +127,7 @@ export default function DoctorProfileSettings() {
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-extrabold text-slate-900">{t("ملفي المهني")}</h1>
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
-        <SpecialtyInput {...register("specialtyName", { required: t("مطلوب") })} />
+        <SpecialtyInput {...register("specialtyName", { required: t("مطلوب") })} value={dirtyFields.specialtyName ? specialtyName : catalogName({ nameAr: specialtyName, nameFr: me?.doctor?.specialty?.nameFr })} />
         <div className="grid grid-cols-2 gap-3">
           <Select label={t("الولاية")} {...register("wilayaId", { required: t("مطلوب") })}>
             <option value="">{t("اختر")}</option>
@@ -185,3 +186,4 @@ export default function DoctorProfileSettings() {
     </div>
   );
 }
+

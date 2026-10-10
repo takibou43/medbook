@@ -19,8 +19,9 @@ import DoctorQueue from "./DoctorQueue";
 import { useAuth } from "../../context/AuthContext";
 import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
 import { canScheduleFollowUp, RELATIONSHIP_LABELS } from "../../lib/features";
+import { padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import {
-  activePreset, appointmentActions, formatDayAr, parseAppointmentFilters, presetRange, serializeAppointmentFilters,
+  activePreset, algeriaToday, appointmentActions, formatDayAr, parseAppointmentFilters, presetRange, serializeAppointmentFilters,
   type AppointmentFilters, type DatePreset, type StatusFilter,
 } from "../../lib/doctorUi";
 
@@ -171,9 +172,11 @@ interface CardProps {
   onFollowUp?: () => void;
   role?: "DOCTOR" | "ASSISTANT";
   canManageAttendance: boolean;
+  /** رقم الدور المرئي (يُعرض فقط في عرض «اليوم» الكامل — كان في «جدول اليوم» بالرئيسية). */
+  turn?: number;
 }
 
-function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy, pending, onFollowUp, role, canManageAttendance }: CardProps) {
+function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, busy, pending, onFollowUp, role, canManageAttendance, turn }: CardProps) {
   useLanguage();
   const phone = patientPhone(a);
   const wa = toWhatsAppNumber(phone);
@@ -191,6 +194,11 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
       {/* البيانات — اسم المريض هو العنصر الأبرز */}
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {turn !== undefined && (
+            <span className="flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-sm font-bold tabular-nums text-slate-700" title={t("رقم الدور حسب وقت الموعد")}>
+              <span className="sr-only">{t("رقم الدور")} </span>{padTurn(turn)}
+            </span>
+          )}
           <h3 className="min-w-0 truncate text-lg font-extrabold leading-tight text-slate-900">{patientFullName(a)}</h3>
           <AppointmentStatusBadge status={a.status} />
         </div>
@@ -343,6 +351,15 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
       .sort((a: any, b: any) => Number(hasTimePassed(a.date, a.startTime)) - Number(hasTimePassed(b.date, b.startTime)));
   }, [appointments, query, getLanguage()]);
 
+  // عرض «اليوم» كاملًا (بلا تصفية حالة): نُظهر رقم الدور المرئي كما كان في «جدول اليوم» بالرئيسية.
+  // يُحسب على كل مواعيد اليوم غير الملغاة قبل البحث، فلا يتغيّر بتصفية القائمة.
+  const today = algeriaToday();
+  const isTodayView = filter === "ALL" && from === today && to === today;
+  const turns = useMemo(
+    () => (isTodayView && appointments ? visibleTurnNumbers(appointments.filter((a: any) => a.status !== "CANCELLED")) : null),
+    [isTodayView, appointments]
+  );
+
   async function changeStatus(id: string, status: AppointmentStatus, appointment?: any) {
     if (updateStatus.isPending) return; // منع الإرسال المتكرر
     setPendingId(id);
@@ -394,7 +411,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
       {/* الهيدر: العنوان + مؤشر مباشر مُختصر بدل الشرح المطوّل */}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-extrabold text-slate-900">{t("إدارة المواعيد")}</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">{t(isTodayView ? "مواعيد اليوم" : "المواعيد")}</h1>
           <LiveIndicator isFetching={isFetching} updatedAt={dataUpdatedAt} />
         </div>
       </header>
@@ -507,6 +524,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
               key={a.id}
               appointment={a}
               canManageAttendance={canManageAttendance}
+              turn={a.status === "CANCELLED" ? undefined : turns?.get(a.id)}
           role={user?.role === "ASSISTANT" ? "ASSISTANT" : "DOCTOR"}
               onComplete={() => changeStatus(a.id, "COMPLETED", a)}
               onNoShow={() => openNoShow(a)}
@@ -527,20 +545,23 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
   );
 }
 
+// «المواعيد» أولًا (مواعيد اليوم افتراضيًا مع اختيار تاريخ آخر)، ثم «طابور اليوم» للنداء والتأخير.
 const APPOINTMENTS_TABS: { key: "queue" | "list"; label: string }[] = [
+  { key: "list", label: "المواعيد" },
   { key: "queue", label: "طابور اليوم" },
-  { key: "list", label: "كل المواعيد" },
 ];
 
 /**
- * صفحة موحّدة بقسمين: "طابور اليوم" (القائمة الحية للنداء/التأجيل/الوصول) و"كل المواعيد"
+ * صفحة «المواعيد» الموحّدة (دُمج فيها «جدول اليوم» الذي كان في الرئيسية): تبويب «المواعيد» يعرض اليوم
+ * افتراضيًا مع رقم الدور والبحث وكل الإجراءات، ويمكن اختيار تاريخ آخر؛ وتبويب «طابور اليوم» للنداء/التأخير.
+ * قسمان: "طابور اليوم" (القائمة الحية للنداء/التأجيل/الوصول) و"كل المواعيد"
  * (تصفّح كامل مع بحث وفلاتر وتذكير واتساب). القسمان مصدرا بيانات مختلفان تمامًا (useQueue
  * مقابل useMyAppointments)، لذا نُركّب أحدهما فقط في كل لحظة (وليس نخفيه بـCSS) حتى يتوقف
  * التحديث الدوري (refetchInterval) للقسم غير الظاهر تلقائيًا، بلا أي استقطاب مضاعف للخادم.
  */
 export default function DoctorAppointments() {
   useLanguage();
-  // التبويب والفلاتر محفوظة في الرابط: الدخول الطبيعي = طابور اليوم و«الكل»، وبطاقات الإحصاءات
+  // التبويب والفلاتر محفوظة في الرابط: الدخول الطبيعي = «المواعيد» لليوم، وبطاقات الإحصاءات
   // تفتح «كل المواعيد» بالفلتر الصريح نفسه، ويبقى كل شيء عند التحديث أو الرجوع.
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => parseAppointmentFilters(searchParams), [searchParams, getLanguage()]);
@@ -556,7 +577,7 @@ export default function DoctorAppointments() {
             type="button"
             role="tab"
             aria-selected={tab === tabItem.key}
-            onClick={() => update({ ...filters, tab: tabItem.key })}
+            onClick={() => update(tabItem.key === "list" && filters.tab !== "list" ? parseAppointmentFilters("?tab=list") : { ...filters, tab: tabItem.key })}
             className={clsx(
               "rounded-full px-4 py-1.5 text-sm font-semibold transition",
               tab === tabItem.key ? "bg-white text-primary-700 shadow-sm" : "text-slate-600 hover:text-slate-800"

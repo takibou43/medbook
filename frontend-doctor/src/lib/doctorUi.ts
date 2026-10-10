@@ -94,11 +94,14 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const STATUSES: StatusFilter[] = ["ALL", "PENDING", "CONFIRMED", "RESCHEDULE_REQUIRED", "IN_PROGRESS", "LATE", "COMPLETED", "CANCELLED", "NO_SHOW"];
 
 /**
- * قراءة الفلاتر من الرابط. الدخول الطبيعي (بلا معاملات) = تبويب الطابور، وفي «كل المواعيد» الحالة «الكل».
- * أي فلتر صريح في الرابط (status/date/from/to — من بطاقات الإحصاءات) يفتح «كل المواعيد» مباشرة ويُحترم.
+ * قراءة الفلاتر من الرابط.
+ * - الدخول الطبيعي (بلا معاملات) = «المواعيد» لمواعيد اليوم (بعد دمج «جدول اليوم» من الرئيسية).
+ * - أي فلتر صريح (status/date/from/to — من بطاقات الإحصاءات) يُحترم كما هو؛ status وحده = كل التواريخ.
+ * - period=all = «كل التواريخ» صراحةً (بعد مسح الفلاتر) حتى لا يُعاد فرض اليوم.
+ * - tab=queue يفتح «طابور اليوم».
  * date=X (الصيغة القديمة) تعني from=X وto=X.
  */
-export function parseAppointmentFilters(search: string | URLSearchParams): AppointmentFilters {
+export function parseAppointmentFilters(search: string | URLSearchParams, now = Date.now()): AppointmentFilters {
   const p = typeof search === "string" ? new URLSearchParams(search) : search;
   const rawStatus = p.get("status");
   const status: StatusFilter = rawStatus && (STATUSES as string[]).includes(rawStatus) ? (rawStatus as StatusFilter) : "ALL";
@@ -112,9 +115,13 @@ export function parseAppointmentFilters(search: string | URLSearchParams): Appoi
   if (from && !DAY_RE.test(from)) from = undefined;
   if (to && !DAY_RE.test(to)) to = undefined;
   if (from && to && from > to) [from, to] = [to, from];
-  const hasExplicit = Boolean(rawStatus || from || to);
   const tabParam = p.get("tab");
-  const tab: AppointmentsTab = tabParam === "list" || tabParam === "queue" ? tabParam : hasExplicit ? "list" : "queue";
+  const tab: AppointmentsTab = tabParam === "list" || tabParam === "queue" ? tabParam : "list";
+  if (tab === "list" && !from && !to && !rawStatus && p.get("period") !== "all") {
+    const today = algeriaToday(now);
+    from = today;
+    to = today;
+  }
   return { tab, status, from, to, q: p.get("q") ?? "" };
 }
 
@@ -125,6 +132,8 @@ export function serializeAppointmentFilters(f: AppointmentFilters): URLSearchPar
     if (f.status !== "ALL") p.set("status", f.status);
     if (f.from) p.set("from", f.from);
     if (f.to) p.set("to", f.to);
+    // بلا تاريخ = كل التواريخ صراحةً (وإلا يعود الافتراضي «اليوم»).
+    if (!f.from && !f.to) p.set("period", "all");
     if (f.q.trim()) p.set("q", f.q.trim());
   }
   return p;

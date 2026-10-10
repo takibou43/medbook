@@ -156,7 +156,7 @@ export default function DoctorSchedule() {
               <select aria-label={t("يوم العمل")} className="input !w-auto" value={b.dayOfWeek} onChange={(e) => updateBlock(i, { dayOfWeek: Number(e.target.value) })}>
                 {DAYS.map((d, idx) => (
                   <option key={idx} value={idx}>
-                    {d}
+                    {t(d)}
                   </option>
                 ))}
               </select>
@@ -208,3 +208,4 @@ export default function DoctorSchedule() {
     </div>
   );
 }
+

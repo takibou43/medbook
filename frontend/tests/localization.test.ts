@@ -13,6 +13,9 @@ test("language changes preserve canonical data and interpolate patient names ver
     assert.equal(beneficiaryLabel({type:"FAMILY_MEMBER",name:"ياسين بن علي",relationship:"CHILD",familyMemberId:"family-child-1"}), "ياسين بن علي (Enfant)");
     assert.equal(catalogName({nameAr:"طب الأسنان",nameFr:"Médecine dentaire"}), "Médecine dentaire");
     assert.equal(catalogName({nameAr:"اسم محلي"}), "اسم محلي");
+    assert.equal(catalogName({nameAr:"طب الأسنان"}), "Dentisterie");
+    assert.equal(catalogName({nameAr:"طب الأطفال",nameFr:" "}), "Pédiatrie");
+    assert.equal(t("موثّق"), "Vérifié");
     assert.equal(t(" غير معروف "), " غير معروف ");
     assert.equal(t(" الطبيب "), " Médecin ");
   } finally { setLanguage("ar"); }

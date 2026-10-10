@@ -49,7 +49,7 @@ export default function AdminAppointments() {
       </div>
       <Input label={t("بحث باسم الطبيب أو المستفيد")} placeholder={t("الاسم...")} value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
     </div>
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Select label={t("طبيب الموعد")} value={doctorId} onChange={e=>update('doctorId',e.target.value)}><option value="">{t("كل الأطباء")}</option>{(doctors.data?.items??[]).map((d:any)=><option key={d.id} value={d.id}>{t("د. ")}{d.firstName} {d.lastName}</option>)}</Select><Select label={t("حالة الموعد")} value={status} onChange={e=>update('status',e.target.value)}><option value="">{t("كل الحالات")}</option>{Object.entries(STATUS).map(([k,v])=><option key={k} value={k}>{v.text}</option>)}</Select><Input label={t("من تاريخ")} type="date" value={from} onChange={e=>update('from',e.target.value)}/><Input label={t("إلى تاريخ")} min={from||undefined} type="date" value={to} onChange={e=>update('to',e.target.value)}/></div>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Select label={t("طبيب الموعد")} value={doctorId} onChange={e=>update('doctorId',e.target.value)}><option value="">{t("كل الأطباء")}</option>{(doctors.data?.items??[]).map((d:any)=><option key={d.id} value={d.id}>{t("د. ")}{d.firstName} {d.lastName}</option>)}</Select><Select label={t("حالة الموعد")} value={status} onChange={e=>update('status',e.target.value)}><option value="">{t("كل الحالات")}</option>{Object.entries(STATUS).map(([k,v])=><option key={k} value={k}>{t(v.text)}</option>)}</Select><Input label={t("من تاريخ")} type="date" value={from} onChange={e=>update('from',e.target.value)}/><Input label={t("إلى تاريخ")} min={from||undefined} type="date" value={to} onChange={e=>update('to',e.target.value)}/></div>
     <AdminResults total={query.data?.total} filtered={filtered} onClear={clear} />
     {query.isLoading ? <Spinner /> : query.isError ? <ErrorState message={apiErrorMessage(query.error)} onRetry={() => void query.refetch()} /> : query.data?.items.length ? <>
       <div className="space-y-3 md:hidden">
@@ -70,3 +70,4 @@ export default function AdminAppointments() {
     </> : <EmptyState title={filtered ? t("لا نتائج مطابقة") : t("لا توجد مواعيد")} description={filtered ? t("جرّب تغيير البحث أو مسح الفلاتر.") : t("ستظهر المواعيد هنا عند تسجيلها.")} />}
   </div>;
 }
+

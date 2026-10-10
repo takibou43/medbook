@@ -21,7 +21,7 @@ import { NoShowSmsDialog, type NoShowTarget } from "../../components/NoShowSmsDi
 import { useCallNext, useCallPatient, useFinishAppointment, useMarkLate, useQueue } from "../../hooks/useQueue";
 import { useMyAppointments } from "../../hooks/useAppointments";
 import { appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
-import { canScheduleFollowUp } from "../../lib/features";
+import { canScheduleFollowUp, isDentalSpecialty } from "../../lib/features";
 import { appointmentPhone, beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import type { Appointment } from "../../types";
 
@@ -373,7 +373,8 @@ export default function DoctorHome() {
               <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-slate-600">{t("لا يوجد مريض بالداخل الآن.")}</p>
             )}
 
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
+              {current?.patientId && isDentalSpecialty(user?.doctor?.specialty) && <Link className="btn-outline flex-1" to={`/treatment-plans?${new URLSearchParams({ patient: current.patientId, member: current.familyMemberId ?? current.beneficiary?.familyMemberId ?? "" })}`}>{t("خطط العلاج")}</Link>}
               {current && (
                 <Button
                   className="flex-1"

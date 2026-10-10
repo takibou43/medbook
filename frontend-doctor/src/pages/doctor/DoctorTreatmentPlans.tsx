@@ -36,10 +36,10 @@ function beneficiaryLine(p: { beneficiary: TreatmentPlanSummary["beneficiary"] }
   return b.type === "FAMILY_MEMBER" && b.relationship ? `${b.name} (${t(RELATIONSHIP_LABELS[b.relationship])})` : b.name;
 }
 
-function CreatePlanForm({ onCreated, onCancel }: { onCreated: (id: string) => void; onCancel: () => void }) {
+function CreatePlanForm({ onCreated, onCancel, initialSubject = "" }: { initialSubject?: string; onCreated: (id: string) => void; onCancel: () => void }) {
   useLanguage();
   const { showToast } = useToast();
-  const [subject, setSubject] = useState("");
+  const [subject, setSubject] = useState(initialSubject);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sessions, setSessions] = useState("");
@@ -67,7 +67,7 @@ function CreatePlanForm({ onCreated, onCancel }: { onCreated: (id: string) => vo
   });
 
   return (
-    <form className="card space-y-3 p-4" onSubmit={(e) => { e.preventDefault(); if (subject && title.trim().length >= 2) create.mutate(); }}>
+    <form className="card space-y-3 p-4" onSubmit={(e) => { e.preventDefault(); if (subject && title.trim().length >= 2 && candidates.data?.some(c => subject === `${c.id}|` || c.familyMembers.some(m => subject === `${c.id}|${m.id}`))) create.mutate(); }}>
       <h2 className="font-bold text-slate-900">{t("خطة علاج جديدة")}</h2>
       {candidates.isLoading ? (
         <Spinner label={t("جارٍ تحميل المرضى...")} />
@@ -287,13 +287,16 @@ export default function DoctorTreatmentPlans() {
   useLanguage();
   const [params, setParams] = useSearchParams();
   const planId = params.get("plan");
+  const patientId = params.get("patient");
+  const memberId = params.get("member") ?? "";
   const [creating, setCreating] = useState(false);
   const plans = useQuery({
     queryKey: ["treatment-plans"],
     queryFn: async () => (await api.get<{ data: TreatmentPlanSummary[] }>("/doctor/treatment-plans")).data.data,
     retry: false,
   });
-  const open = (id: string | null) => setParams(id ? { plan: id } : {}, { replace: false });
+  const visiblePlans = (plans.data ?? []).filter(p => !patientId || (p.patientId === patientId && (p.familyMemberId ?? "") === memberId));
+  const open = (id: string | null) => { const next = new URLSearchParams(params); if (id) next.set("plan", id); else next.delete("plan"); setParams(next, { replace: false }); };
 
   return (
     <div className="space-y-6">
@@ -308,15 +311,15 @@ export default function DoctorTreatmentPlans() {
       ) : (
         <>
           {creating ? (
-            <CreatePlanForm onCancel={() => setCreating(false)} onCreated={(id) => { setCreating(false); plans.refetch(); open(id); }} />
+            <CreatePlanForm initialSubject={patientId ? `${patientId}|${memberId}` : ""} onCancel={() => setCreating(false)} onCreated={(id) => { setCreating(false); plans.refetch(); open(id); }} />
           ) : (
             <Button onClick={() => setCreating(true)}><Plus className="h-4 w-4" />{t(" خطة علاج جديدة")}</Button>
           )}
-          {(plans.data?.length ?? 0) === 0 ? (
+          {visiblePlans.length === 0 ? (
             <EmptyState title={t("لا توجد خطط علاج بعد")} description={t("أنشئ خطة متعددة الجلسات لمريض سبق أن حجز عندك.")} />
           ) : (
             <ul className="space-y-3">
-              {plans.data!.map((p) => (
+              {visiblePlans.map((p) => (
                 <li key={p.id}>
                   <button type="button" onClick={() => open(p.id)} className="card flex w-full flex-col gap-1 p-4 text-start transition hover:border-primary-300">
                     <span className="flex w-full items-start justify-between gap-2">

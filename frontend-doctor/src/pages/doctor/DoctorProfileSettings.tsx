@@ -1,7 +1,7 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, catalogName } from "../../i18n/locale.ts";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { LocateFixed, MapPin } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
@@ -46,7 +46,8 @@ export default function DoctorProfileSettings() {
   const [saving, setSaving] = useState(false);
   const [selectedWilaya, setSelectedWilaya] = useState("");
   const [locating, setLocating] = useState(false);
-  const { register, handleSubmit, reset, watch, setValue } = useForm<FormValues>();
+  const { register, control, handleSubmit, reset, watch, setValue, formState: { dirtyFields } } = useForm<FormValues>();
+
 
   const watchedWilaya = watch("wilayaId");
   const watchedLat = watch("latitude");
@@ -126,7 +127,7 @@ export default function DoctorProfileSettings() {
     <div className="max-w-xl space-y-6">
       <h1 className="text-2xl font-extrabold text-slate-900">{t("ملفي المهني")}</h1>
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
-        <SpecialtyInput {...register("specialtyName", { required: t("مطلوب") })} />
+        <Controller name="specialtyName" control={control} rules={{ required: t("مطلوب") }} render={({ field }) => <SpecialtyInput {...field} value={dirtyFields.specialtyName ? field.value ?? "" : catalogName({ nameAr: field.value ?? "", nameFr: me?.doctor?.specialty?.nameFr })} />} />
         <div className="grid grid-cols-2 gap-3">
           <Select label={t("الولاية")} {...register("wilayaId", { required: t("مطلوب") })}>
             <option value="">{t("اختر")}</option>
@@ -185,3 +186,5 @@ export default function DoctorProfileSettings() {
     </div>
   );
 }
+
+

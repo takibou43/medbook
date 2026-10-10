@@ -228,7 +228,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
             <h2 id={titleId} className="text-base font-bold text-slate-900">{t("معاينة الوصفة")}</h2>
             <p className="hidden text-xs text-slate-500 sm:block">{t("ورقة A5 كما ستُطبع. الطباعة لا تحفظ الوصفة ولا ترسلها ولا تغيّر الموعد.")}</p>
           </div>
-          <div className="flex w-full items-center justify-between gap-1.5 sm:w-auto sm:justify-start">
+          <div className="flex w-full flex-wrap items-center justify-between gap-1.5 sm:w-auto sm:justify-start">
             <div className="flex items-center rounded-xl border border-slate-200" role="group" aria-label={t("التكبير")}>
               <button type="button" onClick={() => stepZoom(-1)} className="flex h-11 w-9 items-center justify-center text-slate-700 hover:bg-slate-100 sm:w-11" aria-label={t("تصغير")}>
                 <Minus className="h-4 w-4" aria-hidden="true" />

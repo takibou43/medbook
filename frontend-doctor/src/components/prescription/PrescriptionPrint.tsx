@@ -4,6 +4,8 @@ import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
 import type { PrescriptionMedication } from "../../lib/prescription";
 import { formatDayAr } from "../../lib/doctorUi";
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { catalogName, getLanguage, t } from "../../i18n/locale.ts";
 
 export interface PrescriptionSheetData {
   doctor: Doctor | null | undefined;
@@ -25,48 +27,50 @@ function Typed({ children, className }: { children: string; className?: string }
  * يُطبع فقط ما هو موجود فعلًا: لا شعار ولا عمر ولا رقم وصفة ولا QR ولا توقيع/ختم رقمي.
  */
 export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
+  useLanguage();
+  const lang = getLanguage();
   const d = data.doctor;
   const clinic = d?.clinic ?? null;
-  const place = [d?.city?.nameAr, d?.wilaya?.nameAr].filter(Boolean).join("، ");
+  const place = [d?.city ? catalogName(d.city) : "", d?.wilaya ? catalogName(d.wilaya) : ""].filter(Boolean).join(lang === "fr" ? ", " : "، ");
   const address = (clinic?.address || d?.address || "").trim();
   const phone = (clinic?.phone || d?.phone || "").trim();
   const hasContact = Boolean(address || place || phone);
   return (
-    <article className="rx-sheet" dir="rtl" lang="ar" aria-label="الوصفة الطبية">
+    <article className="rx-sheet" dir={lang === "fr" ? "ltr" : "rtl"} lang={lang} aria-label={t("الوصفة الطبية")}>
       <header className="rx-head">
         <div className="rx-id">
-          {d && <p className="rx-doctor">د. {d.firstName} {d.lastName}</p>}
-          {d?.specialty?.nameAr && <p className="rx-specialty">{d.specialty.nameAr}</p>}
+          {d && <p className="rx-doctor">{t("د.")} {d.firstName} {d.lastName}</p>}
+          {d?.specialty && <p className="rx-specialty">{catalogName(d.specialty)}</p>}
           {clinic?.nameAr && <p className="rx-clinic">{clinic.nameAr}</p>}
         </div>
         {hasContact && (
           <div className="rx-contact">
             {address && <p>{address}</p>}
             {place && <p>{place}</p>}
-            {phone && <p>الهاتف: <bdi dir="ltr">{phone}</bdi></p>}
+            {phone && <p>{t("الهاتف:")} <bdi dir="ltr">{phone}</bdi></p>}
           </div>
         )}
       </header>
 
-      <h1 className="rx-title">وصفة طبية</h1>
+      <h1 className="rx-title">{t("وصفة طبية")}</h1>
 
       <dl className="rx-meta">
         <div>
-          <dt>المريض</dt>
+          <dt>{t("المريض")}</dt>
           <dd className="rx-patient"><Typed>{data.patientName}</Typed></dd>
         </div>
         <div>
-          <dt>التاريخ</dt>
+          <dt>{t("التاريخ")}</dt>
           <dd>{formatDayAr(data.day)}</dd>
         </div>
       </dl>
 
-      <ol className="rx-meds" aria-label="الأدوية">
+      <ol className="rx-meds" aria-label={t("الأدوية")}>
         {data.medications.map((m, i) => {
           const facts = [
-            { label: "الجرعة", value: m.dose.trim() },
-            { label: "التكرار", value: m.frequency.trim() },
-            { label: "المدة", value: m.duration.trim() },
+            { label: t("الجرعة"), value: m.dose.trim() },
+            { label: t("التكرار"), value: m.frequency.trim() },
+            { label: t("المدة"), value: m.duration.trim() },
           ].filter((f) => f.value);
           const instructions = m.instructions.trim();
           return (
@@ -84,7 +88,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
                   </p>
                 )}
                 {instructions && (
-                  <p className="rx-instructions"><span className="rx-fact-label">تعليمات:</span> <Typed>{instructions}</Typed></p>
+                  <p className="rx-instructions"><span className="rx-fact-label">{t("تعليمات:")}</span> <Typed>{instructions}</Typed></p>
                 )}
               </div>
             </li>
@@ -94,18 +98,18 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
 
       {data.notes.trim() && (
         <section className="rx-notes">
-          <h2 className="rx-small-title">ملاحظات</h2>
+          <h2 className="rx-small-title">{t("ملاحظات")}</h2>
           <p className="rx-notes-body"><Typed>{data.notes.trim()}</Typed></p>
         </section>
       )}
 
       <footer className="rx-sign">
         <div className="rx-sign-area">
-          <p className="rx-small-title">توقيع الطبيب</p>
+          <p className="rx-small-title">{t("توقيع الطبيب")}</p>
           <div className="rx-sign-line" />
         </div>
         <div className="rx-sign-area">
-          <p className="rx-small-title">الختم</p>
+          <p className="rx-small-title">{t("الختم")}</p>
           <div className="rx-stamp-space" />
         </div>
       </footer>
@@ -122,6 +126,7 @@ const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2];
  * ولا تغيّر حالة أي موعد ولا ترسل شيئًا.
  */
 export function PrescriptionPreview({ open, data, onClose }: { open: boolean; data: PrescriptionSheetData | null; onClose: () => void }) {
+  useLanguage();
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -188,27 +193,27 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
         {/* شريط الأدوات خارج الورقة وثابت أعلى المعاينة */}
         <div className="rx-no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:px-5">
           <div className="min-w-0 max-sm:sr-only">
-            <h2 id={titleId} className="text-base font-bold text-slate-900">معاينة الوصفة</h2>
-            <p className="hidden text-xs text-slate-500 sm:block">ورقة A4 كما ستُطبع. الطباعة لا تحفظ الوصفة ولا ترسلها ولا تغيّر الموعد.</p>
+            <h2 id={titleId} className="text-base font-bold text-slate-900">{t("معاينة الوصفة")}</h2>
+            <p className="hidden text-xs text-slate-500 sm:block">{t("ورقة A4 كما ستُطبع. الطباعة لا تحفظ الوصفة ولا ترسلها ولا تغيّر الموعد.")}</p>
           </div>
           <div className="flex w-full items-center justify-between gap-1.5 sm:w-auto sm:justify-start">
-            <div className="flex items-center rounded-xl border border-slate-200" role="group" aria-label="التكبير">
-              <button type="button" onClick={() => stepZoom(-1)} className="flex h-10 w-9 items-center justify-center text-slate-700 hover:bg-slate-100" aria-label="تصغير">
+            <div className="flex items-center rounded-xl border border-slate-200" role="group" aria-label={t("التكبير")}>
+              <button type="button" onClick={() => stepZoom(-1)} className="flex h-10 w-9 items-center justify-center text-slate-700 hover:bg-slate-100" aria-label={t("تصغير")}>
                 <Minus className="h-4 w-4" aria-hidden="true" />
               </button>
-              <button type="button" onClick={() => setZoom(null)} className="flex h-10 min-w-[3rem] items-center justify-center gap-1 px-1 text-xs font-semibold tabular-nums text-slate-700 hover:bg-slate-100" aria-label="ملاءمة العرض" title="ملاءمة العرض">
+              <button type="button" onClick={() => setZoom(null)} className="flex h-10 min-w-[3rem] items-center justify-center gap-1 px-1 text-xs font-semibold tabular-nums text-slate-700 hover:bg-slate-100" aria-label={t("ملاءمة العرض")} title={t("ملاءمة العرض")}>
                 {zoom === null ? <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /> : null}
                 <span dir="ltr">{Math.round(scale * 100)}%</span>
               </button>
-              <button type="button" onClick={() => stepZoom(1)} className="flex h-10 w-9 items-center justify-center text-slate-700 hover:bg-slate-100" aria-label="تكبير">
+              <button type="button" onClick={() => stepZoom(1)} className="flex h-10 w-9 items-center justify-center text-slate-700 hover:bg-slate-100" aria-label={t("تكبير")}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             <button type="button" onClick={onClose} className="btn-outline whitespace-nowrap px-3">
-              <X className="h-4 w-4" aria-hidden="true" /> رجوع للتعديل
+              <X className="h-4 w-4" aria-hidden="true" /> {t("رجوع للتعديل")}
             </button>
             <button type="button" onClick={() => window.print()} className="btn-primary whitespace-nowrap px-3">
-              <Printer className="h-4 w-4" aria-hidden="true" /> طباعة
+              <Printer className="h-4 w-4" aria-hidden="true" /> {t("طباعة")}
             </button>
           </div>
         </div>

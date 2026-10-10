@@ -174,7 +174,7 @@ body {
 .rx-doctor { font-size: 18pt; font-weight: 800; line-height: 1.3; color: #0f2523; }
 .rx-specialty { margin-top: 0.5mm !important; font-size: 11pt; color: #166661; font-weight: 600; }
 .rx-clinic { font-size: 10.5pt; color: #374151; }
-.rx-contact { flex-shrink: 0; max-width: 70mm; font-size: 9.5pt; line-height: 1.55; color: #374151; text-align: left; }
+.rx-contact { flex-shrink: 0; max-width: 70mm; font-size: 9.5pt; line-height: 1.55; color: #374151; text-align: end; }
 .rx-title { margin: 7mm 0 5mm; text-align: center; font-size: 14pt; font-weight: 700; letter-spacing: 0.02em; color: #111827; }
 .rx-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2mm 10mm; padding-bottom: 3mm; margin-bottom: 2mm; border-bottom: 0.2mm solid #d1d5db; }
 .rx-meta > div { display: flex; align-items: baseline; gap: 2.5mm; min-width: 0; }

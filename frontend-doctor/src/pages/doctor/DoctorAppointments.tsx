@@ -195,8 +195,8 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {turn !== undefined && (
-            <span className="flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-sm font-bold tabular-nums text-slate-700" title="رقم الدور حسب وقت الموعد">
-              <span className="sr-only">رقم الدور </span>{padTurn(turn)}
+            <span className="flex h-8 min-w-[2rem] shrink-0 items-center justify-center rounded-lg bg-slate-100 px-1.5 text-sm font-bold tabular-nums text-slate-700" title={t("رقم الدور حسب وقت الموعد")}>
+              <span className="sr-only">{t("رقم الدور")} </span>{padTurn(turn)}
             </span>
           )}
           <h3 className="min-w-0 truncate text-lg font-extrabold leading-tight text-slate-900">{patientFullName(a)}</h3>

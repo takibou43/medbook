@@ -12,6 +12,8 @@ import {
   type PrescriptionDraft, type PrescriptionMedication,
 } from "../../lib/prescription";
 import { PrescriptionPreview, type PrescriptionSheetData } from "./PrescriptionPrint";
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 
 // بلا أمثلة جرعات في placeholder عمدًا: لا اقتراحات دوائية ولا جرعات تلقائية — كل شيء يكتبه الطبيب.
 const MED_FIELDS: { key: keyof Omit<PrescriptionMedication, "id">; label: string; placeholder?: string; wide?: boolean }[] = [
@@ -22,7 +24,7 @@ const MED_FIELDS: { key: keyof Omit<PrescriptionMedication, "id">; label: string
   { key: "instructions", label: "تعليمات إضافية", placeholder: "اختياري", wide: true },
 ];
 
-const DISCARD_MSG = (name: string) => `لديك وصفة غير مطبوعة لـ «${name}» لم تُحفظ. ستُحذف هذه المسودة نهائيًا. هل تريد المتابعة؟`;
+const DISCARD_MSG = (name: string) => t("لديك وصفة غير مطبوعة لـ «{name}» لم تُحفظ. ستُحذف هذه المسودة نهائيًا. هل تريد المتابعة؟", { name });
 
 /**
  * «كتابة وصفة» في الرئيسية (مكان «جدول اليوم» سابقًا).
@@ -41,6 +43,7 @@ export function PrescriptionCard({
   loading: boolean;
   error: boolean;
 }) {
+  useLanguage();
   const { user } = useAuth();
   const uid = user?.id ?? "";
   const formId = useId();
@@ -154,17 +157,17 @@ export function PrescriptionCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 id={`${formId}-title`} className="flex items-center gap-2 text-lg font-bold text-slate-900">
-            <FileText className="h-5 w-5 text-primary-600" aria-hidden="true" /> كتابة وصفة
+            <FileText className="h-5 w-5 text-primary-600" aria-hidden="true" /> {t("كتابة وصفة")}
           </h2>
           {draft && (
-            <span className={clsx("badge", dirty ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600")} title="الوصفة لا تُحفظ في النظام">
-              {dirty ? "مسودة غير محفوظة" : "فارغة"}
+            <span className={clsx("badge", dirty ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600")} title={t("الوصفة لا تُحفظ في النظام")}>
+              {dirty ? t("مسودة غير محفوظة") : t("فارغة")}
             </span>
           )}
         </div>
         {draft && (
           <button type="button" onClick={changePatient} className="text-sm font-semibold text-primary-700 underline-offset-2 hover:underline">
-            تغيير المريض
+            {t("تغيير المريض")}
           </button>
         )}
       </div>
@@ -174,10 +177,10 @@ export function PrescriptionCard({
           <p className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
-              المريض في الاستشارة الآن هو <b>{beneficiaryName(current)}</b>، وهذه المسودة تخص <b>{draft.patient.bookedName}</b>.
+              {t("المريض في الاستشارة الآن هو {current}، وهذه المسودة تخص {draft}.", { current: beneficiaryName(current), draft: draft.patient.bookedName })}
             </span>
           </p>
-          <Button variant="outline" onClick={startForCurrent}>بدء وصفة لـ{beneficiaryName(current)}</Button>
+          <Button variant="outline" onClick={startForCurrent}>{t("بدء وصفة لـ{name}", { name: beneficiaryName(current) })}</Button>
         </div>
       )}
 
@@ -186,22 +189,22 @@ export function PrescriptionCard({
           {loading ? (
             <div className="py-6"><Spinner /></div>
           ) : error ? (
-            <p role="alert" className="text-sm text-red-700">تعذّر تحميل مواعيد اليوم لاختيار المريض.</p>
+            <p role="alert" className="text-sm text-red-700">{t("تعذّر تحميل مواعيد اليوم لاختيار المريض.")}</p>
           ) : (
             <>
               <p className="text-sm text-slate-600">
-                {current ? "اختر المريض الذي تكتب له الوصفة." : "لا توجد استشارة حالية. اختر موعدًا قائمًا لتحديد المريض."}
+                {current ? t("اختر المريض الذي تكتب له الوصفة.") : t("لا توجد استشارة حالية. اختر موعدًا قائمًا لتحديد المريض.")}
               </p>
               {choices.length === 0 ? (
-                <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-slate-600">لا توجد مواعيد اليوم لاختيار مريض.</p>
+                <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-slate-600">{t("لا توجد مواعيد اليوم لاختيار مريض.")}</p>
               ) : (
                 <label className="mt-3 block">
-                  <span className="label">الموعد</span>
+                  <span className="label">{t("الموعد")}</span>
                   <select className="input" value="" onChange={(e) => choose(e.target.value)}>
-                    <option value="" disabled>اختر موعدًا…</option>
+                    <option value="" disabled>{t("اختر موعدًا…")}</option>
                     {choices.map((a) => (
                       <option key={a.id} value={a.id}>
-                        {a.startTime} — {beneficiaryName(a)}{current?.id === a.id ? " (الاستشارة الحالية)" : ""}
+                        {a.startTime} — {beneficiaryName(a)}{current?.id === a.id ? ` (${t("الاستشارة الحالية")})` : ""}
                       </option>
                     ))}
                   </select>
@@ -209,7 +212,7 @@ export function PrescriptionCard({
               )}
               {picking && current && (
                 <button type="button" onClick={() => choose(current.id)} className="mt-2 text-sm font-semibold text-primary-700 hover:underline">
-                  الرجوع إلى المريض الحالي
+                  {t("الرجوع إلى المريض الحالي")}
                 </button>
               )}
             </>
@@ -228,16 +231,16 @@ export function PrescriptionCard({
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <UserRound className="h-4 w-4 text-slate-500" aria-hidden="true" />
-              {draftIsCurrent ? <span className="badge bg-sky-100 text-sky-700">الاستشارة الحالية</span> : <span className="badge bg-slate-200 text-slate-700">موعد مختار</span>}
-              <span>موعد <span className="tabular-nums">{draft.patient.startTime}</span></span>
+              {draftIsCurrent ? <span className="badge bg-sky-100 text-sky-700">{t("الاستشارة الحالية")}</span> : <span className="badge bg-slate-200 text-slate-700">{t("موعد مختار")}</span>}
+              <span>{t("موعد")} <span className="tabular-nums">{draft.patient.startTime}</span></span>
               {draft.patient.relationship && (
                 <span className="badge border border-primary-200 bg-primary-50 text-primary-800">
-                  {draft.patient.relationship}{draft.patient.accountHolderName ? ` — حساب ${draft.patient.accountHolderName}` : ""}
+                  {t(draft.patient.relationship)}{draft.patient.accountHolderName ? ` — ${t("حساب {name}", { name: draft.patient.accountHolderName })}` : ""}
                 </span>
               )}
             </div>
             <label className="mt-2 block">
-              <span className="mb-1 block text-xs font-medium text-slate-600">اسم المريض على الوصفة</span>
+              <span className="mb-1 block text-xs font-medium text-slate-600">{t("اسم المريض على الوصفة")}</span>
               <input
                 className="input py-2 text-base font-bold"
                 value={draft.patientName}
@@ -247,9 +250,9 @@ export function PrescriptionCard({
             </label>
             {nameEdited && (
               <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                عُدّل الاسم للوصفة فقط — لا يتغيّر ملف المريض ولا الحجز.
+                {t("عُدّل الاسم للوصفة فقط — لا يتغيّر ملف المريض ولا الحجز.")}
                 <button type="button" onClick={() => patch({ patientName: draft.patient.bookedName })} className="inline-flex items-center gap-1 font-semibold text-primary-700 hover:underline">
-                  <RotateCcw className="h-3 w-3" aria-hidden="true" /> الاسم الأصلي
+                  <RotateCcw className="h-3 w-3" aria-hidden="true" /> {t("الاسم الأصلي")}
                 </button>
               </p>
             )}
@@ -257,21 +260,21 @@ export function PrescriptionCard({
 
           {/* الأدوية: الاسم بعرض كامل، ثم الجرعة/التكرار/المدة في صف (عمود واحد على الهاتف)، ثم التعليمات */}
           <fieldset>
-            <legend className="mb-2 text-sm font-bold text-slate-800">الأدوية ({draft.medications.length})</legend>
+            <legend className="mb-2 text-sm font-bold text-slate-800">{t("الأدوية")} ({draft.medications.length})</legend>
             <ol className="divide-y divide-slate-200 rounded-xl border border-slate-200">
               {draft.medications.map((m, i) => (
-                <li key={m.id} className="p-2.5 sm:p-3" role="group" aria-label={`الدواء رقم ${i + 1}`}>
+                <li key={m.id} className="p-2.5 sm:p-3" role="group" aria-label={t("الدواء رقم {n}", { n: i + 1 })}>
                   <div className="flex items-start gap-2">
                     <span className="mt-6 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-700" aria-hidden="true">{i + 1}</span>
                     <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
                       {MED_FIELDS.map((f) => (
                         <label key={f.key} className={clsx("block min-w-0", f.wide && "sm:col-span-3")}>
-                          <span className="mb-0.5 block text-xs font-medium text-slate-600">{f.label}</span>
+                          <span className="mb-0.5 block text-xs font-medium text-slate-600">{t(f.label)}</span>
                           <input
                             className={clsx("input py-2", f.key === "name" && "font-semibold")}
                             dir="auto"
                             value={m[f.key]}
-                            placeholder={f.placeholder}
+                            placeholder={f.placeholder ? t(f.placeholder) : undefined}
                             onChange={(e) => updateMed(m.id, f.key, e.target.value)}
                             autoComplete="off"
                             spellCheck={false}
@@ -284,8 +287,8 @@ export function PrescriptionCard({
                       type="button"
                       onClick={() => removeMed(m.id)}
                       className="mt-5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-700"
-                      aria-label={`حذف الدواء رقم ${i + 1}`}
-                      title="حذف الدواء"
+                      aria-label={t("حذف الدواء رقم {n}", { n: i + 1 })}
+                      title={t("حذف الدواء")}
                     >
                       <X className="h-4 w-4" aria-hidden="true" />
                     </button>
@@ -294,12 +297,12 @@ export function PrescriptionCard({
               ))}
             </ol>
             <Button type="button" variant="outline" className="mt-2" onClick={() => patch({ medications: [...draft.medications, newMedication()] })}>
-              <Plus className="h-4 w-4" aria-hidden="true" /> إضافة دواء
+              <Plus className="h-4 w-4" aria-hidden="true" /> {t("إضافة دواء")}
             </Button>
           </fieldset>
 
           <label className="block">
-            <span className="mb-1 block text-sm font-bold text-slate-800">ملاحظات عامة <span className="font-normal text-slate-500">(اختياري)</span></span>
+            <span className="mb-1 block text-sm font-bold text-slate-800">{t("ملاحظات عامة")} <span className="font-normal text-slate-500">({t("اختياري")})</span></span>
             <textarea className="input min-h-[64px]" dir="auto" value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} />
           </label>
 
@@ -311,13 +314,13 @@ export function PrescriptionCard({
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
             <Button type="submit" className="flex-1 sm:flex-none">
-              <Eye className="h-4 w-4" aria-hidden="true" /> معاينة وطباعة
+              <Eye className="h-4 w-4" aria-hidden="true" /> {t("معاينة وطباعة")}
             </Button>
             <button type="button" onClick={clearAll} disabled={!dirty} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-red-700 disabled:opacity-40">
-              مسح الوصفة
+              {t("مسح الوصفة")}
             </button>
           </div>
-          <p id={`${formId}-note`} className="text-xs text-slate-500">لا تُحفظ ولا تُرسل للمريض — تُطبع فقط.</p>
+          <p id={`${formId}-note`} className="text-xs text-slate-500">{t("لا تُحفظ ولا تُرسل للمريض — تُطبع فقط.")}</p>
         </form>
       )}
     </section>

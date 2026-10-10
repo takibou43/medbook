@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t, catalogName } from "../../i18n/locale.ts";
 import { forwardRef } from "react";
 import { CalendarDays } from "lucide-react";
 import { Doctor, NextSlot } from "../../types";
@@ -21,9 +23,10 @@ interface Props {
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  useLanguage();
   return (
     <div className="flex items-start justify-between gap-4 py-2.5">
-      <dt className="shrink-0 text-sm text-slate-500">{label}</dt>
+      <dt className="shrink-0 text-sm text-slate-500">{t(label ?? "")}</dt>
       <dd className="text-end text-sm font-semibold text-slate-800">{children}</dd>
     </div>
   );
@@ -33,38 +36,36 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 // ويمنع التكرار)، وشاشة النجاح تعرض الدور الفعلي الذي سجّله.
 export const ConfirmStep = forwardRef<HTMLHeadingElement, Props>(
   ({ doctor, slot, patientName, patientPhone, submitting, errorMessage, onConfirm, onBack, exactChoice, beneficiaryLabel }, ref) => {
+  useLanguage();
     const address = doctorAddress(doctor);
     return (
       <section aria-labelledby="step-confirm-title">
-        <BackButton onClick={onBack}>تعديل البيانات</BackButton>
-        <StepHeading ref={ref} id="step-confirm-title" hint="راجع بياناتك ثم أكّد الحجز.">
-          تأكيد الحجز
-        </StepHeading>
+        <BackButton onClick={onBack}>{t("تعديل البيانات")}</BackButton>
+        <StepHeading ref={ref} id="step-confirm-title" hint={t("راجع بياناتك ثم أكّد الحجز.")}>{t("تأكيد الحجز ")}</StepHeading>
 
         <dl className="glass divide-y divide-slate-100 px-5 py-2">
-          <Row label="التخصص">{doctor.specialty.nameAr}</Row>
-          <Row label="الطبيب">
-            د. {doctor.firstName} {doctor.lastName}
+          <Row label={t("التخصص")}>{catalogName(doctor.specialty)}</Row>
+          <Row label={t("الطبيب")}>{t("د. ")}{doctor.firstName} {doctor.lastName}
           </Row>
-          {address && <Row label="العنوان">{address}</Row>}
-          <Row label="التاريخ">{formatLongDate(slot.date)}</Row>
-          <Row label="الوقت">
+          {address && <Row label={t("العنوان")}>{address}</Row>}
+          <Row label={t("التاريخ")}>{formatLongDate(slot.date)}</Row>
+          <Row label={t("الوقت")}>
             {/^\d{2}:\d{2}$/.test(slot.startTime) ? <span dir="ltr">{slot.startTime}</span> : slot.startTime}
           </Row>
           {beneficiaryLabel ? (
-            <Row label="الموعد لـ">
+            <Row label={t("الموعد لـ")}>
               <span className="rounded-full bg-primary-50 px-2 py-0.5 text-primary-800">{beneficiaryLabel}</span>
             </Row>
           ) : (
-            <Row label="اسم المريض">{patientName}</Row>
+            <Row label={t("اسم المريض")}>{patientName}</Row>
           )}
-          <Row label="رقم الهاتف">{patientPhone ? <span dir="ltr">{patientPhone}</span> : "—"}</Row>
+          <Row label={t("رقم الهاتف")}>{patientPhone ? <span dir="ltr">{patientPhone}</span> : "—"}</Row>
         </dl>
 
         <p className="mt-3 text-xs text-slate-500">
           {exactChoice
-            ? "الخادم يتحقق من توفر الوقت لحظة التأكيد؛ إن حُجز قبلك للتوّ سنطلب منك اختيار وقت آخر."
-            : "الأدوار تُمنح بالترتيب؛ إن حُجز هذا الوقت قبلك للتوّ سيُعطى لك الدور التالي مباشرة."}
+            ? t("الخادم يتحقق من توفر الوقت لحظة التأكيد؛ إن حُجز قبلك للتوّ سنطلب منك اختيار وقت آخر.")
+            : t("الأدوار تُمنح بالترتيب؛ إن حُجز هذا الوقت قبلك للتوّ سيُعطى لك الدور التالي مباشرة.")}
         </p>
 
         {errorMessage && (
@@ -74,8 +75,7 @@ export const ConfirmStep = forwardRef<HTMLHeadingElement, Props>(
         )}
 
         <Button type="button" onClick={onConfirm} loading={submitting} className="mt-4 min-h-[48px] w-full text-base">
-          <CalendarDays className="ml-1.5 h-4 w-4" aria-hidden="true" /> تأكيد الحجز
-        </Button>
+          <CalendarDays className="me-1.5 h-4 w-4" aria-hidden="true" />{t(" تأكيد الحجز ")}</Button>
       </section>
     );
   }

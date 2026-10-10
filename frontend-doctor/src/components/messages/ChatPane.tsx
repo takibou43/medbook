@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t, getLanguage } from "../../i18n/locale.ts";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Check, CheckCheck, Loader2, Send } from "lucide-react";
 import clsx from "clsx";
@@ -39,6 +41,7 @@ export function ChatPane({
   focusUnread?: boolean;
   onFocusHandled?: () => void;
 }) {
+  useLanguage();
   const { showToast } = useToast();
   const latest = useLatestMessages(scope);
   const send = useSendMessage(scope);
@@ -68,7 +71,7 @@ export function ChatPane({
     const map = new Map<string, ChatMessage>();
     [...older, ...(latest.data?.items ?? [])].forEach((m) => map.set(m.id, m));
     return [...map.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  }, [older, latest.data]);
+  }, [older, latest.data, getLanguage()]);
   const hasMore = hasMoreOlder ?? latest.data?.hasMore ?? false;
 
   // وضع الرسائل الواردة كمقروءة عند فتح المحادثة أو وصول رسالة جديدة أثناء فتحها والتبويبة ظاهرة.
@@ -139,9 +142,9 @@ export function ChatPane({
       pendingId.current = null;
       onAttemptChange?.(undefined);
       stickToBottom.current = true;
-      showToast("تم إرسال الرسالة", "success");
+      showToast(t("تم إرسال الرسالة"), "success");
     } catch (err) {
-      showToast(apiErrorMessage(err, "تعذّر إرسال الرسالة."), "error");
+      showToast(apiErrorMessage(err, t("تعذّر إرسال الرسالة.")), "error");
     } finally {
       sending.current = false;
     }
@@ -166,15 +169,13 @@ export function ChatPane({
             {hasMore && (
               <div className="text-center">
                 <button onClick={loadOlder} disabled={loadingOlder} className="btn-ghost !py-1.5 text-xs">
-                  {loadingOlder && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  تحميل رسائل أقدم
-                </button>
+                  {loadingOlder && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{t("تحميل رسائل أقدم ")}</button>
               </div>
             )}
             {messages.length === 0 ? (
               <div className="py-16 text-center text-sm text-slate-500">
-                <p className="font-semibold text-slate-700">لا توجد رسائل بعد</p>
-                <p className="mt-1">ابدأ المحادثة مع {peerLabel} بإرسال رسالة.</p>
+                <p className="font-semibold text-slate-700">{t("لا توجد رسائل بعد")}</p>
+                <p className="mt-1">{t("ابدأ المحادثة مع ")}{peerLabel}{t(" بإرسال رسالة.")}</p>
               </div>
             ) : (
               messages.map((m) => {
@@ -193,7 +194,7 @@ export function ChatPane({
                       <p className="whitespace-pre-wrap break-words">{m.content}</p>
                       <p className={clsx("mt-1 flex items-center gap-1 text-[11px]", mine ? "text-primary-100" : "text-slate-400")}>
                         {formatMsgTime(m.createdAt)}
-                        {mine && (m.readAt ? <CheckCheck className="h-3.5 w-3.5" aria-label="مقروءة" /> : <Check className="h-3.5 w-3.5" aria-label="مُرسلة" />)}
+                        {mine && (m.readAt ? <CheckCheck className="h-3.5 w-3.5" aria-label={t("مقروءة")} /> : <Check className="h-3.5 w-3.5" aria-label={t("مُرسلة")} />)}
                       </p>
                     </div>
                   </div>
@@ -208,25 +209,22 @@ export function ChatPane({
       <form onSubmit={submit} className="border-t border-slate-200 bg-white p-3">
         <div className="flex items-end gap-2">
           <textarea
-            aria-label={`رسالة إلى ${peerLabel}`}
+            aria-label={t("رسالة إلى {0}", { "0": peerLabel })}
             disabled={send.isPending}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) submit(e as unknown as FormEvent);
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) submit(e as unknown as FormEvent);
             }}
             maxLength={MAX}
             rows={2}
-            placeholder="اكتب رسالتك..."
+            placeholder={t("اكتب رسالتك...")}
             className="input min-h-[44px] flex-1 resize-none"
           />
           <button type="submit" disabled={!text.trim() || send.isPending} className="btn-primary h-11 shrink-0">
-            {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 -scale-x-100" />}
-            إرسال
-          </button>
+            {send.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 -scale-x-100" />}{t("إرسال ")}</button>
         </div>
-        <p className="mt-1 text-[11px] text-slate-400">
-          Enter للإرسال، Shift+Enter لسطر جديد — {text.length}/{MAX}
+        <p className="mt-1 text-[11px] text-slate-400">{t("Enter للإرسال، Shift+Enter لسطر جديد — ")}{text.length}/{MAX}
         </p>
       </form>
     </div>

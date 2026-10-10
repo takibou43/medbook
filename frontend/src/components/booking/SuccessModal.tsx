@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { ReactNode, useEffect } from "react";
 import { CheckCircle2, MapPin } from "lucide-react";
 import { Button } from "../ui/Button";
@@ -15,10 +17,11 @@ export interface ConfirmedBooking {
 // مع دور dialog وإغلاق بـ Escape لتحسين إمكانية الوصول.
 // extra: محتوى إضافي اختياري (مثل بطاقة «ذكّرني بموعدي» للمريض المسجّل) — الضيف لا يرى أي تغيير.
 export function SuccessModal({ booking, onClose, extra }: { booking: ConfirmedBooking; onClose: () => void; extra?: ReactNode }) {
+  useLanguage();
   const dialogRef = useDialogFocus(onClose);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !e.isComposing && e.keyCode !== 229 && onClose();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -34,15 +37,12 @@ export function SuccessModal({ booking, onClose, extra }: { booking: ConfirmedBo
         onClick={(e) => e.stopPropagation()}
       >
         <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-emerald-500" aria-hidden="true" />
-        <h2 id="booking-success-title" className="text-lg font-extrabold text-slate-900">
-          تم حجز موعدك بنجاح ✅
-        </h2>
+        <h2 id="booking-success-title" className="text-lg font-extrabold text-slate-900">{t("تم حجز موعدك بنجاح ✅ ")}</h2>
         <div className="mt-3 space-y-1">
-          <p className="font-semibold text-slate-700">الدكتور: {booking.doctorName}</p>
-          <p className="text-slate-600">
-            التاريخ: {arabicDate(booking.date)}
+          <p className="font-semibold text-slate-700">{t("الدكتور: ")}{booking.doctorName}</p>
+          <p className="text-slate-600">{t("التاريخ: ")}{arabicDate(booking.date)}
           </p>
-          <p className="text-slate-600">الساعة: {booking.startTime}</p>
+          <p className="text-slate-600">{t("الساعة: ")}{booking.startTime}</p>
         </div>
         {booking.address && (
           <p className="mt-2 flex items-center justify-center gap-1.5 text-sm text-slate-500">
@@ -52,9 +52,7 @@ export function SuccessModal({ booking, onClose, extra }: { booking: ConfirmedBo
 
         {extra}
 
-        <Button variant="outline" className="mt-4 min-h-[44px] w-full" onClick={onClose} autoFocus>
-          لاحقًا
-        </Button>
+        <Button variant="outline" className="mt-4 min-h-[44px] w-full" onClick={onClose} autoFocus>{t("لاحقًا ")}</Button>
       </div>
     </div>
   );

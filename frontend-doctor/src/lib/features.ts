@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale.ts";
 import type { Appointment, Beneficiary, DoctorReferralStatus, FamilyRelationship } from "../types/index.ts";
 
 /**
@@ -16,7 +17,7 @@ export const RELATIONSHIP_LABELS: Record<FamilyRelationship, string> = {
 /** اسم المستفيد كما يظهر للطبيب: «ياسين بن علي (ابن/ابنة)» أو اسم صاحب الموعد. */
 export function beneficiaryText(a: Pick<Appointment, "beneficiary" | "patient" | "guestFirstName" | "guestLastName">): string {
   const b: Beneficiary | undefined = a.beneficiary;
-  if (b?.type === "FAMILY_MEMBER") return b.relationship ? `${b.name} (${RELATIONSHIP_LABELS[b.relationship]})` : b.name;
+  if (b?.type === "FAMILY_MEMBER") return b.relationship ? `${b.name} (${t(RELATIONSHIP_LABELS[b.relationship])})` : b.name;
   const guest = [a.guestFirstName, a.guestLastName].filter(Boolean).join(" ").trim();
   if (guest) return guest;
   return [a.patient?.firstName, a.patient?.lastName].filter(Boolean).join(" ").trim();

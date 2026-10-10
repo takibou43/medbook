@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { forwardRef, ReactNode } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { ArrowLeft } from "lucide-react";
@@ -27,6 +29,7 @@ interface Props {
 // مع الحساب العائلي: يختار صاحب الحساب «الموعد لي» (كما كان) أو فردًا من عائلته — عندها يُعرض اسم الفرد
 // ولا يُطلب كتابته، والهاتف يبقى هاتف صاحب الحساب.
 export const PatientStep = forwardRef<HTMLHeadingElement, Props>(({ form, onSubmit, onBack, beneficiary, familyMemberName, familyPending }, ref) => {
+  useLanguage();
   const {
     register,
     handleSubmit,
@@ -36,37 +39,34 @@ export const PatientStep = forwardRef<HTMLHeadingElement, Props>(({ form, onSubm
 
   return (
     <section aria-labelledby="step-patient-title">
-      <BackButton onClick={onBack}>تغيير الموعد</BackButton>
-      <StepHeading ref={ref} id="step-patient-title" hint="الاسم الذي سيظهر للطبيب في الطابور.">
-        معلومات المريض
-      </StepHeading>
+      <BackButton onClick={onBack}>{t("تغيير الموعد")}</BackButton>
+      <StepHeading ref={ref} id="step-patient-title" hint={t("الاسم الذي سيظهر للطبيب في الطابور.")}>{t("معلومات المريض ")}</StepHeading>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="glass space-y-4 p-5">
         {beneficiary}
         {forFamily ? (
-          <div className="rounded-xl bg-primary-50 p-3 text-sm text-primary-900">
-            سيظهر للطبيب باسم: <span className="font-bold">{familyMemberName}</span>
+          <div className="rounded-xl bg-primary-50 p-3 text-sm text-primary-900">{t("سيظهر للطبيب باسم: ")}<span className="font-bold">{familyMemberName}</span>
           </div>
         ) : (
           !familyPending && (
             <Input
-              label="الاسم واللقب"
-              placeholder="مثال: محمد بن علي"
+              label={t("الاسم واللقب")}
+              placeholder={t("مثال: محمد بن علي")}
               autoComplete="name"
               autoFocus
               error={errors.fullName?.message}
               {...register("fullName", {
                 validate: (v) => {
                   if (forFamily) return true;
-                  if (!v.trim()) return "الرجاء كتابة الاسم واللقب";
-                  return splitFullName(v) !== null || "اكتب الاسم واللقب معًا (كلمتان على الأقل)";
+                  if (!v.trim()) return t("الرجاء كتابة الاسم واللقب");
+                  return splitFullName(v) !== null || t("اكتب الاسم واللقب معًا (كلمتان على الأقل)");
                 },
               })}
             />
           )
         )}
         <Input
-          label={forFamily ? "رقم هاتفك للتواصل (اختياري)" : "رقم الهاتف (اختياري)"}
+          label={forFamily ? t("رقم هاتفك للتواصل (اختياري)") : t("رقم الهاتف (اختياري)")}
           placeholder="0551234567"
           type="tel"
           inputMode="tel"
@@ -74,20 +74,16 @@ export const PatientStep = forwardRef<HTMLHeadingElement, Props>(({ form, onSubm
           dir="ltr"
           className="text-left"
           error={errors.phone?.message}
-          {...register("phone", { pattern: { value: PHONE_REGEX, message: "رقم هاتف جزائري غير صالح (مثال: 0551234567)" } })}
+          {...register("phone", { pattern: { value: PHONE_REGEX, message: t("رقم هاتف جزائري غير صالح (مثال: 0551234567)") } })}
         />
         {familyPending && (
-          <p role="alert" className="text-sm text-amber-700">
-            اختر فرد العائلة الذي تحجز له قبل المتابعة.
-          </p>
+          <p role="alert" className="text-sm text-amber-700">{t("اختر فرد العائلة الذي تحجز له قبل المتابعة. ")}</p>
         )}
         <button
           type="submit"
           disabled={familyPending}
           className="btn-primary min-h-[48px] w-full text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:opacity-50"
-        >
-          مراجعة الحجز
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        >{t("مراجعة الحجز ")}<ArrowLeft className="h-4 w-4" aria-hidden="true" />
         </button>
       </form>
     </section>

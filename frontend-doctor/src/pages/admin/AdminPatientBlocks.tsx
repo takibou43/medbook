@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t, getLocale } from "../../i18n/locale.ts";
 import { useAdminListParams } from "../../hooks/useAdminListParams";
 import { AdminResults } from "../../components/admin/AdminUI";
 import { useState } from "react";
@@ -25,9 +27,10 @@ interface BlockRow {
   active: boolean;
 }
 
-const fmt = (d: string | null) => (d ? new Date(d).toLocaleString("ar-DZ", { dateStyle: "medium", timeStyle: "short" }) : "—");
+const fmt = (d: string | null) => (d ? new Date(d).toLocaleString(getLocale(), { dateStyle: "medium", timeStyle: "short" }) : "—");
 
 export default function AdminPatientBlocks() {
+  useLanguage();
   const { params, q, setQ, search, page, setPage, update, clear } = useAdminListParams();
   const status = params.get("status") === "all" ? "all" : "active";
   const setStatus = (value: string) => update("status", value);
@@ -47,19 +50,19 @@ export default function AdminPatientBlocks() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-extrabold text-slate-900">المرضى المحظورون</h1>
-        <p className="mt-1 text-sm text-slate-500">المريض المحظور لا يستطيع إنشاء حجوزات جديدة فقط؛ حجوزاته وحسابه تبقى كما هي. الحظر اليدوي: «المستخدمون» ← مريض ← «حظر». الحظر التلقائي: 3 غيابات خلال 7 أيام.</p>
+        <h1 className="text-2xl font-extrabold text-slate-900">{t("المرضى المحظورون")}</h1>
+        <p className="mt-1 text-sm text-slate-500">{t("المريض المحظور لا يستطيع إنشاء حجوزات جديدة فقط؛ حجوزاته وحسابه تبقى كما هي. الحظر اليدوي: «المستخدمون» ← مريض ← «حظر». الحظر التلقائي: 3 غيابات خلال 7 أيام.")}</p>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Input label="بحث عن مريض محظور" placeholder="بحث بالاسم أو البريد أو الهاتف..." value={q} onChange={(e) => { setQ(e.target.value); }} className="max-w-xs" />
-        <select aria-label="حالة الحظر" className="input max-w-[180px]" value={status} onChange={(e) => { setStatus(e.target.value); }}>
-          <option value="active">المحظورون حاليًا</option>
-          <option value="all">كل السجل (مع الملغى)</option>
+        <Input label={t("بحث عن مريض محظور")} placeholder={t("بحث بالاسم أو البريد أو الهاتف...")} value={q} onChange={(e) => { setQ(e.target.value); }} className="max-w-xs" />
+        <select aria-label={t("حالة الحظر")} className="input max-w-[180px]" value={status} onChange={(e) => { setStatus(e.target.value); }}>
+          <option value="active">{t("المحظورون حاليًا")}</option>
+          <option value="all">{t("كل السجل (مع الملغى)")}</option>
         </select>
       </div>
 
-      <p className="text-sm text-slate-600">نطاق الحظر: منع الحجوزات الجديدة فقط؛ يبقى الحساب والمواعيد السابقة محفوظة.</p>
+      <p className="text-sm text-slate-600">{t("نطاق الحظر: منع الحجوزات الجديدة فقط؛ يبقى الحساب والمواعيد السابقة محفوظة.")}</p>
       <AdminResults total={data?.total} filtered={!!q || status !== "active"} onClear={clear} />
       {isLoading ? (
         <Spinner />
@@ -68,17 +71,17 @@ export default function AdminPatientBlocks() {
       ) : data && data.items.length > 0 ? (
         <>
           <div className="card overflow-x-auto p-0">
-            <table className="w-full text-right text-sm">
+            <table className="w-full text-start text-sm">
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">المريض</th>
-                  <th className="px-4 py-3 font-semibold">الهاتف</th>
-                  <th className="px-4 py-3 font-semibold">تاريخ الحظر</th>
-                  <th className="px-4 py-3 font-semibold">النوع</th>
-                  <th className="px-4 py-3 font-semibold">السبب</th>
-                  <th className="px-4 py-3 font-semibold">بواسطة</th>
-                  <th className="px-4 py-3 font-semibold">الحالة</th>
-                  <th className="px-4 py-3 font-semibold">إجراء</th>
+                  <th className="px-4 py-3 font-semibold">{t("المريض")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("الهاتف")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("تاريخ الحظر")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("النوع")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("السبب")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("بواسطة")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("الحالة")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("إجراء")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -92,26 +95,25 @@ export default function AdminPatientBlocks() {
                     <td className="px-4 py-3 text-slate-600">{fmt(b.blockedAt)}</td>
                     <td className="px-4 py-3">
                       {b.blockType === "AUTOMATIC" ? (
-                        <span className="badge bg-amber-100 text-amber-800">تلقائي</span>
+                        <span className="badge bg-amber-100 text-amber-800">{t("تلقائي")}</span>
                       ) : (
-                        <span className="badge bg-slate-100 text-slate-700">يدوي</span>
+                        <span className="badge bg-slate-100 text-slate-700">{t("يدوي")}</span>
                       )}
                     </td>
                     <td className="max-w-[220px] px-4 py-3 text-slate-600">
                       {b.reason ?? "—"}
                       {b.blockType === "AUTOMATIC" && b.noShowCount != null && (
-                        <p className="mt-1 text-xs text-slate-500">عدد الغيابات: {b.noShowCount} خلال 7 أيام</p>
+                        <p className="mt-1 text-xs text-slate-500">{t("عدد الغيابات: ")}{b.noShowCount}{t(" خلال 7 أيام")}</p>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500" dir="ltr">
-                      {b.blockType === "AUTOMATIC" ? <span dir="rtl">النظام</span> : b.blockedByEmail ?? "—"}
+                      {b.blockType === "AUTOMATIC" ? <span>{t("النظام")}</span> : b.blockedByEmail ?? "—"}
                     </td>
                     <td className="px-4 py-3">
                       {b.active ? (
-                        <span className="badge bg-red-100 text-red-700">محظور</span>
+                        <span className="badge bg-red-100 text-red-700">{t("محظور")}</span>
                       ) : (
-                        <span className="badge bg-slate-100 text-slate-600" title={b.unblockedByEmail ?? undefined}>
-                          رُفع {fmt(b.unblockedAt)}
+                        <span className="badge bg-slate-100 text-slate-600" title={b.unblockedByEmail ?? undefined}>{t("رُفع ")}{fmt(b.unblockedAt)}
                         </span>
                       )}
                       {!b.active && b.unblockedByEmail && (
@@ -120,9 +122,7 @@ export default function AdminPatientBlocks() {
                     </td>
                     <td className="px-4 py-3">
                       {b.active && (
-                        <Button variant="outline" onClick={() => setTarget({ patientId: b.patientId, name: b.patientName, email: b.email })}>
-                          رفع الحظر
-                        </Button>
+                        <Button variant="outline" onClick={() => setTarget({ patientId: b.patientId, name: b.patientName, email: b.email })}>{t("رفع الحظر ")}</Button>
                       )}
                     </td>
                   </tr>
@@ -133,7 +133,7 @@ export default function AdminPatientBlocks() {
           <Pagination page={data.page} totalPages={data.totalPages} onChange={setPage} />
         </>
       ) : (
-        <EmptyState title={q ? "لا نتائج مطابقة" : status === "active" ? "لا يوجد مرضى محظورون حاليًا" : "لا يوجد سجل حظر"} />
+        <EmptyState title={q ? t("لا نتائج مطابقة") : status === "active" ? t("لا يوجد مرضى محظورون حاليًا") : t("لا يوجد سجل حظر")} />
       )}
 
       <BlockPatientDialog target={target} mode="unblock" onClose={() => setTarget(null)} />

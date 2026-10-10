@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { ReactNode } from "react";
 import clsx from "clsx";
 import { AppointmentStatus, VerificationStatus, SubscriptionStatus, InviteStatus } from "../../types";
@@ -26,18 +28,21 @@ const SUBSCRIPTION_LABELS: Record<SubscriptionStatus, { label: string; className
 };
 
 export function AppointmentStatusBadge({ status }: { status: AppointmentStatus }) {
+  useLanguage();
   const { label, className } = APPT_LABELS[status];
-  return <span className={clsx("badge", className)}>{label}</span>;
+  return <span className={clsx("badge", className)}>{t(label ?? "")}</span>;
 }
 
 export function VerificationBadge({ status }: { status: VerificationStatus }) {
+  useLanguage();
   const { label, className } = VERIFY_LABELS[status];
-  return <span className={clsx("badge", className)}>{label}</span>;
+  return <span className={clsx("badge", className)}>{t(label ?? "")}</span>;
 }
 
 export function SubscriptionBadge({ status }: { status: SubscriptionStatus }) {
+  useLanguage();
   const { label, className } = SUBSCRIPTION_LABELS[status];
-  return <span className={clsx("badge", className)}>{label}</span>;
+  return <span className={clsx("badge", className)}>{t(label ?? "")}</span>;
 }
 
 const INVITE_LABELS: Record<InviteStatus, { label: string; className: string }> = {
@@ -48,18 +53,21 @@ const INVITE_LABELS: Record<InviteStatus, { label: string; className: string }> 
 };
 
 export function InviteStatusBadge({ status }: { status: InviteStatus }) {
+  useLanguage();
   const { label, className } = INVITE_LABELS[status];
-  return <span className={clsx("badge", className)}>{label}</span>;
+  return <span className={clsx("badge", className)}>{t(label ?? "")}</span>;
 }
 
 export function AssistantActiveBadge({ isActive }: { isActive: boolean }) {
+  useLanguage();
   return (
     <span className={clsx("badge", isActive ? "bg-green-100 text-green-700" : "bg-slate-200 text-slate-600")}>
-      {isActive ? "نشط" : "معطّل"}
+      {isActive ? t("نشط") : t("معطّل")}
     </span>
   );
 }
 
 export function Badge({ children, className }: { children: ReactNode; className?: string }) {
+  useLanguage();
   return <span className={clsx("badge bg-slate-100 text-slate-700", className)}>{children}</span>;
 }

@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t } from "../i18n/locale.ts";
 import { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
@@ -21,6 +23,7 @@ export function StatCard({
   tone?: "primary" | "green" | "red" | "amber";
   to?: string;
 }) {
+  useLanguage();
   const tones = {
     primary: "bg-primary-100 text-primary-700",
     green: "bg-green-100 text-green-700",
@@ -42,7 +45,7 @@ export function StatCard({
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-xl font-extrabold leading-tight text-slate-900 sm:text-2xl">{value}</p>
-        <p className="truncate text-xs font-medium text-slate-600 sm:text-sm">{label}</p>
+        <p className="truncate text-xs font-medium text-slate-600 sm:text-sm">{t(label ?? "")}</p>
         {sub && <p className="mt-0.5 truncate text-[11px] leading-4 text-slate-500">{sub}</p>}
       </div>
     </div>

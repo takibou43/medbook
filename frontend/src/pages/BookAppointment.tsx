@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t, getLanguage } from "../i18n/locale.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -37,6 +39,7 @@ async function fetchAllDoctors(): Promise<Doctor[]> {
 }
 
 export default function BookAppointment() {
+  useLanguage();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -80,7 +83,7 @@ export default function BookAppointment() {
     const back = doctorId ? `/?doctor=${encodeURIComponent(doctorId)}` : "/";
     navigate(`/account/login?mode=register&redirect=${encodeURIComponent(back)}`);
   }
-  const BLOCKED_MSG = "حسابك محظور حاليًا ولا يمكنك حجز موعد جديد. يرجى التواصل مع الإدارة.";
+  const BLOCKED_MSG = t("حسابك محظور حاليًا ولا يمكنك حجز موعد جديد. يرجى التواصل مع الإدارة.");
   function continueToPatient() {
     if (authLoading) return;
     if (!user) return goToAuth(selectedDoctor?.id);
@@ -129,9 +132,9 @@ export default function BookAppointment() {
       else map.set(d.specialtyId, { specialty: d.specialty, doctorsCount: 1 });
     }
     return Array.from(map.values()).sort((a, b) => b.doctorsCount - a.doctorsCount || a.specialty.nameAr.localeCompare(b.specialty.nameAr, "ar"));
-  }, [allDoctors]);
+  }, [allDoctors, getLanguage()]);
 
-  const specialtyDoctors = useMemo(() => (allDoctors ?? []).filter((d) => d.specialtyId === specialtyId), [allDoctors, specialtyId]);
+  const specialtyDoctors = useMemo(() => (allDoctors ?? []).filter((d) => d.specialtyId === specialtyId), [allDoctors, specialtyId, getLanguage()]);
   const selectedSpecialty = specialtyOptions.find((o) => o.specialty.id === specialtyId)?.specialty ?? selectedDoctor?.specialty ?? null;
 
   // اختيار طبيب مباشرة (من البحث بالاسم أو من رابط QR الخاص بالطبيب) — يتجاوز خطوتي التخصص والطبيب
@@ -181,7 +184,7 @@ export default function BookAppointment() {
     refetchInterval: step === "slot" ? 30000 : false,
     refetchIntervalInBackground: false,
   });
-  const slotErr = slotError ? bookingError(slotError, "تعذّر تحميل الموعد.") : null;
+  const slotErr = slotError ? bookingError(slotError, t("تعذّر تحميل الموعد.")) : null;
 
   const bookMutation = useMutation({
     // بلا اختيار: لا نرسل التاريخ ولا الوقت — الخادم يعيّن الدور التالي لحظة الحجز ويمنع التكرار (كما كان).
@@ -229,7 +232,7 @@ export default function BookAppointment() {
         doctorName: `${selectedDoctor.firstName} ${selectedDoctor.lastName}`,
         address: doctorAddress(selectedDoctor),
       });
-      showToast("تم إرسال طلب الحجز بنجاح!", "success");
+      showToast(t("تم إرسال طلب الحجز بنجاح!"), "success");
       // نفرّغ بيانات المريض فور نجاح الحجز حتى لا يُكرَّر الحجز بالخطأ بضغطة ثانية.
       form.reset({ fullName: "", phone: "" });
       queryClient.invalidateQueries({ queryKey: ["next-slot"] });
@@ -239,11 +242,11 @@ export default function BookAppointment() {
     } catch (err) {
       if ((err as any)?.response?.status === 401) {
         // الجلسة انتهت ولم يمكن تجديدها: نعيده لتسجيل الدخول ثم لنفس الطبيب.
-        showToast("انتهت جلستك. سجّل الدخول لإتمام الحجز.", "info");
+        showToast(t("انتهت جلستك. سجّل الدخول لإتمام الحجز."), "info");
         goToAuth(selectedDoctor.id);
         return;
       }
-      const { kind, message } = bookingError(err, "تعذّر إتمام الحجز.");
+      const { kind, message } = bookingError(err, t("تعذّر إتمام الحجز."));
       if (kind === "forbidden") {
         // حظر من الخادم (أو أي رفض صلاحية): رسالة الخادم كما هي، وتحديث حالة الحساب.
         setSubmitError(message);
@@ -311,17 +314,17 @@ export default function BookAppointment() {
     <div className="container-app py-8">
       <div className="mx-auto max-w-xl">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-extrabold text-slate-900">احجز موعدك بسهولة</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900">{t("احجز موعدك بسهولة")}</h1>
           <p className="mt-1 text-slate-600">
             {user
-              ? "اختر التخصص ثم الطبيب، والموقع يمنحك أول دور متاح — ويُضاف الموعد إلى حسابك."
-              : "اختر التخصص ثم الطبيب، ثم أنشئ حسابك أو سجّل الدخول لتأكيد الحجز."}
+              ? t("اختر التخصص ثم الطبيب، والموقع يمنحك أول دور متاح — ويُضاف الموعد إلى حسابك.")
+              : t("اختر التخصص ثم الطبيب، ثم أنشئ حسابك أو سجّل الدخول لتأكيد الحجز.")}
           </p>
         </div>
 
         {user?.isBlocked && (
           <div className="mb-4" role="alert">
-            <InlineError title="لا يمكنك الحجز حاليًا" message={BLOCKED_MSG} />
+            <InlineError title={t("لا يمكنك الحجز حاليًا")} message={BLOCKED_MSG} />
           </div>
         )}
 
@@ -331,12 +334,12 @@ export default function BookAppointment() {
 
         {qrDoctorId && qrFailed && !selectedDoctor && (
           <div className="mb-4">
-            <InlineError title="تعذّر فتح صفحة هذا الطبيب." message="يمكنك اختيار التخصص والطبيب من القائمة." />
+            <InlineError title={t("تعذّر فتح صفحة هذا الطبيب.")} message={t("يمكنك اختيار التخصص والطبيب من القائمة.")} />
           </div>
         )}
 
         {openingDirectLink ? (
-          <Spinner label="جارٍ فتح صفحة الطبيب..." />
+          <Spinner label={t("جارٍ فتح صفحة الطبيب...")} />
         ) : (
           <>
             {step === "specialty" && (
@@ -387,7 +390,7 @@ export default function BookAppointment() {
                 onRetry={() => refetchSlot()}
                 onContinue={continueToPatient}
                 onBack={() => setStep("doctor")}
-                backLabel="العودة إلى الأطباء"
+                backLabel={t("العودة إلى الأطباء")}
                 choice={choice}
                 picker={<DayTimePicker doctorId={selectedDoctor.id} value={choice} onChange={setChoice} />}
               />
@@ -424,7 +427,7 @@ export default function BookAppointment() {
                 doctor={selectedDoctor}
                 slot={
                   choice
-                    ? { date: choice.date, startTime: choice.startTime ?? "أول وقت متاح في هذا اليوم", endTime: "", slotMinutes: nextSlot?.slotMinutes ?? 0 }
+                    ? { date: choice.date, startTime: choice.startTime ?? t("أول وقت متاح في هذا اليوم"), endTime: "", slotMinutes: nextSlot?.slotMinutes ?? 0 }
                     : nextSlot!
                 }
                 exactChoice={Boolean(choice?.startTime)}
@@ -447,11 +450,9 @@ export default function BookAppointment() {
           onClose={closeConfirmation}
           extra={
             user ? (
-              <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-right">
+              <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-start">
                 <ReminderCard compact />
-                <Link to="/account" className="flex min-h-[48px] items-center justify-center text-sm font-semibold text-primary-700 hover:underline">
-                  عرض مواعيدي
-                </Link>
+                <Link to="/account" className="flex min-h-[48px] items-center justify-center text-sm font-semibold text-primary-700 hover:underline">{t("عرض مواعيدي ")}</Link>
               </div>
             ) : null
           }

@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { ReactNode } from "react";
 import clsx from "clsx";
 import { AppointmentStatus, VerificationStatus } from "../../types";
@@ -21,15 +23,18 @@ const VERIFY_LABELS: Record<VerificationStatus, { label: string; className: stri
 };
 
 export function AppointmentStatusBadge({ status }: { status: AppointmentStatus }) {
+  useLanguage();
   const { label, className } = APPT_LABELS[status];
-  return <span className={clsx("badge", className)}>{label}</span>;
+  return <span className={clsx("badge", className)}>{t(label ?? "")}</span>;
 }
 
 export function VerificationBadge({ status }: { status: VerificationStatus }) {
+  useLanguage();
   const { label, className } = VERIFY_LABELS[status];
-  return <span className={clsx("badge", className)}>{label}</span>;
+  return <span className={clsx("badge", className)}>{t(label ?? "")}</span>;
 }
 
 export function Badge({ children, className }: { children: ReactNode; className?: string }) {
+  useLanguage();
   return <span className={clsx("badge bg-slate-100 text-slate-700", className)}>{children}</span>;
 }

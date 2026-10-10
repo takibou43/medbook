@@ -9,9 +9,11 @@ import { ToastProvider } from "./components/ui/Toast";
 import { InstallPrompt } from "./components/InstallPrompt";
 import App from "./App";
 import "./index.css";
+import { LanguageRoot } from "./i18n/LanguageRoot";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
+    <LanguageRoot>{() => (
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
@@ -24,5 +26,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </ToastProvider>
       </QueryClientProvider>
     </BrowserRouter>
+    )}</LanguageRoot>
   </React.StrictMode>
 );

@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t } from "../i18n/locale.ts";
 import { useEffect, useState } from "react";
 import { Download, X } from "lucide-react";
 
@@ -54,6 +56,7 @@ function rememberDismiss() {
 }
 
 export function InstallPrompt() {
+  useLanguage();
   const [mode, setMode] = useState<"hidden" | "prompt" | "ios">("hidden");
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
 
@@ -116,27 +119,23 @@ export function InstallPrompt() {
         <div className="min-w-0 flex-1">
           {mode === "prompt" ? (
             <>
-              <p className="text-sm font-bold text-slate-800">ثبّت MedBook على هاتفك</p>
-              <p className="text-xs text-slate-500">فتح أسرع وأيقونة على شاشتك، بلا متجر ولا مساحة تُذكر.</p>
+              <p className="text-sm font-bold text-slate-800">{t("ثبّت MedBook على هاتفك")}</p>
+              <p className="text-xs text-slate-500">{t("فتح أسرع وأيقونة على شاشتك، بلا متجر ولا مساحة تُذكر.")}</p>
             </>
           ) : (
             <>
-              <p className="text-sm font-bold text-slate-800">أضِف MedBook إلى شاشتك</p>
-              <p className="text-xs leading-6 text-slate-500">
-                اضغط زر المشاركة في شريط سفاري، ثم اختر «إضافة إلى الشاشة الرئيسية».
-              </p>
+              <p className="text-sm font-bold text-slate-800">{t("أضِف MedBook إلى شاشتك")}</p>
+              <p className="text-xs leading-6 text-slate-500">{t("اضغط زر المشاركة في شريط سفاري، ثم اختر «إضافة إلى الشاشة الرئيسية». ")}</p>
             </>
           )}
         </div>
 
         {mode === "prompt" && (
           <button onClick={install} className="btn-primary shrink-0 px-3 py-2 text-xs">
-            <Download className="h-4 w-4" />
-            تثبيت MedBook
-          </button>
+            <Download className="h-4 w-4" />{t("تثبيت MedBook ")}</button>
         )}
 
-        <button onClick={close} aria-label="إغلاق" className="btn-ghost shrink-0 px-2 py-2">
+        <button onClick={close} aria-label={t("إغلاق")} className="btn-ghost shrink-0 px-2 py-2">
           <X className="h-4 w-4" />
         </button>
       </div>

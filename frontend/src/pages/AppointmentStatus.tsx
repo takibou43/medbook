@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t } from "../i18n/locale.ts";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Clock, MapPin, Phone, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -36,14 +38,15 @@ interface QueueStatus {
 }
 
 function formatWait(minutes: number): string {
-  if (minutes <= 0) return "دورك التالي مباشرة";
-  if (minutes < 60) return "حوالي " + minutes + " دقيقة";
+  if (minutes <= 0) return t("دورك التالي مباشرة");
+  if (minutes < 60) return t("حوالي ") + minutes + t(" دقيقة");
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return "حوالي " + hours + " ساعة" + (rest > 0 ? " و" + rest + " دقيقة" : "");
+  return t("حوالي ") + hours + t(" ساعة") + (rest > 0 ? t(" و") + rest + t(" دقيقة") : "");
 }
 
 export default function AppointmentStatus() {
+  useLanguage();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   // Never add patient identity to the public status response. Resolve only through the authenticated account endpoint.
@@ -63,20 +66,20 @@ export default function AppointmentStatus() {
     retry: false,
   });
 
-  if (isLoading) return <Spinner label="جارٍ تحميل حالة دورك..." />;
+  if (isLoading) return <Spinner label={t("جارٍ تحميل حالة دورك...")} />;
 
   if (isError || !data) {
     return (
       <div className="container-app py-10">
         <EmptyState
-          title="لم نعثر على هذا الموعد"
-          description="تأكد من الرابط، أو تواصل مع العيادة مباشرة."
+          title={t("لم نعثر على هذا الموعد")}
+          description={t("تأكد من الرابط، أو تواصل مع العيادة مباشرة.")}
         />
       </div>
     );
   }
 
-  const doctorName = "د. " + data.doctor.firstName + " " + data.doctor.lastName;
+  const doctorName = t("د. ") + data.doctor.firstName + " " + data.doctor.lastName;
   const dateLabel = arabicDate(data.date);
   const directions = directionsUrl(data.doctor.address);
 
@@ -88,7 +91,7 @@ export default function AppointmentStatus() {
     <div className="container-app py-8">
       <div className="mx-auto max-w-md space-y-4">
         <div className="text-center">
-          <h1 className="text-xl font-extrabold text-slate-900">متابعة دورك</h1>
+          <h1 className="text-xl font-extrabold text-slate-900">{t("متابعة دورك")}</h1>
           <p className="mt-1 text-sm text-slate-500">
             {doctorName}
           </p>
@@ -96,9 +99,9 @@ export default function AppointmentStatus() {
 
         <div className="card p-4" aria-live="polite">
           {identity.data ? <>
-            <p className="font-bold">الموعد لـ {patientName(identity.data.beneficiary)}</p>
-            {identity.data.type === "FOLLOW_UP" && identity.data.createdBy === "DOCTOR" && <p className="mt-2 text-sm text-amber-800">موعد عودة برمجه الطبيب</p>}
-          </> : <p className="text-sm text-slate-600">{user ? identity.isPending ? "جارٍ تحميل اسم المستفيد…" : "تعذّر عرض اسم المستفيد لهذا الحساب." : "سجّل الدخول إلى حساب الموعد لعرض اسم المستفيد."} <Link className="btn-outline mt-2" to={user ? "/account" : `/account/login?redirect=${encodeURIComponent(`/status/${id}`)}`}>فتح حساب المريض</Link></p>}
+            <p className="font-bold">{t("الموعد لـ ")}{patientName(identity.data.beneficiary)}</p>
+            {identity.data.type === "FOLLOW_UP" && identity.data.createdBy === "DOCTOR" && <p className="mt-2 text-sm text-amber-800">{t("موعد عودة برمجه الطبيب")}</p>}
+          </> : <p className="text-sm text-slate-600">{user ? identity.isPending ? t("جارٍ تحميل اسم المستفيد…") : t("تعذّر عرض اسم المستفيد لهذا الحساب.") : t("سجّل الدخول إلى حساب الموعد لعرض اسم المستفيد.")} <Link className="btn-outline mt-2" to={user ? "/account" : `/account/login?redirect=${encodeURIComponent(`/status/${id}`)}`}>{t("فتح حساب المريض")}</Link></p>}
         </div>
         {/* البطاقة الرئيسية */}
         {finished ? (
@@ -106,70 +109,66 @@ export default function AppointmentStatus() {
             {data.status === "COMPLETED" && (
               <>
                 <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-emerald-500" />
-                <p className="text-lg font-extrabold text-slate-900">انتهى موعدك</p>
-                <p className="mt-1 text-sm text-slate-500">نتمنى لك الشفاء العاجل.</p>
+                <p className="text-lg font-extrabold text-slate-900">{t("انتهى موعدك")}</p>
+                <p className="mt-1 text-sm text-slate-500">{t("نتمنى لك الشفاء العاجل.")}</p>
               </>
             )}
             {data.status === "CANCELLED" && (
               <>
                 <AlertTriangle className="mx-auto mb-2 h-10 w-10 text-red-500" />
-                <p className="text-lg font-extrabold text-slate-900">تم إلغاء هذا الموعد</p>
+                <p className="text-lg font-extrabold text-slate-900">{t("تم إلغاء هذا الموعد")}</p>
               </>
             )}
             {data.status === "NO_SHOW" && (
               <>
                 <AlertTriangle className="mx-auto mb-2 h-10 w-10 text-amber-500" />
-                <p className="text-lg font-extrabold text-slate-900">لم يُسجَّل حضورك</p>
-                <p className="mt-1 text-sm text-slate-500">يمكنك حجز موعد جديد في أي وقت.</p>
+                <p className="text-lg font-extrabold text-slate-900">{t("لم يُسجَّل حضورك")}</p>
+                <p className="mt-1 text-sm text-slate-500">{t("يمكنك حجز موعد جديد في أي وقت.")}</p>
               </>
             )}
             {data.status === "RESCHEDULE_REQUIRED" && (
               <>
                 <AlertTriangle className="mx-auto mb-2 h-10 w-10 text-red-500" />
-                <p className="text-lg font-extrabold text-slate-900">موعدك يحتاج إلى إعادة جدولة</p>
-                <p className="mt-1 text-sm text-slate-600">الطبيب غير متاح في هذا اليوم. ارجع إلى حسابك لحجز موعد جديد أو لإلغاء الموعد الحالي.</p>
+                <p className="text-lg font-extrabold text-slate-900">{t("موعدك يحتاج إلى إعادة جدولة")}</p>
+                <p className="mt-1 text-sm text-slate-600">{t("الطبيب غير متاح في هذا اليوم. ارجع إلى حسابك لحجز موعد جديد أو لإلغاء الموعد الحالي.")}</p>
               </>
             )}
           </div>
         ) : data.status === "IN_PROGRESS" ? (
           <div className="card border-primary-300 bg-primary-50 p-6 text-center">
-            <p className="text-sm font-semibold text-primary-700">دورك الآن</p>
-            <p className="mt-2 text-2xl font-extrabold text-slate-900">تفضّل بالدخول</p>
+            <p className="text-sm font-semibold text-primary-700">{t("دورك الآن")}</p>
+            <p className="mt-2 text-2xl font-extrabold text-slate-900">{t("تفضّل بالدخول")}</p>
           </div>
         ) : data.status === "LATE" ? (
           <div className="card border-amber-200 bg-amber-50 p-6 text-center">
             <Clock className="mx-auto mb-2 h-9 w-9 text-amber-600" />
-            <p className="text-lg font-extrabold text-slate-900">نودي عليك ولم تحضر</p>
+            <p className="text-lg font-extrabold text-slate-900">{t("نودي عليك ولم تحضر")}</p>
             <p className="mt-1 text-sm text-amber-700">
               {data.skipCredits > 0
-                ? "يعود دورك بعد " + data.skipCredits + (data.skipCredits === 1 ? " مريض" : " مريضين")
-                : "دورك التالي مباشرة — أبلغ الاستقبال أنك حاضر"}
+                ? t("يعود دورك بعد ") + data.skipCredits + (data.skipCredits === 1 ? t(" مريض") : t(" مريضين"))
+                : t("دورك التالي مباشرة — أبلغ الاستقبال أنك حاضر")}
             </p>
           </div>
         ) : data.isToday ? (
           <div className="card p-6 text-center">
-            <p className="text-sm text-slate-500">رقم دورك اليوم</p>
+            <p className="text-sm text-slate-500">{t("رقم دورك اليوم")}</p>
             <p className="my-1 text-6xl font-extrabold text-primary-700">{data.position}</p>
             <p className="text-sm font-semibold text-slate-700">
               {data.aheadOfYou === 0
-                ? "أنت التالي"
-                : "يسبقك " + data.aheadOfYou + (data.aheadOfYou === 1 ? " مريض" : " مرضى")}
+                ? t("أنت التالي")
+                : t("يسبقك ") + data.aheadOfYou + (data.aheadOfYou === 1 ? t(" مريض") : t(" مرضى"))}
             </p>
             <p className="mt-2 text-sm text-slate-500">
               {formatWait(data.estimatedWaitMinutes ?? 0)}
             </p>
-            <p className="mt-3 text-xs text-slate-400">
-              الوقت تقديري ويتغيّر حسب سير العيادة. أبقِ هذه الصفحة مفتوحة — تتحدّث تلقائيًا.
-            </p>
+            <p className="mt-3 text-xs text-slate-400">{t("الوقت تقديري ويتغيّر حسب سير العيادة. أبقِ هذه الصفحة مفتوحة — تتحدّث تلقائيًا. ")}</p>
           </div>
         ) : (
           <div className="card p-6 text-center">
             <CalendarDays className="mx-auto mb-2 h-9 w-9 text-primary-600" />
             <p className="text-lg font-extrabold text-slate-900">{dateLabel}</p>
             <p className="text-2xl font-extrabold text-primary-700">{data.startTime}</p>
-            <p className="mt-2 text-xs text-slate-500">
-              يظهر رقم دورك في هذه الصفحة صباح يوم الموعد.
-            </p>
+            <p className="mt-2 text-xs text-slate-500">{t("يظهر رقم دورك في هذه الصفحة صباح يوم الموعد. ")}</p>
           </div>
         )}
 
@@ -188,7 +187,7 @@ export default function AppointmentStatus() {
               {data.doctor.address}
             </p>
           )}
-          {directions && <a className="btn-outline min-h-[48px]" href={directions} target="_blank" rel="noopener noreferrer">الاتجاهات إلى العيادة</a>}
+          {directions && <a className="btn-outline min-h-[48px]" href={directions} target="_blank" rel="noopener noreferrer">{t("الاتجاهات إلى العيادة")}</a>}
           {data.doctor.phone && (
             <a
               href={"tel:" + data.doctor.phone}
@@ -207,7 +206,7 @@ export default function AppointmentStatus() {
           className="flex min-h-[48px] w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-primary-300 disabled:opacity-60"
         >
           <RefreshCw className={"h-4 w-4 " + (isFetching ? "animate-spin" : "")} />
-          {isFetching ? "جارٍ التحديث..." : "تحديث الآن"}
+          {isFetching ? t("جارٍ التحديث...") : t("تحديث الآن")}
         </button>
       </div>
     </div>

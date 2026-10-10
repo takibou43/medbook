@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t, catalogName } from "../i18n/locale.ts";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -29,6 +31,7 @@ const PATIENT_SITE = import.meta.env.VITE_MAIN_SITE_URL ?? "https://medbook-alph
  * يُنشأ ملف طبيب «قيد المراجعة» فقط؛ لا ظهور للمرضى ولا اعتماد قبل موافقة الإدارة، وتبقى وظائف المريض كما هي.
  */
 export default function ApplyDoctor() {
+  useLanguage();
   const { user, applyAsDoctor, logout } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -56,13 +59,13 @@ export default function ApplyDoctor() {
         yearsExperience: Number(values.yearsExperience) || 0,
         ...(referralCode ? { referralCode } : {}),
       });
-      showToast("تم استلام طلبك كطبيب. ملفك قيد المراجعة من الإدارة قبل الظهور للمرضى.", "success");
+      showToast(t("تم استلام طلبك كطبيب. ملفك قيد المراجعة من الإدارة قبل الظهور للمرضى."), "success");
       navigate(clinicInviteReturnPath(location.state?.returnTo) ?? "/");
     } catch (err) {
       if ((err as any)?.response?.data?.details?.field === "referralCode") {
         form.setError("referralCode", { message: apiErrorMessage(err) }, { shouldFocus: true });
       } else {
-        showToast(apiErrorMessage(err, "تعذّر تقديم الطلب."), "error");
+        showToast(apiErrorMessage(err, t("تعذّر تقديم الطلب.")), "error");
       }
     } finally {
       setLoading(false);
@@ -79,43 +82,39 @@ export default function ApplyDoctor() {
       <div className="w-full max-w-lg">
         <div className="mb-6 flex flex-col items-center">
           <Logo className="mb-2 h-14 w-14" />
-          <h1 className="text-xl font-extrabold text-slate-900">قدّم كطبيب من حسابك الحالي</h1>
-          <p className="mt-2 text-center text-sm leading-6 text-slate-600">
-            أنت مسجّل الدخول بحساب مريض ({user?.email}). سيُضاف ملف الطبيب إلى الحساب نفسه بالبريد والهاتف نفسيهما، ويبقى استخدامك كمريض كما هو.
-          </p>
-          <p className="mt-1 text-center text-xs leading-5 text-slate-500">
-            الطلب لا يعني الاعتماد: يخضع ملفك لمراجعة الإدارة قبل الظهور للمرضى وقبل أي صلاحية تعتمد على التوثيق.
-          </p>
+          <h1 className="text-xl font-extrabold text-slate-900">{t("قدّم كطبيب من حسابك الحالي")}</h1>
+          <p className="mt-2 text-center text-sm leading-6 text-slate-600">{t("أنت مسجّل الدخول بحساب مريض (")}{user?.email}{t("). سيُضاف ملف الطبيب إلى الحساب نفسه بالبريد والهاتف نفسيهما، ويبقى استخدامك كمريض كما هو. ")}</p>
+          <p className="mt-1 text-center text-xs leading-5 text-slate-500">{t("الطلب لا يعني الاعتماد: يخضع ملفك لمراجعة الإدارة قبل الظهور للمرضى وقبل أي صلاحية تعتمد على التوثيق. ")}</p>
         </div>
 
         <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="card space-y-4 p-6">
           <div className="grid grid-cols-2 gap-3">
-            <Input label="الاسم" error={form.formState.errors.firstName?.message} {...form.register("firstName", { required: "مطلوب", minLength: { value: 2, message: "قصير جدًا" } })} />
-            <Input label="اللقب" error={form.formState.errors.lastName?.message} {...form.register("lastName", { required: "مطلوب", minLength: { value: 2, message: "قصير جدًا" } })} />
+            <Input label={t("الاسم")} error={form.formState.errors.firstName?.message} {...form.register("firstName", { required: t("مطلوب"), minLength: { value: 2, message: t("قصير جدًا") } })} />
+            <Input label={t("اللقب")} error={form.formState.errors.lastName?.message} {...form.register("lastName", { required: t("مطلوب"), minLength: { value: 2, message: t("قصير جدًا") } })} />
           </div>
-          <Select label="التخصص" error={form.formState.errors.specialtyId?.message} {...form.register("specialtyId", { required: "مطلوب" })}>
-            <option value="">اختر التخصص</option>
+          <Select label={t("التخصص")} error={form.formState.errors.specialtyId?.message} {...form.register("specialtyId", { required: t("مطلوب") })}>
+            <option value="">{t("اختر التخصص")}</option>
             {specialties?.map((s) => (
-              <option key={s.id} value={s.id}>{s.nameAr}</option>
+              <option key={s.id} value={s.id}>{catalogName(s)}</option>
             ))}
           </Select>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Select label="الولاية" error={form.formState.errors.wilayaId?.message} {...form.register("wilayaId", { required: "مطلوب", onChange: (e) => { setSelectedWilaya(e.target.value); form.setValue("cityId", ""); } })}>
-              <option value="">اختر</option>
+            <Select label={t("الولاية")} error={form.formState.errors.wilayaId?.message} {...form.register("wilayaId", { required: t("مطلوب"), onChange: (e) => { setSelectedWilaya(e.target.value); form.setValue("cityId", ""); } })}>
+              <option value="">{t("اختر")}</option>
               {wilayas?.map((w) => (
-                <option key={w.id} value={w.id}>{w.nameAr}</option>
+                <option key={w.id} value={w.id}>{catalogName(w)}</option>
               ))}
             </Select>
-            <Select label="المدينة" error={form.formState.errors.cityId?.message} {...form.register("cityId", { required: "مطلوب" })}>
-              <option value="">اختر</option>
+            <Select label={t("المدينة")} error={form.formState.errors.cityId?.message} {...form.register("cityId", { required: t("مطلوب") })}>
+              <option value="">{t("اختر")}</option>
               {cities.map((c) => (
                 <option key={c.id} value={c.id}>{c.nameAr}</option>
               ))}
             </Select>
           </div>
-          <Input label="سنوات الخبرة" type="number" min={0} {...form.register("yearsExperience")} />
+          <Input label={t("سنوات الخبرة")} type="number" min={0} {...form.register("yearsExperience")} />
           <Input
-            label="كود دعوة من زميل (اختياري)"
+            label={t("كود دعوة من زميل (اختياري)")}
             placeholder="MB-XXXXXXXX"
             dir="ltr"
             autoCapitalize="characters"
@@ -124,24 +123,18 @@ export default function ApplyDoctor() {
             {...form.register("referralCode")}
           />
           <Input
-            label="كلمة مرور حسابك الحالية (للتأكيد)"
+            label={t("كلمة مرور حسابك الحالية (للتأكيد)")}
             type="password"
             autoComplete="current-password"
             error={form.formState.errors.password?.message}
-            {...form.register("password", { required: "مطلوبة لتأكيد الطلب" })}
+            {...form.register("password", { required: t("مطلوبة لتأكيد الطلب") })}
           />
-          <Button type="submit" className="min-h-[48px] w-full" loading={loading}>
-            إرسال طلب التسجيل كطبيب
-          </Button>
+          <Button type="submit" className="min-h-[48px] w-full" loading={loading}>{t("إرسال طلب التسجيل كطبيب ")}</Button>
         </form>
 
         <div className="mt-4 flex flex-col items-center gap-2 text-sm">
-          <a href={portalUrl(PATIENT_SITE, "/account")} className="font-semibold text-primary-700 hover:underline">
-            العودة إلى واجهة المرضى
-          </a>
-          <button type="button" onClick={handleLogout} className="text-slate-500 hover:underline">
-            تسجيل الخروج
-          </button>
+          <a href={portalUrl(PATIENT_SITE, "/account")} className="font-semibold text-primary-700 hover:underline">{t("العودة إلى واجهة المرضى ")}</a>
+          <button type="button" onClick={handleLogout} className="text-slate-500 hover:underline">{t("تسجيل الخروج ")}</button>
         </div>
       </div>
     </div>

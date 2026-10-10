@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t, getLocale, catalogName, getLanguage } from "../../i18n/locale.ts";
 import { forwardRef, useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { LocateFixed, MapPin, Star, Stethoscope } from "lucide-react";
@@ -31,6 +33,7 @@ interface Props {
 const PREVIEW_LIMIT = 10;
 
 function DoctorAvatar({ doctor }: { doctor: Doctor }) {
+  useLanguage();
   if (doctor.photoUrl) {
     return <img src={doctor.photoUrl} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded-full border border-slate-200 object-cover" />;
   }
@@ -42,6 +45,7 @@ function DoctorAvatar({ doctor }: { doctor: Doctor }) {
 }
 
 export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, doctors, loading, error, errorMessage, onRetry, onSelect, onBack, onWilayaChange }, ref) => {
+  useLanguage();
   const { showToast } = useToast();
   const [wilayaFilter, setWilayaFilter] = useState<string>("");
   const [cityFilter, setCityFilter] = useState("");
@@ -54,7 +58,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
     return list
       .map((d) => ({ doctor: d, distance: distanceToDoctor(d, pos) }))
       .sort((a, b) => (a.distance?.km ?? Infinity) - (b.distance?.km ?? Infinity));
-  }, [doctors, wilayaFilter, cityFilter, pos]);
+  }, [doctors, wilayaFilter, cityFilter, pos, getLanguage()]);
 
   const previews = useQueries({
     queries: visible.slice(0, PREVIEW_LIMIT).map(({ doctor }) => ({
@@ -68,7 +72,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
   // خيار اختياري تمامًا: لا يُطلب إذن الموقع إلا عند الضغط، والحجز لا يتطلب GPS إطلاقًا.
   function sortByNearest() {
     if (!navigator.geolocation) {
-      showToast("متصفحك لا يدعم تحديد الموقع. اختر الولاية والبلدية يدويًا.", "error");
+      showToast(t("متصفحك لا يدعم تحديد الموقع. اختر الولاية والبلدية يدويًا."), "error");
       return;
     }
     setLocating(true);
@@ -79,7 +83,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
       },
       () => {
         setLocating(false);
-        showToast("تعذّر الوصول إلى موقعك. اختر الولاية والبلدية يدويًا.", "error");
+        showToast(t("تعذّر الوصول إلى موقعك. اختر الولاية والبلدية يدويًا."), "error");
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
     );
@@ -87,27 +91,25 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
 
   return (
     <section aria-labelledby="step-doctor-title">
-      <BackButton onClick={onBack}>تغيير التخصص</BackButton>
-      <StepHeading ref={ref} id="step-doctor-title" hint="اختر الطبيب الذي تريد الحجز عنده.">
-        {specialty ? `أطباء ${specialty.nameAr}` : "اختر الطبيب"}
+      <BackButton onClick={onBack}>{t("تغيير التخصص")}</BackButton>
+      <StepHeading ref={ref} id="step-doctor-title" hint={t("اختر الطبيب الذي تريد الحجز عنده.")}>
+        {specialty ? t("أطباء {0}", { "0": catalogName(specialty) }) : t("اختر الطبيب")}
       </StepHeading>
 
       {loading ? (
         <DoctorListSkeleton />
       ) : error ? (
-        <InlineError title="تعذّر تحميل الأطباء." message={errorMessage ?? "أعد المحاولة بعد قليل."} onRetry={onRetry} />
+        <InlineError title={t("تعذّر تحميل الأطباء.")} message={errorMessage ?? t("أعد المحاولة بعد قليل.")} onRetry={onRetry} />
       ) : doctors.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 glass p-8 text-center">
           <Stethoscope className="mx-auto h-10 w-10 text-slate-300" aria-hidden="true" />
-          <p className="mt-2 font-bold text-slate-800">لا يوجد أطباء متاحون حاليًا لهذا التخصص.</p>
-          <p className="mt-1 text-sm text-slate-500">جرّب تخصصًا آخر.</p>
+          <p className="mt-2 font-bold text-slate-800">{t("لا يوجد أطباء متاحون حاليًا لهذا التخصص.")}</p>
+          <p className="mt-1 text-sm text-slate-500">{t("جرّب تخصصًا آخر.")}</p>
           <button
             type="button"
             onClick={onBack}
             className="btn-primary mt-4 min-h-[44px] px-6 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-          >
-            العودة إلى التخصصات
-          </button>
+          >{t("العودة إلى التخصصات ")}</button>
         </div>
       ) : (
         <>
@@ -122,35 +124,34 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
               }`}
             >
               <LocateFixed className="h-4 w-4" aria-hidden="true" />
-              {locating ? "جارٍ تحديد موقعك..." : pos ? "مرتّبون حسب الأقرب إليك" : "الأطباء القريبون منك"}
+              {locating ? t("جارٍ تحديد موقعك...") : pos ? t("مرتّبون حسب الأقرب إليك") : t("الأطباء القريبون منك")}
             </button>
           </div>
 
           <RegionFilters wilayaId={wilayaFilter} cityId={cityFilter} onChange={(w, c) => { setWilayaFilter(w); setCityFilter(c); onWilayaChange?.(w); }} />
-          <button type="button" className="btn-outline mb-3" onClick={() => { setWilayaFilter(""); setCityFilter(""); setPos(null); onWilayaChange?.(""); }}>مسح الفلاتر</button>
-          {visible.length === 0 && <p className="glass p-4" role="status">لا يوجد أطباء يطابقون المنطقة المختارة. جرّب منطقة أخرى أو امسح الفلاتر.</p>}
+          <button type="button" className="btn-outline mb-3" onClick={() => { setWilayaFilter(""); setCityFilter(""); setPos(null); onWilayaChange?.(""); }}>{t("مسح الفلاتر")}</button>
+          {visible.length === 0 && <p className="glass p-4" role="status">{t("لا يوجد أطباء يطابقون المنطقة المختارة. جرّب منطقة أخرى أو امسح الفلاتر.")}</p>}
           <ul className="space-y-3">
             {visible.map(({ doctor: d, distance }, i) => {
               const preview = i < PREVIEW_LIMIT ? previews[i] : undefined;
               const address = doctorAddress(d);
-              const directions = directionsUrl(address, d.city?.nameAr, d.wilaya.nameAr, d.latitude, d.longitude);
-              const place = [d.clinic?.nameAr, d.city?.nameAr, d.wilaya.nameAr].filter(Boolean).join(" — ");
+              const directions = directionsUrl(address, d.city?.nameAr, catalogName(d.wilaya), d.latitude, d.longitude);
+              const place = [d.clinic?.nameAr, d.city?.nameAr, catalogName(d.wilaya)].filter(Boolean).join(" — ");
               return (
                 <li key={d.id} className="glass p-4">
                   <div className="flex gap-3">
                     <DoctorAvatar doctor={d} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="font-bold leading-snug text-slate-900">
-                          د. {d.firstName} {d.lastName}
+                        <p className="font-bold leading-snug text-slate-900">{t("د. ")}{d.firstName} {d.lastName}
                         </p>
                         <span className="flex shrink-0 items-center gap-1 text-sm text-amber-600">
                           <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
-                          {d.avgRating > 0 ? d.avgRating.toFixed(1) : "جديد"}
-                          {typeof d.reviewsCount === "number" && <span className="text-xs text-slate-500">({d.reviewsCount} مراجعة)</span>}
+                          {d.avgRating > 0 ? d.avgRating.toFixed(1) : t("جديد")}
+                          {typeof d.reviewsCount === "number" && <span className="text-xs text-slate-500">({d.reviewsCount}{t(" مراجعة)")}</span>}
                         </span>
                       </div>
-                      <p className="text-sm text-primary-700">{d.specialty.nameAr}</p>
+                      <p className="text-sm text-primary-700">{catalogName(d.specialty)}</p>
                       {place && (
                         <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
                           <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -159,45 +160,40 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
                       )}
                       {address && <p className="mt-0.5 ps-[18px] text-xs text-slate-400">{address}</p>}
                       {distance?.exact && (
-                        <p className="mt-0.5 ps-[18px] text-xs font-semibold text-slate-600">
-                          على بعد {distance.km < 1 ? "أقل من 1" : Math.round(distance.km * 10) / 10} كم
-                        </p>
+                        <p className="mt-0.5 ps-[18px] text-xs font-semibold text-slate-600">{t("على بعد ")}{distance.km < 1 ? t("أقل من 1") : Math.round(distance.km * 10) / 10}{t(" كم ")}</p>
                       )}
                     </div>
                   </div>
 
                   {(d.bio || d.languages?.length || d.yearsExperience > 0 || d.consultationFee != null) && <details className="mt-3 rounded-xl border border-slate-200 p-3 text-sm">
-                    <summary className="min-h-[48px] cursor-pointer font-semibold text-primary-700">معلومات الطبيب</summary>
+                    <summary className="min-h-[48px] cursor-pointer font-semibold text-primary-700">{t("معلومات الطبيب")}</summary>
                     {d.bio && <p className="mt-2 whitespace-pre-line break-words text-slate-600">{d.bio}</p>}
-                    {d.yearsExperience > 0 && <p className="mt-2">الخبرة: {d.yearsExperience} سنوات</p>}
-                    {d.languages?.length > 0 && <p className="mt-2">اللغات: {d.languages.join("، ")}</p>}
-                    {d.consultationFee != null && Number.isFinite(d.consultationFee) && <p className="mt-2">سعر الاستشارة المسجّل: {d.consultationFee.toLocaleString("ar-DZ")} دج</p>}
+                    {d.yearsExperience > 0 && <p className="mt-2">{t("الخبرة: ")}{d.yearsExperience}{t(" سنوات")}</p>}
+                    {d.languages?.length > 0 && <p className="mt-2">{t("اللغات: ")}{d.languages.join(t("، "))}</p>}
+                    {d.consultationFee != null && Number.isFinite(d.consultationFee) && <p className="mt-2">{t("سعر الاستشارة المسجّل: ")}{d.consultationFee.toLocaleString(getLocale())}{t(" دج")}</p>}
                   </details>}
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {(d.clinic?.phone || d.phone) && <a className="btn-outline" href={`tel:${d.clinic?.phone || d.phone}`}>اتصل بالعيادة</a>}
-                    {directions && <a className="btn-outline" href={directions} target="_blank" rel="noopener noreferrer">الاتجاهات</a>}
+                    {(d.clinic?.phone || d.phone) && <a className="btn-outline" href={`tel:${d.clinic?.phone || d.phone}`}>{t("اتصل بالعيادة")}</a>}
+                    {directions && <a className="btn-outline" href={directions} target="_blank" rel="noopener noreferrer">{t("الاتجاهات")}</a>}
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
                     <p className="min-w-0 text-xs font-semibold" aria-live="polite">
                       {preview?.isLoading ? (
-                        <span className="text-slate-400">جارٍ التحقق من التوفر...</span>
+                        <span className="text-slate-400">{t("جارٍ التحقق من التوفر...")}</span>
                       ) : preview?.data ? (
                         <span className="flex items-center gap-1.5 text-emerald-700">
-                          <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-                          أقرب دور: {formatSlotLabel(preview.data.date, preview.data.startTime)}
+                          <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />{t("أقرب دور: ")}{formatSlotLabel(preview.data.date, preview.data.startTime)}
                         </span>
                       ) : preview?.isError ? (
-                        <span className="text-slate-500">لا تتوفر أدوار حاليًا</span>
+                        <span className="text-slate-500">{t("لا تتوفر أدوار حاليًا")}</span>
                       ) : null}
                     </p>
                     <button
                       type="button"
                       onClick={() => onSelect(d)}
-                      aria-label={`اختيار الطبيب ${d.firstName} ${d.lastName}`}
+                      aria-label={t("اختيار الطبيب {0} {1}", { "0": d.firstName, "1": d.lastName })}
                       className="btn-primary min-h-[44px] shrink-0 px-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-                    >
-                      اختيار الطبيب
-                    </button>
+                    >{t("اختيار الطبيب ")}</button>
                   </div>
                 </li>
               );

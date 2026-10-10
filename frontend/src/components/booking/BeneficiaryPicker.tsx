@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { Link } from "react-router-dom";
 import clsx from "clsx";
 import { UserRound, Users } from "lucide-react";
@@ -21,6 +23,7 @@ interface Props {
  * الخادم يتحقق من ملكية الفرد ويأخذ اسمه من قاعدة البيانات؛ هنا عرض واختيار فقط.
  */
 export function BeneficiaryPicker({ members, loading, error, onRetry, value, familyMode, onChange }: Props) {
+  useLanguage();
   const option = (active: boolean) =>
     clsx(
       "flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500",
@@ -29,33 +32,25 @@ export function BeneficiaryPicker({ members, loading, error, onRetry, value, fam
 
   return (
     <fieldset className="space-y-3">
-      <legend className="label">لمن هذا الموعد؟</legend>
+      <legend className="label">{t("لمن هذا الموعد؟")}</legend>
       <div className="flex gap-2" role="radiogroup">
         <button type="button" role="radio" aria-checked={!familyMode} className={option(!familyMode)} onClick={() => onChange({ familyMode: false, memberId: null })}>
-          <UserRound className="h-4 w-4" aria-hidden="true" /> الموعد لي
-        </button>
+          <UserRound className="h-4 w-4" aria-hidden="true" />{t(" الموعد لي ")}</button>
         <button type="button" role="radio" aria-checked={familyMode} className={option(familyMode)} onClick={() => onChange({ familyMode: true, memberId: value })}>
-          <Users className="h-4 w-4" aria-hidden="true" /> لفرد من العائلة
-        </button>
+          <Users className="h-4 w-4" aria-hidden="true" />{t(" لفرد من العائلة ")}</button>
       </div>
 
       {familyMode && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           {loading ? (
-            <p className="text-sm text-slate-500">جارٍ تحميل أفراد العائلة...</p>
+            <p className="text-sm text-slate-500">{t("جارٍ تحميل أفراد العائلة...")}</p>
           ) : error ? (
-            <p className="text-sm text-red-600" role="alert">
-              تعذّر تحميل أفراد العائلة.{" "}
-              <button type="button" className="font-semibold underline" onClick={onRetry}>
-                إعادة المحاولة
-              </button>
+            <p className="text-sm text-red-600" role="alert">{t("تعذّر تحميل أفراد العائلة.")}{" "}
+              <button type="button" className="font-semibold underline" onClick={onRetry}>{t("إعادة المحاولة ")}</button>
             </p>
           ) : members.length === 0 ? (
-            <p className="text-sm text-slate-600">
-              لم تُضف أي فرد بعد.{" "}
-              <Link to="/account/family" className="font-semibold text-primary-700 hover:underline">
-                أضف فردًا من العائلة
-              </Link>
+            <p className="text-sm text-slate-600">{t("لم تُضف أي فرد بعد.")}{" "}
+              <Link to="/account/family" className="font-semibold text-primary-700 hover:underline">{t("أضف فردًا من العائلة ")}</Link>
             </p>
           ) : (
             <ul className="space-y-2">
@@ -77,7 +72,7 @@ export function BeneficiaryPicker({ members, loading, error, onRetry, value, fam
                       />
                       <span className="font-semibold text-slate-800">{memberFullName(m)}</span>
                     </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{RELATIONSHIP_LABELS[m.relationship]}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{t(RELATIONSHIP_LABELS[m.relationship] ?? "")}</span>
                   </label>
                 </li>
               ))}

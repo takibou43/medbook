@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { useAdminConfirm } from "../../components/admin/AdminConfirm";
 import { useAuth } from "../../context/AuthContext";
 import { AdminResults, AdminActions } from "../../components/admin/AdminUI";
@@ -17,6 +19,7 @@ import { BlockPatientDialog, BlockTarget } from "../../components/BlockPatientDi
 const ROLE_LABELS: Record<Role, string> = { PATIENT: "مريض", DOCTOR: "طبيب", ADMIN: "إدارة", ASSISTANT: "مساعد", CLINIC_OWNER: "صاحب عيادة" };
 
 export default function AdminUsers() {
+  useLanguage();
   const {user:me}=useAuth(); const confirmation=useAdminConfirm();
   const { params, q, setQ, search, page, setPage, update, clear } = useAdminListParams();
   const id = params.get("id");
@@ -31,12 +34,12 @@ export default function AdminUsers() {
     queryFn: async ({ signal }) => (await api.get("/admin/users", { signal, params: { id: id || undefined, q: search || undefined, role: role || undefined, page } })).data.data,
   });
 
-  function toggleActive(u:any){confirmation.ask({title:u.isActive?'تعطيل الحساب':'تفعيل الحساب',record:u.email,reasonRequired:true,impact:u.isActive?'يمنع الدخول إلى الحساب؛ تبقى الملفات والمواعيد والاشتراكات محفوظة.':'يعيد إتاحة الدخول دون تغيير حالة حظر الحجوزات أو توثيق الطبيب أو الاشتراك.',action:async reason=>{await api.patch('/admin/users/'+u.id+'/'+(u.isActive?'deactivate':'activate'),{reason});showToast(u.isActive?'تم تعطيل الحساب.':'تم تفعيل الحساب.','success');await qc.invalidateQueries({queryKey:['admin-users']});}});}
-  function remove(u:any){confirmation.ask({title:'حذف الحساب',record:u.email,reasonRequired:true,impact:'الحذف نهائي ولا توجد استعادة. قد يمنعه الخادم عند وجود عيادة أو سجلات مرتبطة؛ يشمل الملفات المرتبطة وفق القيود الحالية.',action:async reason=>{await api.delete('/admin/users/'+u.id,{data:{reason}});showToast('تم الحذف.','success');await qc.invalidateQueries({queryKey:['admin-users']});}});}
+  function toggleActive(u:any){confirmation.ask({title:u.isActive?t("تعطيل الحساب"):t("تفعيل الحساب"),record:u.email,reasonRequired:true,impact:u.isActive?t("يمنع الدخول إلى الحساب؛ تبقى الملفات والمواعيد والاشتراكات محفوظة."):t("يعيد إتاحة الدخول دون تغيير حالة حظر الحجوزات أو توثيق الطبيب أو الاشتراك."),action:async reason=>{await api.patch('/admin/users/'+u.id+'/'+(u.isActive?'deactivate':'activate'),{reason});showToast(u.isActive?t("تم تعطيل الحساب."):t("تم تفعيل الحساب."),'success');await qc.invalidateQueries({queryKey:['admin-users']});}});}
+  function remove(u:any){confirmation.ask({title:t("حذف الحساب"),record:u.email,reasonRequired:true,impact:t("الحذف نهائي ولا توجد استعادة. قد يمنعه الخادم عند وجود عيادة أو سجلات مرتبطة؛ يشمل الملفات المرتبطة وفق القيود الحالية."),action:async reason=>{await api.delete('/admin/users/'+u.id,{data:{reason}});showToast(t("تم الحذف."),'success');await qc.invalidateQueries({queryKey:['admin-users']});}});}
 
-  const actions = (u: any) => (<AdminActions label={"المستخدم " + u.email}>
+  const actions = (u: any) => (<AdminActions label={t("المستخدم ") + u.email}>
                         <Button variant="outline" disabled={u.id===me?.id && u.isActive} onClick={() => toggleActive(u)}>
-                          {u.isActive ? "تعطيل" : "تفعيل"}
+                          {u.isActive ? t("تعطيل") : t("تفعيل")}
                         </Button>
                         {u.patient && (
                           <Button
@@ -48,27 +51,25 @@ export default function AdminUsers() {
                               })
                             }
                           >
-                            {u.patient.blocks?.length > 0 ? "رفع الحظر" : "حظر المريض"}
+                            {u.patient.blocks?.length > 0 ? t("رفع الحظر") : t("حظر المريض")}
                           </Button>
                         )}
-                        <Button variant="danger" disabled={u.id===me?.id} onClick={() => remove(u)}>
-                          حذف
-                        </Button>
+                        <Button variant="danger" disabled={u.id===me?.id} onClick={() => remove(u)}>{t("حذف ")}</Button>
                       </AdminActions>);
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-extrabold text-slate-900">إدارة المستخدمين</h1>
-      {id && <p className="text-sm text-primary-700" role="status">عرض السجل المحدد من الرابط</p>}
+      <h1 className="text-2xl font-extrabold text-slate-900">{t("إدارة المستخدمين")}</h1>
+      {id && <p className="text-sm text-primary-700" role="status">{t("عرض السجل المحدد من الرابط")}</p>}
 
       <div className="flex flex-wrap gap-3">
-        <Input label="بحث عن مستخدم" placeholder="بحث بالبريد أو الهاتف..." value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
-        <select aria-label="دور المستخدم" className="input max-w-[160px]" value={role} onChange={(e) => setRole(e.target.value as Role | "")}>
-          <option value="">كل الأدوار</option>
-          <option value="PATIENT">مريض</option>
-          <option value="DOCTOR">طبيب</option>
-          <option value="ASSISTANT">مساعد</option>
-          <option value="ADMIN">إدارة</option><option value="CLINIC_OWNER">صاحب عيادة</option>
+        <Input label={t("بحث عن مستخدم")} placeholder={t("بحث بالبريد أو الهاتف...")} value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
+        <select aria-label={t("دور المستخدم")} className="input max-w-[160px]" value={role} onChange={(e) => setRole(e.target.value as Role | "")}>
+          <option value="">{t("كل الأدوار")}</option>
+          <option value="PATIENT">{t("مريض")}</option>
+          <option value="DOCTOR">{t("طبيب")}</option>
+          <option value="ASSISTANT">{t("مساعد")}</option>
+          <option value="ADMIN">{t("إدارة")}</option><option value="CLINIC_OWNER">{t("صاحب عيادة")}</option>
         </select>
       </div>
 
@@ -81,36 +82,36 @@ export default function AdminUsers() {
       ) : data && data.items.length > 0 ? (
         <>
           <div className="space-y-3 md:hidden">
-            {data.items.map((u: any) => <article key={u.id} aria-label={"حساب " + u.email} className="card space-y-3 p-4">
+            {data.items.map((u: any) => <article key={u.id} aria-label={t("حساب ") + u.email} className="card space-y-3 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3"><h2 className="min-w-[140px] flex-1 break-words font-bold text-slate-900"><bdi>{[u.patient?.firstName ?? u.doctor?.firstName ?? u.assistant?.firstName, u.patient?.lastName ?? u.doctor?.lastName ?? u.assistant?.lastName].filter(Boolean).join(" ") || u.email}</bdi></h2>{actions(u)}</div>
-              <p className="text-xs text-slate-600">{u.patient&&"ملف مريض "}{u.doctor&&" · ملف طبيب"}{u.assistant&&" · ملف مساعد"}</p>{(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic)&&<p className="text-xs text-slate-600">العيادة: {(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic).nameAr}</p>}
+              <p className="text-xs text-slate-600">{u.patient&&t("ملف مريض ")}{u.doctor&&t(" · ملف طبيب")}{u.assistant&&t(" · ملف مساعد")}</p>{(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic)&&<p className="text-xs text-slate-600">{t("العيادة: ")}{(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic).nameAr}</p>}
               <p className="break-all text-sm text-slate-600"><bdi dir="ltr">{u.email}</bdi></p>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm"><dt className="text-slate-600">الهاتف</dt><dd><bdi dir="ltr">{u.phone ?? "—"}</bdi></dd><dt className="text-slate-600">الدور</dt><dd>{ROLE_LABELS[u.role as Role]}</dd></dl>
-              <div className="flex flex-wrap gap-2"><span className={"badge " + (u.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>{u.isActive ? "مفعّل" : "معطّل"}</span>{u.patient?.blocks?.length > 0 && <span className="badge bg-red-100 text-red-700">محظور من الحجز</span>}</div>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm"><dt className="text-slate-600">{t("الهاتف")}</dt><dd><bdi dir="ltr">{u.phone ?? "—"}</bdi></dd><dt className="text-slate-600">{t("الدور")}</dt><dd>{t(ROLE_LABELS[u.role as Role])}</dd></dl>
+              <div className="flex flex-wrap gap-2"><span className={"badge " + (u.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700")}>{u.isActive ? t("مفعّل") : t("معطّل")}</span>{u.patient?.blocks?.length > 0 && <span className="badge bg-red-100 text-red-700">{t("محظور من الحجز")}</span>}</div>
             </article>)}
           </div>
           <div className="card hidden overflow-x-auto p-0 md:block">
-            <table className="w-full text-right text-sm">
+            <table className="w-full text-start text-sm">
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">البريد الإلكتروني</th>
-                  <th className="px-4 py-3 font-semibold">الهاتف</th>
-                  <th className="px-4 py-3 font-semibold">الدور</th>
-                  <th className="px-4 py-3 font-semibold">الحالة</th>
-                  <th className="px-4 py-3 font-semibold">إجراءات</th>
+                  <th className="px-4 py-3 font-semibold">{t("البريد الإلكتروني")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("الهاتف")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("الدور")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("الحالة")}</th>
+                  <th className="px-4 py-3 font-semibold">{t("إجراءات")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {data.items.map((u: any) => (
                   <tr key={u.id} className={id === u.id ? "bg-primary-50" : undefined}>
-                    <td className="px-4 py-3 text-slate-700"><p className="font-bold"><bdi>{[u.patient?.firstName??u.doctor?.firstName??u.assistant?.firstName,u.patient?.lastName??u.doctor?.lastName??u.assistant?.lastName].filter(Boolean).join(" ")||"—"}</bdi></p><bdi dir="ltr">{u.email}</bdi><p className="text-xs">{u.patient&&"ملف مريض "}{u.doctor&&" · ملف طبيب"}{u.assistant&&" · ملف مساعد"}</p>{(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic)&&<p className="text-xs">العيادة: {(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic).nameAr}</p>}</td>
+                    <td className="px-4 py-3 text-slate-700"><p className="font-bold"><bdi>{[u.patient?.firstName??u.doctor?.firstName??u.assistant?.firstName,u.patient?.lastName??u.doctor?.lastName??u.assistant?.lastName].filter(Boolean).join(" ")||"—"}</bdi></p><bdi dir="ltr">{u.email}</bdi><p className="text-xs">{u.patient&&t("ملف مريض ")}{u.doctor&&t(" · ملف طبيب")}{u.assistant&&t(" · ملف مساعد")}</p>{(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic)&&<p className="text-xs">{t("العيادة: ")}{(u.doctor?.clinic??u.assistant?.clinic??u.assistant?.doctor?.clinic).nameAr}</p>}</td>
                     <td className="px-4 py-3 text-slate-600" dir="ltr">{u.phone ?? "—"}</td>
-                    <td className="px-4 py-3 text-slate-600">{ROLE_LABELS[u.role as Role]}</td>
+                    <td className="px-4 py-3 text-slate-600">{t(ROLE_LABELS[u.role as Role])}</td>
                     <td className="px-4 py-3">
                       <span className={`badge ${u.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                        {u.isActive ? "مفعّل" : "معطّل"}
+                        {u.isActive ? t("مفعّل") : t("معطّل")}
                       </span>
-                      {u.patient?.blocks?.length > 0 && <span className="badge mr-1 bg-red-100 text-red-700">محظور من الحجز</span>}
+                      {u.patient?.blocks?.length > 0 && <span className="badge ms-1 bg-red-100 text-red-700">{t("محظور من الحجز")}</span>}
                     </td>
                     <td className="px-4 py-3">
                       {actions(u)}
@@ -123,7 +124,7 @@ export default function AdminUsers() {
           <Pagination page={data.page} totalPages={data.totalPages} onChange={setPage} />
         </>
       ) : (
-        <EmptyState title={!!(q || id || role) ? "لا نتائج مطابقة" : "لا يوجد مستخدمون"} description={!!(q || id || role) ? "جرّب تغيير البحث أو مسح الفلاتر." : undefined} />
+        <EmptyState title={!!(q || id || role) ? t("لا نتائج مطابقة") : t("لا يوجد مستخدمون")} description={!!(q || id || role) ? t("جرّب تغيير البحث أو مسح الفلاتر.") : undefined} />
       )}
 
       {confirmation.dialog}

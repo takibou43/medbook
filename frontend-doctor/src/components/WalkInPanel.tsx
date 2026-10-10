@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t } from "../i18n/locale.ts";
 import { useId, useRef, useState } from "react";
 import clsx from "clsx";
 import { CheckCircle2, UserPlus } from "lucide-react";
@@ -12,7 +14,7 @@ import { buildWalkInBody, EMPTY_WALK_IN, keepKeyAfterError, newIdempotencyKey, r
 export const WALK_IN_NOTE = "سُجّل بواسطة المساعد";
 
 export type WalkInDoctor = { id: string; firstName: string; lastName: string };
-const doctorLabel = (d: WalkInDoctor) => `د. ${d.firstName} ${d.lastName}`;
+const doctorLabel = (d: WalkInDoctor) => t("د. {0} {1}", { "0": d.firstName, "1": d.lastName });
 /** تاريخ اليوم بتوقيت الجزائر (UTC+1)، كما في لوحة الاستقبال. */
 const algeriaToday = () => new Date(Date.now() + 3600000).toISOString().slice(0, 10);
 
@@ -23,6 +25,7 @@ const algeriaToday = () => new Date(Date.now() + 3600000).toISOString().slice(0,
  *  - أقرب وقت متاح تلقائيًا أو وقت محدد من أوقات اليوم؛ زر معطّل ومفتاح ثابت للمحاولة الواحدة ضد الضغط المزدوج.
  */
 export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
+  useLanguage();
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const formId = useId();
@@ -64,8 +67,8 @@ export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
     if (inFlight.current || register.isPending) return;
     const effective: WalkInForm = { ...form, startTime: timeMode === "choose" ? form.startTime : "" };
     const errs: WalkInErrors & { doctor?: string } = validateWalkIn(effective);
-    if (!doctorId) errs.doctor = "اختر الطبيب.";
-    if (timeMode === "choose" && !effective.startTime) errs.startTime = "اختر وقتًا من القائمة، أو اختر «أقرب وقت متاح».";
+    if (!doctorId) errs.doctor = t("اختر الطبيب.");
+    if (timeMode === "choose" && !effective.startTime) errs.startTime = t("اختر وقتًا من القائمة، أو اختر «أقرب وقت متاح».");
     setErrors(errs);
     setSubmitError(null);
     if (Object.keys(errs).length || !doctor) {
@@ -78,7 +81,7 @@ export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
       const res = await register.mutateAsync({ doctorId: doctor.id, body: buildWalkInBody(effective, keyRef.current) });
       const name = doctorLabel(doctor);
       setLastDone({ ...res, doctorName: name });
-      showToast(`سُجّل ${res.guestFirstName} ${res.guestLastName} عند ${name} على الساعة ${res.startTime}.`, "success");
+      showToast(t("سُجّل {0} {1} عند {2} على الساعة {3}.", { "0": res.guestFirstName, "1": res.guestLastName, "2": name, "3": res.startTime }), "success");
       setForm(EMPTY_WALK_IN);
       setTimeMode("auto");
       keyRef.current = newIdempotencyKey();
@@ -86,7 +89,7 @@ export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
     } catch (err) {
       const { status } = classifyApiError(err);
       const code = (err as any)?.response?.data?.details?.code as string | undefined;
-      setSubmitError(apiErrorMessage(err, "تعذّر تسجيل المريض."));
+      setSubmitError(apiErrorMessage(err, t("تعذّر تسجيل المريض.")));
       if (code === "SLOT_TAKEN") {
         // الوقت أخذه غيرنا: نحدّث الأوقات ونطلب اختيارًا جديدًا (لا ننقله بصمت).
         set("startTime", "");
@@ -106,22 +109,20 @@ export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
 
   return (
     <>
-    <Button className="min-h-11" onClick={() => setOpen(true)}><UserPlus aria-hidden="true" className="h-5 w-5" />إضافة مريض</Button>
-    {lastDone && !open && <p role="status" className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-900">سُجّل {lastDone.guestFirstName} {lastDone.guestLastName} عند {lastDone.doctorName} — <bdi dir="ltr">{lastDone.startTime}</bdi></p>}
-    <Modal open={open} onClose={() => { if (!inFlight.current) setOpen(false); }} title="تسجيل مريض حضر">
+    <Button className="min-h-11" onClick={() => setOpen(true)}><UserPlus aria-hidden="true" className="h-5 w-5" />{t("إضافة مريض")}</Button>
+    {lastDone && !open && <p role="status" className="rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-900">{t("سُجّل ")}{lastDone.guestFirstName} {lastDone.guestLastName}{t(" عند ")}{lastDone.doctorName} — <bdi dir="ltr">{lastDone.startTime}</bdi></p>}
+    <Modal open={open} onClose={() => { if (!inFlight.current) setOpen(false); }} title={t("تسجيل مريض حضر")}>
     <section aria-labelledby={`${formId}-title`}>
       <h2 id={`${formId}-title`} className="flex items-center gap-2 text-lg font-bold text-slate-900">
-        <UserPlus className="h-5 w-5 text-primary-600" aria-hidden="true" /> تسجيل مريض حضر
-      </h2>
-      <p className="mt-1 text-sm text-slate-600">يُسجَّل كضيف بالاسم والهاتف لليوم، ويدخل طابور الطبيب مباشرة. الحقول المعلّمة بـ «مطلوب» إلزامية.</p>
+        <UserPlus className="h-5 w-5 text-primary-600" aria-hidden="true" />{t(" تسجيل مريض حضر ")}</h2>
+      <p className="mt-1 text-sm text-slate-600">{t("يُسجَّل كضيف بالاسم والهاتف لليوم، ويدخل طابور الطبيب مباشرة. الحقول المعلّمة بـ «مطلوب» إلزامية.")}</p>
 
       {lastDone && (
         <p role="status" className="mt-3 flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>
-            سُجّل <strong>{lastDone.guestFirstName} {lastDone.guestLastName}</strong> عند <strong>{lastDone.doctorName}</strong> — موعده{" "}
+          <span>{t("سُجّل ")}<strong>{lastDone.guestFirstName} {lastDone.guestLastName}</strong>{t(" عند ")}<strong>{lastDone.doctorName}</strong>{t(" — موعده")}{" "}
             <strong className="tabular-nums" dir="ltr">{lastDone.startTime}</strong>
-            {lastDone.replayed ? " (كان مسجّلًا من قبل بنفس الطلب)." : "."}
+            {lastDone.replayed ? t(" (كان مسجّلًا من قبل بنفس الطلب).") : "."}
           </span>
         </p>
       )}
@@ -130,92 +131,79 @@ export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
         <fieldset disabled={register.isPending} className="space-y-4">
         {doctors.length > 1 ? (
           <div>
-            <label className="block text-sm font-semibold text-slate-700">
-              الطبيب (مطلوب)
-              <select className={inputCls(errors.doctor)} value={doctorId} onChange={(e) => changeDoctor(e.target.value)} aria-invalid={Boolean(errors.doctor)} aria-describedby={errors.doctor ? `${formId}-dr` : undefined}>
-                <option value="">اختر الطبيب</option>
+            <label className="block text-sm font-semibold text-slate-700">{t("الطبيب (مطلوب) ")}<select className={inputCls(errors.doctor)} value={doctorId} onChange={(e) => changeDoctor(e.target.value)} aria-invalid={Boolean(errors.doctor)} aria-describedby={errors.doctor ? `${formId}-dr` : undefined}>
+                <option value="">{t("اختر الطبيب")}</option>
                 {doctors.map((d) => <option key={d.id} value={d.id}>{doctorLabel(d)}</option>)}
               </select>
             </label>
             {errors.doctor && <span id={`${formId}-dr`} className="mt-1 block text-xs text-red-700">{errors.doctor}</span>}
           </div>
         ) : (
-          <p className="text-sm text-slate-600">الطبيب: <strong>{doctor && doctorLabel(doctor)}</strong></p>
+          <p className="text-sm text-slate-600">{t("الطبيب: ")}<strong>{doctor && doctorLabel(doctor)}</strong></p>
         )}
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-semibold text-slate-700">
-              الاسم (مطلوب)
-              <input ref={firstNameRef} className={inputCls(errors.firstName)} value={form.firstName} onChange={(e) => set("firstName", e.target.value)} autoComplete="off" aria-invalid={Boolean(errors.firstName)} aria-describedby={errors.firstName ? `${formId}-fn` : undefined} />
+            <label className="block text-sm font-semibold text-slate-700">{t("الاسم (مطلوب) ")}<input ref={firstNameRef} className={inputCls(errors.firstName)} value={form.firstName} onChange={(e) => set("firstName", e.target.value)} autoComplete="off" aria-invalid={Boolean(errors.firstName)} aria-describedby={errors.firstName ? `${formId}-fn` : undefined} />
             </label>
             {errors.firstName && <span id={`${formId}-fn`} className="mt-1 block text-xs text-red-700">{errors.firstName}</span>}
           </div>
           <div>
-            <label className="block text-sm font-semibold text-slate-700">
-              اللقب (مطلوب)
-              <input className={inputCls(errors.lastName)} value={form.lastName} onChange={(e) => set("lastName", e.target.value)} autoComplete="off" aria-invalid={Boolean(errors.lastName)} aria-describedby={errors.lastName ? `${formId}-ln` : undefined} />
+            <label className="block text-sm font-semibold text-slate-700">{t("اللقب (مطلوب) ")}<input className={inputCls(errors.lastName)} value={form.lastName} onChange={(e) => set("lastName", e.target.value)} autoComplete="off" aria-invalid={Boolean(errors.lastName)} aria-describedby={errors.lastName ? `${formId}-ln` : undefined} />
             </label>
             {errors.lastName && <span id={`${formId}-ln`} className="mt-1 block text-xs text-red-700">{errors.lastName}</span>}
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-slate-700">
-            رقم الهاتف (مطلوب)
-            <input dir="ltr" inputMode="tel" placeholder="0551234567" className={clsx(inputCls(errors.phone), "text-left tabular-nums")} value={form.phone} onChange={(e) => set("phone", e.target.value)} autoComplete="off" aria-invalid={Boolean(errors.phone)} aria-describedby={errors.phone ? `${formId}-ph` : undefined} />
+          <label className="block text-sm font-semibold text-slate-700">{t("رقم الهاتف (مطلوب) ")}<input dir="ltr" inputMode="tel" placeholder="0551234567" className={clsx(inputCls(errors.phone), "text-left tabular-nums")} value={form.phone} onChange={(e) => set("phone", e.target.value)} autoComplete="off" aria-invalid={Boolean(errors.phone)} aria-describedby={errors.phone ? `${formId}-ph` : undefined} />
           </label>
           {errors.phone && <span id={`${formId}-ph`} className="mt-1 block text-xs text-red-700">{errors.phone}</span>}
         </div>
 
         <fieldset disabled={!doctorId}>
-          <legend className="text-sm font-semibold text-slate-700">الوقت (تلقائي أو اختيار محدد)</legend>
+          <legend className="text-sm font-semibold text-slate-700">{t("الوقت (تلقائي أو اختيار محدد)")}</legend>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <label className={clsx("flex cursor-pointer items-start gap-2 rounded-xl border p-3 text-sm", timeMode === "auto" ? "border-primary-400 bg-primary-50" : "border-slate-200")}>
               <input type="radio" name={`${formId}-mode`} className="mt-1" checked={timeMode === "auto"} onChange={() => setTimeMode("auto")} />
               <span>
-                <span className="block font-semibold">أقرب وقت متاح</span>
+                <span className="block font-semibold">{t("أقرب وقت متاح")}</span>
                 <span className="text-xs text-slate-600">
-                  {!doctorId ? "اختر الطبيب أولًا" : slots.isPending ? "جارٍ تحميل الأوقات…" : slotList.length ? <>الآن: <span className="tabular-nums" dir="ltr">{slotList[0]}</span></> : "لا أوقات متاحة متبقية اليوم"}
+                  {!doctorId ? t("اختر الطبيب أولًا") : slots.isPending ? t("جارٍ تحميل الأوقات…") : slotList.length ? <>{t("الآن: ")}<span className="tabular-nums" dir="ltr">{slotList[0]}</span></> : t("لا أوقات متاحة متبقية اليوم")}
                 </span>
               </span>
             </label>
             <label className={clsx("flex cursor-pointer items-start gap-2 rounded-xl border p-3 text-sm", timeMode === "choose" ? "border-primary-400 bg-primary-50" : "border-slate-200")}>
               <input type="radio" name={`${formId}-mode`} className="mt-1" checked={timeMode === "choose"} onChange={() => setTimeMode("choose")} />
               <span>
-                <span className="block font-semibold">اختيار وقت</span>
-                <span className="text-xs text-slate-600">من الأوقات المتاحة اليوم</span>
+                <span className="block font-semibold">{t("اختيار وقت")}</span>
+                <span className="text-xs text-slate-600">{t("من الأوقات المتاحة اليوم")}</span>
               </span>
             </label>
           </div>
           {timeMode === "choose" && (
             <div className="mt-3">
-              <label className="block text-sm font-semibold text-slate-700">
-                الوقت المتاح
-                <select dir="ltr" className={clsx(inputCls(errors.startTime), "tabular-nums")} value={form.startTime} onChange={(e) => set("startTime", e.target.value)} disabled={slots.isPending || slotList.length === 0} aria-invalid={Boolean(errors.startTime)} aria-describedby={errors.startTime ? `${formId}-st` : undefined}>
-                  <option value="">{slots.isPending ? "جارٍ التحميل…" : slotList.length ? "اختر وقتًا" : "لا أوقات متاحة اليوم"}</option>
+              <label className="block text-sm font-semibold text-slate-700">{t("الوقت المتاح ")}<select dir="ltr" className={clsx(inputCls(errors.startTime), "tabular-nums")} value={form.startTime} onChange={(e) => set("startTime", e.target.value)} disabled={slots.isPending || slotList.length === 0} aria-invalid={Boolean(errors.startTime)} aria-describedby={errors.startTime ? `${formId}-st` : undefined}>
+                  <option value="">{slots.isPending ? t("جارٍ التحميل…") : slotList.length ? t("اختر وقتًا") : t("لا أوقات متاحة اليوم")}</option>
                   {slotList.map((t) => <option key={t} value={t}>{t}</option>)}
                 </select>
               </label>
-              {slots.isError && <span className="mt-1 block text-xs text-red-700">تعذّر تحميل الأوقات. <button type="button" className="underline" onClick={() => void slots.refetch()}>إعادة المحاولة</button></span>}
+              {slots.isError && <span className="mt-1 block text-xs text-red-700">{t("تعذّر تحميل الأوقات. ")}<button type="button" className="underline" onClick={() => void slots.refetch()}>{t("إعادة المحاولة")}</button></span>}
               {errors.startTime && <span id={`${formId}-st`} className="mt-1 block text-xs text-red-700">{errors.startTime}</span>}
             </div>
           )}
         </fieldset>
 
         <div>
-          <label className="block text-sm font-semibold text-slate-700">
-            ملاحظات <span className="font-normal text-slate-600">(اختياري)</span>
+          <label className="block text-sm font-semibold text-slate-700">{t("ملاحظات ")}<span className="font-normal text-slate-600">{t("(اختياري)")}</span>
             <textarea rows={2} className={inputCls(errors.notes)} value={form.notes} onChange={(e) => set("notes", e.target.value)} maxLength={1000} aria-invalid={Boolean(errors.notes)} aria-describedby={`${formId}-nt`} />
           </label>
-          <span id={`${formId}-nt`} className="mt-1 block text-xs font-normal text-slate-600">{errors.notes || `تُضاف تلقائيًا عبارة «${WALK_IN_NOTE}».`}</span>
+          <span id={`${formId}-nt`} className="mt-1 block text-xs font-normal text-slate-600">{errors.notes || t("تُضاف تلقائيًا عبارة «{0}».", { "0": WALK_IN_NOTE })}</span>
         </div>
 
         {submitError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{submitError}</p>}
 
-        <Button type="submit" className="w-full sm:w-auto" loading={register.isPending} disabled={register.isPending}>
-          تسجيل الحضور
-        </Button>
+        <Button type="submit" className="w-full sm:w-auto" loading={register.isPending} disabled={register.isPending}>{t("تسجيل الحضور ")}</Button>
         </fieldset>
       </form>
     </section>

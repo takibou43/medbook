@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t } from "../i18n/locale.ts";
 import { useEffect, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { RefreshCw, WifiOff } from "lucide-react";
@@ -9,6 +11,7 @@ import { API_MESSAGES, ApiErrorKind } from "../lib/api";
 // شاشة انتظار التحقق من الجلسة: بعد بضع ثوانٍ نطمئن المستخدم بأن أول فتح قد يكون بطيئًا
 // (خادم الاستضافة ينام عند عدم الاستعمال ويحتاج وقتًا ليستيقظ)، حتى لا يظن أن الموقع معطّل.
 function SessionLoading() {
+  useLanguage();
   const [slow, setSlow] = useState(false);
 
   useEffect(() => {
@@ -18,11 +21,9 @@ function SessionLoading() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-      <Spinner label="جارٍ التحقق من الجلسة..." />
+      <Spinner label={t("جارٍ التحقق من الجلسة...")} />
       {slow && (
-        <p className="max-w-xs text-xs leading-relaxed text-slate-500">
-          قد يستغرق أول فتح حتى دقيقة لأن الخادم يستيقظ من وضع السكون. أبقِ الصفحة مفتوحة.
-        </p>
+        <p className="max-w-xs text-xs leading-relaxed text-slate-500">{t("قد يستغرق أول فتح حتى دقيقة لأن الخادم يستيقظ من وضع السكون. أبقِ الصفحة مفتوحة. ")}</p>
       )}
     </div>
   );
@@ -31,25 +32,26 @@ function SessionLoading() {
 // عند فشل التحقق لسبب شبكي (انقطاع إنترنت أو انتهاء مهلة الطلب) لا نُخرج الطبيب من حسابه
 // ولا نتركه أمام دائرة تحميل لا تنتهي — نعرض سبب المشكلة وزر إعادة محاولة.
 function SessionError({ onRetry, kind }: { onRetry: () => void; kind: ApiErrorKind | null }) {
+  useLanguage();
   // الرسالة حسب السبب الفعلي: جهاز بلا شبكة ≠ خادم لا يصل ≠ مهلة ≠ ضغط (429) ≠ عطل خادم (5xx).
   const message = kind && kind !== "other" ? API_MESSAGES[kind] : API_MESSAGES.network;
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
       <WifiOff className="h-10 w-10 text-slate-400" />
-      <p className="max-w-xs text-lg font-extrabold leading-relaxed text-slate-900">{message}</p>
-      <p className="max-w-xs text-sm leading-relaxed text-slate-500">جلستك لم تُلغَ.</p>
+      <p className="max-w-xs text-lg font-extrabold leading-relaxed text-slate-900">{t(message ?? "")}</p>
+      <p className="max-w-xs text-sm leading-relaxed text-slate-500">{t("جلستك لم تُلغَ.")}</p>
       <button
         type="button"
         onClick={onRetry}
         className="flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-700"
       >
-        <RefreshCw className="h-4 w-4" /> إعادة المحاولة
-      </button>
+        <RefreshCw className="h-4 w-4" />{t(" إعادة المحاولة ")}</button>
     </div>
   );
 }
 
 export function ProtectedRoute({ allow }: { allow: Role[] }) {
+  useLanguage();
   const { user, loading, sessionError, sessionErrorKind, refreshMe } = useAuth();
 
   if (loading) return <SessionLoading />;

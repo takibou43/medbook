@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale";
 import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Building2, ChevronLeft, LucideIcon, LogOut, Menu, Stethoscope, X } from "lucide-react";
@@ -46,6 +48,7 @@ export function DashboardLayout({
   settingsStart?: number;
   clinicMode?: boolean;
 }) {
+  useLanguage();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -89,7 +92,7 @@ export function DashboardLayout({
       Array.from(drawer?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? []);
     focusables()[0]?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) {
         closeMobileMenu();
         return;
       }
@@ -126,23 +129,23 @@ export function DashboardLayout({
 
   const { main, footer } = splitNavItems(items);
   const name = accountDisplayName(user);
-  const account = { name, initials: initialsOf(name.replace(/^د\.\s*/, "")), role: roleLabel(user?.role) };
+  const account = { name, initials: initialsOf(name.replace(/^د\.\s*/, "")), role: t(roleLabel(user?.role)) };
 
   const renderNav = (compact: boolean, onNavigate?: () => void) => (
     <>
-      {!compact && !main[0]?.group && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">القائمة</p>}
+      {!compact && !main[0]?.group && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{t("القائمة")}</p>}
       <ul className="space-y-1" role="list">
         {main.map((item, index) => (
           <li key={item.to}>
             {item.group && item.group !== main[index - 1]?.group && (
               compact
                 ? <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
-                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{item.group}</p></>
+                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{t(item.group ?? "")}</p></>
             )}
             {index === settingsStart && settingsStart < main.length && (
               compact
                 ? <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
-                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">الإدارة والإعدادات</p></>
+                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{t("الإدارة والإعدادات")}</p></>
             )}
             <SidebarLink item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
           </li>
@@ -154,7 +157,7 @@ export function DashboardLayout({
   const renderFooter = (compact: boolean, onNavigate?: () => void) => (
     <div className="space-y-1">
       <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
-      {!compact && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">عام</p>}
+      {!compact && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{t("عام")}</p>}
       {footer.map((item) => (
         <SidebarLink key={item.to} item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
       ))}
@@ -169,13 +172,13 @@ export function DashboardLayout({
         <button
           type="button"
           onClick={handleLogout}
-          aria-label={compact ? "تسجيل الخروج" : undefined}
+          aria-label={compact ? t("تسجيل الخروج") : undefined}
           className={clsx(itemBase, "text-rose-100 hover:bg-white/10 hover:text-white", compact && "justify-center px-0")}
         >
           <span className={iconChip}><LogOut className="h-4 w-4" aria-hidden /></span>
-          {!compact && <span className="truncate">تسجيل الخروج</span>}
+          {!compact && <span className="truncate">{t("تسجيل الخروج")}</span>}
         </button>
-        {compact && <Tip>تسجيل الخروج</Tip>}
+        {compact && <Tip>{t("تسجيل الخروج")}</Tip>}
       </div>
     </div>
   );
@@ -184,8 +187,8 @@ export function DashboardLayout({
     clinicMode && (
       <div className={clsx("mt-3 flex gap-1.5 rounded-2xl border border-white/10 bg-white/[0.06] p-1.5 text-sm", compact && "flex-col")}>
         {[
-          { to: "/", label: "وضع الطبيب", icon: Stethoscope, end: true },
-          { to: "/clinic", label: "إدارة العيادة", icon: Building2, end: false },
+          { to: "/", label: t("وضع الطبيب"), icon: Stethoscope, end: true },
+          { to: "/clinic", label: t("إدارة العيادة"), icon: Building2, end: false },
         ].map((m) => (
           <div key={m.to} className="group relative flex-1">
             <NavLink
@@ -234,7 +237,7 @@ export function DashboardLayout({
     <div className="app-glass-bg flex min-h-screen">
       {/* ===== الحاسوب: لوحة زجاجية عائمة ===== */}
       <aside
-        aria-label="القائمة الجانبية"
+        aria-label={t("القائمة الجانبية")}
         className={clsx(
           "glass-sidebar sticky top-3 z-30 m-3 hidden h-[calc(100vh-1.5rem)] shrink-0 flex-col rounded-3xl text-slate-100 [text-shadow:0_1px_2px_rgba(2,6,23,0.35)] md:flex",
           "transition-[width] duration-200 ease-out motion-reduce:transition-none",
@@ -248,8 +251,8 @@ export function DashboardLayout({
             type="button"
             onClick={toggleCollapsed}
             aria-expanded={!collapsed}
-            aria-label={collapsed ? "توسيع القائمة الجانبية" : "طي القائمة الجانبية"}
-            title={collapsed ? "توسيع القائمة" : "طي القائمة"}
+            aria-label={collapsed ? t("توسيع القائمة الجانبية") : t("طي القائمة الجانبية")}
+            title={collapsed ? t("توسيع القائمة") : t("طي القائمة")}
             className="absolute -end-3.5 top-5 flex h-7 w-7 items-center justify-center rounded-full border border-white/30 bg-[#0f3d5c] text-white shadow-lg transition-colors duration-200 hover:bg-primary-500 motion-reduce:transition-none"
           >
             {/* السهم يشير لاتجاه الحركة: نحو حافة الشاشة عند الطي، ويُعكس في RTL. */}
@@ -265,7 +268,7 @@ export function DashboardLayout({
           {renderClinicSwitch(collapsed)}
         </div>
 
-        <nav aria-label="أقسام اللوحة" className={clsx("mt-3 flex-1 px-3 pb-2", collapsed ? "overflow-visible px-2" : "overflow-y-auto")}>
+        <nav aria-label={t("أقسام اللوحة")} className={clsx("mt-3 flex-1 px-3 pb-2", collapsed ? "overflow-visible px-2" : "overflow-y-auto")}>
           {renderNav(collapsed)}
         </nav>
 
@@ -285,7 +288,7 @@ export function DashboardLayout({
             aria-expanded={mobileMenuOpen}
             onClick={() => (mobileMenuOpen ? closeMobileMenu() : openMobileMenu())}
             className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100"
-            aria-label={mobileMenuOpen ? "إغلاق القائمة" : "فتح القائمة"}
+            aria-label={mobileMenuOpen ? t("إغلاق القائمة") : t("فتح القائمة")}
           >
             <Menu className="h-5 w-5" aria-hidden />
           </button>
@@ -304,7 +307,7 @@ export function DashboardLayout({
           id={menuId}
           role="dialog"
           aria-modal="true"
-          aria-label="القائمة"
+          aria-label={t("القائمة")}
           className={clsx(
             "glass-sidebar fixed inset-y-2 start-2 z-50 flex w-[min(288px,calc(100vw-3rem))] flex-col rounded-3xl text-slate-100 [text-shadow:0_1px_2px_rgba(2,6,23,0.35)] md:hidden",
             "transition-transform duration-200 ease-out motion-reduce:transition-none",
@@ -319,7 +322,7 @@ export function DashboardLayout({
             <button
               type="button"
               onClick={() => closeMobileMenu()}
-              aria-label="إغلاق القائمة"
+              aria-label={t("إغلاق القائمة")}
               className="flex h-11 w-11 items-center justify-center rounded-full text-slate-200 hover:bg-white/10"
             >
               <X className="h-5 w-5" aria-hidden />
@@ -329,7 +332,7 @@ export function DashboardLayout({
             {accountCard(false)}
             {renderClinicSwitch(false, () => closeMobileMenu(false))}
           </div>
-          <nav aria-label="أقسام اللوحة" className="mt-3 flex-1 overflow-y-auto px-3 pb-2">
+          <nav aria-label={t("أقسام اللوحة")} className="mt-3 flex-1 overflow-y-auto px-3 pb-2">
             {renderNav(false, () => closeMobileMenu(false))}
           </nav>
           <div className="px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{renderFooter(false, () => closeMobileMenu(false))}</div>
@@ -340,7 +343,7 @@ export function DashboardLayout({
           <Outlet />
         </main>
         {dailyNavigation && (
-          <nav aria-label="التنقل اليومي" className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
+          <nav aria-label={t("التنقل اليومي")} className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
             {items.slice(0, settingsStart ?? 2).map((item) => (
               <NavLink
                 key={item.to}
@@ -351,8 +354,8 @@ export function DashboardLayout({
                 }
               >
                 <item.icon className="h-5 w-5" aria-hidden />
-                <span className="truncate">{item.label}</span>
-                {item.badge ? <span className="absolute top-1 rounded-full bg-red-600 px-1 text-[10px] text-white">{item.badge}</span> : null}
+                <span className="truncate">{t(item.label ?? "")}</span>
+                {item.badge ? <span className="absolute top-1 rounded-full bg-red-600 px-1 text-[10px] text-white">{t(item.badge ?? "")}</span> : null}
               </NavLink>
             ))}
             <button
@@ -362,9 +365,7 @@ export function DashboardLayout({
               onClick={() => (mobileMenuOpen ? closeMobileMenu() : openMobileMenu())}
               className="flex flex-1 flex-col items-center gap-1 py-3 text-[11px] text-slate-600"
             >
-              <Menu className="h-5 w-5" aria-hidden />
-              المزيد
-            </button>
+              <Menu className="h-5 w-5" aria-hidden />{t("المزيد ")}</button>
           </nav>
         )}
       </div>
@@ -380,6 +381,7 @@ const iconChip = "flex h-8 w-8 shrink-0 items-center justify-center rounded-full
 
 /** تلميح يظهر عند المرور أو التركيز بلوحة المفاتيح (في الوضع المطوي فقط). يظهر في جهة المحتوى. */
 function Tip({ children }: { children: ReactNode }) {
+  useLanguage();
   return (
     <span
       role="presentation"
@@ -401,6 +403,7 @@ function SidebarLink({
   active: (isActive: boolean) => boolean;
   onNavigate?: () => void;
 }) {
+  useLanguage();
   const badge = item.badge ? (item.badge > 99 ? "99+" : String(item.badge)) : null;
   return (
     <div className="group relative">
@@ -408,7 +411,7 @@ function SidebarLink({
         to={item.to}
         end={item.end}
         onClick={onNavigate}
-        aria-label={compact ? (badge ? `${item.label} (${badge} غير مقروءة)` : item.label) : undefined}
+        aria-label={compact ? (badge ? t("{0} ({1} غير مقروءة)", { "0": item.label, "1": badge }) : item.label) : undefined}
         className={({ isActive }) =>
           clsx(
             itemBase,
@@ -427,14 +430,16 @@ function SidebarLink({
             </span>
           )}
         </span>
-        {!compact && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+        {!compact && <span className="min-w-0 flex-1 truncate">{t(item.label ?? "")}</span>}
         {!compact && badge && (
           <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold text-white">
             {badge}
           </span>
         )}
       </NavLink>
-      {compact && <Tip>{item.label}</Tip>}
+      {compact && <Tip>{t(item.label ?? "")}</Tip>}
     </div>
   );
 }
+
+

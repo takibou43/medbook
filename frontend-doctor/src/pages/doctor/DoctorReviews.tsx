@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t, getLocale } from "../../i18n/locale.ts";
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -27,8 +29,9 @@ interface ReviewsResponse {
 }
 
 function Stars({ value, size = "h-4 w-4" }: { value: number; size?: string }) {
+  useLanguage();
   return (
-    <span className="inline-flex items-center gap-0.5" aria-label={`${value} من 5`}>
+    <span className="inline-flex items-center gap-0.5" aria-label={t("{0} من 5", { "0": value })}>
       {[1, 2, 3, 4, 5].map((n) => (
         <Star key={n} className={clsx(size, n <= Math.round(value) ? "fill-amber-400 text-amber-400" : "fill-slate-200 text-slate-200")} aria-hidden="true" />
       ))}
@@ -37,10 +40,11 @@ function Stars({ value, size = "h-4 w-4" }: { value: number; size?: string }) {
 }
 
 function formatDay(iso: string) {
-  return new Date(iso).toLocaleDateString("ar-DZ", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  return new Date(iso).toLocaleDateString(getLocale(), { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 export default function DoctorReviews() {
+  useLanguage();
   const [page, setPage] = useState(1);
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["doctor-reviews", page],
@@ -49,28 +53,28 @@ export default function DoctorReviews() {
   });
 
   if (isLoading) return <Spinner />;
-  if (isError || !data) return <ErrorState message={apiErrorMessage(error, "تعذّر تحميل التقييمات.")} />;
+  if (isError || !data) return <ErrorState message={apiErrorMessage(error, t("تعذّر تحميل التقييمات."))} />;
 
   const { summary } = data;
   const max = Math.max(1, ...Object.values(summary.distribution));
 
   return (
     <div className="space-y-5">
-      <h1 className="text-2xl font-extrabold text-slate-900">تقييمات المرضى</h1>
+      <h1 className="text-2xl font-extrabold text-slate-900">{t("تقييمات المرضى")}</h1>
 
-      <section className="card grid gap-4 p-4 sm:grid-cols-[auto_1fr] sm:gap-6 sm:p-6" aria-label="ملخص التقييمات">
+      <section className="card grid gap-4 p-4 sm:grid-cols-[auto_1fr] sm:gap-6 sm:p-6" aria-label={t("ملخص التقييمات")}>
         <div className="text-center sm:min-w-[140px]">
           <p className="text-4xl font-extrabold tabular-nums text-slate-900">{summary.avgRating.toFixed(1)}</p>
           <div className="mt-1 flex justify-center">
             <Stars value={summary.avgRating} size="h-5 w-5" />
           </div>
           <p className="mt-1 text-sm text-slate-600">
-            {summary.reviewsCount > 0 ? `${summary.reviewsCount} تقييم` : "لا توجد تقييمات بعد"}
+            {summary.reviewsCount > 0 ? t("{0} تقييم", { "0": summary.reviewsCount }) : t("لا توجد تقييمات بعد")}
           </p>
-          {summary.withCommentCount > 0 && <p className="text-xs text-slate-500">{summary.withCommentCount} منها بتعليق</p>}
+          {summary.withCommentCount > 0 && <p className="text-xs text-slate-500">{summary.withCommentCount}{t(" منها بتعليق")}</p>}
         </div>
 
-        <ul className="space-y-1.5" aria-label="توزيع النجوم">
+        <ul className="space-y-1.5" aria-label={t("توزيع النجوم")}>
           {(["5", "4", "3", "2", "1"] as const).map((k) => {
             const n = summary.distribution[k];
             return (
@@ -89,7 +93,7 @@ export default function DoctorReviews() {
       </section>
 
       {data.items.length === 0 ? (
-        <EmptyState title="لا توجد تقييمات بعد" description="تظهر هنا تقييمات المرضى بعد اكتمال مواعيدهم." />
+        <EmptyState title={t("لا توجد تقييمات بعد")} description={t("تظهر هنا تقييمات المرضى بعد اكتمال مواعيدهم.")} />
       ) : (
         <ul className="space-y-3">
           {data.items.map((r) => (
@@ -104,10 +108,10 @@ export default function DoctorReviews() {
                   <span>{r.comment}</span>
                 </p>
               ) : (
-                <p className="mt-2 text-xs text-slate-400">بدون تعليق</p>
+                <p className="mt-2 text-xs text-slate-400">{t("بدون تعليق")}</p>
               )}
               <p className="mt-2 text-xs text-slate-500">
-                {r.patientName} · موعد {formatDay(r.appointmentDate)} الساعة {r.appointmentTime}
+                {r.patientName}{t(" · موعد ")}{formatDay(r.appointmentDate)}{t(" الساعة ")}{r.appointmentTime}
               </p>
             </li>
           ))}

@@ -1,3 +1,4 @@
+import { t, getLocale } from "../i18n/locale.ts";
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
@@ -125,16 +126,16 @@ export function formatMsgTime(iso: string) {
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
   return sameDay
-    ? d.toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString("ar-DZ", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("ar-DZ", { hour: "2-digit", minute: "2-digit" });
+    ? d.toLocaleTimeString(getLocale(), { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString(getLocale(), { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(getLocale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 export function timeAgo(iso: string) {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (s < 60) return "الآن";
+  if (s < 60) return t("الآن");
   const m = Math.floor(s / 60);
-  if (m < 60) return `منذ ${m} دقيقة`;
+  if (m < 60) return t("منذ {0} دقيقة", { "0": m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `منذ ${h} ساعة`;
-  return `منذ ${Math.floor(h / 24)} يوم`;
+  if (h < 24) return t("منذ {0} ساعة", { "0": h });
+  return t("منذ {0} يوم", { "0": Math.floor(h / 24) });
 }

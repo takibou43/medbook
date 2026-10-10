@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale.ts";
 import { timeGroups } from "../../lib/patientPresentation";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -31,6 +33,7 @@ export function DayTimePicker({
   value: DayTimeChoice | null;
   onChange: (v: DayTimeChoice | null) => void;
 }) {
+  useLanguage();
   const [open, setOpen] = useState(Boolean(value));
 
   const days = useQuery({
@@ -58,8 +61,7 @@ export function DayTimePicker({
         onClick={() => setOpen(true)}
         className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary-300 px-4 text-sm font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
-        <CalendarDays className="h-4 w-4" aria-hidden="true" /> أفضّل اختيار يوم أو وقت آخر (اختياري)
-        <ChevronDown className="h-4 w-4" aria-hidden="true" />
+        <CalendarDays className="h-4 w-4" aria-hidden="true" />{t(" أفضّل اختيار يوم أو وقت آخر (اختياري) ")}<ChevronDown className="h-4 w-4" aria-hidden="true" />
       </button>
     );
   }
@@ -70,9 +72,7 @@ export function DayTimePicker({
   return (
     <div className="mt-4 rounded-2xl border border-slate-200 bg-white/70 p-4" aria-labelledby="pick-day-title">
       <div className="flex items-center justify-between gap-2">
-        <p id="pick-day-title" className="font-bold text-slate-800">
-          اختر اليوم (اختياري)
-        </p>
+        <p id="pick-day-title" className="font-bold text-slate-800">{t("اختر اليوم (اختياري) ")}</p>
         <button
           type="button"
           onClick={() => {
@@ -81,22 +81,19 @@ export function DayTimePicker({
           }}
           className="inline-flex min-h-[48px] items-center gap-1 rounded-lg px-2 text-xs font-semibold text-slate-500 hover:bg-slate-100"
         >
-          <X className="h-3.5 w-3.5" aria-hidden="true" /> العودة إلى أقرب موعد
-        </button>
+          <X className="h-3.5 w-3.5" aria-hidden="true" />{t(" العودة إلى أقرب موعد ")}</button>
       </div>
 
       {days.isLoading ? (
-        <p className="mt-3 text-sm text-slate-500" role="status">
-          جارٍ تحميل الأيام المتاحة...
-        </p>
+        <p className="mt-3 text-sm text-slate-500" role="status">{t("جارٍ تحميل الأيام المتاحة... ")}</p>
       ) : days.isError ? (
         <div className="mt-3">
-          <InlineError title="تعذّر تحميل الأيام المتاحة." message={bookingError(days.error).message} onRetry={() => days.refetch()} />
+          <InlineError title={t("تعذّر تحميل الأيام المتاحة.")} message={bookingError(days.error).message} onRetry={() => days.refetch()} />
         </div>
       ) : dayList.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">لا توجد أيام متاحة لدى هذا الطبيب حاليًا.</p>
+        <p className="mt-3 text-sm text-slate-500">{t("لا توجد أيام متاحة لدى هذا الطبيب حاليًا.")}</p>
       ) : (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="الأيام المتاحة">
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="group" aria-label={t("الأيام المتاحة")}>
           {dayList.map((d) => {
             const selected = value?.date === d.date;
             return (
@@ -111,7 +108,7 @@ export function DayTimePicker({
                 }`}
               >
                 <span className="block font-bold">{formatLongDate(d.date)}</span>
-                <span className={`block text-xs ${selected ? "text-primary-50" : "text-slate-500"}`}>{d.freeCount} وقت متاح</span>
+                <span className={`block text-xs ${selected ? "text-primary-50" : "text-slate-500"}`}>{d.freeCount}{t(" وقت متاح")}</span>
               </button>
             );
           })}
@@ -121,20 +118,17 @@ export function DayTimePicker({
       {value?.date && (
         <div className="mt-4">
           <p className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
-            <Clock className="h-4 w-4" aria-hidden="true" /> الوقت (اختياري)
-          </p>
+            <Clock className="h-4 w-4" aria-hidden="true" />{t(" الوقت (اختياري) ")}</p>
           {slots.isLoading ? (
-            <p className="mt-2 text-sm text-slate-500" role="status">
-              جارٍ تحميل الأوقات...
-            </p>
+            <p className="mt-2 text-sm text-slate-500" role="status">{t("جارٍ تحميل الأوقات... ")}</p>
           ) : slots.isError ? (
             <div className="mt-2">
-              <InlineError title="تعذّر تحميل الأوقات." message={bookingError(slots.error).message} onRetry={() => slots.refetch()} />
+              <InlineError title={t("تعذّر تحميل الأوقات.")} message={bookingError(slots.error).message} onRetry={() => slots.refetch()} />
             </div>
           ) : timeList.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-500">لم يعد في هذا اليوم وقت متاح. اختر يومًا آخر.</p>
+            <p className="mt-2 text-sm text-slate-500">{t("لم يعد في هذا اليوم وقت متاح. اختر يومًا آخر.")}</p>
           ) : (
-            <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6" role="group" aria-label="الأوقات المتاحة">
+            <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6" role="group" aria-label={t("الأوقات المتاحة")}>
               <button
                 type="button"
 
@@ -143,11 +137,10 @@ export function DayTimePicker({
                 className={`col-span-4 min-h-[44px] rounded-xl border px-2 text-sm font-semibold sm:col-span-6 ${
                   value.startTime === null ? "border-primary-600 bg-primary-50 text-primary-800" : "border-slate-200 bg-white text-slate-700"
                 }`}
-              >
-                أول وقت متاح في هذا اليوم ({timeList[0]})
+              >{t("أول وقت متاح في هذا اليوم (")}{timeList[0]})
               </button>
               {timeGroups(timeList).map(group => <details key={group.label} open={Boolean(value.startTime && group.times.includes(value.startTime)) || undefined} className="col-span-4 rounded-xl border border-slate-200 p-2 sm:col-span-6">
-                <summary className="flex min-h-[48px] cursor-pointer items-center font-semibold">{group.label} ({group.times.length} وقتًا)</summary>
+                <summary className="flex min-h-[48px] cursor-pointer items-center font-semibold">{t(group.label)} ({group.times.length}{t(" وقتًا)")}</summary>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
               {group.times.map((t) => {
                 const selected = value.startTime === t;

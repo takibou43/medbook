@@ -1,3 +1,5 @@
+import { useLanguage } from "../i18n/LanguageRoot";
+import { t, catalogName } from "../i18n/locale.ts";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -27,6 +29,7 @@ interface DoctorForm {
 }
 
 export default function Register() {
+  useLanguage();
   const { registerDoctor } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -48,7 +51,7 @@ export default function Register() {
       const r = await api.post("/doctor/referrals/validate-code", { code: c });
       const valid = Boolean(r.data?.data?.valid);
       setReferralState(valid ? "valid" : "invalid");
-      if (!valid) doctorForm.setError("referralCode", { message: "كود الإحالة غير صحيح. صحّحه أو احذفه لإكمال التسجيل." });
+      if (!valid) doctorForm.setError("referralCode", { message: t("كود الإحالة غير صحيح. صحّحه أو احذفه لإكمال التسجيل.") });
     } catch {
       setReferralState("idle"); // تعذّر التحقق الآن — الخادم سيتحقق عند التسجيل.
     }
@@ -59,7 +62,7 @@ export default function Register() {
     try {
       const referralCode = (values.referralCode ?? "").trim();
       await registerDoctor({ ...values, referralCode: referralCode || undefined, yearsExperience: Number(values.yearsExperience) });
-      showToast("تم إنشاء الحساب! ملفك قيد المراجعة من الإدارة قبل الظهور للمرضى.", "success");
+      showToast(t("تم إنشاء الحساب! ملفك قيد المراجعة من الإدارة قبل الظهور للمرضى."), "success");
       navigate("/");
     } catch (err) {
       // كود إحالة غير صحيح: الخطأ بجانب الحقل نفسه (لا يُنشأ الحساب حتى يُصحَّح الكود أو يُحذف).
@@ -73,7 +76,7 @@ export default function Register() {
         setAccountExists(true);
         return;
       }
-      showToast(apiErrorMessage(err, "تعذّر إنشاء الحساب."), "error");
+      showToast(apiErrorMessage(err, t("تعذّر إنشاء الحساب.")), "error");
     } finally {
       setLoading(false);
     }
@@ -86,44 +89,40 @@ export default function Register() {
       <div className="w-full max-w-lg">
         <div className="mb-6 flex flex-col items-center">
           <Logo className="mb-2 h-14 w-14" />
-          <h1 className="text-xl font-extrabold text-slate-900">انضم كطبيب في MedBook</h1>
-          <a href="/register/clinic" className="mt-2 font-semibold text-primary-700 hover:underline">صاحب عيادة؟ سجّل عيادتك وأطباءها</a>
-          <p className="mt-2 text-sm text-slate-600">اشتراك الطبيب المستقل: 5,000 دج شهريًا، شامل حسابات المساعدين.</p>
-          <p className="mt-1 text-center text-sm text-slate-500">
-            مرضاك يحجزون معك مباشرة بدون حاجة لإنشاء حساب — أنت فقط من يحتاج تسجيل الدخول لإدارة مواعيدك.
-          </p>
+          <h1 className="text-xl font-extrabold text-slate-900">{t("انضم كطبيب في MedBook")}</h1>
+          <a href="/register/clinic" className="mt-2 font-semibold text-primary-700 hover:underline">{t("صاحب عيادة؟ سجّل عيادتك وأطباءها")}</a>
+          <p className="mt-2 text-sm text-slate-600">{t("اشتراك الطبيب المستقل: 5,000 دج شهريًا، شامل حسابات المساعدين.")}</p>
+          <p className="mt-1 text-center text-sm text-slate-500">{t("مرضاك يحجزون معك مباشرة بدون حاجة لإنشاء حساب — أنت فقط من يحتاج تسجيل الدخول لإدارة مواعيدك. ")}</p>
         </div>
 
         {accountExists && (
-          <div role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-            هذا البريد الإلكتروني أو رقم الهاتف مسجّل بالفعل. لن ننشئ حسابًا ثانيًا.{" "}
-            <a href="/login" className="font-bold underline">سجّل الدخول إلى حسابك</a>
-            {" "}ثم أضف ملف الطبيب من داخله (إن كان حساب مريض) دون أي تغيير في كلمة مرورك.
-          </div>
+          <div role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">{t("هذا البريد الإلكتروني أو رقم الهاتف مسجّل بالفعل. لن ننشئ حسابًا ثانيًا.")}{" "}
+            <a href="/login" className="font-bold underline">{t("سجّل الدخول إلى حسابك")}</a>
+            {" "}{t("ثم أضف ملف الطبيب من داخله (إن كان حساب مريض) دون أي تغيير في كلمة مرورك. ")}</div>
         )}
         <form onSubmit={doctorForm.handleSubmit(onSubmitDoctor)} className="card space-y-4 p-6">
           <div className="grid grid-cols-2 gap-3">
-            <Input label="الاسم" error={doctorForm.formState.errors.firstName?.message} {...doctorForm.register("firstName", { required: "مطلوب" })} />
-            <Input label="اللقب" error={doctorForm.formState.errors.lastName?.message} {...doctorForm.register("lastName", { required: "مطلوب" })} />
+            <Input label={t("الاسم")} error={doctorForm.formState.errors.firstName?.message} {...doctorForm.register("firstName", { required: t("مطلوب") })} />
+            <Input label={t("اللقب")} error={doctorForm.formState.errors.lastName?.message} {...doctorForm.register("lastName", { required: t("مطلوب") })} />
           </div>
-          <Input label="البريد الإلكتروني" type="email" error={doctorForm.formState.errors.email?.message} {...doctorForm.register("email", { required: "مطلوب" })} />
-          <Input label="رقم الهاتف" error={doctorForm.formState.errors.phone?.message} {...doctorForm.register("phone")} />
-          <SpecialtyInput error={doctorForm.formState.errors.specialtyName?.message} {...doctorForm.register("specialtyName", { required: "مطلوب" })} />
+          <Input label={t("البريد الإلكتروني")} type="email" error={doctorForm.formState.errors.email?.message} {...doctorForm.register("email", { required: t("مطلوب") })} />
+          <Input label={t("رقم الهاتف")} error={doctorForm.formState.errors.phone?.message} {...doctorForm.register("phone")} />
+          <SpecialtyInput error={doctorForm.formState.errors.specialtyName?.message} {...doctorForm.register("specialtyName", { required: t("مطلوب") })} />
           <div className="grid grid-cols-2 gap-3">
             <Select
-              label="الولاية"
+              label={t("الولاية")}
               error={doctorForm.formState.errors.wilayaId?.message}
-              {...doctorForm.register("wilayaId", { required: "مطلوب", onChange: (e) => setSelectedWilaya(e.target.value) })}
+              {...doctorForm.register("wilayaId", { required: t("مطلوب"), onChange: (e) => setSelectedWilaya(e.target.value) })}
             >
-              <option value="">اختر</option>
+              <option value="">{t("اختر")}</option>
               {wilayas?.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.nameAr}
+                  {catalogName(w)}
                 </option>
               ))}
             </Select>
-            <Select label="المدينة" error={doctorForm.formState.errors.cityId?.message} {...doctorForm.register("cityId", { required: "مطلوب" })}>
-              <option value="">اختر</option>
+            <Select label={t("المدينة")} error={doctorForm.formState.errors.cityId?.message} {...doctorForm.register("cityId", { required: t("مطلوب") })}>
+              <option value="">{t("اختر")}</option>
               {cities.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.nameAr}
@@ -131,10 +130,10 @@ export default function Register() {
               ))}
             </Select>
           </div>
-          <Input label="سنوات الخبرة" type="number" min={0} {...doctorForm.register("yearsExperience")} />
+          <Input label={t("سنوات الخبرة")} type="number" min={0} {...doctorForm.register("yearsExperience")} />
           <div>
             <Input
-              label="كود دعوة من زميل (اختياري)"
+              label={t("كود دعوة من زميل (اختياري)")}
               placeholder="MB-XXXXXXXX"
               dir="ltr"
               autoCapitalize="characters"
@@ -142,30 +141,23 @@ export default function Register() {
               error={doctorForm.formState.errors.referralCode?.message as string | undefined}
               {...doctorForm.register("referralCode", { onBlur: (e) => checkReferral(e.target.value), onChange: () => setReferralState("idle") })}
             />
-            {referralState === "valid" && <p className="mt-1 text-xs text-emerald-700">كود صحيح ✓</p>}
+            {referralState === "valid" && <p className="mt-1 text-xs text-emerald-700">{t("كود صحيح ✓")}</p>}
             {referralState === "invalid" && (
-              <button type="button" className="mt-1 text-xs font-semibold text-primary-700 underline" onClick={() => { doctorForm.setValue("referralCode", ""); doctorForm.clearErrors("referralCode"); setReferralState("idle"); }}>
-                حذف الكود والتسجيل بدونه
-              </button>
+              <button type="button" className="mt-1 text-xs font-semibold text-primary-700 underline" onClick={() => { doctorForm.setValue("referralCode", ""); doctorForm.clearErrors("referralCode"); setReferralState("idle"); }}>{t("حذف الكود والتسجيل بدونه ")}</button>
             )}
           </div>
           <Input
-            label="كلمة المرور"
+            label={t("كلمة المرور")}
             type="password"
             error={doctorForm.formState.errors.password?.message}
-            {...doctorForm.register("password", { required: "مطلوب", minLength: { value: 8, message: "8 خانات على الأقل" } })}
+            {...doctorForm.register("password", { required: t("مطلوب"), minLength: { value: 8, message: t("8 خانات على الأقل") } })}
           />
-          <p className="text-xs text-slate-500">ملاحظة: يخضع حساب الطبيب لمراجعة الإدارة قبل الظهور للمرضى في نتائج البحث.</p>
-          <Button type="submit" className="w-full" loading={loading}>
-            إنشاء الحساب
-          </Button>
+          <p className="text-xs text-slate-500">{t("ملاحظة: يخضع حساب الطبيب لمراجعة الإدارة قبل الظهور للمرضى في نتائج البحث.")}</p>
+          <Button type="submit" className="w-full" loading={loading}>{t("إنشاء الحساب ")}</Button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-slate-600">
-          هل لديك حساب بالفعل؟{" "}
-          <a href="/login" className="font-semibold text-primary-700 hover:underline">
-            تسجيل الدخول
-          </a>
+        <p className="mt-4 text-center text-sm text-slate-600">{t("هل لديك حساب بالفعل؟")}{" "}
+          <a href="/login" className="font-semibold text-primary-700 hover:underline">{t("تسجيل الدخول ")}</a>
         </p>
       </div>
     </div>

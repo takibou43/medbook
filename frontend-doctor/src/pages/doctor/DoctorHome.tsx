@@ -1,3 +1,4 @@
+import { CurrentPatientPlansModal } from "./DoctorTreatmentPlans";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, getLanguage } from "../../i18n/locale.ts";
 import { canSendAttendanceMessage } from "../../lib/assistantReception";
@@ -193,6 +194,7 @@ export default function DoctorHome() {
   const callPatient = useCallPatient();
   const markLate = useMarkLate();
 
+  const [planSubject, setPlanSubject] = useState<{ patientId: string; memberId: string; name: string } | null>(null);
   const [search, setSearch] = useState("");
   const [menuId, setMenuId] = useState<string | null>(null);
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
@@ -300,6 +302,7 @@ export default function DoctorHome() {
   return (
     <div className="space-y-5">
       <NoShowSmsDialog target={noShowTarget} onClose={() => setNoShowTarget(null)} />
+      {planSubject && <CurrentPatientPlansModal {...planSubject} onClose={() => setPlanSubject(null)} />}
       <FollowUpModal open={Boolean(followUpCtx)} ctx={followUpCtx} onClose={() => setFollowUpCtx(null)} onDone={refreshAll} />
 
       {/* ترحيب */}
@@ -374,7 +377,7 @@ export default function DoctorHome() {
             )}
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {current?.patientId && isDentalSpecialty(user?.doctor?.specialty) && <Link className="btn-outline flex-1" to={`/treatment-plans?${new URLSearchParams({ patient: current.patientId, member: current.familyMemberId ?? current.beneficiary?.familyMemberId ?? "" })}`}>{t("خطط العلاج")}</Link>}
+              {current?.patientId && isDentalSpecialty(user?.doctor?.specialty) && <Button className="flex-1" variant="outline" onClick={() => setPlanSubject({ patientId: current.patientId!, memberId: current.familyMemberId ?? current.beneficiary?.familyMemberId ?? "", name: beneficiaryName(current) })}>{t("خطط العلاج")}</Button>}
               {current && (
                 <Button
                   className="flex-1"

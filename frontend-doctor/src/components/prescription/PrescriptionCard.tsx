@@ -242,13 +242,13 @@ export function PrescriptionCard({
             <span className="mt-1 block text-xs text-slate-500">{t("تغيير لغة الوصفة لا يغيّر لغة لوحة الطبيب أو النصوص التي كتبتها.")}</span>
           </label>
           <details className="rounded-xl border border-slate-200 p-3">
-            <summary className="cursor-pointer text-sm font-semibold">{t("بيانات مهنية اختيارية لهذه الوصفة")}</summary>
+            <summary className="min-h-11 cursor-pointer content-center text-sm font-semibold">{t("بيانات مهنية اختيارية لهذه الوصفة")}</summary>
             <p className="my-2 text-xs text-slate-600">{t("تُطبق على لغة الوصفة المختارة فقط. اترك الحقول فارغة لاستخدام البيانات الأصلية. لا تُحفظ في الملف المهني ولا تُترجم الأسماء تلقائيًا.")}</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {([{ key: "doctorName", label: "اسم الطبيب للطباعة" }, { key: "clinicName", label: "اسم العيادة للطباعة" }, { key: "address", label: "العنوان للطباعة" }] as const).map(field => (
                 <label key={field.key} className="block text-xs">
                   <span className="mb-1 block">{t(field.label)}</span>
-                  <input className="input" dir="auto" value={draft.professional?.[draft.printLanguage ?? "ar"]?.[field.key] ?? ""} onChange={e => {
+                  <input className="input" dir="auto" translate="no" value={draft.professional?.[draft.printLanguage ?? "ar"]?.[field.key] ?? ""} onChange={e => {
                     const lang = draft.printLanguage ?? "ar";
                     patch({ professional: { ...draft.professional, [lang]: { ...draft.professional?.[lang], [field.key]: e.target.value } } });
                   }} />
@@ -272,6 +272,8 @@ export function PrescriptionCard({
               <span className="mb-1 block text-xs font-medium text-slate-600">{t("اسم المريض على الوصفة")}</span>
               <input
                 className="input py-2 text-base font-bold"
+                dir="auto"
+                translate="no"
                 value={draft.patientName}
                 onChange={(e) => patch({ patientName: e.target.value })}
                 autoComplete="off"
@@ -352,7 +354,10 @@ export function PrescriptionCard({
 
           {errors.length > 0 && (
             <ul role="alert" className="space-y-1 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-              {errors.map((e) => <li key={e}>{e}</li>)}
+              {errors.map((e) => {
+                const medication = /^الدواء رقم (\d+): (.+)$/.exec(e);
+                return <li key={e}>{medication ? `${t("الدواء رقم {n}", { n: medication[1] })}: ${t(medication[2])}` : t(e)}</li>;
+              })}
             </ul>
           )}
 
@@ -360,7 +365,7 @@ export function PrescriptionCard({
             <Button type="submit" className="flex-1 sm:flex-none">
               <Eye className="h-4 w-4" aria-hidden="true" /> {t("معاينة وطباعة")}
             </Button>
-            <button type="button" onClick={clearAll} disabled={!dirty} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-red-700 disabled:opacity-40">
+            <button type="button" onClick={clearAll} disabled={!dirty} className="min-h-11 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-red-700 disabled:opacity-40">
               {t("مسح الوصفة")}
             </button>
           </div>

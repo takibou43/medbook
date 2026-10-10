@@ -120,17 +120,22 @@ body {
    حتى يظهر أثر التمويه (لا حركة مستمرة). بديل ثابت عند غياب دعم backdrop-filter. */
 .app-glass-bg {
   background-color: #f3f8f8;
+  /* تدرّجات ثابتة خلف القائمة فقط (يمين في RTL، يسار في LTR) حتى تظهر شفافية الزجاج. */
   background-image:
-    radial-gradient(42rem 30rem at 100% 0%, rgba(63, 185, 172, 0.22), transparent 60%),
-    radial-gradient(36rem 28rem at 0% 100%, rgba(56, 152, 214, 0.16), transparent 60%),
-    radial-gradient(30rem 24rem at 100% 100%, rgba(33, 158, 146, 0.12), transparent 60%);
+    radial-gradient(26rem 34rem at 100% 8%, rgba(33, 158, 146, 0.55), transparent 65%),
+    radial-gradient(24rem 30rem at 100% 92%, rgba(15, 61, 92, 0.45), transparent 65%);
   background-attachment: fixed;
+}
+[dir="ltr"] .app-glass-bg {
+  background-image:
+    radial-gradient(26rem 34rem at 0% 8%, rgba(33, 158, 146, 0.55), transparent 65%),
+    radial-gradient(24rem 30rem at 0% 92%, rgba(15, 61, 92, 0.45), transparent 65%);
 }
 .glass-sidebar {
   /* زجاج داكن شفاف بألوان مادبوك (فيروزي عميق ← كحلي الشعار) مع لمعة علوية وحد أبيض رقيق. */
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 60%),
-    linear-gradient(165deg, rgba(10, 64, 66, 0.86) 0%, rgba(12, 46, 70, 0.88) 100%);
+    linear-gradient(165deg, rgba(10, 64, 66, 0.6) 0%, rgba(12, 46, 70, 0.64) 100%);
   border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow:
     0 24px 50px -22px rgba(2, 6, 23, 0.55),

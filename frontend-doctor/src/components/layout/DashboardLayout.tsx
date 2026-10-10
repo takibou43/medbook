@@ -130,19 +130,19 @@ export function DashboardLayout({
 
   const renderNav = (compact: boolean, onNavigate?: () => void) => (
     <>
-      {!compact && !main[0]?.group && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-primary-200/70">القائمة</p>}
+      {!compact && !main[0]?.group && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">القائمة</p>}
       <ul className="space-y-1" role="list">
         {main.map((item, index) => (
           <li key={item.to}>
             {item.group && item.group !== main[index - 1]?.group && (
               compact
                 ? <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
-                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-primary-200/70">{item.group}</p></>
+                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{item.group}</p></>
             )}
             {index === settingsStart && settingsStart < main.length && (
               compact
                 ? <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
-                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-primary-200/70">الإدارة والإعدادات</p></>
+                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">الإدارة والإعدادات</p></>
             )}
             <SidebarLink item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
           </li>
@@ -154,7 +154,7 @@ export function DashboardLayout({
   const renderFooter = (compact: boolean, onNavigate?: () => void) => (
     <div className="space-y-1">
       <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
-      {!compact && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-primary-200/70">عام</p>}
+      {!compact && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">عام</p>}
       {footer.map((item) => (
         <SidebarLink key={item.to} item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
       ))}
@@ -170,7 +170,7 @@ export function DashboardLayout({
           type="button"
           onClick={handleLogout}
           aria-label={compact ? "تسجيل الخروج" : undefined}
-          className={clsx(itemBase, "text-rose-300 hover:bg-white/10 hover:text-rose-200", compact && "justify-center px-0")}
+          className={clsx(itemBase, "text-rose-100 hover:bg-white/10 hover:text-white", compact && "justify-center px-0")}
         >
           <span className={iconChip}><LogOut className="h-4 w-4" aria-hidden /></span>
           {!compact && <span className="truncate">تسجيل الخروج</span>}
@@ -225,7 +225,7 @@ export function DashboardLayout({
       </span>
       <div className={clsx("min-w-0", compact && "sr-only")}>
         <p className="truncate text-sm font-bold text-white">{account.name}</p>
-        <p className="truncate text-xs text-slate-400">{subtitle ?? `${account.role} · ${title}`}</p>
+        <p className="truncate text-xs text-white/80">{subtitle ?? `${account.role} · ${title}`}</p>
       </div>
     </div>
   );
@@ -236,7 +236,7 @@ export function DashboardLayout({
       <aside
         aria-label="القائمة الجانبية"
         className={clsx(
-          "glass-sidebar sticky top-3 z-30 m-3 hidden h-[calc(100vh-1.5rem)] shrink-0 flex-col rounded-3xl text-slate-200 md:flex",
+          "glass-sidebar sticky top-3 z-30 m-3 hidden h-[calc(100vh-1.5rem)] shrink-0 flex-col rounded-3xl text-slate-100 [text-shadow:0_1px_2px_rgba(2,6,23,0.35)] md:flex",
           "transition-[width] duration-200 ease-out motion-reduce:transition-none",
           collapsed ? "w-[76px]" : "w-[264px]"
         )}
@@ -306,7 +306,7 @@ export function DashboardLayout({
           aria-modal="true"
           aria-label="القائمة"
           className={clsx(
-            "glass-sidebar fixed inset-y-2 start-2 z-50 flex w-[min(288px,calc(100vw-3rem))] flex-col rounded-3xl text-slate-200 md:hidden",
+            "glass-sidebar fixed inset-y-2 start-2 z-50 flex w-[min(288px,calc(100vw-3rem))] flex-col rounded-3xl text-slate-100 [text-shadow:0_1px_2px_rgba(2,6,23,0.35)] md:hidden",
             "transition-transform duration-200 ease-out motion-reduce:transition-none",
             mobileMenuOpen ? "translate-x-0" : "ltr:-translate-x-[110%] rtl:translate-x-[110%]"
           )}
@@ -374,7 +374,7 @@ export function DashboardLayout({
 
 const itemBase =
   "relative flex min-h-[44px] w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium transition-colors duration-200 motion-reduce:transition-none";
-const itemIdle = "text-slate-200 hover:bg-white/[0.08] hover:text-white";
+const itemIdle = "text-white/95 hover:bg-white/[0.08] hover:text-white";
 /** الأيقونة داخل دائرة صغيرة شفافة كما في المرجع المرئي. */
 const iconChip = "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.08] ring-1 ring-white/10";
 

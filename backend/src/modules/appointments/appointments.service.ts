@@ -819,8 +819,8 @@ export async function callSpecificPatient(doctorUserId: string, appointmentId: s
     await assertReception(doctorUserId, role, doctor.id, tx);
     const profile = await tx.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
     if (!profile.dutyEndsAt || profile.dutyEndsAt <= new Date()) throw ApiError.badRequest("الطبيب خارج المداومة.");
-    if (role === Role.ASSISTANT && !profile.queueRequestedAt) throw ApiError.badRequest("انتظر طلب الطبيب للمريض التالي.");
     if (await tx.appointment.findFirst({ where: { doctorId: doctor.id, status: AppointmentStatus.IN_PROGRESS } })) throw ApiError.conflict("هناك مريض بالداخل الآن.");
+    if (role === Role.ASSISTANT && !profile.queueRequestedAt) throw ApiError.badRequest("انتظر طلب الطبيب للمريض التالي.");
     const rows = await tx.appointment.findMany({ where: { doctorId: doctor.id, date: todayRangeUTC(), status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] } } });
     const next = firstPresent(rows);
     if (!next || next.id !== appointmentId) throw ApiError.conflict("يجب إدخال أول مريض حاضر حسب وقت الموعد. حدّث القائمة.");

@@ -130,18 +130,19 @@ export function DashboardLayout({
 
   const renderNav = (compact: boolean, onNavigate?: () => void) => (
     <>
+      {!compact && !main[0]?.group && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-primary-200/70">القائمة</p>}
       <ul className="space-y-1" role="list">
         {main.map((item, index) => (
           <li key={item.to}>
             {item.group && item.group !== main[index - 1]?.group && (
               compact
-                ? <div className="mx-3 my-2 border-t border-white/10" aria-hidden />
-                : <p className="px-3 pb-1.5 pt-4 text-[11px] font-bold tracking-wide text-slate-300/90">{item.group}</p>
+                ? <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
+                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-primary-200/70">{item.group}</p></>
             )}
             {index === settingsStart && settingsStart < main.length && (
               compact
-                ? <div className="mx-3 my-2 border-t border-white/10" aria-hidden />
-                : <p className="px-3 pb-1.5 pt-4 text-[11px] font-bold text-slate-300/90">الإدارة والإعدادات</p>
+                ? <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
+                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-primary-200/70">الإدارة والإعدادات</p></>
             )}
             <SidebarLink item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
           </li>
@@ -151,7 +152,9 @@ export function DashboardLayout({
   );
 
   const renderFooter = (compact: boolean, onNavigate?: () => void) => (
-    <div className="space-y-1 border-t border-white/10 pt-3">
+    <div className="space-y-1">
+      <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
+      {!compact && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-primary-200/70">عام</p>}
       {footer.map((item) => (
         <SidebarLink key={item.to} item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
       ))}
@@ -167,9 +170,9 @@ export function DashboardLayout({
           type="button"
           onClick={handleLogout}
           aria-label={compact ? "تسجيل الخروج" : undefined}
-          className={clsx(itemBase, "text-rose-200 hover:bg-rose-500/15 hover:text-white", compact && "justify-center px-0")}
+          className={clsx(itemBase, "text-rose-300 hover:bg-white/10 hover:text-rose-200", compact && "justify-center px-0")}
         >
-          <LogOut className="h-[18px] w-[18px] shrink-0" aria-hidden />
+          <span className={iconChip}><LogOut className="h-4 w-4" aria-hidden /></span>
           {!compact && <span className="truncate">تسجيل الخروج</span>}
         </button>
         {compact && <Tip>تسجيل الخروج</Tip>}
@@ -179,7 +182,7 @@ export function DashboardLayout({
 
   const renderClinicSwitch = (compact: boolean, onNavigate?: () => void) =>
     clinicMode && (
-      <div className={clsx("mt-3 flex gap-1.5 rounded-2xl bg-white/5 p-1.5 text-sm", compact && "flex-col")}>
+      <div className={clsx("mt-3 flex gap-1.5 rounded-2xl border border-white/10 bg-white/[0.06] p-1.5 text-sm", compact && "flex-col")}>
         {[
           { to: "/", label: "وضع الطبيب", icon: Stethoscope, end: true },
           { to: "/clinic", label: "إدارة العيادة", icon: Building2, end: false },
@@ -193,7 +196,7 @@ export function DashboardLayout({
               className={({ isActive }) =>
                 clsx(
                   "flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-semibold transition-colors duration-200 motion-reduce:transition-none",
-                  isActive ? "bg-white/15 text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  isActive ? "bg-primary-500 text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"
                 )
               }
             >
@@ -210,36 +213,36 @@ export function DashboardLayout({
     <div
       className={clsx(
         "mt-4 flex items-center gap-3 rounded-2xl",
-        compact ? "justify-center" : "border border-white/10 bg-white/[0.06] p-2.5"
+        compact ? "justify-center" : "border border-white/10 bg-white/[0.07] p-2.5"
       )}
       title={compact ? `${account.name} — ${account.role}` : undefined}
     >
       <span
         aria-hidden
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-sky-600 text-sm font-bold text-white ring-2 ring-white/20"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-sky-600 text-sm font-bold text-white ring-2 ring-white/30"
       >
         {account.initials}
       </span>
       <div className={clsx("min-w-0", compact && "sr-only")}>
         <p className="truncate text-sm font-bold text-white">{account.name}</p>
-        <p className="truncate text-xs text-slate-300">{subtitle ?? `${account.role} · ${title}`}</p>
+        <p className="truncate text-xs text-slate-400">{subtitle ?? `${account.role} · ${title}`}</p>
       </div>
     </div>
   );
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="app-glass-bg flex min-h-screen">
       {/* ===== الحاسوب: لوحة زجاجية عائمة ===== */}
       <aside
         aria-label="القائمة الجانبية"
         className={clsx(
-          "glass-sidebar sticky top-3 z-30 m-3 hidden h-[calc(100vh-1.5rem)] shrink-0 flex-col rounded-3xl text-slate-100 md:flex",
+          "glass-sidebar sticky top-3 z-30 m-3 hidden h-[calc(100vh-1.5rem)] shrink-0 flex-col rounded-3xl text-slate-200 md:flex",
           "transition-[width] duration-200 ease-out motion-reduce:transition-none",
           collapsed ? "w-[76px]" : "w-[264px]"
         )}
       >
         <div className={clsx("relative flex h-16 shrink-0 items-center gap-2.5 px-4", collapsed && "justify-center px-0")}>
-          <Logo className="h-9 w-9 shrink-0 drop-shadow" />
+          <Logo className="h-9 w-9 shrink-0" />
           {!collapsed && <span className="truncate text-lg font-extrabold tracking-tight text-white">MedBook</span>}
           <button
             type="button"
@@ -247,7 +250,7 @@ export function DashboardLayout({
             aria-expanded={!collapsed}
             aria-label={collapsed ? "توسيع القائمة الجانبية" : "طي القائمة الجانبية"}
             title={collapsed ? "توسيع القائمة" : "طي القائمة"}
-            className="absolute -end-3.5 top-5 flex h-7 w-7 items-center justify-center rounded-full border border-white/25 bg-[#12355a] text-white shadow-lg transition-colors duration-200 hover:bg-primary-600 motion-reduce:transition-none"
+            className="absolute -end-3.5 top-5 flex h-7 w-7 items-center justify-center rounded-full border border-white/30 bg-[#0f3d5c] text-white shadow-lg transition-colors duration-200 hover:bg-primary-500 motion-reduce:transition-none"
           >
             {/* السهم يشير لاتجاه الحركة: نحو حافة الشاشة عند الطي، ويُعكس في RTL. */}
             <ChevronLeft
@@ -271,7 +274,7 @@ export function DashboardLayout({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* ===== الهاتف: شريط علوي + قائمة منزلقة ===== */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur md:hidden">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/70 bg-white/70 px-4 backdrop-blur-md md:hidden">
           <div className="flex min-w-0 items-center gap-2 text-primary-700">
             <Logo className="h-8 w-8 shrink-0" />
             <span className="truncate text-lg font-extrabold">MedBook</span>
@@ -292,7 +295,7 @@ export function DashboardLayout({
           aria-hidden
           onClick={() => closeMobileMenu()}
           className={clsx(
-            "fixed inset-0 z-40 bg-slate-900/50 transition-opacity duration-200 motion-reduce:transition-none md:hidden",
+            "fixed inset-0 z-40 bg-slate-900/35 backdrop-blur-[2px] transition-opacity duration-200 motion-reduce:transition-none md:hidden",
             mobileMenuOpen ? "opacity-100" : "pointer-events-none opacity-0"
           )}
         />
@@ -303,7 +306,7 @@ export function DashboardLayout({
           aria-modal="true"
           aria-label="القائمة"
           className={clsx(
-            "glass-sidebar fixed inset-y-2 start-2 z-50 flex w-[min(288px,calc(100vw-3rem))] flex-col rounded-3xl text-slate-100 md:hidden",
+            "glass-sidebar fixed inset-y-2 start-2 z-50 flex w-[min(288px,calc(100vw-3rem))] flex-col rounded-3xl text-slate-200 md:hidden",
             "transition-transform duration-200 ease-out motion-reduce:transition-none",
             mobileMenuOpen ? "translate-x-0" : "ltr:-translate-x-[110%] rtl:translate-x-[110%]"
           )}
@@ -371,7 +374,9 @@ export function DashboardLayout({
 
 const itemBase =
   "relative flex min-h-[44px] w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium transition-colors duration-200 motion-reduce:transition-none";
-const itemIdle = "text-slate-200 hover:bg-white/10 hover:text-white";
+const itemIdle = "text-slate-200 hover:bg-white/[0.08] hover:text-white";
+/** الأيقونة داخل دائرة صغيرة شفافة كما في المرجع المرئي. */
+const iconChip = "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.08] ring-1 ring-white/10";
 
 /** تلميح يظهر عند المرور أو التركيز بلوحة المفاتيح (في الوضع المطوي فقط). يظهر في جهة المحتوى. */
 function Tip({ children }: { children: ReactNode }) {
@@ -409,15 +414,15 @@ function SidebarLink({
             itemBase,
             compact && "justify-center px-0",
             active(isActive)
-              ? "bg-primary-600 text-white shadow-[0_6px_18px_-6px_rgba(20,184,166,0.65)] ring-1 ring-white/15"
+              ? clsx("text-white bg-gradient-to-l from-primary-500 to-primary-600 shadow-[0_8px_24px_-10px_rgba(63,185,172,0.9)]", compact ? "-mx-2 !w-[calc(100%+1rem)] rounded-none" : "-mx-3 !w-[calc(100%+1.5rem)] rounded-none px-6")
               : itemIdle
           )
         }
       >
-        <span className="relative flex shrink-0">
-          <item.icon className="h-[18px] w-[18px]" aria-hidden />
+        <span className={clsx(iconChip, "relative")}>
+          <item.icon className="h-4 w-4" aria-hidden />
           {compact && badge && (
-            <span className="absolute -end-2.5 -top-2 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-[#12355a]">
+            <span className="absolute -end-2.5 -top-2 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-[#0f3d5c]">
               {badge}
             </span>
           )}

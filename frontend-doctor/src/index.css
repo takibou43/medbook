@@ -116,14 +116,30 @@ body {
 .admin-actions summary::-webkit-details-marker { display: none; }
 
 /* ===== القائمة الجانبية الزجاجية (DashboardLayout) =====
-   كحلي مائل للأزرق بشفافية معتدلة + تمويه؛ خلفية ثابتة معتمة عند غياب دعم backdrop-filter. */
+   زجاج مصنفر فاتح بلمسة فيروزية متناسقة مع ألوان مادبوك؛ خلف الصفحة تدرّجات ثابتة هادئة
+   حتى يظهر أثر التمويه (لا حركة مستمرة). بديل ثابت عند غياب دعم backdrop-filter. */
+.app-glass-bg {
+  background-color: #f3f8f8;
+  background-image:
+    radial-gradient(42rem 30rem at 100% 0%, rgba(63, 185, 172, 0.22), transparent 60%),
+    radial-gradient(36rem 28rem at 0% 100%, rgba(56, 152, 214, 0.16), transparent 60%),
+    radial-gradient(30rem 24rem at 100% 100%, rgba(33, 158, 146, 0.12), transparent 60%);
+  background-attachment: fixed;
+}
 .glass-sidebar {
-  background: linear-gradient(180deg, rgba(16, 42, 72, 0.9) 0%, rgba(12, 34, 60, 0.92) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 18px 40px -18px rgba(15, 37, 64, 0.55), 0 2px 8px rgba(15, 37, 64, 0.18);
+  /* زجاج داكن شفاف بألوان مادبوك (فيروزي عميق ← كحلي الشعار) مع لمعة علوية وحد أبيض رقيق. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 22%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(165deg, rgba(10, 64, 66, 0.86) 0%, rgba(12, 46, 70, 0.88) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 24px 50px -22px rgba(2, 6, 23, 0.55),
+    0 2px 10px rgba(2, 6, 23, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
   backdrop-filter: blur(18px) saturate(140%);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass-sidebar { background: #10294a; }
+  .glass-sidebar { background: linear-gradient(165deg, #0c3a3d 0%, #0e2c44 100%); }
 }
+

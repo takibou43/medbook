@@ -29,21 +29,9 @@ function patientPhone(a: Appointment): string | null {
   return a.patient?.user?.phone ?? a.guestPhone ?? null;
 }
 
-// "مريض واحد" / "مريضان" / "3 مرضى" / "11 مريضًا" — عدد المرضى الذين يمرّون قبل المتأخر.
-function patientsCount(n: number): string {
-  if (n === 1) return t("مريض واحد");
-  if (n === 2) return t("مريضين");
-  if (n >= 3 && n <= 10) return t("{0} مرضى", { "0": n });
-  return t("{0} مريضًا", { "0": n });
-}
-
-// رسالة ما بعد «متأخر» من رد الخادم نفسه: كم مركزًا تراجع فعلًا (2 أول مرة، ثم 4)، أو أن الضغطة تكرار.
 function lateToast(res: unknown): string {
-  const r = res as { duplicate?: boolean; lateEvent?: { penalty: number; sequence: number } | null } | undefined;
-  if (r?.duplicate) return t("مسجَّل متأخرًا مسبقًا — لم يُحتسب تأخير إضافي.");
-  const penalty = r?.lateEvent?.penalty ?? 2;
-  const seq = r?.lateEvent?.sequence;
-  return t("لم يُسجَّل غيابًا — بقي في الطابور ويعود دوره بعد {0}{1}.", { "0": patientsCount(penalty), "1": seq && seq > 1 ? ` (التأخير رقم ${seq})` : "" });
+  const r = res as { duplicate?: boolean } | undefined;
+  return t(r?.duplicate ? "مسجَّل متأخرًا مسبقًا — لم يُحتسب تأخير إضافي." : "بقي الموعد محفوظًا. عند الحضور تعود الأولوية حسب وقت الموعد.");
 }
 
 // تنبيه صوتي قصير (نغمتان) بلا ملفات صوت — قد يمنعه المتصفح قبل أول لمسة للصفحة، فنتجاهل الفشل بصمت.
@@ -332,7 +320,7 @@ export default function DoctorQueue() {
         </Card>
       ) : (
         <Card className="text-center">
-          <p className="text-sm text-slate-600">{t("لا يوجد مريض بالداخل الآن.")}</p>
+          <p className="text-sm text-slate-600">{t(data?.awaitingAssistant ? "في انتظار تأكيد المساعد" : "لا يوجد مريض بالداخل الآن.")}</p>
           <Button
             className="mt-3 w-full"
             loading={callNext.isPending}
@@ -363,7 +351,6 @@ export default function DoctorQueue() {
           <div className="space-y-2">
             {queueList.map((a, i) => {
               const isLate = a.status === "LATE";
-              const remaining = a.skipCredits ?? 0;
               return (
               <Card key={a.id} className={"flex items-center justify-between gap-3 py-3" + (isLate ? " border-amber-200 bg-amber-50" : "")}>
                 <div className="flex items-center gap-3">
@@ -384,7 +371,7 @@ export default function DoctorQueue() {
                     </p>
                     <p className={"text-xs " + (isLate ? "text-amber-700" : "text-slate-500")}>
                       {a.startTime}
-                      {isLate && (remaining > 0 ? t(" · يعود دوره بعد ") + patientsCount(remaining) : t(" · دوره التالي مباشرة"))}
+                      {isLate && t(" · الأولوية حسب وقت الموعد عند الحضور")}
                       {isLate && a.deferredCount ? t(" · تأخّر ") + a.deferredCount + t(" مرة") : ""}
                     </p>
                   </div>
@@ -396,7 +383,7 @@ export default function DoctorQueue() {
                   ) : (
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || !canManageAttendance}
                       title={t("تسجيل وصول المريض إلى العيادة")}
                       aria-label={t("تسجيل وصول {0}", { "0": patientName(a) })}
                       onClick={() => run(markArrived.mutateAsync(a.id), t("تم تسجيل وصوله."), t("تعذّر تسجيل وصوله."))}
@@ -407,11 +394,11 @@ export default function DoctorQueue() {
                   )}
                   <button
                     type="button"
-                    disabled={busy || Boolean(current)}
+                    disabled={busy || Boolean(current) || !a.arrivedAt || !canManageAttendance || (user?.role === "ASSISTANT" && !data?.awaitingAssistant)}
                     onClick={() => run(callPatient.mutateAsync(a.id), t("تمت مناداته."), t("تعذّرت مناداته."))}
                     className="rounded-lg px-2 py-1 text-xs font-semibold text-primary-600 transition hover:bg-primary-50 disabled:opacity-40"
                   >
-                    {isLate ? t("نادِه الآن") : t("نادِه")}
+                    {t("تأكيد الإدخال")}
                   </button>
                   {canManageAttendance && canSendAttendanceMessage(a) && (
                     <button
@@ -441,13 +428,12 @@ export default function DoctorQueue() {
           </p>
           <div className="space-y-2">
             {late.map((a) => {
-              const remaining = a.skipCredits ?? 0;
               return (
                 <Card key={a.id} className="flex items-center justify-between gap-3 border-amber-200 bg-amber-50 py-3">
                   <div>
                     <p className="font-semibold text-slate-800">{patientName(a)}</p>
                     <p className="text-xs text-amber-700">
-                      {remaining > 0 ? t("يعود دوره بعد ") + patientsCount(remaining) : t("دوره التالي مباشرة")}
+                      {t("الأولوية حسب وقت الموعد عند الحضور")}
                       {a.deferredCount ? t(" · تأجّل ") + a.deferredCount + t(" مرة") : ""}
                     </p>
                   </div>

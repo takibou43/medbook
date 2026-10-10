@@ -289,7 +289,7 @@ export async function processDueReminders(now: Date, stats: ReminderRunStats): P
         // تحقق من الطابور الفعلي في قاعدة البيانات لحظة الإرسال: نفس الطبيب، يوم اليوم، قبل الإغلاق،
         // وضمن المنتظرين (CONFIRMED/LATE) بترتيب المناداة الحالي. تغيّر الترتيب بسبب LATE لا يُلغي التذكير.
         const queue = await loadDoctorDayQueue(prisma, appt.doctorId, now);
-        if (!locateInQueue(queue.rows, appt.id).waiting) {
+        if (queue.closed || !locateInQueue(queue.rows, appt.id).waiting) {
           await finish(r.id, ReminderStatus.SKIPPED, { skipReason: "not_in_queue" });
           stats.skipped += 1;
           continue;

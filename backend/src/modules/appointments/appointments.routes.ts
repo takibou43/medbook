@@ -1,3 +1,6 @@
+import { z } from "zod";
+import { asyncHandler } from "../../utils/asyncHandler";
+import { requestUrgency, decideUrgency } from "./urgency.service";
 import { Router } from "express";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
@@ -38,6 +41,13 @@ router.post("/:id/call", authorize(Role.DOCTOR, Role.ASSISTANT), controller.call
 
 // POST /api/appointments/:id/arrived — تسجيل وصول المريض فعليًا إلى العيادة (اختياري)
 router.post("/:id/arrived", authorize(Role.DOCTOR, Role.ASSISTANT), controller.markArrived);
+
+router.post("/:id/urgency", authorize(Role.DOCTOR, Role.ASSISTANT), validate({ body: z.object({ reason: z.string().trim().min(1).max(500) }) }), asyncHandler(async (req, res) => {
+  res.json({ success: true, data: await requestUrgency(req.user!.id, req.user!.role, req.params.id, req.body.reason) });
+}));
+router.post("/:id/urgency/decision", authorize(Role.DOCTOR), validate({ body: z.object({ approve: z.boolean() }) }), asyncHandler(async (req, res) => {
+  res.json({ success: true, data: await decideUrgency(req.user!.id, req.user!.role, req.params.id, req.body.approve) });
+}));
 
 // PATCH /api/appointments/:id — تغيير الحالة (قبول/رفض/إنهاء/عدم حضور) حسب صلاحية الدور
 router.patch("/:id", validate({ body: updateStatusSchema }), controller.updateStatus);

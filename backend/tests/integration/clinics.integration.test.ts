@@ -372,15 +372,23 @@ describe.skipIf(!url)("Clinic ownership, invitations and shared subscriptions (l
     const headers = bearer(accepted.body.data.accessToken);
     const today = new Date(Date.now() + 3600000).toISOString().slice(0, 10);
     const createWaiting = (doctorId: string, name: string) => db.appointment.create({ data: { doctorId, date: new Date(today + "T00:00:00Z"), startTime: "23:00", endTime: "23:15", status: "CONFIRMED", type: "IN_PERSON", guestFirstName: name, guestLastName: "اختبار", guestPhone: "0550000000" } });
+    await db.doctor.updateMany({where:{id:{in:[firstId,secondId]}},data:{dutyEndsAt:new Date(Date.now()+3600000)}});
+    await db.assistant.update({where:{id:accepted.body.data.user.assistant.id},data:{shiftEndsAt:new Date(Date.now()+3600000)}});
     const [first, second] = await Promise.all([createWaiting(firstId, "مريض الأول"), createWaiting(secondId, "مريض الثاني")]);
     const board = () => request(app).get("/api/assistant/queues").set({ ...headers, "X-Assistant-Doctor-Id": "stale-foreign-selection" });
     expect((await board()).body.data.every((row: { queue: { current: unknown } }) => row.queue.current === null)).toBe(true);
     expect((await request(app).post(`/api/appointments/${second.id}/arrived`).set({ ...headers, "X-Assistant-Doctor-Id": secondId })).status).toBe(200);
+    expect((await request(app).post(`/api/appointments/${first.id}/arrived`).set({ ...headers, "X-Assistant-Doctor-Id": firstId })).status).toBe(200);
     const called = await Promise.all([
       request(app).post("/api/appointments/queue/next").set(bearer(sign({ sub: o.user.id, role: "DOCTOR" }))),
       request(app).post("/api/appointments/queue/next").set(bearer(joined.body.data.accessToken)),
     ]);
     expect(called.map(response => response.status)).toEqual([200, 200]);
+    expect(called.every(r=>r.body.data.awaitingAssistant===true && !r.body.data.id)).toBe(true);
+    const confirmations = await Promise.all(Array.from({ length: 10 }, () => request(app).post(`/api/appointments/${first.id}/call`).set({ ...headers, "X-Assistant-Doctor-Id": firstId })));
+    expect(confirmations.filter(r => r.status === 200)).toHaveLength(1);
+    expect(confirmations.filter(r => r.status === 409)).toHaveLength(9);
+    expect((await request(app).post(`/api/appointments/${second.id}/call`).set({ ...headers, "X-Assistant-Doctor-Id": secondId })).status).toBe(200);
     const response = await board(); expect(response.status).toBe(200);
     expect(response.body.data.map((row: { queue: { current: { id: string } } }) => row.queue.current.id).sort()).toEqual([first.id, second.id].sort());
     const all = await request(app).get(`/api/assistant/appointments?date=${today}`).set(headers);

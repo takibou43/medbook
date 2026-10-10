@@ -51,7 +51,7 @@ describe.skipIf(!TEST_URL)("تذكير الخمس دقائق المشروط با
     const d = await db.doctor.create({
       data: {
         userId: u.id, firstName: "أحمد", lastName: "بن علي", specialtyId: created.specialty, wilayaId: created.wilaya, cityId: created.city,
-        slotDurationMin: 10, verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE",
+        dutyEndsAt: at(opts.closing ?? "23:59"), slotDurationMin: 10, verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE",
         schedules: { create: Array.from({ length: 7 }, (_, day) => ({ dayOfWeek: day, startTime: "00:00", endTime: opts.closing ?? "23:59" })) },
       },
     });
@@ -86,7 +86,7 @@ describe.skipIf(!TEST_URL)("تذكير الخمس دقائق المشروط با
   async function appt(doctorId: string, startTime: string, data: Record<string, unknown> = {}) {
     const [hh, mm] = startTime.split(":").map(Number);
     return db.appointment.create({
-      data: { doctorId, date: DAY, startTime, endTime: hhmm(hh * 60 + mm + 10), status: "CONFIRMED", guestFirstName: "ض", ...data },
+      data: { doctorId, date: DAY, startTime, endTime: hhmm(hh * 60 + mm + 10), status: "CONFIRMED", arrivedAt: at("08:00"), guestFirstName: "ض", ...data },
     });
   }
 
@@ -283,7 +283,7 @@ describe.skipIf(!TEST_URL)("تذكير الخمس دقائق المشروط با
   it("تغيّر ترتيب الطابور بسبب LATE يُعاد حسابه: المتأخر لا يُنبَّه على ترتيبه القديم، ويُنبَّه حين يعود دوره", async () => {
     const d = await newDoctor({ smartMinutes: 5 });
     const X = await appt(d, "15:00", { status: "IN_PROGRESS", calledAt: at("15:40") });
-    const c = await appt(d, "15:10", { patientId: await newPatient(), status: "LATE", skipCredits: 4, deferredCount: 2 });
+    const c = await appt(d, "15:10", { patientId: await newPatient(), status: "LATE", arrivedAt: null, skipCredits: 4, deferredCount: 2 });
     const others = [await appt(d, "15:20"), await appt(d, "15:30"), await appt(d, "15:40"), await appt(d, "15:50")];
     await cycle(at("15:41")); // ترتيبه الأصلي أول الطابور، لكن بعد LATE يسبقه 4 → ~24 د
     expect(sentFor(c.id)).toHaveLength(0);
@@ -291,7 +291,7 @@ describe.skipIf(!TEST_URL)("تذكير الخمس دقائق المشروط با
     await db.appointment.update({ where: { id: X.id }, data: { status: "COMPLETED" } });
     for (const o of others.slice(0, 2)) await db.appointment.update({ where: { id: o.id }, data: { status: "COMPLETED" } });
     await db.appointment.update({ where: { id: others[2].id }, data: { status: "IN_PROGRESS", calledAt: at("15:58") } });
-    await db.appointment.update({ where: { id: c.id }, data: { skipCredits: 1 } });
+    await db.appointment.update({ where: { id: c.id }, data: { skipCredits: 0, arrivedAt: at("15:59") } });
     await cycle(at("15:59")); // بالداخل ~4 د + واحد قبله 5 د = 9 د
     expect(sentFor(c.id).filter((s) => s.payload.kind === "QUEUE_APPROACH_ALARM")).toHaveLength(1);
   });

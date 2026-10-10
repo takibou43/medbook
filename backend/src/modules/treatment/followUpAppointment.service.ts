@@ -75,6 +75,7 @@ const RESULT_SELECT = {
   patientId: true,
   guestFirstName: true,
   guestLastName: true,
+  guestPhone: true,
   familyMember: { select: FAMILY_MEMBER_PUBLIC_SELECT },
 } satisfies Prisma.AppointmentSelect;
 
@@ -87,6 +88,39 @@ function view(a: ResultRow) {
 
 async function findByIdempotencyKey(doctorId: string, key: string) {
   return prisma.appointment.findUnique({ where: { doctorId_idempotencyKey: { doctorId, idempotencyKey: key } }, select: RESULT_SELECT });
+}
+
+export async function createGuestAppointment(userId: string, input: FollowUpAppointmentInput & { firstName: string; lastName: string; phone: string }) {
+  const doctor = await requireBookingDoctor(userId);
+  const replay = await findByIdempotencyKey(doctor.id, input.idempotencyKey);
+  if (replay) {
+    if (replay.parentAppointmentId || replay.patientId || replay.guestFirstName !== input.firstName || replay.guestLastName !== input.lastName || replay.guestPhone !== input.phone || replay.date.toISOString().slice(0,10) !== input.date || replay.startTime !== input.startTime)
+      throw ApiError.conflict("مفتاح الطلب مستعمل لحجز آخر.");
+    return { appointment: view(replay), replayed: true };
+  }
+  const date = assertSlotInSchedule(doctor, input.date, input.startTime);
+  const financial = await loadFinancialCreate(doctor.id);
+  try {
+    const { result } = await reserveExactSlot({ doctor, date, startTime: input.startTime, create: async (tx, slot) => {
+      const row = await tx.appointment.create({ data: { doctorId: doctor.id, patientId: null,
+        guestFirstName: input.firstName, guestLastName: input.lastName, guestPhone: input.phone,
+        date, startTime: slot.startTime, endTime: slot.endTime, type: "IN_PERSON", status: "CONFIRMED",
+        createdBy: "DOCTOR", createdByUserId: userId, idempotencyKey: input.idempotencyKey, financial,
+        notes: input.notes,
+      }, select: RESULT_SELECT });
+      await writeAudit({ userId, action: "GUEST_APPOINTMENT_CREATED", entity: "Appointment", entityId: row.id }, tx);
+      return row;
+    } });
+    return { appointment: view(result), replayed: false };
+  } catch (error) {
+    if (error instanceof ExactSlotUnavailableError) {
+      const again = await findByIdempotencyKey(doctor.id, input.idempotencyKey);
+      if (again && !again.patientId && !again.parentAppointmentId && again.guestFirstName === input.firstName && again.guestLastName === input.lastName && again.guestPhone === input.phone && again.startTime === input.startTime && again.date.toISOString().slice(0,10) === input.date)
+        return { appointment: view(again), replayed: true };
+      throw ApiError.conflict(SLOT_TAKEN_MESSAGE, { code: "SLOT_TAKEN" });
+    }
+    throw error;
+  }
 }
 
 export async function createFollowUpAppointment(userId: string, parentAppointmentId: string, input: FollowUpAppointmentInput) {
@@ -107,19 +141,26 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
       patientId: true,
       familyMemberId: true,
       status: true,
+      guestFirstName: true,
+      guestLastName: true,
       guestPhone: true,
       patient: { select: { id: true, userId: true, firstName: true, lastName: true, user: { select: { phone: true } } } },
     },
   });
   // موعد طبيب آخر أو غير موجود → 404 (لا نكشف وجوده). حجز ضيف بلا حساب → لا يمكن ربط العودة بحساب.
   if (!parent || parent.doctorId !== doctor.id) throw ApiError.notFound("الموعد غير موجود.");
-  if (!parent.patientId || !parent.patient) throw ApiError.badRequest("لا يمكن برمجة موعد عودة لحجز بدون حساب مريض.");
+  const isGuest = !parent.patientId;
+  if (isGuest && (!parent.guestFirstName?.trim() || !parent.guestLastName?.trim() || !parent.guestPhone?.trim()))
+    throw ApiError.badRequest("أكمل اسم المريض ولقبه ورقم هاتفه قبل برمجة المتابعة.");
+  if (isGuest && (input.familyMemberId || input.treatmentPlanId || input.treatmentSessionId || input.dentalFollowUpId))
+    throw ApiError.badRequest("متابعة الضيف تبقى لنفس المريض دون ربطها بحساب عائلي أو خطة حساب آخر.");
   if (parent.status === AppointmentStatus.CANCELLED) throw ApiError.badRequest("لا يمكن برمجة موعد عودة انطلاقًا من موعد ملغى.");
 
   // المستفيد: نفس مستفيد الموعد الأصلي ما لم يُختر غيره صراحةً — وأي فرد يجب أن يكون من عائلة نفس صاحب الحساب.
   const familyMemberId = resolveFollowUpBeneficiary(parent.familyMemberId, input.familyMemberId);
   let member: { id: string; firstName: string; lastName: string } | null = null;
   if (familyMemberId) {
+    if (!parent.patientId) throw ApiError.badRequest("لا يوجد حساب عائلي مرتبط بحجز الضيف.");
     member = await prisma.familyMember.findFirst({
       where: { id: familyMemberId, ownerPatientId: parent.patientId, archivedAt: null },
       select: { id: true, firstName: true, lastName: true },
@@ -154,8 +195,8 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
 
   const date = assertSlotInSchedule(doctor, input.date, input.startTime);
   const financial = await loadFinancialCreate(doctor.id);
-  const beneficiaryFirst = member ? member.firstName : parent.patient.firstName;
-  const beneficiaryLast = member ? member.lastName : parent.patient.lastName;
+  const beneficiaryFirst = member ? member.firstName : parent.patient?.firstName ?? parent.guestFirstName!;
+  const beneficiaryLast = member ? member.lastName : parent.patient?.lastName ?? parent.guestLastName!;
 
   let created: ResultRow;
   try {
@@ -174,7 +215,7 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
               // الاسم الظاهر في لوحة الطبيب والطابور = المستفيد؛ الهاتف = هاتف صاحب الحساب (لا هاتف لكل فرد).
               guestFirstName: beneficiaryFirst,
               guestLastName: beneficiaryLast,
-              guestPhone: parent.patient!.user.phone ?? parent.guestPhone ?? null,
+              guestPhone: parent.patient?.user.phone ?? parent.guestPhone ?? null,
               date,
               startTime: slot.startTime,
               endTime: slot.endTime,
@@ -237,7 +278,7 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
   }
 
   // إشعار داخل التطبيق لصاحب الحساب (إلزامي) — بعد نجاح المعاملة، وفشله لا يلغي الموعد المحفوظ.
-  try {
+  if (parent.patient) try {
     await createNotification(
       parent.patient.userId,
       "APPOINTMENT_FOLLOW_UP_SCHEDULED",

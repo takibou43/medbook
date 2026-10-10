@@ -1,5 +1,5 @@
 import { AppointmentStatus, Prisma, PrismaClient } from "@prisma/client";
-import { projectQueueOrder } from "./queueOrder";
+import { presentQueueOrder } from "./presentQueue";
 import { ALGERIA_OFFSET_MINUTES, closingTimeForDate } from "./slots";
 
 /**
@@ -28,6 +28,8 @@ export interface DayQueueRow {
   status: AppointmentStatus;
   skipCredits: number;
   calledAt: Date | null;
+  arrivedAt?: Date | null;
+  urgencyStatus?: string;
 }
 
 export interface QueuePosition {
@@ -49,7 +51,7 @@ export interface QueuePosition {
 export function locateInQueue(dayQueue: DayQueueRow[], appointmentId: string): QueuePosition {
   const inside = dayQueue.filter((a) => a.status === AppointmentStatus.IN_PROGRESS);
   const insideOtherRow = inside.find((a) => a.id !== appointmentId) ?? null;
-  const order = projectQueueOrder(dayQueue.filter((a) => WAITING_QUEUE_STATUSES.includes(a.status)));
+  const order = presentQueueOrder(dayQueue.filter((a) => WAITING_QUEUE_STATUSES.includes(a.status)));
   const index = order.findIndex((a) => a.id === appointmentId);
   const insideOther = Boolean(insideOtherRow);
   return {
@@ -97,10 +99,10 @@ export async function loadDoctorDayQueue(db: Db, doctorId: string, now: Date): P
   const day = algeriaDayStart(now);
   const end = new Date(day.getTime() + 24 * 60 * MINUTE_MS - 1);
   const [doctor, rows, activity] = await Promise.all([
-    db.doctor.findUnique({ where: { id: doctorId }, select: { schedules: true } }),
+    db.doctor.findUnique({ where: { id: doctorId }, select: { schedules: true, dutyEndsAt: true } }),
     db.appointment.findMany({
       where: { doctorId, date: { gte: day, lte: end }, status: { in: DAY_QUEUE_STATUSES } },
-      select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true },
+      select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true, arrivedAt: true, urgencyStatus: true },
       orderBy: [{ startTime: "asc" }],
     }),
     db.appointment.aggregate({
@@ -108,11 +110,11 @@ export async function loadDoctorDayQueue(db: Db, doctorId: string, now: Date): P
       _max: { calledAt: true, endedAt: true },
     }),
   ]);
-  const closed = doctor ? isQueueDayClosed(day, doctor.schedules, now) : true;
+  const closed = !doctor?.dutyEndsAt || doctor.dutyEndsAt <= now;
   const times = [activity._max.calledAt, activity._max.endedAt].filter((d): d is Date => Boolean(d));
   const lastActivityAt = times.length ? new Date(Math.max(...times.map((d) => d.getTime()))) : null;
   // بعد الإغلاق لا أحد في الطابور (نفس نتيجة الكنس الذي سيحوّلهم إلى NO_SHOW/COMPLETED).
-  return { day, closed, rows: closed ? [] : rows, lastActivityAt };
+  return { day, closed, rows, lastActivityAt };
 }
 
 // ===== تقدير وقت الدور (لتنبيه «دورك اقترب») =====

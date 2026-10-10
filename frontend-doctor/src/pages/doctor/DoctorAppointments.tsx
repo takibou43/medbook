@@ -325,6 +325,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
   const openFollowUp = (a: any) =>
     setFollowUpCtx({
       parentAppointmentId: a.id,
+      hasAccount: Boolean(a.patientId),
       beneficiaryName: patientFullName(a),
       familyMemberId: a.familyMemberId ?? null,
       accountHolderName: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : null,

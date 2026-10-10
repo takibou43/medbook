@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { walkInSchema } from "../appointments/appointments.schema";
 import { Role } from "@prisma/client";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
@@ -120,6 +121,12 @@ doctorTreatmentRouter.patch(
 );
 
 // ---- برمجة موعد عودة ----
+doctorTreatmentRouter.post("/appointments/guest", ...doctorOnly,
+  validate({ body: followUpAppointmentSchema.pick({ date: true, startTime: true, notes: true, idempotencyKey: true }).extend(walkInSchema.pick({ firstName: true, lastName: true, phone: true }).shape) }),
+  asyncHandler(async (req, res) => {
+    const result = await followUps.createGuestAppointment(req.user!.id, req.body);
+    res.status(result.replayed ? 200 : 201).json({ success: true, data: result.appointment, replayed: result.replayed });
+  }));
 doctorTreatmentRouter.get(
   "/follow-up-slots",
   ...doctorOnly,

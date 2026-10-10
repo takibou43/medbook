@@ -36,7 +36,7 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
     const doctor = await db.doctor.create({
       data: {
         userId: user.id, firstName: "د" + i, lastName: tag, specialtyId: created.specialtyId, wilayaId: created.wilayaId,
-        cityId: created.cityId, slotDurationMin: 20, verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE",
+        dutyEndsAt: new Date(Date.now()+3600000), cityId: created.cityId, slotDurationMin: 20, verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE",
         schedules: { create: Array.from({ length: 7 }, (_, d) => ({ dayOfWeek: d, startTime: "08:00", endTime: "18:00" })) },
       },
     });
@@ -106,13 +106,13 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
     created.userIds.push(assistant.id);
     const assistantToken = signAccessToken({ sub: assistant.id, role: "ASSISTANT" });
     const late = await db.appointment.create({ data: { doctorId: d.id, date: today, startTime: "08:00", endTime: "08:20", status: "NO_SHOW" } });
-    await db.appointment.create({ data: { doctorId: d.id, date: today, startTime: "08:20", endTime: "08:40", status: "CONFIRMED" } });
+    await db.appointment.create({ data: { doctorId: d.id, date: today, startTime: "08:20", endTime: "08:40", status: "CONFIRMED", arrivedAt:new Date() } });
     const results = await Promise.all([
       call("PATCH", `/api/appointments/${late.id}`, { status: "IN_PROGRESS" }, assistantToken),
       call("POST", "/api/appointments/queue/next", {}, d.token),
     ]);
     expect(results.filter(r => r.status === 200)).toHaveLength(1);
-    expect(results.filter(r => r.status === 400)).toHaveLength(1);
+    expect(results.filter(r => r.status === 403)).toHaveLength(1);
     const active = await db.appointment.findMany({ where: { doctorId: d.id, status: "IN_PROGRESS" } });
     expect(active).toHaveLength(1);
     expect(active[0].calledAt).not.toBeNull();
@@ -146,7 +146,7 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
     const d = await mkDoctor("next");
     for (let k = 0; k < 20; k++) {
       await db.appointment.create({
-        data: { doctorId: d.id, date: today, startTime: `${String(8 + Math.floor(k / 3)).padStart(2, "0")}:${String((k % 3) * 20).padStart(2, "0")}`, endTime: "23:59", status: "CONFIRMED", guestFirstName: "g" + k, guestLastName: "x", guestPhone: "05" + String(30000000 + k) },
+        data: { doctorId: d.id, date: today, startTime: `${String(8 + Math.floor(k / 3)).padStart(2, "0")}:${String((k % 3) * 20).padStart(2, "0")}`, endTime: "23:59", status: "CONFIRMED", arrivedAt:new Date(), guestFirstName: "g" + k, guestLastName: "x", guestPhone: "05" + String(30000000 + k) },
       });
     }
     const rs = await Promise.all(Array.from({ length: 40 }, (_, i) => call("POST", "/api/appointments/queue/next", undefined, d.token, i)));

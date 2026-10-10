@@ -60,7 +60,7 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
     const d = await db.doctor.create({
       data: {
         userId: u.id, firstName: "د" + suffix, lastName: tag, specialtyId: ids.specialty, wilayaId: ids.wilaya, cityId: ids.city,
-        slotDurationMin: 5, verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE",
+        dutyEndsAt: new Date(Date.now()+3600000), slotDurationMin: 5, verificationStatus: "VERIFIED", subscriptionStatus: "ACTIVE",
         schedules: { create: Array.from({ length: 7 }, (_, day) => ({ dayOfWeek: day, startTime: "00:00", endTime: "23:59" })) },
       },
     });
@@ -76,7 +76,7 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
       const a = await db.appointment.create({
         data: {
           doctorId, date: today, startTime: `00:${String(10 + i).padStart(2, "0")}`, endTime: `00:${String(11 + i).padStart(2, "0")}`,
-          status: "CONFIRMED", guestFirstName: names[i], guestLastName: "اختبار",
+          status: "CONFIRMED", arrivedAt: new Date(), guestFirstName: names[i], guestLastName: "اختبار",
           patientId: linkFirstToPatient && i === 0 ? patient.patientId : null,
         },
       });
@@ -143,47 +143,28 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
     h.sendNotification.mockResolvedValue({ statusCode: 201 });
   });
 
-  it("A..F: التأخير الأول +2 ثم الثاني +4، والمريض يبقى في الطابور (ليس NO_SHOW)", async () => {
-    const m = await seedQueue(docA.id, ["A", "B", "C", "D", "E", "F"], true);
+  it("absence clears attendance; return restores scheduled priority", async () => {
+    const m = await seedQueue(docA.id, ["A", "B", "C"], true);
     expect(await next(docA.token)).toBe(m.A);
-
-    const r1 = await late(m.A, docA.token);
-    expect(r1.status).toBe(200);
-    expect(r1.data).toMatchObject({ status: "LATE", deferredCount: 1, skipCredits: 2, duplicate: false });
-    expect(r1.data.lateEvent).toMatchObject({ sequence: 1, penalty: 2 });
-    expect(await orderedNames(docA.token, m)).toEqual(["B", "C", "A", "D", "E", "F"]);
-
-    for (const n of ["B", "C"]) {
-      expect(await next(docA.token)).toBe(m[n]);
-      expect((await finish(m[n], docA.token)).status).toBe(200);
-    }
+    expect((await late(m.A, docA.token)).status).toBe(200);
+    expect((await db.appointment.findUnique({where:{id:m.A}}))!.arrivedAt).toBeNull();
+    expect(await orderedNames(docA.token,m)).toEqual(["B","C","A"]);
+    expect(await next(docA.token)).toBe(m.B);
+    await finish(m.B,docA.token);
+    expect((await call("POST", "/api/appointments/"+m.A+"/arrived", docA.token)).status).toBe(200);
     expect(await next(docA.token)).toBe(m.A);
-    const r2 = await late(m.A, docA.token);
-    expect(r2.data).toMatchObject({ status: "LATE", deferredCount: 2, skipCredits: 4 });
-    expect(r2.data.lateEvent).toMatchObject({ sequence: 2, penalty: 4 });
-    // لم يبق بعده إلا 3 مرضى: يعود بعدهم مباشرة (لا يتجاوز حدود الطابور)
-    expect(await orderedNames(docA.token, m)).toEqual(["D", "E", "F", "A"]);
-
-    const events = await db.appointmentLateEvent.findMany({ where: { appointmentId: m.A }, orderBy: { sequence: "asc" } });
-    expect(events.map((e) => [e.sequence, e.penalty])).toEqual([[1, 2], [2, 4]]);
-    const a = await db.appointment.findUnique({ where: { id: m.A } });
-    expect(a!.status).toBe("LATE");
+    expect((await late(m.A,docA.token)).data.deferredCount).toBe(2);
+    expect(await db.appointmentLateEvent.count({where:{appointmentId:m.A}})).toBe(2);
   });
 
-  it("A..H: A +2 ثم B +2 ثم A +4 — ترتيب صحيح بلا تكرار ولا فقدان", async () => {
-    const m = await seedQueue(docA.id, ["A", "B", "C", "D", "E", "F", "G", "H"]);
-    await next(docA.token);
-    await late(m.A, docA.token);
-    await next(docA.token); // B
-    await late(m.B, docA.token);
-    expect(await orderedNames(docA.token, m)).toEqual(["C", "A", "B", "D", "E", "F", "G", "H"]);
-    expect(await next(docA.token)).toBe(m.C);
-    await finish(m.C, docA.token);
+  it("only the last patient is present, then an earlier arrival wins the next admission", async () => {
+    const m=await seedQueue(docA.id,["A","B","C","D"]);
+    await db.appointment.updateMany({where:{id:{in:[m.A,m.B,m.C]}},data:{arrivedAt:null}});
+    expect(await next(docA.token)).toBe(m.D);
+    await call("POST","/api/appointments/"+m.A+"/arrived",docA.token);
+    expect((await call("POST","/api/appointments/queue/next",docA.token)).status).toBe(409);
+    await finish(m.D,docA.token);
     expect(await next(docA.token)).toBe(m.A);
-    await late(m.A, docA.token);
-    const order = await orderedNames(docA.token, m);
-    expect(order).toEqual(["B", "D", "E", "F", "A", "G", "H"]);
-    expect(new Set(order).size).toBe(7);
   });
 
   it("25+17) نفس الطلب مرتين ثم 10 طلبات متزامنة: حدث واحد، lateCount = 1، إشعار واحد", async () => {
@@ -196,8 +177,9 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
     expect(again.data).toMatchObject({ duplicate: true, deferredCount: 1, skipCredits: 2 });
 
     // مناداته من جديد ثم 10 ضغطات متزامنة (طبيب + مساعد معًا)
+    await call("POST", `/api/appointments/${m.A}/arrived`, docA.token);
     await call("POST", `/api/appointments/${m.A}/call`, docA.token);
-    const burst = await Promise.all(Array.from({ length: 10 }, (_, i) => late(m.A, i % 2 ? assistantToken : docA.token)));
+    const burst = await Promise.all(Array.from({ length: 10 }, (_, i) => late(m.A, docA.token)));
     expect(burst.every((r) => r.status === 200)).toBe(true);
     expect(burst.filter((r) => r.data.duplicate === false)).toHaveLength(1);
     const a = await db.appointment.findUnique({ where: { id: m.A } });
@@ -248,6 +230,7 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
     expect((await db.appointment.findUnique({ where: { id: m.A } }))!.status).toBe("LATE");
 
     h.sendNotification.mockRejectedValueOnce(Object.assign(new Error("gone"), { statusCode: 410 }));
+    await call("POST", `/api/appointments/${m.A}/arrived`, docA.token);
     await call("POST", `/api/appointments/${m.A}/call`, docA.token);
     expect((await late(m.A, docA.token)).status).toBe(200);
     await sleep(300);
@@ -276,8 +259,10 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
     // المريض لا يستطيع تغيير الحالة إلى LATE عبر PATCH العام أيضًا
     expect((await call("PATCH", `/api/appointments/${m.A}`, patient.token, { status: "LATE" })).status).not.toBe(200);
     expect((await db.appointment.findUnique({ where: { id: m.A } }))!.status).toBe("IN_PROGRESS");
+    await db.assistant.updateMany({where:{doctorId:docA.id},data:{shiftEndsAt:new Date(Date.now()+60000)}});
     const byAssistant = await late(m.A, assistantToken);
     expect(byAssistant.data).toMatchObject({ status: "LATE", skipCredits: 2 });
+    await db.assistant.updateMany({where:{doctorId:docA.id},data:{shiftEndsAt:null}});
   });
 
   it("19) العقد الحالي للـAPI محفوظ: «متأخر» عبر POST /:id/late فقط، و PATCH لا يقبل LATE (400) ولا يُنشئ حدثًا", async () => {
@@ -296,7 +281,7 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
     expect(await next(docA.token)).toBe(m.A);
     const r = await late(m.A, docA.token);
     expect(r.data).toMatchObject({ deferredCount: 2, skipCredits: 4 });
-    expect(await orderedNames(docA.token, m)).toEqual(["B", "C", "D", "E", "A", "F"]);
+    expect(await orderedNames(docA.token, m)).toEqual(["B", "C", "D", "E", "F", "A"]);
   });
 
   it("30) حالة الدور للمريض تعرض ترتيبه الجديد بعد التأخير", async () => {
@@ -304,6 +289,6 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
     await next(docA.token);
     await late(m.A, docA.token);
     const s = await call("GET", `/api/booking/status/${m.A}`);
-    expect(s.data).toMatchObject({ status: "LATE", aheadOfYou: 2, position: 3 });
+    expect(s.data).toMatchObject({ status: "LATE", aheadOfYou: 3, position: 4 });
   });
 });

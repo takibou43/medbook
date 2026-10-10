@@ -1,3 +1,4 @@
+import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import { useEffect, useRef, useState } from "react";
@@ -50,6 +51,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   useLanguage();
   const live = useLiveUpdates();
   const { user } = useAuth();
+  const canManageAttendance = useAttendanceActions();
   const { showToast } = useToast();
   const qc = useQueryClient();
   const [date, setDate] = useState(() => new Date(Date.now() + 3600000).toISOString().slice(0, 10));
@@ -97,17 +99,22 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   }, [queues.data, sound, showToast]);
   useEffect(() => () => { void audio.current?.close().catch(() => undefined); }, []);
   const action = useMutation({
-    mutationFn: async ({ appointment, kind }: { appointment: Appointment; kind: "arrived" | "late" | AppointmentStatus }) => {
+    mutationFn: async ({ appointment, kind }: { appointment: Appointment; kind: "arrived" | "late" | "call" | "urgency" | AppointmentStatus }) => {
       // The row owns its doctor context. No global doctor selection or shared mutable header.
       const config = { headers: { "X-Assistant-Doctor-Id": appointment.doctorId } };
-      return kind === "arrived" || kind === "late"
+      if (kind === "urgency") {
+        const reason = window.prompt(t("سبب طلب تقديم الحالة المستعجلة"));
+        if (!reason?.trim()) return;
+        return api.post(`/appointments/${appointment.id}/urgency`, { reason: reason.trim() }, config);
+      }
+      return kind === "arrived" || kind === "late" || kind === "call"
         ? api.post(`/appointments/${appointment.id}/${kind}`, {}, config)
         : api.patch(`/appointments/${appointment.id}`, { status: kind }, config);
     },
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["assistant-queues"] }); void qc.invalidateQueries({ queryKey: ["assistant-appointments"] }); void qc.invalidateQueries({ queryKey: ["assistant-daily-income"] }); },
     onError: error => showToast(apiErrorMessage(error), "error"),
   });
-  function update(appointment: Appointment, kind: "arrived" | "late" | AppointmentStatus) {
+  function update(appointment: Appointment, kind: "arrived" | "late" | "call" | "urgency" | AppointmentStatus) {
     if (advancing.current || action.isPending) return;
     if ((kind === "CANCELLED" || kind === "NO_SHOW") && !window.confirm(kind === "CANCELLED" ? t("هل تريد إلغاء هذا الموعد؟") : t("هل تريد تسجيل عدم حضور هذا المريض؟"))) return;
     action.mutate({ appointment, kind });
@@ -151,7 +158,11 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     };
     return <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
       {a.status === "PENDING" && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CONFIRMED")}>{t("تأكيد")}</Button>}
-      {(a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt && a.date.slice(0, 10) === today && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "arrived")}>{t("وصل المريض")}</Button>}
+      {(a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt && a.date.slice(0, 10) === today && <Button variant="outline" disabled={action.isPending || advance.isPending || !canManageAttendance} onClick={() => update(a, "arrived")}>{t("وصل المريض")}</Button>}
+      {a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && queues.data?.some(row => row.doctor.id === a.doctorId && row.queue.awaitingAssistant && !row.queue.current) && <Button disabled={action.isPending || !canManageAttendance} onClick={() => update(a, "call")}>{t("تأكيد الإدخال")}</Button>}
+      {a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && (!a.urgencyStatus || a.urgencyStatus === "NONE") && <Button variant="outline" disabled={!canManageAttendance || action.isPending} onClick={() => update(a, "urgency")}>{t("طلب تقديم حالة مستعجلة")}</Button>}
+      {a.urgencyStatus === "REQUESTED" && <span className="text-xs text-amber-700">{t("بانتظار قرار الطبيب")}</span>}
+      {a.urgencyStatus === "APPROVED" && <span className="text-xs text-red-700">{t("حالة مستعجلة معتمدة")}</span>}
       {canMarkUnanswered(a) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => setMissedCall(a)}>{t("تأجيل ونداء التالي")}</Button>}
       {canMarkLate(a, today) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "late")}>{t("متأخر")}</Button>}
       {canSendAttendanceMessage(a) && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => openDialog("call")}>{t("إرسال رسالة")}</Button>}
@@ -187,6 +198,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     </Modal>
     {Object.values(advanceRetries).map(appointment => <div key={appointment.doctorId} role="alert" className="card p-4 text-slate-800"><p>{t("تم تأجيل ")}{patientName(appointment)}{t(" دون حذف موعده، لكن نداء التالي لم يتأكد.")}</p><Button className="mt-2 min-h-11" loading={advance.isPending} onClick={() => void deferAndAdvance(appointment, true)}>{t("إعادة محاولة نداء التالي")}</Button></div>)}
     <NoShowSmsDialog target={dialog?.target ?? null} mode={dialog?.mode} onClose={() => setDialog(null)} />
+    {doctorQueues.filter(row => row.queue.awaitingAssistant && !row.queue.current).map(row => <p key={row.doctor.id} role="status" className="rounded-xl bg-amber-50 p-3">{row.doctor.firstName} {row.doctor.lastName}: {t("في انتظار تأكيد المساعد")}</p>)}
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h1 className="text-2xl font-bold">{appointmentsView ? t("مواعيد الأطباء") : t("الطابور")}</h1><p className="mt-1 text-sm text-slate-600">{t("المواعيد والنداءات في قائمة واحدة، دون تكرار المريض.")}</p></div>
       <Button variant="outline" onClick={() => {

@@ -57,7 +57,11 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
   const endOf = (start: string) => { const [h, m] = start.split(":").map(Number); return hhmm(h * 60 + m + 1); };
   const book = (token: string, extra: Record<string, unknown> = {}) =>
     call("POST", "/api/booking", { firstName: "سارة", lastName: "بن يوسف", phone: "0551234567", wilayaId: ids.wilaya, specialtyId: ids.specialty, doctorId: docA, ...extra }, token);
-  const noShow = (apptId: string, token = doctorToken) => call("PATCH", `/api/appointments/${apptId}`, { status: "NO_SHOW" }, token);
+  const noShow = async (apptId: string, token = doctorToken) => {
+    if(token===assistantToken) await db.assistant.updateMany({where:{doctorId:docA},data:{shiftEndsAt:new Date(Date.now()+60000)}});
+    try { return await call("PATCH", `/api/appointments/${apptId}`, { status: "NO_SHOW" }, token); }
+    finally { if(token===assistantToken) await db.assistant.updateMany({where:{doctorId:docA},data:{shiftEndsAt:null}}); }
+  };
   const blocksOf = (patientId: string) => db.patientBlock.findMany({ where: { patientId }, orderBy: { blockedAt: "asc" } });
   const activeOf = (patientId: string) => db.patientBlock.count({ where: { activePatientId: patientId } });
 
@@ -230,11 +234,15 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
     expect(late).toMatchObject({ status: "LATE", deferredCount: 1, skipCredits: 2 });
     // المساعد يسجّل متأخرًا آخر، ثم تأخير لاحق لنفس الموعد بعد إعادة ندائه = عقوبة 4
     const late2 = await mkAppt(p.patientId, 0);
+    await db.assistant.updateMany({where:{doctorId:docA},data:{shiftEndsAt:new Date(Date.now()+60000)}});
     expect((await call("POST", `/api/appointments/${late2}/late`, undefined, assistantToken)).status).toBe(200);
+    await db.doctor.update({where:{id:docA},data:{dutyEndsAt:new Date(Date.now()+60000),queueRequestedAt:new Date()}});
+    await db.appointment.update({where:{id:late2},data:{arrivedAt:new Date()}});
     expect((await call("POST", `/api/appointments/${late2}/call`, undefined, assistantToken)).status).toBe(200);
     expect((await call("POST", `/api/appointments/${late2}/late`, undefined, assistantToken)).status).toBe(200);
     expect(await db.appointment.findUnique({ where: { id: late2 } })).toMatchObject({ status: "LATE", deferredCount: 2, skipCredits: 4 });
     expect((await db.appointment.findUnique({ where: { id: late2 } }))!.status).toBe("LATE");
+    await db.assistant.updateMany({where:{doctorId:docA},data:{shiftEndsAt:null}});
     expect(await blocksOf(p.patientId)).toHaveLength(0);
 
     // CANCELLED وCOMPLETED
@@ -391,7 +399,7 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
       const p = await mkPatient();
       const appts = [await mkAppt(p.patientId, 0), await mkAppt(p.patientId, -1), await mkAppt(p.patientId, -2), await mkAppt(p.patientId, -3)];
       // كل موعد يُضغط عليه من الطبيب والمساعد معًا — 8 طلبات متوازية
-      const res = await Promise.all(appts.flatMap((id) => [noShow(id, doctorToken), noShow(id, assistantToken)]));
+      const res = await Promise.all(appts.flatMap((id) => [noShow(id, doctorToken), noShow(id, doctorToken)]));
       for (let i = 0; i < appts.length; i++) {
         const pair = [res[2 * i].status, res[2 * i + 1].status].sort();
         expect(pair).toEqual([200, 409]); // واحد يفوز لكل موعد

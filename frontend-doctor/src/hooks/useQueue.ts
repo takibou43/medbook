@@ -9,6 +9,7 @@ import { livePollInterval } from "../lib/livePolling";
 export const QUEUE_POLL_MS = 10000;
 
 export interface QueueState {
+  awaitingAssistant?: boolean;
   date: string;
   current: Appointment | null;
   waiting: Appointment[];

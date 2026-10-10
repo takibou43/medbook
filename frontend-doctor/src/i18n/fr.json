@@ -1779,5 +1779,7 @@
   "إضافة الجلسة": "Ajouter la séance",
   "إضافة الجلسة لا تحجز موعدًا ولا ترسل إشعارًا. بعد إضافتها، استخدم «برمجة موعد عودة» لاختيار التاريخ والوقت وتأكيد الحجز.": "Ajouter une séance ne réserve aucun rendez-vous et n’envoie aucune notification. Ensuite, utilisez « Programmer un suivi » pour choisir la date et l’heure et confirmer la réservation.",
   "أدخل عددًا صحيحًا غير سالب لسنوات الخبرة.": "Saisissez un nombre entier positif ou nul pour les années d’expérience.",
-  "يشمل أفراد العائلة وسجلات الضيوف وفق قائمة المرضى": "Inclut les membres de la famille et les visiteurs selon la liste des patients"
+  "يشمل أفراد العائلة وسجلات الضيوف وفق قائمة المرضى": "Inclut les membres de la famille et les visiteurs selon la liste des patients",
+  "جارٍ تحميل قالب الوصفة…": "Chargement du modèle d’ordonnance…",
+  "تعذر تحميل قالب الوصفة. أعد تحميل الصفحة للمحاولة مجددًا.": "Impossible de charger le modèle d’ordonnance. Rechargez la page pour réessayer."
 }

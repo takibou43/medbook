@@ -9,7 +9,7 @@ import { isWithinWorkingHours, ScheduleBlock } from "../../lib/slots";
 import { createNotification } from "../notifications/notifications.service";
 import { syncDentalFollowUpsSafe } from "../../lib/dentalFollowUpSync";
 import { FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
-import { queryPatients, summarizePatients, type PatientQuery } from "../../lib/doctorPatients";
+import { countPatients, queryPatients, summarizePatients, type PatientQuery } from "../../lib/doctorPatients";
 import { clinicSharePercent, effectiveAppointmentPrice, revenueFromGroups } from "../../lib/clinicFinance";
 
 const SCHEDULE_ACTIVE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
@@ -278,8 +278,8 @@ export async function getDashboardStats(userId: string, role: Role) {
     // النطاق الذي يفتحه رابط البطاقة في صفحة المواعيد (from/to)، فيتطابق العدد مع النتائج.
     prisma.appointment.count({ where: { doctorId: doctor.id, date: { gte: monthStart, lte: monthEnd } } }),
     // لا يمكن الاعتماد على distinct:["patientId"] وحده لأن الحجوزات كضيف تحمل patientId فارغًا (null)
-    // وستُحسب كلها كـ "مريض واحد" فقط؛ لذا نجلب المعرّفات ونحسب التفرّد يدويًا (مريض حقيقي أو رقم هاتف ضيف).
-    prisma.appointment.findMany({ where: { doctorId: doctor.id }, select: { patientId: true, guestPhone: true, id: true } }),
+    // نستخدم نفس مفتاح قائمة المرضى: الحساب + فرد العائلة؛ والضيف حسب قاعدة القائمة القائمة دون دمج بيانات.
+    prisma.appointment.findMany({ where: { doctorId: doctor.id }, select: { patientId: true, familyMemberId: true, guestPhone: true, id: true } }),
     // الدخل التقديري يُحسب من المواعيد المكتملة (COMPLETED) وحدها — لا من المؤكّدة ولا
     // التي بالداخل الآن ولا الملغاة ولا "لم يحضر". النطاق الزمني بنفس اصطلاح حقل date
     // (تاريخ تقويمي مخزَّن عند 00:00 UTC محسوبًا بتوقيت الجزائر).
@@ -295,7 +295,7 @@ export async function getDashboardStats(userId: string, role: Role) {
     }),
   ]);
 
-  const uniquePatientKeys = new Set(allForPatientsCount.map((a) => a.patientId ?? `guest:${a.guestPhone ?? a.id}`));
+  const totalPatients = countPatients(allForPatientsCount);
 
   // نسبة الغياب تُحسب من مجموع المواعيد "المحسومة" (انتهت فعليًا: حضر/ألغى/لم يحضر) فقط،
   // دون المواعيد القادمة التي لم يُحسم أمرها بعد — وإلا كانت النسبة مضلِّلة لطبيب حديث الانضمام.
@@ -352,7 +352,7 @@ export async function getDashboardStats(userId: string, role: Role) {
     completedThisMonth: completedMonthCount,
     consultationFee,
     clinicEarnings,
-    totalPatients: uniquePatientKeys.size,
+    totalPatients,
     avgRating: doctor.avgRating,
     reviewsCount: doctor.reviewsCount,
     verificationStatus: doctor.verificationStatus,

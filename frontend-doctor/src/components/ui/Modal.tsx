@@ -12,7 +12,7 @@ interface ModalProps {
   footer?: ReactNode;
 }
 
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE = 'summary, a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 export function Modal({ open, onClose, title, children, footer }: ModalProps) {
   useLanguage();
@@ -21,15 +21,25 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const dialogs = document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]');
+      if (dialogs[dialogs.length - 1] !== dialogRef.current) return;
       if (e.key === "Escape" && !e.isComposing && e.keyCode !== 229) onClose();
       // حصر Tab داخل النافذة حتى لا ينتقل التركيز إلى الصفحة خلفها.
       if (e.key === "Tab" && dialogRef.current) {
-        const els = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE));
+        const els = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(el => {
+          if (!el.getClientRects().length || el.closest("[inert]") || getComputedStyle(el).visibility === "hidden") return false;
+          // Chromium may return rectangles for descendants of closed details.
+          for (let parent = el.parentElement; parent && parent !== dialogRef.current; parent = parent.parentElement) {
+            if (parent.tagName === "DETAILS" && !parent.hasAttribute("open") && !parent.querySelector(":scope > summary")?.contains(el)) return false;
+          }
+          return true;
+        });
         if (els.length === 0) { e.preventDefault(); return; }
         const first = els[0];
         const last = els[els.length - 1];
         const active = document.activeElement;
-        if (e.shiftKey && (active === first || active === dialogRef.current)) { e.preventDefault(); last.focus(); }
+        if (!dialogRef.current.contains(active)) { e.preventDefault(); first.focus(); }
+        else if (e.shiftKey && (active === first || active === dialogRef.current)) { e.preventDefault(); last.focus(); }
         else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
       }
     }

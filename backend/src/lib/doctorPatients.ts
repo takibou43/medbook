@@ -72,6 +72,11 @@ export function patientKey(a: Pick<PatientAppointmentRow, "id" | "patientId" | "
   return a.patientId ? `${a.patientId}:${a.familyMemberId ?? "self"}` : `guest:${a.guestPhone ?? a.id}`;
 }
 
+/** Same grouping as the patient list; no identity merge or data mutation. */
+export function countPatients(rows: Pick<PatientAppointmentRow, "id" | "patientId" | "familyMemberId" | "guestPhone">[]): number {
+  return new Set(rows.map(patientKey)).size;
+}
+
 export function summarizePatients(rows: PatientAppointmentRow[], nowMs: number): PatientSummary[] {
   const today = algeriaTodayKey(nowMs);
   const map = new Map<string, PatientSummary>();

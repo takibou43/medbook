@@ -1,3 +1,4 @@
+import { CurrentPatientPlansModal } from "./DoctorTreatmentPlans";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, getLanguage } from "../../i18n/locale.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -68,6 +69,7 @@ export default function DoctorHome() {
   const finish = useFinishAppointment();
   const callNext = useCallNext();
 
+  const [planSubject, setPlanSubject] = useState<{ patientId: string; memberId: string; name: string } | null>(null);
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
   // إعادة التركيز إلى زر الصف بعد إغلاق القائمة أو نافذة التأكيد أو انتهاء الإجراء.
   const triggerEls = useRef(new Map<string, HTMLElement>());
@@ -146,6 +148,7 @@ export default function DoctorHome() {
 
   return (
     <div className="space-y-5">
+      {planSubject && <CurrentPatientPlansModal {...planSubject} onClose={() => setPlanSubject(null)} />}
       <FollowUpModal open={Boolean(followUpCtx)} ctx={followUpCtx} onClose={() => setFollowUpCtx(null)} onDone={refreshAll} />
 
       {/* ترحيب */}
@@ -220,7 +223,7 @@ export default function DoctorHome() {
             )}
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {current?.patientId && isDentalSpecialty(user?.doctor?.specialty) && <Link className="btn-outline flex-1" to={`/treatment-plans?${new URLSearchParams({ patient: current.patientId, member: current.familyMemberId ?? current.beneficiary?.familyMemberId ?? "" })}`}>{t("خطط العلاج")}</Link>}
+              {current?.patientId && isDentalSpecialty(user?.doctor?.specialty) && <Button className="flex-1" variant="outline" onClick={() => setPlanSubject({ patientId: current.patientId!, memberId: current.familyMemberId ?? current.beneficiary?.familyMemberId ?? "", name: beneficiaryName(current) })}>{t("خطط العلاج")}</Button>}
               {current && (
                 <Button
                   className="flex-1"

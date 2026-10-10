@@ -1,3 +1,4 @@
+import { GuestFollowUpNotice } from "../../components/GuestFollowUpNotice";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, getLanguage } from "../../i18n/locale.ts";
 import { canSendAttendanceMessage } from "../../lib/assistantReception";
@@ -292,6 +293,7 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
           </>
         )}
       </div>
+      {role !== "ASSISTANT" && !a.patientId && a.status !== "CANCELLED" && <GuestFollowUpNotice />}
     </article>
   );
 }

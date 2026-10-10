@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  clearPrescriptionDraft, draftHasContent, emptyDraft, getStoredDraft, newMedication, prescriptionPatientFrom, shouldAutoRebind, storeDraft, validateDraft,
+  clearPrescriptionDraft, draftHasContent, emptyDraft, getStoredDraft, newMedication, prescriptionPatientFrom, shouldAutoRebind, storeDraft, validateDraft, samePrescriptionVisit, prescriptionVisitLabel,
 } from "../src/lib/prescription.ts";
 import type { Appointment } from "../src/types/index.ts";
 
@@ -60,7 +60,7 @@ test("التحقق قبل المعاينة: دواء واحد على الأقل 
   const bad = validateDraft({ ...d, medications: [m1, m2, m3] });
   assert.equal(bad.ok, false);
   assert.ok(bad.errors.some((e) => e.includes("رقم 2")));
-  const good = validateDraft({ ...d, medications: [m1, { ...m2, name: "دواء ب" }, m3] });
+  const good = validateDraft({ ...d, medications: [m1, { ...m2, name: "دواء ب", frequency: "عند الحاجة", duration: "حتى الموعد القادم" }, m3] });
   assert.equal(good.ok, true);
   assert.deepEqual(good.printable.map((m) => m.name), ["دواء أ", "دواء ب"]);
   assert.equal(validateDraft({ ...d, patientName: "  ", medications: [m1] }).ok, false);
@@ -87,3 +87,42 @@ test("المخزن المؤقت: لا يُعرض لحساب آخر ويُمسح 
   clearPrescriptionDraft();
   assert.equal(getStoredDraft("u1"), null);
 });
+
+ test("name alone is blocked with field errors; content is untouched", () => {
+  const d = emptyDraft("u1", prescriptionPatientFrom(selfAppt));
+  d.medications[0].name = "دواء تجريبي";
+  const before = JSON.stringify(d);
+  const result = validateDraft(d);
+  assert.equal(result.ok, false);
+  assert.deepEqual(Object.keys(result.medicationErrors[d.medications[0].id]), ["dose", "frequency", "duration"]);
+  assert.equal(JSON.stringify(d), before);
+  d.medications[0].directionsMode = "freeText";
+  assert.equal(validateDraft(d).ok, false);
+  d.medications[0].instructions = "تعليمات كاملة يكتبها الطبيب حسب الحالة";
+  assert.equal(validateDraft(d).ok, true);
+  d.medications[0].directionsMode = "structured";
+  assert.equal(validateDraft(d).ok, false);
+ });
+ test("visit identity: same person on two visits and two people with identical names", () => {
+  const p = prescriptionPatientFrom(selfAppt);
+  const next = { ...selfAppt, id: "second", startTime: "15:52" };
+  assert.equal(samePrescriptionVisit(p, next), false);
+  assert.equal(samePrescriptionVisit(p, { ...selfAppt, patientId: "different" }), false);
+  const d = emptyDraft("u1", p, "current");
+  d.medications[0].name = "دواء";
+  assert.equal(shouldAutoRebind(d, next.id), false);
+  assert.equal(d.patient.appointmentId, selfAppt.id);
+  assert.match(prescriptionVisitLabel(p), /2026-10-10.*11:00/);
+  assert.match(prescriptionVisitLabel(prescriptionPatientFrom(next)), /15:52/);
+ });
+ test("account holder and family member cannot share a prescription identity", () => {
+  const p = prescriptionPatientFrom(familyAppt);
+  const holder = { ...familyAppt, familyMemberId: null, familyMember: null, beneficiary: { type: "SELF", name: p.accountHolderName } } as unknown as Appointment;
+  assert.equal(samePrescriptionVisit(p, holder), false);
+  const d = emptyDraft("u1", p, "current");
+  d.medications[0].name = "دواء";
+  storeDraft(d);
+  assert.equal(shouldAutoRebind(d, "another"), false);
+  assert.equal(getStoredDraft("u1")?.patient.familyMemberId, "fm1");
+  clearPrescriptionDraft();
+ });

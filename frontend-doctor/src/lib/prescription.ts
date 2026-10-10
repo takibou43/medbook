@@ -1,4 +1,5 @@
 import type { Appointment } from "../types/index.ts";
+import type { PrescriptionLanguage, PrescriptionProfessional } from "./prescriptionPrint.ts";
 
 /**
  * منطق «كتابة وصفة» (نقي، يُختبر بـnode --test).
@@ -15,6 +16,7 @@ export interface PrescriptionMedication {
   frequency: string;
   duration: string;
   instructions: string;
+  directionsMode?: "structured" | "freeText";
 }
 
 /** المستفيد كما يُشتق من الموعد — لقطة ثابتة لا تتغيّر بتغيّر المريض الحالي. */
@@ -35,6 +37,8 @@ export interface PrescriptionPatient {
 }
 
 export interface PrescriptionDraft {
+  printLanguage?: PrescriptionLanguage;
+  professional?: Partial<Record<PrescriptionLanguage, PrescriptionProfessional>>;
   /** الحساب الذي كتب المسودة — لا تُعرض لحساب آخر على نفس الجهاز. */
   ownerUserId: string;
   patient: PrescriptionPatient;
@@ -103,25 +107,48 @@ const filled = (m: PrescriptionMedication) => [m.name, m.dose, m.frequency, m.du
 /** هل كتب الطبيب شيئًا يُفقد؟ (تعديل الاسم وحده لا يُعدّ محتوى طبيًا لكنه يُحتسب كتعديل). */
 export function draftHasContent(d: PrescriptionDraft | null | undefined): boolean {
   if (!d) return false;
-  return d.medications.some(filled) || d.notes.trim() !== "" || d.patientName.trim() !== d.patient.bookedName.trim();
+  return d.medications.some(filled) || d.notes.trim() !== "" || d.patientName.trim() !== d.patient.bookedName.trim()
+    || Object.values(d.professional ?? {}).some(fields => Object.values(fields).some(value => Boolean(value?.trim())));
 }
 
 export interface DraftValidation {
   ok: boolean;
   errors: string[];
+  medicationErrors: Record<string, Partial<Record<"name" | "dose" | "frequency" | "duration" | "instructions", string>>>;
   /** الأدوية التي ستُطبع فعلًا (الصفوف الفارغة كليًا تُتجاهل). */
   printable: PrescriptionMedication[];
 }
 
 export function validateDraft(d: PrescriptionDraft): DraftValidation {
   const errors: string[] = [];
+  const medicationErrors: DraftValidation["medicationErrors"] = {};
   if (!d.patientName.trim()) errors.push("اكتب اسم المريض.");
   const rows = d.medications.filter(filled);
   if (rows.length === 0) errors.push("أضف دواءً واحدًا على الأقل.");
   rows.forEach((m, i) => {
-    if (!m.name.trim()) errors.push(`الدواء رقم ${i + 1}: اسم الدواء مطلوب.`);
+    const fields: DraftValidation["medicationErrors"][string] = {};
+    if (!m.name.trim()) fields.name = "اسم الدواء مطلوب.";
+    if (m.directionsMode === "freeText") {
+      if (!m.instructions.trim()) fields.instructions = "اكتب تعليمات الاستخدام الكاملة لهذه الحالة.";
+    } else {
+      if (!m.dose.trim()) fields.dose = "اكتب الجرعة أو الكمية لكل استخدام.";
+      if (!m.frequency.trim()) fields.frequency = "اكتب تكرار الاستخدام أو شرطه عند الحاجة.";
+      if (!m.duration.trim()) fields.duration = "اكتب مدة العلاج أو شرط انتهائه.";
+    }
+    if (Object.keys(fields).length) medicationErrors[m.id] = fields;
+    Object.values(fields).forEach(message => errors.push(`الدواء رقم ${i + 1}: ${message}`));
   });
-  return { ok: errors.length === 0, errors, printable: rows.map((m) => ({ ...m, name: m.name.trim() })) };
+  return { ok: errors.length === 0, errors, medicationErrors, printable: rows.map((m) => ({ ...m, name: m.name.trim() })) };
+}
+
+/** Compare immutable identifiers, never names. */
+export function samePrescriptionVisit(p: PrescriptionPatient, a: Appointment): boolean {
+  const next = prescriptionPatientFrom(a);
+  return p.appointmentId === next.appointmentId && p.patientId === next.patientId && p.familyMemberId === next.familyMemberId;
+}
+
+export function prescriptionVisitLabel(p: PrescriptionPatient): string {
+  return `${p.bookedName} — ${p.appointmentDate.slice(0, 10)} — ${p.startTime}`;
 }
 
 // ---------------- مخزن المسودة في الذاكرة (لا localStorage: بيانات طبية على جهاز قد يكون مشتركًا) ----------------

@@ -3,11 +3,13 @@ import { createPortal } from "react-dom";
 import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
 import type { PrescriptionMedication } from "../../lib/prescription";
-import { formatDayAr } from "../../lib/doctorUi";
+import { prescriptionLabels, prescriptionDate, prescriptionCatalogName, professionalText, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
-import { catalogName, getLanguage, t } from "../../i18n/locale.ts";
+import { t } from "../../i18n/locale.ts";
 
 export interface PrescriptionSheetData {
+  language: PrescriptionLanguage;
+  professional?: PrescriptionProfessional;
   doctor: Doctor | null | undefined;
   /** اسم المستفيد الفعلي كما كتبه/أكّده الطبيب (لا يُطبع صاحب الحساب ولا صلة القرابة). */
   patientName: string;
@@ -19,7 +21,7 @@ export interface PrescriptionSheetData {
 
 /** نص كتبه الطبيب: يُعرض كما هو، معزول الاتجاه حتى لا تنقلب الأرقام والوحدات في النص المختلط. */
 function Typed({ children, className }: { children: string; className?: string }) {
-  return <bdi dir="auto" className={className}>{children}</bdi>;
+  return <bdi dir="auto" translate="no" className={className}>{children}</bdi>;
 }
 
 /**
@@ -27,50 +29,52 @@ function Typed({ children, className }: { children: string; className?: string }
  * يُطبع فقط ما هو موجود فعلًا: لا شعار ولا عمر ولا رقم وصفة ولا QR ولا توقيع/ختم رقمي.
  */
 export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
-  useLanguage();
-  const lang = getLanguage();
+  const lang = data.language;
+  const text = prescriptionLabels(lang);
   const d = data.doctor;
   const clinic = d?.clinic ?? null;
-  const place = [d?.city ? catalogName(d.city) : "", d?.wilaya ? catalogName(d.wilaya) : ""].filter(Boolean).join(lang === "fr" ? ", " : "، ");
-  const address = (clinic?.address || d?.address || "").trim();
+  const place = [d?.city ? prescriptionCatalogName(d.city, lang) : "", d?.wilaya ? prescriptionCatalogName(d.wilaya, lang) : ""].filter(Boolean).join(lang === "fr" ? ", " : "، ");
+  const address = professionalText(data.professional?.address, clinic?.address || d?.address);
+  const doctorName = professionalText(data.professional?.doctorName, d ? `${d.firstName} ${d.lastName}` : "");
+  const clinicName = professionalText(data.professional?.clinicName, clinic?.nameAr);
   const phone = (clinic?.phone || d?.phone || "").trim();
   const hasContact = Boolean(address || place || phone);
   return (
-    <article className="rx-sheet" dir={lang === "fr" ? "ltr" : "rtl"} lang={lang} aria-label={t("الوصفة الطبية")}>
+    <article className="rx-sheet" dir={lang === "fr" ? "ltr" : "rtl"} lang={lang} aria-label={text.sheet}>
       <header className="rx-head">
         <div className="rx-id">
-          {d && <p className="rx-doctor">{t("د.")} {d.firstName} {d.lastName}</p>}
-          {d?.specialty && <p className="rx-specialty">{catalogName(d.specialty)}</p>}
-          {clinic?.nameAr && <p className="rx-clinic">{clinic.nameAr}</p>}
+          {doctorName && <p className="rx-doctor">{text.doctor} <Typed>{doctorName}</Typed></p>}
+          {d?.specialty && <p className="rx-specialty">{prescriptionCatalogName(d.specialty, lang)}</p>}
+          {clinicName && <p className="rx-clinic"><Typed>{clinicName}</Typed></p>}
         </div>
         {hasContact && (
           <div className="rx-contact">
-            {address && <p>{address}</p>}
-            {place && <p>{place}</p>}
-            {phone && <p>{t("الهاتف:")} <bdi dir="ltr">{phone}</bdi></p>}
+            {address && <p><Typed>{address}</Typed></p>}
+            {place && <p><Typed>{place}</Typed></p>}
+            {phone && <p>{text.phone} <bdi dir="ltr" translate="no">{phone}</bdi></p>}
           </div>
         )}
       </header>
 
-      <h1 className="rx-title">{t("وصفة طبية")}</h1>
+      <h1 className="rx-title">{text.title}</h1>
 
       <dl className="rx-meta">
         <div>
-          <dt>{t("المريض")}</dt>
+          <dt>{text.patient}</dt>
           <dd className="rx-patient"><Typed>{data.patientName}</Typed></dd>
         </div>
         <div>
-          <dt>{t("التاريخ")}</dt>
-          <dd>{formatDayAr(data.day)}</dd>
+          <dt>{text.date}</dt>
+          <dd>{prescriptionDate(data.day, lang)}</dd>
         </div>
       </dl>
 
-      <ol className="rx-meds" aria-label={t("الأدوية")}>
+      <ol className="rx-meds" aria-label={text.medications}>
         {data.medications.map((m, i) => {
           const facts = [
-            { label: t("الجرعة"), value: m.dose.trim() },
-            { label: t("التكرار"), value: m.frequency.trim() },
-            { label: t("المدة"), value: m.duration.trim() },
+            { label: text.dose, value: m.dose.trim() },
+            { label: text.frequency, value: m.frequency.trim() },
+            { label: text.duration, value: m.duration.trim() },
           ].filter((f) => f.value);
           const instructions = m.instructions.trim();
           return (
@@ -88,7 +92,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
                   </p>
                 )}
                 {instructions && (
-                  <p className="rx-instructions"><span className="rx-fact-label">{t("تعليمات:")}</span> <Typed>{instructions}</Typed></p>
+                  <p className="rx-instructions"><span className="rx-fact-label">{text.instructions}</span> <Typed>{instructions}</Typed></p>
                 )}
               </div>
             </li>
@@ -98,18 +102,18 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
 
       {data.notes.trim() && (
         <section className="rx-notes">
-          <h2 className="rx-small-title">{t("ملاحظات")}</h2>
+          <h2 className="rx-small-title">{text.notes}</h2>
           <p className="rx-notes-body"><Typed>{data.notes.trim()}</Typed></p>
         </section>
       )}
 
       <footer className="rx-sign">
         <div className="rx-sign-area">
-          <p className="rx-small-title">{t("توقيع الطبيب")}</p>
+          <p className="rx-small-title">{text.signature}</p>
           <div className="rx-sign-line" />
         </div>
         <div className="rx-sign-area">
-          <p className="rx-small-title">{t("الختم")}</p>
+          <p className="rx-small-title">{text.stamp}</p>
           <div className="rx-stamp-space" />
         </div>
       </footer>
@@ -198,14 +202,14 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
           </div>
           <div className="flex w-full items-center justify-between gap-1.5 sm:w-auto sm:justify-start">
             <div className="flex items-center rounded-xl border border-slate-200" role="group" aria-label={t("التكبير")}>
-              <button type="button" onClick={() => stepZoom(-1)} className="flex h-10 w-9 items-center justify-center text-slate-700 hover:bg-slate-100" aria-label={t("تصغير")}>
+              <button type="button" onClick={() => stepZoom(-1)} className="flex h-11 w-11 items-center justify-center text-slate-700 hover:bg-slate-100" aria-label={t("تصغير")}>
                 <Minus className="h-4 w-4" aria-hidden="true" />
               </button>
-              <button type="button" onClick={() => setZoom(null)} className="flex h-10 min-w-[3rem] items-center justify-center gap-1 px-1 text-xs font-semibold tabular-nums text-slate-700 hover:bg-slate-100" aria-label={t("ملاءمة العرض")} title={t("ملاءمة العرض")}>
+              <button type="button" onClick={() => setZoom(null)} className="flex h-11 min-w-[3rem] items-center justify-center gap-1 px-1 text-xs font-semibold tabular-nums text-slate-700 hover:bg-slate-100" aria-label={t("ملاءمة العرض")} title={t("ملاءمة العرض")}>
                 {zoom === null ? <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" /> : null}
                 <span dir="ltr">{Math.round(scale * 100)}%</span>
               </button>
-              <button type="button" onClick={() => stepZoom(1)} className="flex h-10 w-9 items-center justify-center text-slate-700 hover:bg-slate-100" aria-label={t("تكبير")}>
+              <button type="button" onClick={() => stepZoom(1)} className="flex h-11 w-11 items-center justify-center text-slate-700 hover:bg-slate-100" aria-label={t("تكبير")}>
                 <Plus className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>

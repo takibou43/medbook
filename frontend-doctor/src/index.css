@@ -169,6 +169,11 @@ body {
   overflow-wrap: anywhere;
 }
 .rx-sheet p { margin: 0; }
+.rx-sheet[lang="fr"] { font-family: Arial, Tahoma, sans-serif; }
+.rx-head, .rx-meta { break-inside: avoid; page-break-inside: avoid; }
+.rx-med-name { break-after: avoid; page-break-after: avoid; }
+.rx-fact { break-inside: avoid; }
+.rx-instructions { white-space: pre-wrap; orphans: 3; widows: 3; }
 .rx-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10mm; padding-bottom: 4mm; border-bottom: 0.4mm solid #187f77; }
 .rx-id { min-width: 0; }
 .rx-doctor { font-size: 18pt; font-weight: 800; line-height: 1.3; color: #0f2523; }
@@ -192,8 +197,9 @@ body {
 .rx-fact-label { color: #6b7280; font-weight: 600; }
 .rx-instructions { margin-top: 1mm !important; font-size: 10.5pt; color: #1f2937; }
 .rx-small-title { font-size: 9.5pt; font-weight: 700; color: #6b7280; }
-.rx-notes { margin-top: 5mm; padding-top: 3mm; border-top: 0.2mm solid #d1d5db; break-inside: avoid; page-break-inside: avoid; }
-.rx-notes-body { margin-top: 1mm !important; white-space: pre-wrap; }
+.rx-notes { margin-top: 5mm; padding-top: 3mm; border-top: 0.2mm solid #d1d5db; }
+.rx-notes h2 { break-after: avoid; page-break-after: avoid; }
+.rx-notes-body { margin-top: 1mm !important; white-space: pre-wrap; orphans: 3; widows: 3; }
 .rx-sign { display: flex; justify-content: space-between; gap: 14mm; margin-top: 12mm; break-inside: avoid; page-break-inside: avoid; }
 .rx-sign-area { flex: 1; max-width: 70mm; }
 .rx-sign-line { height: 16mm; border-bottom: 0.3mm solid #9ca3af; }
@@ -202,7 +208,7 @@ body {
 .rx-stage { -webkit-overflow-scrolling: touch; }
 .rx-scaler { position: relative; }
 
-@page { size: A4; margin: 12mm 12mm 14mm; }
+@page { size: A4; margin: 16mm 15mm 14mm; }
 @media print {
   /* أثناء معاينة الوصفة: لا يُطبع إلا الورقة — تختفي الواجهة والتنقل والأزرار والخلفية المعتمة. */
   html, body.rx-printing { height: auto !important; overflow: visible !important; background: #fff !important; }

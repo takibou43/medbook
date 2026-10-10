@@ -153,9 +153,9 @@ body {
 /* ===== الوصفة الطبية (PrescriptionSheet) — نفس الورقة في المعاينة والطباعة =====
    أبيض/نص داكن ولمسة تركواز محدودة، واضحة بالأبيض والأسود. بلا تدرجات ولا ظلال داخل الورقة. */
 .rx-paper {
-  width: 210mm;
-  min-height: 297mm;
-  padding: 16mm 15mm 14mm;
+  width: 148mm;
+  min-height: 210mm;
+  padding: 10mm;
   background: #fff;
   transform-origin: top right;
   box-shadow: 0 6px 24px rgba(2, 6, 23, 0.35); /* ظل الورقة في المعاينة فقط (يُلغى في الطباعة) */
@@ -174,20 +174,20 @@ body {
 .rx-med-name { break-after: avoid; page-break-after: avoid; }
 .rx-fact { break-inside: avoid; }
 .rx-instructions { white-space: pre-wrap; orphans: 3; widows: 3; }
-.rx-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10mm; padding-bottom: 4mm; border-bottom: 0.4mm solid #187f77; }
+.rx-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 5mm; padding-bottom: 3mm; border-bottom: 0.4mm solid #187f77; }
 .rx-id { min-width: 0; }
-.rx-doctor { font-size: 18pt; font-weight: 800; line-height: 1.3; color: #0f2523; }
+.rx-doctor { font-size: 16pt; font-weight: 800; line-height: 1.3; color: #0f2523; }
 .rx-specialty { margin-top: 0.5mm !important; font-size: 11pt; color: #166661; font-weight: 600; }
 .rx-clinic { font-size: 10.5pt; color: #374151; }
-.rx-contact { flex-shrink: 0; max-width: 70mm; font-size: 9.5pt; line-height: 1.55; color: #374151; text-align: end; }
-.rx-title { margin: 7mm 0 5mm; text-align: center; font-size: 14pt; font-weight: 700; letter-spacing: 0.02em; color: #111827; }
+.rx-contact { flex: 0 1 48mm; min-width: 0; font-size: 9.5pt; line-height: 1.55; color: #374151; text-align: end; }
+.rx-title { margin: 4mm 0 3mm; text-align: center; font-size: 14pt; font-weight: 700; letter-spacing: 0.02em; color: #111827; }
 .rx-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2mm 10mm; padding-bottom: 3mm; margin-bottom: 2mm; border-bottom: 0.2mm solid #d1d5db; }
 .rx-meta > div { display: flex; align-items: baseline; gap: 2.5mm; min-width: 0; }
 .rx-meta dt { font-size: 9.5pt; color: #6b7280; font-weight: 600; }
 .rx-meta dd { margin: 0; font-weight: 600; }
 .rx-patient { font-size: 12.5pt; font-weight: 800 !important; }
 .rx-meds { list-style: none; margin: 0; padding: 0; }
-.rx-med { display: flex; gap: 3.5mm; padding: 3.5mm 0; border-bottom: 0.2mm solid #e5e7eb; break-inside: avoid; page-break-inside: avoid; }
+.rx-med { display: flex; gap: 3mm; padding: 2.5mm 0; border-bottom: 0.2mm solid #e5e7eb; break-inside: avoid; page-break-inside: avoid; }
 .rx-med:last-child { border-bottom: 0; }
 .rx-index { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 6mm; height: 6mm; margin-top: 0.8mm; border: 0.3mm solid #187f77; border-radius: 999px; font-size: 9pt; font-weight: 700; color: #166661; }
 .rx-med-body { min-width: 0; flex: 1; }
@@ -200,15 +200,18 @@ body {
 .rx-notes { margin-top: 5mm; padding-top: 3mm; border-top: 0.2mm solid #d1d5db; }
 .rx-notes h2 { break-after: avoid; page-break-after: avoid; }
 .rx-notes-body { margin-top: 1mm !important; white-space: pre-wrap; orphans: 3; widows: 3; }
-.rx-sign { display: flex; justify-content: space-between; gap: 14mm; margin-top: 12mm; break-inside: avoid; page-break-inside: avoid; }
+.rx-sign { display: flex; justify-content: space-between; gap: 10mm; margin-top: 7mm; break-inside: avoid; page-break-inside: avoid; }
 .rx-sign-area { flex: 1; max-width: 70mm; }
 .rx-sign-line { height: 16mm; border-bottom: 0.3mm solid #9ca3af; }
-.rx-stamp-space { height: 26mm; }
+.rx-stamp-space { height: 20mm; }
 
 .rx-stage { -webkit-overflow-scrolling: touch; }
 .rx-scaler { position: relative; }
+.rx-custom-paper { position: relative; }
+.rx-template-image { position: absolute; inset: 0; width: 148mm; height: 210mm; pointer-events: none; }
+.rx-custom-paper .rx-sheet { position: relative; }
 
-@page { size: A4; margin: 16mm 15mm 14mm; }
+@page { size: A5 portrait; margin: 10mm; }
 @media print {
   /* أثناء معاينة الوصفة: لا يُطبع إلا الورقة — تختفي الواجهة والتنقل والأزرار والخلفية المعتمة. */
   html, body.rx-printing { height: auto !important; overflow: visible !important; background: #fff !important; }
@@ -219,4 +222,6 @@ body {
   .rx-scaler { width: auto !important; height: auto !important; margin: 0 !important; }
   .rx-paper { transform: none !important; width: auto !important; min-height: 0 !important; padding: 0 !important; box-shadow: none !important; }
   .rx-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.rx-printing:has(.rx-custom-paper) { margin: 0 !important; }
+  .rx-paper.rx-custom-paper { width: 148mm !important; min-height: 210mm !important; }
 }

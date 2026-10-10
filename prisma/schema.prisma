@@ -404,9 +404,22 @@ model PatientBlock {
   @@index([patientId])
   @@map("patient_blocks")
 }
+model PrescriptionTemplate {
+  doctorId String @id
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  image String @db.Text
+  top Int @default(40)
+  bottom Int @default(30)
+  side Int @default(12)
+  updatedAt DateTime @updatedAt
+
+  @@map("prescription_templates")
+}
+
 model Doctor {
   dutyEndsAt DateTime?
   queueRequestedAt DateTime?
+  prescriptionTemplate PrescriptionTemplate?
   // A delegation belongs to this exact clinic; changing clinics never carries it over.
   clinicManagerForId String?
   clinicPermissions String[] @default([])

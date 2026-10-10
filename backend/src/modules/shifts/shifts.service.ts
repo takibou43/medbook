@@ -35,12 +35,21 @@ export async function shiftState(userId: string, role: Role) {
     hasActiveAssistant: await hasOnDutyAssistant(doctorId) };
 }
 
-export async function setShift(userId: string, role: Role, endTime: string | null) {
+export async function setShift(userId: string, role: Role, endTime: string | null | undefined) {
   const doctorId = await resolveActingDoctorId(userId, role);
-  let endsAt: Date | null = null;
-  if (endTime !== null) {
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime)) throw ApiError.badRequest("حدد وقت نهاية صحيحًا.");
-    const [h, m] = endTime.split(":").map(Number);
+  const liveDoctorSession = role === Role.DOCTOR && endTime === undefined;
+  if (endTime === undefined && !liveDoctorSession) {
+    const doctor = await prisma.doctor.findUniqueOrThrow({ where: { id: doctorId }, include: { schedules: true } });
+    const day = algeriaTodayUTCMidnight();
+    const scheduled = closingTimeForDate(day, doctor.schedules);
+    const minutesNow = (Date.now() - day.getTime()) / 60000 + ALGERIA_OFFSET_MINUTES;
+    const minutesEnd = scheduled ? Number(scheduled.slice(0, 2)) * 60 + Number(scheduled.slice(3)) : 0;
+    endTime = minutesEnd > minutesNow ? scheduled! : "23:59";
+  }
+  let endsAt: Date | null = liveDoctorSession ? new Date(Date.now() + 90000) : null;
+  if (endTime !== null && !liveDoctorSession) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime!)) throw ApiError.badRequest("حدد وقت نهاية صحيحًا.");
+    const [h, m] = endTime!.split(":").map(Number);
     endsAt = new Date(algeriaTodayUTCMidnight().getTime() + ((h * 60 + m) - ALGERIA_OFFSET_MINUTES) * 60000);
     if (endsAt <= new Date()) throw ApiError.badRequest("نهاية المناوبة يجب أن تكون لاحقًا اليوم.");
   }
@@ -49,6 +58,17 @@ export async function setShift(userId: string, role: Role, endTime: string | nul
     if (role === Role.DOCTOR) await tx.doctor.update({ where: { id: doctorId }, data: { dutyEndsAt: endsAt, queueRequestedAt: null } });
     else await tx.assistant.update({ where: { userId }, data: { shiftEndsAt: endsAt } });
     await writeAudit({ userId, action: endsAt ? "SHIFT_STARTED" : "SHIFT_ENDED", entity: role, meta: { doctorId, endsAt: endsAt?.toISOString() ?? null } }, tx);
+  });
+  return shiftState(userId, role);
+}
+
+/** Closing or losing all open doctor sessions expires availability without browser unload promises. */
+export async function heartbeatShift(userId: string, role: Role) {
+  if (role !== Role.DOCTOR) throw ApiError.forbidden("للطبيب فقط.");
+  const doctorId = await resolveActingDoctorId(userId, role);
+  await prisma.$transaction(async tx => {
+    await lockDoctorCalls(tx, doctorId);
+    await tx.doctor.updateMany({ where: { id: doctorId, dutyEndsAt: { gt: new Date() } }, data: { dutyEndsAt: new Date(Date.now() + 90000) } });
   });
   return shiftState(userId, role);
 }

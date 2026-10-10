@@ -10,7 +10,7 @@ vi.mock("../src/lib/slots", async importOriginal => ({ ...await importOriginal<o
 vi.mock("../src/lib/slotAssign", () => ({ reserveExactSlot: mocks.reserve, slotMinutesFor: () => 15, ExactSlotUnavailableError: class extends Error {} }));
 vi.mock("../src/lib/audit", () => ({ writeAudit: vi.fn() }));
 vi.mock("../src/modules/notifications/notifications.service", () => ({ createNotification: mocks.notify }));
-import { createFollowUpAppointment } from "../src/modules/treatment/followUpAppointment.service";
+import { createFollowUpAppointment, createGuestAppointment } from "../src/modules/treatment/followUpAppointment.service";
 import { algeriaTodayUTCMidnight } from "../src/lib/slots";
 const parent = () => ({ id: "parent", doctorId: "d", patientId: null, patient: null, familyMemberId: null, status: "COMPLETED", guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: "0550000000" });
 const input = () => ({ date: new Date(algeriaTodayUTCMidnight().getTime() + 86400000).toISOString().slice(0,10), startTime: "09:00", idempotencyKey: "request-1" });
@@ -27,6 +27,17 @@ describe("guest follow-up appointments", () => {
     expect(result.appointment).toMatchObject({ patientId: null, parentAppointmentId: "parent", status: "CONFIRMED" });
     expect(mocks.db.appointment.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: "0550000000", familyMemberId: null }) }));
     expect(mocks.notify).not.toHaveBeenCalled();
+  });
+  it("books a named guest without an earlier appointment or account", async () => {
+    await createGuestAppointment("doctor", { ...input(), firstName: "Ahmed", lastName: "Test", phone: "0550000000" });
+    expect(mocks.db.appointment.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ patientId: null, guestPhone: "0550000000", createdBy: "DOCTOR" }) }));
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+  it("rejects reuse of a booking key with a changed phone", async () => {
+    const i = input();
+    mocks.db.appointment.findUnique.mockResolvedValue({ patientId: null, parentAppointmentId: null, guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: "0660000000", date: new Date(i.date), startTime: i.startTime });
+    await expect(createGuestAppointment("doctor", { ...i, firstName: "Ahmed", lastName: "Test", phone: "0550000000" })).rejects.toThrow();
+    expect(mocks.reserve).not.toHaveBeenCalled();
   });
   it("rejects incomplete guest identity", async () => {
     mocks.db.appointment.findUnique.mockImplementation(async ({ where }) => where.id ? { ...parent(), guestPhone: null } : null);

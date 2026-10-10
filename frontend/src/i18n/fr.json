@@ -1808,5 +1808,16 @@
   "تحقق من هاتف حسابك، ثم اطلب من العيادة تأكيد هويتك لربط المواعيد المسجلة باسمك. مواعيد أفراد العائلة لا تُدمج تلقائيًا.": "Vérifiez votre téléphone, puis demandez au cabinet de confirmer votre identité pour rattacher vos rendez-vous. Les rendez-vous de vos proches ne sont pas fusionnés automatiquement.",
   "تم التحقق من الهاتف. راجع العيادة لتأكيد السجلات الخاصة بك.": "Téléphone vérifié. Contactez le cabinet pour confirmer vos dossiers.",
   "إرسال رمز التحقق": "Envoyer le code de vérification",
-  "رمز التحقق": "Code de vérification"
+  "رمز التحقق": "Code de vérification",
+  "طلبات الحالات المستعجلة": "Demandes de priorité urgente",
+  "التقديم للنداء التالي ولا يوقف الاستشارة الجارية.": "La priorité concerne le prochain appel et ne coupe pas la consultation en cours.",
+  "الموافقة على التقديم": "Approuver la priorité",
+  "إبقاء الترتيب": "Garder l’ordre",
+  "سبب طلب تقديم الحالة المستعجلة": "Motif de la demande de priorité urgente",
+  "طلب تقديم حالة مستعجلة": "Demander une priorité urgente",
+  "بانتظار قرار الطبيب": "En attente de la décision du médecin",
+  "حالة مستعجلة معتمدة": "Priorité urgente approuvée",
+  "تمت برمجة موعد العودة للمريض دون حساب.": "Le rendez-vous de suivi du patient sans compte a été enregistré.",
+  "يُحفظ الموعد بالاسم واللقب والهاتف. أخبر المريض بتفاصيله من العيادة.": "Le rendez-vous est enregistré avec le nom, le prénom et le téléphone. Informez le patient à la clinique.",
+  "أكمل اسم المريض ولقبه ورقم هاتفه قبل برمجة المتابعة.": "Complétez le nom, le prénom et le téléphone du patient avant de programmer le suivi."
 }

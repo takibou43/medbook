@@ -15,6 +15,16 @@ describe("guest identity protection", () => {
   beforeEach(() => { vi.clearAllMocks(); m.patient.findUnique.mockResolvedValue(patient); m.guestIdentityClaim.findUnique.mockResolvedValue(claim()); m.guestIdentityClaim.aggregate.mockResolvedValue({ _sum: { sentCount: 0 } }); m.sms.mockResolvedValue({ success: true }); m.appointment.findUnique.mockResolvedValue({ id: "a", doctorId: "d", patientId: null, familyMemberId: null, guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: "0550000000" }); m.appointment.updateMany.mockResolvedValue({ count: 1 }); });
   it("normalizes Algerian phone formats and rejects invalid numbers", () => { expect(identityPhone("+213 550000000")).toBe("0550000000"); expect(identityPhone("123")).toBeNull(); });
   it("counts failed attempts without granting verification", async () => { await expect(verifyIdentityCode("u", "123456")).rejects.toThrow(); expect(m.guestIdentityClaim.update).toHaveBeenCalledWith({ where: { id: "c" }, data: { attempts: { increment: 1 } } }); });
+  it("accepts the delivered code once and clears its hash", async () => {
+    await sendIdentityCode("u");
+    const saved = m.guestIdentityClaim.upsert.mock.calls[0][0].create;
+    const code = m.sms.mock.calls[0][1].match(/\d{6}/)![0];
+    m.guestIdentityClaim.findUnique.mockResolvedValue({ ...claim(), ...saved });
+    await expect(verifyIdentityCode("u", code)).resolves.toMatchObject({ verified: true });
+    expect(m.guestIdentityClaim.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ codeHash: "", verifiedAt: expect.any(Date) }) }));
+    m.guestIdentityClaim.findUnique.mockResolvedValue({ ...claim(), ...saved, verifiedAt: new Date(), codeHash: "" });
+    await expect(verifyIdentityCode("u", code)).rejects.toThrow();
+  });
   it.each([{ attempts: 5 }, { expiresAt: new Date(0) }, { phone: "0660000000" }])("rejects expired, exhausted or changed identity: %j", async change => { m.guestIdentityClaim.findUnique.mockResolvedValue({ ...claim(), ...change }); await expect(verifyIdentityCode("u", "123456")).rejects.toThrow(); expect(m.guestIdentityClaim.update).not.toHaveBeenCalled(); });
   it("enforces phone-wide send limits without contacting SMS provider", async () => { m.guestIdentityClaim.aggregate.mockResolvedValue({ _sum: { sentCount: 5 } }); await expect(sendIdentityCode("u")).rejects.toThrow(); expect(m.sms).not.toHaveBeenCalled(); });
   it("invalidates the code if SMS delivery fails", async () => { m.sms.mockResolvedValue({ success: false }); await expect(sendIdentityCode("u")).rejects.toThrow(); expect(m.guestIdentityClaim.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { codeHash: "", expiresAt: new Date(0) } })); });

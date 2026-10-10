@@ -112,7 +112,7 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
       call("POST", "/api/appointments/queue/next", {}, d.token),
     ]);
     expect(results.filter(r => r.status === 200)).toHaveLength(1);
-    expect(results.filter(r => r.status === 400)).toHaveLength(1);
+    expect(results.filter(r => r.status === 403)).toHaveLength(1);
     const active = await db.appointment.findMany({ where: { doctorId: d.id, status: "IN_PROGRESS" } });
     expect(active).toHaveLength(1);
     expect(active[0].calledAt).not.toBeNull();

@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
 import { profileSchema } from "./doctorProfile.schema";
+import { prescriptionTemplateSchema } from "./prescriptionTemplate.schema";
+import { prisma } from "../../lib/prisma";
+import { ApiError } from "../../utils/ApiError";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
@@ -52,6 +55,28 @@ router.get(
 
 // كل ما يلي (الملف المهني، أوقات العمل والاستثناءات) — طبيب فقط.
 router.use(authorize(Role.DOCTOR));
+
+async function templateOwner(userId: string) {
+  const doctor = await prisma.doctor.findUnique({ where: { userId }, select: { id: true } });
+  if (!doctor) throw ApiError.notFound();
+  return doctor.id;
+}
+router.get("/prescription-template", asyncHandler(async (req, res) => {
+  const doctorId = await templateOwner(req.user!.id);
+  const value = await prisma.prescriptionTemplate.findUnique({ where: { doctorId }, select: { image: true, top: true, bottom: true, side: true } });
+  res.json({ success: true, data: value });
+}));
+router.put("/prescription-template", validate({ body: prescriptionTemplateSchema }), asyncHandler(async (req, res) => {
+  const doctorId = await templateOwner(req.user!.id);
+  const value = prescriptionTemplateSchema.parse(req.body);
+  await prisma.prescriptionTemplate.upsert({ where: { doctorId }, create: { doctorId, ...value }, update: value });
+  res.json({ success: true, data: value });
+}));
+router.delete("/prescription-template", asyncHandler(async (req, res) => {
+  const doctorId = await templateOwner(req.user!.id);
+  await prisma.prescriptionTemplate.deleteMany({ where: { doctorId } });
+  res.json({ success: true, data: null });
+}));
 
 // تقييمات المرضى للطبيب الحالي (طبيب فقط): متوسط، عدد، توزيع النجوم، والتقييمات مع التعليقات.
 // قراءة فقط — لا يوجد أي مسار تعديل أو حذف للطبيب؛ doctorId من الجلسة وحدها.

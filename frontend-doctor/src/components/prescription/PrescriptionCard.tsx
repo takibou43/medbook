@@ -14,6 +14,9 @@ import {
 import { PrescriptionPreview, type PrescriptionSheetData } from "./PrescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
+import { api } from "../../lib/api";
+import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
+import { PrescriptionTemplateEditor } from "./PrescriptionTemplateEditor";
 
 // بلا أمثلة جرعات في placeholder عمدًا: لا اقتراحات دوائية ولا جرعات تلقائية — كل شيء يكتبه الطبيب.
 const MED_FIELDS: { key: keyof Omit<PrescriptionMedication, "id" | "directionsMode">; label: string; placeholder?: string; wide?: boolean }[] = [
@@ -52,6 +55,15 @@ export function PrescriptionCard({
   const [errors, setErrors] = useState<string[]>([]);
   const [validation, setValidation] = useState<DraftValidation | null>(null);
   const [preview, setPreview] = useState<PrescriptionSheetData | null>(null);
+  const [template, setTemplate] = useState<PrescriptionTemplate | null>(null);
+  const [templateError, setTemplateError] = useState(false);
+  const [templateLoading, setTemplateLoading] = useState(Boolean(uid));
+  useEffect(() => {
+    let active = true;
+    setTemplate(null); setTemplateError(false); setTemplateLoading(Boolean(uid));
+    if (uid) api.get("/doctor/prescription-template").then(res => { if (active) setTemplate(res.data.data); }).catch(() => { if (active) setTemplateError(true); }).finally(() => { if (active) setTemplateLoading(false); });
+    return () => { active = false; };
+  }, [uid]);
 
   const setDraft = (d: PrescriptionDraft | null) => {
     storeDraft(d);
@@ -132,6 +144,7 @@ export function PrescriptionCard({
   }
 
   function openPreview() {
+    if (templateLoading) return;
     if (!draft) return;
     const v = validateDraft(draft);
     setValidation(v);
@@ -141,6 +154,7 @@ export function PrescriptionCard({
     }
     setErrors([]);
     setPreview({
+      template,
       doctor: user?.doctor,
       language: draft.printLanguage ?? "ar",
       professional: draft.professional?.[draft.printLanguage ?? "ar"],
@@ -158,6 +172,9 @@ export function PrescriptionCard({
   return (
     <section className="card p-4 sm:p-5" aria-labelledby={`${formId}-title`}>
       <PrescriptionPreview open={Boolean(preview)} data={preview} onClose={() => setPreview(null)} />
+      {templateError && <p role="alert" className="text-sm text-amber-800">{t("تعذر تحميل قالب الوصفة. أعد تحميل الصفحة للمحاولة مجددًا.")}</p>}
+      {templateLoading && <p role="status" className="text-sm text-slate-600">{t("جارٍ تحميل قالب الوصفة…")}</p>}
+      {!templateLoading && !templateError && <PrescriptionTemplateEditor key={uid} value={template} onChange={setTemplate} />}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">

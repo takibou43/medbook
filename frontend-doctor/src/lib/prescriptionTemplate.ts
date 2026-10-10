@@ -1,4 +1,7 @@
+import type { PrescriptionDesign } from "./prescriptionDesign";
+
 export interface PrescriptionTemplate {
+  design?: PrescriptionDesign | null;
   image: string;
   top: number;
   bottom: number;

@@ -38,9 +38,20 @@ test("Arabic date formatting is uniform (no jj/mm/aaaa)", () => {
   assert.equal(relativeDayAr("2026-11-15", NOW), "الأحد 15 نوفمبر");
 });
 
-test("plain «all appointments» entry starts at ALL, not «upcoming»", () => {
-  assert.deepEqual(parseAppointmentFilters(""), { tab: "queue", status: "ALL", from: undefined, to: undefined, q: "" });
-  assert.equal(parseAppointmentFilters("?tab=list").status, "ALL");
+test("plain «المواعيد» entry shows today's appointments (merged «جدول اليوم»)", () => {
+  assert.deepEqual(parseAppointmentFilters("", NOW), { tab: "list", status: "ALL", from: "2026-10-02", to: "2026-10-02", q: "" });
+  assert.deepEqual(parseAppointmentFilters("?tab=list", NOW).from, "2026-10-02");
+  assert.equal(parseAppointmentFilters("?tab=queue", NOW).tab, "queue");
+});
+
+test("«كل التواريخ» stays explicit and status-only links keep all dates", () => {
+  const all = { tab: "list" as const, status: "ALL" as const, from: undefined, to: undefined, q: "" };
+  assert.equal(serializeAppointmentFilters(all).get("period"), "all");
+  assert.deepEqual(parseAppointmentFilters(serializeAppointmentFilters(all), NOW), all);
+  const completed = parseAppointmentFilters("?status=COMPLETED", NOW);
+  assert.deepEqual([completed.from, completed.to], [undefined, undefined]);
+  const other = parseAppointmentFilters("?tab=list&from=2026-09-20&to=2026-09-20", NOW);
+  assert.deepEqual([other.from, other.to], ["2026-09-20", "2026-09-20"]);
 });
 
 test("explicit filters from stat cards open the list and are kept", () => {

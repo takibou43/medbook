@@ -149,3 +149,54 @@ body {
 }
 
 @media (max-width: 767px) { input, select, textarea, .input { font-size: 16px; scroll-margin-block: 5rem; } } html[lang="fr"] { font-family: system-ui, sans-serif; }
+
+/* ===== الوصفة الطبية (PrescriptionSheet) — نفس الورقة في المعاينة والطباعة ===== */
+.rx-paper {
+  background: #fff;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 30px -12px rgba(2, 6, 23, 0.45);
+  padding: 14mm 14mm 12mm;
+  min-height: 297mm;
+}
+@media (max-width: 640px) {
+  .rx-paper { padding: 6mm; min-height: 0; }
+}
+.rx-sheet { color: #0f172a; font-family: "Cairo", Tahoma, sans-serif; font-size: 13.5px; line-height: 1.7; }
+.rx-head { display: flex; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 2px solid #187f77; }
+.rx-doctor-name { font-size: 20px; font-weight: 800; color: #166661; }
+.rx-strong { font-weight: 700; }
+.rx-muted { color: #475569; }
+.rx-contact { text-align: left; color: #334155; font-size: 12.5px; }
+.rx-title { margin: 16px 0 10px; text-align: center; font-size: 18px; font-weight: 800; letter-spacing: 0.02em; }
+.rx-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; }
+.rx-label { color: #475569; font-weight: 600; }
+.rx-table { width: 100%; margin-top: 14px; border-collapse: collapse; }
+.rx-table th { background: #eefbf9; color: #154442; font-size: 12.5px; font-weight: 700; text-align: right; padding: 7px 8px; border: 1px solid #cbd5e1; }
+.rx-table td { padding: 8px; border: 1px solid #cbd5e1; vertical-align: top; }
+.rx-table tr { break-inside: avoid; page-break-inside: avoid; }
+.rx-num { width: 2.2em; text-align: center !important; }
+.rx-med { display: block; font-size: 14.5px; }
+.rx-instr { display: block; margin-top: 2px; color: #334155; font-size: 12.5px; }
+.rx-notes { margin-top: 14px; padding: 8px 12px; border: 1px dashed #94a3b8; border-radius: 8px; break-inside: avoid; page-break-inside: avoid; }
+.rx-notes-body { white-space: pre-wrap; }
+.rx-sign { display: flex; justify-content: space-between; gap: 24px; margin-top: 36px; break-inside: avoid; page-break-inside: avoid; }
+.rx-sign-box { flex: 1; max-width: 45%; height: 34mm; border: 1px solid #94a3b8; border-radius: 8px; padding: 6px 10px; }
+@media (max-width: 640px) {
+  .rx-head { flex-direction: column; }
+  .rx-contact { text-align: right; }
+  .rx-table { font-size: 12px; }
+}
+
+@page { size: A4; margin: 12mm; }
+@media print {
+  /* أثناء معاينة الوصفة: لا يُطبع إلا الورقة — تختفي الواجهة والتنقل والأزرار. */
+  body.rx-printing > *:not(.rx-print-root) { display: none !important; }
+  body.rx-printing { background: #fff !important; }
+  .rx-print-root { position: static !important; inset: auto !important; overflow: visible !important; background: none !important; padding: 0 !important; }
+  .rx-print-root [role="dialog"] { max-width: none !important; }
+  .rx-print-root .rx-no-print { display: none !important; }
+  .rx-paper { box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; min-height: 0 !important; }
+  .rx-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .rx-head { flex-direction: row !important; }
+  .rx-contact { text-align: left !important; }
+}

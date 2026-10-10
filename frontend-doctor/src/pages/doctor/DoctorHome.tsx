@@ -1,28 +1,26 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, getLanguage } from "../../i18n/locale.ts";
-import { canSendAttendanceMessage } from "../../lib/assistantReception";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { AlertTriangle, ArrowLeft, CalendarClock, CalendarPlus, Check, CheckCircle2, Hourglass, MoreHorizontal, Search } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarClock, CalendarPlus, Check, CheckCircle2, Hourglass } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
-import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useLiveUpdates } from "../../context/LiveUpdatesContext";
 import { livePollInterval } from "../../lib/livePolling";
 import { useToast } from "../../components/ui/Toast";
 import { Spinner } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
-import { AppointmentStatusBadge, VerificationBadge } from "../../components/ui/Badge";
+import { VerificationBadge } from "../../components/ui/Badge";
 import { StatCard } from "../../components/StatCard";
 import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
-import { NoShowSmsDialog, type NoShowTarget } from "../../components/NoShowSmsDialog";
-import { useCallNext, useCallPatient, useFinishAppointment, useMarkLate, useQueue } from "../../hooks/useQueue";
+import { useCallNext, useFinishAppointment, useQueue } from "../../hooks/useQueue";
 import { useMyAppointments } from "../../hooks/useAppointments";
 import { appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
 import { canScheduleFollowUp, isDentalSpecialty } from "../../lib/features";
-import { appointmentPhone, beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
+import { beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
+import { PrescriptionCard } from "../../components/prescription/PrescriptionCard";
 import type { Appointment } from "../../types";
 
 // تاريخ اليوم بتوقيت الجزائر (UTC+1) بصيغة YYYY-MM-DD — نفس منطق بقية اللوحة.
@@ -49,129 +47,8 @@ function Avatar({ name, index }: { name: string; index: number }) {
   );
 }
 
-/** الحالات التي يسمح الخادم فيها بتسجيل «متأخر» (markAsLate). */
-const LATE_ALLOWED = ["CONFIRMED", "IN_PROGRESS", "LATE"];
-/** الحالات التي يسمح الخادم فيها بمناداة موعد بعينه (callSpecificPatient). */
-const CALL_ALLOWED = ["CONFIRMED", "LATE"];
-
-interface RowMenuItem {
-  key: string;
-  label: string;
-  onSelect: () => void;
-  /** معطّل بقرار من قواعد الخادم: يبقى قابلًا للتركيز ليُقرأ سببه، لكنه لا يُنفَّذ. */
-  disabled?: boolean;
-  hint?: string;
-  danger?: boolean;
-}
-
-/**
- * قائمة «…» لإجراءات صف واحد بنمط menu button: Enter/Space/السهم لفتحها، الأسهم وHome/End للتنقل،
- * Escape يغلقها ويعيد التركيز إلى زرّها، وTab يغلقها ويكمل التنقل الطبيعي.
- */
-function RowActionsMenu({
-  label, open, onOpenChange, disabled, openUpward, triggerRef, items,
-}: {
-  label: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  disabled?: boolean;
-  openUpward?: boolean;
-  triggerRef: (el: HTMLButtonElement | null) => void;
-  items: RowMenuItem[];
-}) {
-  useLanguage();
-  const menuId = useId();
-  const menuRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
-
-  const menuItems = () => Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
-  const focusItem = (index: number) => {
-    const els = menuItems();
-    if (els.length) els[(index + els.length) % els.length].focus();
-  };
-
-  useEffect(() => {
-    if (open) focusItem(0);
-  }, [open]);
-
-  function close(returnFocus: boolean) {
-    onOpenChange(false);
-    // setTimeout لا requestAnimationFrame: الأخير يتوقف تمامًا في التبويبات غير الظاهرة.
-    if (returnFocus) setTimeout(() => buttonRef.current?.focus(), 0);
-  }
-
-  function onMenuKeyDown(e: React.KeyboardEvent) {
-    const els = menuItems();
-    const index = els.indexOf(document.activeElement as HTMLButtonElement);
-    if (e.key === "ArrowDown") { e.preventDefault(); focusItem(index + 1); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); focusItem(index - 1); }
-    else if (e.key === "Home") { e.preventDefault(); focusItem(0); }
-    else if (e.key === "End") { e.preventDefault(); focusItem(els.length - 1); }
-    else if (e.key === "Escape") { e.preventDefault(); close(true); }
-    else if (e.key === "Tab") close(false);
-  }
-
-  return (
-    <div className="relative">
-      <button
-        ref={(el) => { buttonRef.current = el; triggerRef(el); }}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        aria-label={t(label ?? "")}
-        disabled={disabled}
-        onClick={() => onOpenChange(!open)}
-        onKeyDown={(e) => {
-          if (!open && (e.key === "ArrowDown" || e.key === "ArrowUp")) { e.preventDefault(); onOpenChange(true); }
-        }}
-        className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:border-primary-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 disabled:opacity-50"
-      >
-        <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
-      </button>
-      {open && (
-        <>
-          <div aria-hidden="true" className="fixed inset-0 z-30" onClick={() => close(false)} />
-          <div
-            id={menuId}
-            ref={menuRef}
-            role="menu"
-            aria-label={t(label ?? "")}
-            onKeyDown={onMenuKeyDown}
-            className={clsx("absolute end-0 z-40 w-52 rounded-xl border border-slate-200 bg-white p-1 shadow-lg", openUpward ? "bottom-full mb-1" : "mt-1")}
-          >
-            {items.map((item) => (
-              <button
-                key={item.key}
-                role="menuitem"
-                type="button"
-                tabIndex={-1}
-                aria-disabled={item.disabled || undefined}
-                onClick={() => {
-                  if (item.disabled) return;
-                  onOpenChange(false);
-                  item.onSelect();
-                }}
-                className={clsx(
-                  "block w-full rounded-lg px-3 py-2 text-start text-sm outline-none focus:bg-slate-100",
-                  item.danger ? "text-red-700 hover:bg-red-50" : "hover:bg-slate-50",
-                  item.disabled && "cursor-not-allowed opacity-60"
-                )}
-              >
-                {t(item.label ?? "")}
-                {item.disabled && item.hint && <span className="block text-[11px] font-normal text-slate-500">{t(item.hint ?? "")}</span>}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 export default function DoctorHome() {
   useLanguage();
-  const canManageAttendance = useAttendanceActions();
   const live = useLiveUpdates();
   const { user } = useAuth();
   const { showToast } = useToast();
@@ -190,13 +67,8 @@ export default function DoctorHome() {
 
   const finish = useFinishAppointment();
   const callNext = useCallNext();
-  const callPatient = useCallPatient();
-  const markLate = useMarkLate();
 
-  const [search, setSearch] = useState("");
-  const [menuId, setMenuId] = useState<string | null>(null);
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
-  const [noShowTarget, setNoShowTarget] = useState<NoShowTarget | null>(null);
   // إعادة التركيز إلى زر الصف بعد إغلاق القائمة أو نافذة التأكيد أو انتهاء الإجراء.
   const triggerEls = useRef(new Map<string, HTMLElement>());
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
@@ -206,11 +78,11 @@ export default function DoctorHome() {
   };
 
   const doctor = user?.doctor;
-  const busy = finish.isPending || callNext.isPending || callPatient.isPending || markLate.isPending;
+  const busy = finish.isPending || callNext.isPending;
 
   // يُنفَّذ بعد انتهاء أي طلب (الأزرار تعود مفعّلة) حتى لا يضيع التركيز على زر معطّل.
   useEffect(() => {
-    if (!pendingFocusId || busy || noShowTarget || followUpCtx) return;
+    if (!pendingFocusId || busy || followUpCtx) return;
     const id = pendingFocusId;
     const timer = setTimeout(() => {
       const el = triggerEls.current.get(id);
@@ -218,22 +90,11 @@ export default function DoctorHome() {
       setPendingFocusId(null);
     }, 0);
     return () => clearTimeout(timer);
-  }, [pendingFocusId, busy, noShowTarget, followUpCtx]);
+  }, [pendingFocusId, busy, followUpCtx]);
 
   // المواعيد المعروضة اليوم: بلا الملغاة. رقم الدور يُحسب قبل البحث فلا يتغير بتصفية القائمة.
   const todays = useMemo<Appointment[]>(() => (appointments.data ?? []).filter((a) => a.status !== "CANCELLED"), [appointments.data, getLanguage()]);
   const turns = useMemo(() => visibleTurnNumbers(todays), [todays, getLanguage()]);
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return todays;
-    const qDigits = q.replace(/\D/g, "");
-    return todays.filter((a) => {
-      if (beneficiaryName(a).toLowerCase().includes(q)) return true;
-      const phone = (appointmentPhone(a) ?? "").replace(/\D/g, "");
-      return qDigits.length > 0 && phone.includes(qDigits);
-    });
-  }, [todays, search, getLanguage()]);
 
   const current = queue.data?.current ?? null;
   const nextList = (queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])]).slice(0, 3);
@@ -247,7 +108,6 @@ export default function DoctorHome() {
 
   async function run(action: () => Promise<unknown>, okMessage: string, focusId?: string) {
     if (busy) return;
-    setMenuId(null);
     try {
       await action();
       showToast(okMessage, "success");
@@ -261,7 +121,6 @@ export default function DoctorHome() {
   }
 
   function openFollowUp(a: Appointment, focusId = a.id) {
-    setMenuId(null);
     setPendingFocusId(focusId);
     setFollowUpCtx({
       parentAppointmentId: a.id,
@@ -269,19 +128,6 @@ export default function DoctorHome() {
       // فرد العائلة يبقى هو المستفيد من موعد العودة، وصاحب الحساب خيار صريح منفصل.
       familyMemberId: a.familyMemberId ?? a.beneficiary?.familyMemberId ?? null,
       accountHolderName: a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : null,
-    });
-  }
-
-  function openNoShow(a: Appointment) {
-    setMenuId(null);
-    setPendingFocusId(a.id);
-    setNoShowTarget({
-      id: a.id,
-      patientName: beneficiaryName(a),
-      phone: appointmentPhone(a),
-      date: a.date,
-      startTime: a.startTime,
-      alreadyNoShow: a.status === "NO_SHOW",
     });
   }
 
@@ -299,7 +145,6 @@ export default function DoctorHome() {
 
   return (
     <div className="space-y-5">
-      <NoShowSmsDialog target={noShowTarget} onClose={() => setNoShowTarget(null)} />
       <FollowUpModal open={Boolean(followUpCtx)} ctx={followUpCtx} onClose={() => setFollowUpCtx(null)} onDone={refreshAll} />
 
       {/* ترحيب */}
@@ -417,96 +262,11 @@ export default function DoctorHome() {
             )}
           </section>
 
-          {/* جدول اليوم */}
-          <section className="card p-4 sm:p-5" aria-label={t("جدول اليوم")}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-bold text-slate-900">{t("جدول اليوم")}</h2>
-              <label className="relative block w-full sm:w-64">
-                <span className="sr-only">{t("البحث عن مريض بالاسم أو الهاتف")}</span>
-                <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={t("البحث عن مريض")}
-                  className="w-full rounded-xl border border-slate-200 bg-white py-2 ps-9 pe-3 text-sm outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
-                />
-              </label>
-            </div>
-
-            {appointments.isPending ? (
-              <div className="py-6"><Spinner /></div>
-            ) : appointments.isError ? (
-              <p role="alert" className="mt-3 text-sm text-red-700">
-                {apiErrorMessage(appointments.error, t("تعذر تحميل مواعيد اليوم."))}{" "}
-                <button type="button" className="font-semibold underline" onClick={() => void appointments.refetch()}>{t("إعادة المحاولة")}</button>
-              </p>
-            ) : todays.length === 0 ? (
-              <p className="mt-4 rounded-xl bg-slate-50 p-4 text-center text-slate-600">{t("لا توجد مواعيد اليوم.")}</p>
-            ) : filtered.length === 0 ? (
-              <p className="mt-4 rounded-xl bg-slate-50 p-4 text-center text-slate-600">{t("لا توجد نتائج مطابقة للبحث.")}</p>
-            ) : (
-              <div className="mt-3">
-                <div className="hidden grid-cols-[3rem_minmax(0,1fr)_5rem_7rem_9rem] gap-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500 md:grid" aria-hidden="true">
-                  <span>{t("الدور")}</span><span>{t("المريض")}</span><span>{t("الوقت")}</span><span>{t("الحالة")}</span><span>{t("الإجراء")}</span>
-                </div>
-                <ul>
-                  {filtered.map((a, i) => {
-                    const showFollowUp = a.status === "COMPLETED" && canScheduleFollowUp(a);
-                    const canCall = CALL_ALLOWED.includes(a.status) && !current;
-                    const canLate = canManageAttendance && LATE_ALLOWED.includes(a.status);
-                    const canNoShow = canManageAttendance && canSendAttendanceMessage(a);
-                    const hasMenu = canCall || canLate || canNoShow;
-                    const name = beneficiaryName(a);
-                    return (
-                      <li
-                        key={a.id}
-                        className="relative grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-t border-slate-100 px-1 py-3 md:grid-cols-[3rem_minmax(0,1fr)_5rem_7rem_9rem] md:px-3"
-                      >
-                        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold tabular-nums text-slate-700" title={t("رقم الدور حسب وقت الموعد")}>
-                          {padTurn(turns.get(a.id))}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="break-words font-bold leading-snug text-slate-900">{name}</p>
-                          <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500 md:hidden">
-                            <span className="tabular-nums">{a.startTime}</span>
-                            <AppointmentStatusBadge status={a.status} />
-                          </p>
-                        </div>
-                        <span className="hidden tabular-nums text-slate-700 md:block">{a.startTime}</span>
-                        <span className="hidden md:block"><AppointmentStatusBadge status={a.status} /></span>
-
-                        <div className="justify-self-end md:justify-self-start">
-                          {showFollowUp ? (
-                            <Button ref={registerTrigger(a.id)} variant="outline" disabled={busy} onClick={() => openFollowUp(a)} title={t("إنشاء موعد عودة لهذا المريض")}>
-                              <CalendarPlus className="h-4 w-4" aria-hidden="true" />{t(" جدولة عودة ")}</Button>
-                          ) : hasMenu ? (
-                            <RowActionsMenu
-                              label={t("إجراءات {0}", { "0": name })}
-                              open={menuId === a.id}
-                              onOpenChange={(o) => setMenuId(o ? a.id : null)}
-                              disabled={busy}
-                              openUpward={i > filtered.length - 3 && filtered.length > 3}
-                              triggerRef={registerTrigger(a.id)}
-                              items={[
-                                ...(canCall ? [{ key: "call", label: t("نادِ هذا المريض"), onSelect: () => run(async () => { await callPatient.mutateAsync(a.id); }, t("تمت مناداة المريض."), a.id) }] : []),
-                                ...(canLate ? [{ key: "late", label: t("متأخر"), onSelect: () => run(async () => { await markLate.mutateAsync(a.id); }, t("سُجّل المريض متأخراً."), a.id) }] : []),
-                                ...(canNoShow
-                                  ? [{ key: "noshow", label: t("إرسال رسالة"), onSelect: () => openNoShow(a) }]
-                                  : []),
-                              ]}
-                            />
-                          ) : (
-                            <span className="text-xs text-slate-400">—</span>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-          </section>
+          {/* كتابة وصفة — مكان «جدول اليوم» سابقًا (دُمج الجدول في صفحة «المواعيد»). */}
+          <PrescriptionCard current={current} appointments={todays} loading={appointments.isPending} error={appointments.isError} />
+          <Link to="/appointments" className="block text-center text-sm font-semibold text-primary-700 hover:underline">
+            {t("عرض مواعيد اليوم وإدارتها في «المواعيد»")}
+          </Link>
         </div>
 
         {/* الدور القادم */}

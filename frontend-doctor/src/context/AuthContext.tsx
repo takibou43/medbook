@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { api, setAccessToken, getAccessToken, classifyApiError, ApiErrorKind } from "../lib/api";
 import { User } from "../types";
 import { logoutBody, wantsSessionBootstrap, withoutSwitchParam } from "../lib/portalSwitch";
+import { clearPrescriptionDraft } from "../lib/prescription";
 
 interface AuthContextValue {
   user: User | null;
@@ -139,6 +140,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await api.post("/auth/logout", logoutBody(user?.profiles));
     } finally {
+      // لا تبقى مسودة وصفة (بيانات طبية) في ذاكرة الصفحة بعد الخروج.
+      clearPrescriptionDraft();
       setAccessToken(null);
       setUser(null);
       setSessionError(false);

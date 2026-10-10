@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
 import type { PrescriptionMedication } from "../../lib/prescription";
 import { prescriptionLabels, prescriptionDate, prescriptionCatalogName, professionalText, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
+import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 
 export interface PrescriptionSheetData {
+  template?: PrescriptionTemplate | null;
   language: PrescriptionLanguage;
   professional?: PrescriptionProfessional;
   doctor: Doctor | null | undefined;
@@ -25,7 +27,7 @@ function Typed({ children, className }: { children: string; className?: string }
 }
 
 /**
- * ورقة الوصفة (A4) — نفس المكوّن ونفس البيانات في المعاينة والطباعة.
+ * ورقة الوصفة (A5) — نفس المكوّن ونفس البيانات في المعاينة والطباعة.
  * يُطبع فقط ما هو موجود فعلًا: لا شعار ولا عمر ولا رقم وصفة ولا QR ولا توقيع/ختم رقمي.
  */
 export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
@@ -41,7 +43,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const hasContact = Boolean(address || place || phone);
   return (
     <article className="rx-sheet" dir={lang === "fr" ? "ltr" : "rtl"} lang={lang} aria-label={text.sheet}>
-      <header className="rx-head">
+      {!data.template && <header className="rx-head">
         <div className="rx-id">
           {doctorName && <p className="rx-doctor">{text.doctor} <Typed>{doctorName}</Typed></p>}
           {d?.specialty && <p className="rx-specialty">{prescriptionCatalogName(d.specialty, lang)}</p>}
@@ -54,9 +56,9 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
             {phone && <p>{text.phone} <bdi dir="ltr" translate="no">{phone}</bdi></p>}
           </div>
         )}
-      </header>
+      </header>}
 
-      <h1 className="rx-title">{text.title}</h1>
+      {!data.template && <h1 className="rx-title">{text.title}</h1>}
 
       <dl className="rx-meta">
         <div>
@@ -107,7 +109,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </section>
       )}
 
-      <footer className="rx-sign">
+      {!data.template && <footer className="rx-sign">
         <div className="rx-sign-area">
           <p className="rx-small-title">{text.signature}</p>
           <div className="rx-sign-line" />
@@ -116,16 +118,16 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
           <p className="rx-small-title">{text.stamp}</p>
           <div className="rx-stamp-space" />
         </div>
-      </footer>
+      </footer>}
     </article>
   );
 }
 
-const PAPER_PX = 794; // 210mm بدقة 96dpi
+const PAPER_PX = 148 * 96 / 25.4; // A5: 148mm بدقة 96dpi
 const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 /**
- * معاينة قبل الطباعة: ورقة A4 بأبعادها الحقيقية مصغّرة لتلائم الشاشة (نفس الورقة على الهاتف والكمبيوتر)،
+ * معاينة قبل الطباعة: ورقة A5 بأبعادها الحقيقية مصغّرة لتلائم الشاشة (نفس الورقة على الهاتف والكمبيوتر)،
  * مع تكبير/تصغير وشريط أدوات خارج الورقة. الطباعة تُخفي كل شيء عدا الورقة (.rx-print-root في index.css)،
  * ولا تغيّر حالة أي موعد ولا ترسل شيئًا.
  */
@@ -137,8 +139,22 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
   const paperRef = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(1);
   const [zoom, setZoom] = useState<number | null>(null); // null = ملاءمة العرض
-  const [paperHeight, setPaperHeight] = useState(1123);
+  const [paperHeight, setPaperHeight] = useState(210 * 96 / 25.4);
+  const [useTemplate, setUseTemplate] = useState(true);
+  const [imageReady, setImageReady] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const template = useTemplate ? data?.template : null;
+  const templateOverflow = Boolean(template && paperHeight > 210 * 96 / 25.4 + 2);
   const scale = zoom ?? fit;
+  // Browser keyboard/menu printing must also preserve every medication when the custom sheet cannot fit.
+  useEffect(() => {
+    if (!open) return;
+    const beforePrint = () => {
+      if (template && (templateOverflow || !imageReady || imageError)) flushSync(() => setUseTemplate(false));
+    };
+    window.addEventListener("beforeprint", beforePrint);
+    return () => window.removeEventListener("beforeprint", beforePrint);
+  }, [open, template, templateOverflow, imageReady, imageError]);
 
   const measure = useCallback(() => {
     const stage = stageRef.current;
@@ -166,7 +182,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key === "Tab" && dialogRef.current) {
-        const els = Array.from(dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled])"));
+        const els = Array.from(dialogRef.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])"));
         if (!els.length) return;
         const first = els[0];
         const last = els[els.length - 1];
@@ -183,6 +199,14 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
     };
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!open) return;
+    setUseTemplate(true);
+    const img = paperRef.current?.querySelector("img");
+    setImageReady(Boolean(img?.complete && img.naturalWidth));
+    setImageError(false);
+  }, [open, data?.template?.image]);
+
   if (!open || !data) return null;
 
   const stepZoom = (dir: 1 | -1) => {
@@ -193,12 +217,16 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
 
   return createPortal(
     <div className="rx-print-root fixed inset-0 z-50 flex flex-col bg-slate-800/80">
+      {template && <style>{`@page { size: A5 portrait; margin: 0; } @media print { .rx-paper.rx-custom-paper { padding: ${template.top}mm ${template.side}mm ${template.bottom}mm !important; } }`}</style>}
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="flex min-h-0 flex-1 flex-col outline-none">
         {/* شريط الأدوات خارج الورقة وثابت أعلى المعاينة */}
         <div className="rx-no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:px-5">
+          {data.template && <label className="text-sm"><input type="checkbox" checked={useTemplate} onChange={e => setUseTemplate(e.target.checked)} /> {data.language === "fr" ? "Utiliser mon modèle" : "استخدام قالبي المحفوظ"}</label>}
+          {templateOverflow && <p role="alert" className="w-full text-sm text-red-700">{data.language === "fr" ? "Le contenu dépasse la zone du modèle. Désactivez le modèle pour imprimer toutes les pages sans couper le texte." : "المحتوى يتجاوز مساحة القالب. ألغِ استخدام القالب لطباعة الوصفة كاملة على عدة صفحات دون قص النص."}</p>}
+          {imageError && <p role="alert" className="text-red-700">{data.language === "fr" ? "Image illisible. Désactivez le modèle." : "تعذر عرض الصورة. ألغِ استخدام القالب."}</p>}
           <div className="min-w-0 max-sm:sr-only">
             <h2 id={titleId} className="text-base font-bold text-slate-900">{t("معاينة الوصفة")}</h2>
-            <p className="hidden text-xs text-slate-500 sm:block">{t("ورقة A4 كما ستُطبع. الطباعة لا تحفظ الوصفة ولا ترسلها ولا تغيّر الموعد.")}</p>
+            <p className="hidden text-xs text-slate-500 sm:block">{t("ورقة A5 كما ستُطبع. الطباعة لا تحفظ الوصفة ولا ترسلها ولا تغيّر الموعد.")}</p>
           </div>
           <div className="flex w-full items-center justify-between gap-1.5 sm:w-auto sm:justify-start">
             <div className="flex items-center rounded-xl border border-slate-200" role="group" aria-label={t("التكبير")}>
@@ -216,17 +244,18 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
             <button type="button" onClick={onClose} className="btn-outline whitespace-nowrap px-3">
               <X className="h-4 w-4" aria-hidden="true" /> {t("رجوع للتعديل")}
             </button>
-            <button type="button" onClick={() => window.print()} className="btn-primary whitespace-nowrap px-3">
+            <button type="button" disabled={templateOverflow || Boolean(template && (!imageReady || imageError))} onClick={() => window.print()} className="btn-primary whitespace-nowrap px-3">
               <Printer className="h-4 w-4" aria-hidden="true" /> {t("طباعة")}
             </button>
           </div>
         </div>
 
-        {/* مساحة المعاينة القابلة للتمرير (أفقيًا أيضًا عند التكبير) — الورقة بأبعاد A4 مصغّرة */}
+        {/* مساحة المعاينة القابلة للتمرير (أفقيًا أيضًا عند التكبير) — الورقة بأبعاد A5 مصغّرة */}
         <div ref={stageRef} className="rx-stage min-h-0 flex-1 overflow-auto p-3 sm:p-6">
           <div className="rx-scaler mx-auto" style={{ width: PAPER_PX * scale, height: paperHeight * scale }}>
-            <div ref={paperRef} className="rx-paper" style={{ transform: `scale(${scale})` }}>
-              <PrescriptionSheet data={data} />
+            <div ref={paperRef} className={`rx-paper${template ? " rx-custom-paper" : ""}`} style={{ transform: `scale(${scale})`, ...(template ? { paddingTop: `${template.top}mm`, paddingBottom: `${template.bottom}mm`, paddingLeft: `${template.side}mm`, paddingRight: `${template.side}mm` } : {}) }}>
+              {template && <img className="rx-template-image" src={template.image} alt="" onLoad={() => { setImageReady(true); setImageError(false); measure(); }} onError={() => { setImageReady(false); setImageError(true); }} />}
+              <PrescriptionSheet data={{ ...data, template }} />
             </div>
           </div>
         </div>

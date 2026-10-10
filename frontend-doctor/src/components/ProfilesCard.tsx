@@ -107,7 +107,7 @@ export function ProfilesCard() {
 }
 
 /** زر الانتقال السريع إلى واجهة المرضى في الشريط الجانبي/قائمة الهاتف — يظهر فقط لحساب يملك الملفين. */
-export function SwitchToPatientButton({ className, onDone }: { className?: string; onDone?: () => void }) {
+export function SwitchToPatientButton({ className, onDone, compact = false }: { className?: string; onDone?: () => void; /** وضع القائمة المطوية: أيقونة فقط مع اسم مقروء لقارئات الشاشة وتلميح. */ compact?: boolean }) {
   const { user, prepareSwitchToPatient } = useAuth();
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
@@ -124,9 +124,9 @@ export function SwitchToPatientButton({ className, onDone }: { className?: strin
     }
   }
   return (
-    <button type="button" onClick={go} disabled={busy} className={className ?? "btn-ghost w-full justify-start"}>
-      <ArrowLeftRight className="h-4 w-4" aria-hidden />
-      {busy ? "جارٍ الانتقال…" : "واجهة المرضى"}
+    <button type="button" onClick={go} disabled={busy} className={className ?? "btn-ghost w-full justify-start"} title={compact ? "واجهة المرضى" : undefined}>
+      <ArrowLeftRight className="h-4 w-4 shrink-0" aria-hidden />
+      <span className={compact ? "sr-only" : undefined}>{busy ? "جارٍ الانتقال…" : "واجهة المرضى"}</span>
     </button>
   );
 }

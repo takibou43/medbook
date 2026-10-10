@@ -72,6 +72,8 @@ const doctorMainNav = [
     to: "/settings",
     label: "الإعدادات",
     icon: Settings,
+    // يظهر في أسفل القائمة الجانبية بجانب «تسجيل الخروج» (ويبقى ضمن شريط الهاتف السفلي).
+    footer: true,
     // الصفحات التابعة لـ«الإعدادات» تُبقي العنصر مضيئًا (القائمة تبقى أربعة عناصر).
     activeFor: ["/overview", "/schedule", "/reviews", "/assistants", "/profile", "/account", "/messages", "/treatment-plans"],
   },
@@ -130,7 +132,7 @@ const adminNav = [
   { to: "/admin/referrals", label: "إحالات الأطباء", icon: Gift, group: "الحسابات والأطباء والعيادات" },
   { to: "/admin/specialties", label: "التخصصات", icon: ShieldCheck, group: "الكتالوج والإعدادات" },
   { to: "/admin/wilayas", label: "الولايات والبلديات", icon: Building2, group: "الكتالوج والإعدادات" },
-  { to: "/admin/account", label: "إعدادات الحساب", icon: KeyRound, group: "الكتالوج والإعدادات" },
+  { to: "/admin/account", label: "إعدادات الحساب", icon: KeyRound, footer: true },
 ];
 
 function AdminAreaLayout() {

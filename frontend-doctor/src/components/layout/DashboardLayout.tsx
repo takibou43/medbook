@@ -1,10 +1,11 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { LucideIcon, LogOut, Menu, X } from "lucide-react";
+import { Building2, ChevronLeft, LucideIcon, LogOut, Menu, Stethoscope, X } from "lucide-react";
 import clsx from "clsx";
 import { useAuth } from "../../context/AuthContext";
 import { Logo } from "../ui/Logo";
 import { SwitchToPatientButton } from "../ProfilesCard";
+import { accountDisplayName, initialsOf, readSidebarCollapsed, roleLabel, splitNavItems, writeSidebarCollapsed } from "../../lib/sidebar";
 
 export interface DashboardNavItem {
   to: string;
@@ -16,8 +17,17 @@ export interface DashboardNavItem {
   /** مسارات تابعة تُبقي هذا العنصر مضيئًا عند زيارتها (مثل صفحات «الإعدادات»). */
   activeFor?: string[];
   group?: string;
+  /** يُعرض في أسفل القائمة الجانبية (الإعدادات) بدل قائمة الأقسام. */
+  footer?: boolean;
 }
 
+/**
+ * تخطيط لوحات الطبيب/المساعد/الإدارة.
+ * - الحاسوب: لوحة زجاجية عائمة قابلة للطي (264px ↔ 76px)، يُحفظ اختيار الطي في localStorage.
+ * - الهاتف: قائمة جانبية منزلقة مع طبقة مظللة، تُغلق بالنقر خارجها أو باختيار صفحة أو بـEscape.
+ * الاتجاه منطقي (start/end): يمين الشاشة في العربية (dir=rtl) ويُعكس تلقائيًا في dir=ltr.
+ * التعديل بصري فقط: نفس الروابط والصلاحيات (تأتي من App.tsx حسب الدور) دون طلبات أو مؤقتات جديدة.
+ */
 export function DashboardLayout({
   title,
   contentClassName,
@@ -36,141 +46,390 @@ export function DashboardLayout({
   settingsStart?: number;
   clinicMode?: boolean;
 }) {
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  // العنصر نشط إن طابق مساره (NavLink) أو كان المسار الحالي من صفحاته التابعة (activeFor).
   const isItemActive = (item: DashboardNavItem, isActive: boolean) =>
     isActive || (item.activeFor ?? []).some((p) => pathname === p || pathname.startsWith(p + "/"));
-  // روابط التنقّل (مثل "المواعيد") كانت موجودة فقط داخل الشريط الجانبي المخفي على الهاتف
-  // (hidden md:flex)، فلم يكن هناك أي وسيلة للوصول إليها على الشاشات الصغيرة. أضفنا قائمة
-  // منسدلة تُفتح بزر همبرغر في الترويسة على الهاتف وتحتوي نفس الروابط.
+
+  const [collapsed, setCollapsed] = useState<boolean>(() => readSidebarCollapsed());
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((v) => {
+      writeSidebarCollapsed(!v);
+      return !v;
+    });
+  }, []);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuId = useId();
-  const menuButton = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+
+  const openMobileMenu = () => {
+    returnFocus.current = document.activeElement as HTMLElement | null;
+    setMobileMenuOpen(true);
+  };
+  const closeMobileMenu = useCallback((restoreFocus = true) => {
+    setMobileMenuOpen(false);
+    if (restoreFocus) requestAnimationFrame(() => returnFocus.current?.focus());
+  }, []);
+
+  // الدرج المغلق خارج شجرة التركيز ولا تقرؤه قارئات الشاشة.
+  useEffect(() => {
+    const el = drawerRef.current;
+    if (el) el.inert = !mobileMenuOpen;
+  }, [mobileMenuOpen]);
+
   useEffect(() => {
     if (!mobileMenuOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") { setMobileMenuOpen(false); menuButton.current?.focus(); } };
-    document.addEventListener("keydown", close);
-    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener("keydown", close); };
-  }, [mobileMenuOpen]);
+    const drawer = drawerRef.current;
+    const focusables = () =>
+      Array.from(drawer?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? []);
+    focusables()[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMobileMenu();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      // حبس التركيز داخل القائمة المفتوحة.
+      const list = focusables();
+      if (list.length === 0) return;
+      const first = list[0];
+      const last = list[list.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [mobileMenuOpen, closeMobileMenu]);
+
+  // إغلاق القائمة عند الانتقال لصفحة أخرى (بما فيها أزرار الرجوع في المتصفح).
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   async function handleLogout() {
     await logout();
     navigate("/login");
   }
 
-  return (
+  const { main, footer } = splitNavItems(items);
+  const name = accountDisplayName(user);
+  const account = { name, initials: initialsOf(name.replace(/^د\.\s*/, "")), role: roleLabel(user?.role) };
+
+  const renderNav = (compact: boolean, onNavigate?: () => void) => (
     <>
-    <div className="flex min-h-screen bg-slate-50">
-      <aside className="hidden w-64 shrink-0 border-l border-slate-200 bg-white md:flex md:flex-col">
-        <div className="flex h-16 items-center gap-2 border-b border-slate-200 px-5 text-primary-700">
-          <Logo className="h-8 w-8" />
-          <span className="text-lg font-extrabold">MedBook</span>
-        </div>
-        <p className="px-5 pt-4 text-xs font-semibold uppercase text-slate-400">{title}</p>
-        {subtitle && (
-          <p className="mx-5 mt-2 truncate rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-semibold text-primary-700" title={subtitle}>
-            {subtitle}
-          </p>
-        )}
-        {clinicMode && <div className="mx-3 mt-3 flex gap-2 rounded-xl bg-slate-50 p-2 text-sm"><NavLink className="flex-1 rounded-lg bg-primary-50 p-2 text-primary-700" to="/">وضع الطبيب</NavLink><NavLink className="flex-1 rounded-lg p-2" to="/clinic">إدارة العيادة</NavLink></div>}
-        <nav className="flex-1 space-y-1 p-3">
-          {items.map((item, index) => (
-            <div key={item.to}>
-            {item.group && item.group !== items[index - 1]?.group && <p className="px-3 pb-2 pt-4 text-xs font-bold text-slate-600">{item.group}</p>}
-            {index === settingsStart && <p className="px-3 pb-2 pt-4 text-xs font-bold text-slate-500">الإدارة والإعدادات</p>}
+      <ul className="space-y-1" role="list">
+        {main.map((item, index) => (
+          <li key={item.to}>
+            {item.group && item.group !== main[index - 1]?.group && (
+              compact
+                ? <div className="mx-3 my-2 border-t border-white/10" aria-hidden />
+                : <p className="px-3 pb-1.5 pt-4 text-[11px] font-bold tracking-wide text-slate-300/90">{item.group}</p>
+            )}
+            {index === settingsStart && settingsStart < main.length && (
+              compact
+                ? <div className="mx-3 my-2 border-t border-white/10" aria-hidden />
+                : <p className="px-3 pb-1.5 pt-4 text-[11px] font-bold text-slate-300/90">الإدارة والإعدادات</p>
+            )}
+            <SidebarLink item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+
+  const renderFooter = (compact: boolean, onNavigate?: () => void) => (
+    <div className="space-y-1 border-t border-white/10 pt-3">
+      {footer.map((item) => (
+        <SidebarLink key={item.to} item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
+      ))}
+      <div className="group relative">
+        <SwitchToPatientButton
+          compact={compact}
+          onDone={onNavigate}
+          className={clsx(itemBase, itemIdle, compact && "justify-center px-0")}
+        />
+      </div>
+      <div className="group relative">
+        <button
+          type="button"
+          onClick={handleLogout}
+          aria-label={compact ? "تسجيل الخروج" : undefined}
+          className={clsx(itemBase, "text-rose-200 hover:bg-rose-500/15 hover:text-white", compact && "justify-center px-0")}
+        >
+          <LogOut className="h-[18px] w-[18px] shrink-0" aria-hidden />
+          {!compact && <span className="truncate">تسجيل الخروج</span>}
+        </button>
+        {compact && <Tip>تسجيل الخروج</Tip>}
+      </div>
+    </div>
+  );
+
+  const renderClinicSwitch = (compact: boolean, onNavigate?: () => void) =>
+    clinicMode && (
+      <div className={clsx("mt-3 flex gap-1.5 rounded-2xl bg-white/5 p-1.5 text-sm", compact && "flex-col")}>
+        {[
+          { to: "/", label: "وضع الطبيب", icon: Stethoscope, end: true },
+          { to: "/clinic", label: "إدارة العيادة", icon: Building2, end: false },
+        ].map((m) => (
+          <div key={m.to} className="group relative flex-1">
             <NavLink
-              to={item.to}
-              end={item.end}
+              to={m.to}
+              end={m.end}
+              onClick={onNavigate}
+              aria-label={compact ? m.label : undefined}
               className={({ isActive }) =>
                 clsx(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
-                  isItemActive(item, isActive) ? "bg-primary-50 text-primary-700" : "text-slate-600 hover:bg-slate-100"
+                  "flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-semibold transition-colors duration-200 motion-reduce:transition-none",
+                  isActive ? "bg-white/15 text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"
                 )
               }
             >
-              <item.icon className="h-4.5 w-4.5" />
-              {item.label}
-              {item.badge ? (
-                <span className="mr-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">{item.badge}</span>
-              ) : null}
-            </NavLink></div>
-          ))}
-        </nav>
-        <div className="border-t border-slate-200 p-3">
-          <SwitchToPatientButton />
-          <button onClick={handleLogout} className="btn-ghost w-full justify-start">
-            <LogOut className="h-4 w-4" />
-            تسجيل الخروج
+              <m.icon className="h-4 w-4 shrink-0" aria-hidden />
+              {!compact && <span className="truncate">{m.label}</span>}
+            </NavLink>
+            {compact && <Tip>{m.label}</Tip>}
+          </div>
+        ))}
+      </div>
+    );
+
+  const accountCard = (compact: boolean) => (
+    <div
+      className={clsx(
+        "mt-4 flex items-center gap-3 rounded-2xl",
+        compact ? "justify-center" : "border border-white/10 bg-white/[0.06] p-2.5"
+      )}
+      title={compact ? `${account.name} — ${account.role}` : undefined}
+    >
+      <span
+        aria-hidden
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-sky-600 text-sm font-bold text-white ring-2 ring-white/20"
+      >
+        {account.initials}
+      </span>
+      <div className={clsx("min-w-0", compact && "sr-only")}>
+        <p className="truncate text-sm font-bold text-white">{account.name}</p>
+        <p className="truncate text-xs text-slate-300">{subtitle ?? `${account.role} · ${title}`}</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex min-h-screen bg-slate-50">
+      {/* ===== الحاسوب: لوحة زجاجية عائمة ===== */}
+      <aside
+        aria-label="القائمة الجانبية"
+        className={clsx(
+          "glass-sidebar sticky top-3 z-30 m-3 hidden h-[calc(100vh-1.5rem)] shrink-0 flex-col rounded-3xl text-slate-100 md:flex",
+          "transition-[width] duration-200 ease-out motion-reduce:transition-none",
+          collapsed ? "w-[76px]" : "w-[264px]"
+        )}
+      >
+        <div className={clsx("relative flex h-16 shrink-0 items-center gap-2.5 px-4", collapsed && "justify-center px-0")}>
+          <Logo className="h-9 w-9 shrink-0 drop-shadow" />
+          {!collapsed && <span className="truncate text-lg font-extrabold tracking-tight text-white">MedBook</span>}
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "توسيع القائمة الجانبية" : "طي القائمة الجانبية"}
+            title={collapsed ? "توسيع القائمة" : "طي القائمة"}
+            className="absolute -end-3.5 top-5 flex h-7 w-7 items-center justify-center rounded-full border border-white/25 bg-[#12355a] text-white shadow-lg transition-colors duration-200 hover:bg-primary-600 motion-reduce:transition-none"
+          >
+            {/* السهم يشير لاتجاه الحركة: نحو حافة الشاشة عند الطي، ويُعكس في RTL. */}
+            <ChevronLeft
+              className={clsx("h-4 w-4 transition-transform duration-200 motion-reduce:transition-none rtl:-scale-x-100", collapsed && "rotate-180")}
+              aria-hidden
+            />
           </button>
         </div>
+
+        <div className={clsx("px-3", collapsed && "px-2")}>
+          {accountCard(collapsed)}
+          {renderClinicSwitch(collapsed)}
+        </div>
+
+        <nav aria-label="أقسام اللوحة" className={clsx("mt-3 flex-1 px-3 pb-2", collapsed ? "overflow-visible px-2" : "overflow-y-auto")}>
+          {renderNav(collapsed)}
+        </nav>
+
+        <div className={clsx("px-3 pb-3", collapsed && "px-2")}>{renderFooter(collapsed)}</div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-5 md:hidden">
-          <div className="flex items-center gap-2 text-primary-700">
-            <Logo className="h-7 w-7" />
-            <span className="text-lg font-extrabold">MedBook</span>
+        {/* ===== الهاتف: شريط علوي + قائمة منزلقة ===== */}
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur md:hidden">
+          <div className="flex min-w-0 items-center gap-2 text-primary-700">
+            <Logo className="h-8 w-8 shrink-0" />
+            <span className="truncate text-lg font-extrabold">MedBook</span>
           </div>
           <button
-            ref={menuButton}
+            type="button"
             aria-controls={menuId}
             aria-expanded={mobileMenuOpen}
-            onClick={() => setMobileMenuOpen((v) => !v)}
-            className="btn-ghost"
+            onClick={() => (mobileMenuOpen ? closeMobileMenu() : openMobileMenu())}
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100"
             aria-label={mobileMenuOpen ? "إغلاق القائمة" : "فتح القائمة"}
           >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            <Menu className="h-5 w-5" aria-hidden />
           </button>
         </header>
 
-        {mobileMenuOpen && (
-          <nav id={menuId} aria-label="قائمة الأقسام" className={clsx("fixed inset-x-0 top-16 z-50 overflow-y-auto space-y-1 border-b border-slate-200 bg-white p-3 md:hidden", dailyNavigation ? "bottom-20" : "bottom-0")}>
-            {items.map((item, index) => (
-              <div key={item.to}>
-              {item.group && item.group !== items[index - 1]?.group && <p className="px-3 pb-2 pt-4 text-xs font-bold text-slate-600">{item.group}</p>}
+        <div
+          aria-hidden
+          onClick={() => closeMobileMenu()}
+          className={clsx(
+            "fixed inset-0 z-40 bg-slate-900/50 transition-opacity duration-200 motion-reduce:transition-none md:hidden",
+            mobileMenuOpen ? "opacity-100" : "pointer-events-none opacity-0"
+          )}
+        />
+        <div
+          ref={drawerRef}
+          id={menuId}
+          role="dialog"
+          aria-modal="true"
+          aria-label="القائمة"
+          className={clsx(
+            "glass-sidebar fixed inset-y-2 start-2 z-50 flex w-[min(288px,calc(100vw-3rem))] flex-col rounded-3xl text-slate-100 md:hidden",
+            "transition-transform duration-200 ease-out motion-reduce:transition-none",
+            mobileMenuOpen ? "translate-x-0" : "ltr:-translate-x-[110%] rtl:translate-x-[110%]"
+          )}
+        >
+          <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-4">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Logo className="h-9 w-9 shrink-0" />
+              <span className="truncate text-lg font-extrabold text-white">MedBook</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => closeMobileMenu()}
+              aria-label="إغلاق القائمة"
+              className="flex h-11 w-11 items-center justify-center rounded-full text-slate-200 hover:bg-white/10"
+            >
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          </div>
+          <div className="px-3">
+            {accountCard(false)}
+            {renderClinicSwitch(false, () => closeMobileMenu(false))}
+          </div>
+          <nav aria-label="أقسام اللوحة" className="mt-3 flex-1 overflow-y-auto px-3 pb-2">
+            {renderNav(false, () => closeMobileMenu(false))}
+          </nav>
+          <div className="px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">{renderFooter(false, () => closeMobileMenu(false))}</div>
+        </div>
+
+        {/* min-w-0 + overflow-x-hidden: خط دفاع أخير حتى لا يُخرج أي عنصر عريض الصفحة عن عرض الشاشة. */}
+        <main className={clsx("min-w-0 flex-1 overflow-x-hidden p-4 md:p-8 md:ps-5", contentClassName, dailyNavigation && "pb-24 md:pb-8")}>
+          <Outlet />
+        </main>
+        {dailyNavigation && (
+          <nav aria-label="التنقل اليومي" className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
+            {items.slice(0, settingsStart ?? 2).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                onClick={() => setMobileMenuOpen(false)}
                 className={({ isActive }) =>
-                  clsx(
-                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
-                    isItemActive(item, isActive) ? "bg-primary-50 text-primary-700" : "text-slate-600 hover:bg-slate-100"
-                  )
+                  clsx("relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-3 text-[11px]", isItemActive(item, isActive) ? "bg-primary-50 text-primary-700" : "text-slate-600")
                 }
               >
-                <item.icon className="h-4.5 w-4.5" />
-                {item.label}
-                {item.badge ? (
-                  <span className="mr-auto flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">{item.badge}</span>
-                ) : null}
-              </NavLink></div>
+                <item.icon className="h-5 w-5" aria-hidden />
+                <span className="truncate">{item.label}</span>
+                {item.badge ? <span className="absolute top-1 rounded-full bg-red-600 px-1 text-[10px] text-white">{item.badge}</span> : null}
+              </NavLink>
             ))}
-            {clinicMode && <NavLink to="/clinic" onClick={() => setMobileMenuOpen(false)} className="block rounded-xl p-3 text-primary-700">إدارة العيادة</NavLink>}
-            <SwitchToPatientButton className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-primary-700 hover:bg-slate-100" onDone={() => setMobileMenuOpen(false)} />
-            <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100">
-              <LogOut className="h-4 w-4" />
-              تسجيل الخروج
+            <button
+              type="button"
+              aria-controls={menuId}
+              aria-expanded={mobileMenuOpen}
+              onClick={() => (mobileMenuOpen ? closeMobileMenu() : openMobileMenu())}
+              className="flex flex-1 flex-col items-center gap-1 py-3 text-[11px] text-slate-600"
+            >
+              <Menu className="h-5 w-5" aria-hidden />
+              المزيد
             </button>
           </nav>
         )}
-
-        {/* min-w-0 + overflow-x-hidden: خط دفاع أخير حتى لا يُخرج أي عنصر عريض (رابط طويل،
-            جدول، رقم غير قابل للقصّ) الصفحة كاملة عن عرض شاشة الهاتف. */}
-        <main className={clsx("min-w-0 flex-1 overflow-x-hidden p-4 md:p-8", contentClassName, dailyNavigation && "pb-24 md:pb-8")}>
-          <Outlet />
-        </main>
-        {dailyNavigation && <nav aria-label="التنقل اليومي" className="fixed inset-x-0 bottom-0 z-40 flex border-t bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
-          {items.slice(0, settingsStart ?? 2).map(item => <NavLink key={item.to} to={item.to} end={item.end} onClick={() => setMobileMenuOpen(false)} className={({isActive}) => clsx("relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-3 text-[11px]", isItemActive(item, isActive) ? "text-primary-700 bg-primary-50" : "text-slate-600")}><item.icon className="h-5 w-5"/><span>{item.label}</span>{item.badge ? <span className="absolute top-1 rounded-full bg-red-500 px-1 text-white">{item.badge}</span> : null}</NavLink>)}
-          <button aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(v => !v)} className="flex flex-1 flex-col items-center gap-1 py-3 text-[11px]"><Menu className="h-5 w-5"/>المزيد</button>
-        </nav>}
       </div>
     </div>
-    </>
+  );
+}
+
+const itemBase =
+  "relative flex min-h-[44px] w-full items-center gap-3 rounded-2xl px-3 text-sm font-medium transition-colors duration-200 motion-reduce:transition-none";
+const itemIdle = "text-slate-200 hover:bg-white/10 hover:text-white";
+
+/** تلميح يظهر عند المرور أو التركيز بلوحة المفاتيح (في الوضع المطوي فقط). يظهر في جهة المحتوى. */
+function Tip({ children }: { children: ReactNode }) {
+  return (
+    <span
+      role="presentation"
+      className="pointer-events-none absolute start-full top-1/2 z-50 ms-3 -translate-y-1/2 whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none"
+    >
+      {children}
+    </span>
+  );
+}
+
+function SidebarLink({
+  item,
+  compact,
+  active,
+  onNavigate,
+}: {
+  item: DashboardNavItem;
+  compact: boolean;
+  active: (isActive: boolean) => boolean;
+  onNavigate?: () => void;
+}) {
+  const badge = item.badge ? (item.badge > 99 ? "99+" : String(item.badge)) : null;
+  return (
+    <div className="group relative">
+      <NavLink
+        to={item.to}
+        end={item.end}
+        onClick={onNavigate}
+        aria-label={compact ? (badge ? `${item.label} (${badge} غير مقروءة)` : item.label) : undefined}
+        className={({ isActive }) =>
+          clsx(
+            itemBase,
+            compact && "justify-center px-0",
+            active(isActive)
+              ? "bg-primary-600 text-white shadow-[0_6px_18px_-6px_rgba(20,184,166,0.65)] ring-1 ring-white/15"
+              : itemIdle
+          )
+        }
+      >
+        <span className="relative flex shrink-0">
+          <item.icon className="h-[18px] w-[18px]" aria-hidden />
+          {compact && badge && (
+            <span className="absolute -end-2.5 -top-2 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-[#12355a]">
+              {badge}
+            </span>
+          )}
+        </span>
+        {!compact && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+        {!compact && badge && (
+          <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold text-white">
+            {badge}
+          </span>
+        )}
+      </NavLink>
+      {compact && <Tip>{item.label}</Tip>}
+    </div>
   );
 }

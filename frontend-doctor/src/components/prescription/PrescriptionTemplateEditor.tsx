@@ -2,26 +2,34 @@ import { useState } from "react";
 import { api } from "../../lib/api";
 import { readTemplateImage, type PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 import { useLanguage } from "../../i18n/LanguageRoot";
+import type { Doctor } from "../../types";
+import { PrescriptionDesigner } from "./PrescriptionDesigner";
 
-export function PrescriptionTemplateEditor({ value, onChange }: { value: PrescriptionTemplate | null; onChange: (value: PrescriptionTemplate | null) => void }) {
+export function PrescriptionTemplateEditor({ value, onChange, doctor }: { value: PrescriptionTemplate | null; onChange: (value: PrescriptionTemplate | null) => void; doctor?: Doctor | null }) {
   const fr = useLanguage() === "fr";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function save(remove = false) {
+  const [mode, setMode] = useState<"image" | "design">(value?.design ? "design" : "image");
+  async function save(remove = false, next = draft) {
     setBusy(true); setError("");
     try {
       if (remove) await api.delete("/doctor/prescription-template");
-      else await api.put("/doctor/prescription-template", draft);
-      onChange(remove ? null : draft); setEditing(false);
+      else await api.put("/doctor/prescription-template", next);
+      onChange(remove ? null : next); setEditing(false);
     } catch { setError(fr ? "Enregistrement impossible. Réessayez." : "تعذر حفظ القالب. أعد المحاولة."); }
     finally { setBusy(false); }
   }
   return <div className="my-3 rounded-xl border border-slate-200 p-3">
-    <button type="button" className="btn-outline" onClick={() => { setDraft(value); setError(""); setEditing(!editing); }}>{fr ? "Modèle personnel A5" : "قالب الوصفة الشخصي A5"}</button>
+    <button type="button" disabled={busy} className="btn-outline" onClick={() => { setDraft(value); setMode(value?.design ? "design" : "image"); setError(""); setEditing(!editing); }}>{fr ? "Modèle personnel A5" : "قالب الوصفة الشخصي A5"}</button>
     {value && <span className="mx-2 text-sm text-emerald-700">{fr ? "Enregistré dans votre compte" : "محفوظ في حسابك"}</span>}
     {editing && <div className="mt-3 space-y-3">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={fr ? "Source du modèle" : "طريقة إنشاء القالب"}>
+        <button type="button" disabled={busy} aria-pressed={mode === "design"} className={mode === "design" ? "btn-primary" : "btn-outline"} onClick={() => { setMode("design"); setError(""); }}>{fr ? "Créer / modifier mon design" : "إنشاء وتعديل تصميمي"}</button>
+        <button type="button" disabled={busy} aria-pressed={mode === "image"} className={mode === "image" ? "btn-primary" : "btn-outline"} onClick={() => { setMode("image"); setError(""); }}>{fr ? "Importer une feuille vierge" : "رفع صورة وصفة فارغة"}</button>
+      </div>
+      {mode === "design" ? <PrescriptionDesigner value={value} doctor={doctor} saving={busy} onSave={next => save(false, next)} /> : <>
       <p className="text-sm text-slate-600">{fr ? "Importez une ordonnance vierge, sans données de patient. Photo verticale de toute la feuille A5, puis réglez la zone d’écriture (mm)." : "ارفع صورة وصفة فارغة دون بيانات مرضى. صوّر ورقة A5 كاملة بشكل مستقيم، ثم اضبط مساحة الكتابة بالميليمتر."}</p>
       <input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} aria-label={fr ? "Image du modèle vierge" : "صورة قالب الوصفة الفارغة"} onChange={async e => {
         const file = e.target.files?.[0]; e.target.value = "";
@@ -40,6 +48,7 @@ export function PrescriptionTemplateEditor({ value, onChange }: { value: Prescri
           <div className="absolute border-2 border-dashed border-teal-600 bg-white/30 text-center text-xs text-teal-900" style={{ top: draft.top * 1.5, bottom: draft.bottom * 1.5, left: draft.side * 1.5, right: draft.side * 1.5 }}>{fr ? "Zone d’écriture" : "مساحة الكتابة"}</div>
         </div>
         <button type="button" disabled={busy} className="btn-primary" onClick={() => save()}>{busy ? (fr ? "Enregistrement…" : "جارٍ الحفظ…") : (fr ? "Enregistrer le modèle" : "حفظ القالب")}</button>
+      </>}
       </>}
       {value && <button type="button" disabled={busy} className="btn-outline mx-2" onClick={() => save(true)}>{fr ? "Supprimer le modèle" : "حذف القالب"}</button>}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}

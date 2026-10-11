@@ -671,6 +671,12 @@ model Appointment {
   // تمنع تراجع موعد العودة خطوة مع كل مناداة؛ انظر lib/queuePriority.ts (followUpAnchorFor). NULL = لم تُحفظ.
   followUpAnchorId String?
 
+  // مُهمَلان (legacy): من تصميم PR #47 غير المعتمد، لكنهما موجودان في قاعدة الإنتاج. لا يكتب فيهما أي كود (ثابتان false/0)
+  // وتُحوَّل قيمهما إلى isFollowUp في migration 20261011190000_reconcile_follow_up_designs. أُبقيا في المخطط كي لا يحاول
+  // prisma db push حذفهما (فقدان بيانات). يُحذفان لاحقًا بقرار صريح وبعد التحقق من عدم الاعتماد عليهما.
+  doctorFollowUp Boolean @default(false)
+  slotSeq        Int     @default(0)
+
   // الجلسة (من خطة علاج) التي يحققها هذا الموعد، والمتابعة التي حُوّلت إليه.
   treatmentSessionLink DentalTreatmentSession? @relation("SessionAppointment")
   dentalFollowUp       DentalFollowUp?

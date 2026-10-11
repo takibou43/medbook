@@ -376,6 +376,34 @@ describe.skipIf(!TEST_URL)("أولوية موعد العودة في الطابو
     expect(rows.filter((r) => r.isFollowUp).length).toBe(4);
   }, 60000);
 
+  it("13ب) 100 طلب موعد عودة متزامن لنفس الوقت ⇒ بلا تكرار وبلا 5xx، والحجوزات السابقة لا تتغير", async () => {
+    const d = await mkDoctor();
+    const parent = await mkToday(d.doctorId, "أصل", { status: "COMPLETED" });
+    const date = dayStr(9);
+    const day = new Date(`${date}T00:00:00Z`);
+    const seeded = await Promise.all(["10:00", "10:15", "10:30"].map((t, i) =>
+      db.appointment.create({ data: { doctorId: d.doctorId, date: day, startTime: t, endTime: hhmm(10 * 60 + 15 * (i + 1)), status: "CONFIRMED", guestFirstName: "سابق" + i, guestLastName: tag, guestPhone: "0551234567" } })));
+    const results = await Promise.all(
+      Array.from({ length: 100 }, () => call("POST", `/api/doctor/appointments/${parent.id}/follow-up`, d.token, { date, startTime: "10:00", idempotencyKey: randomUUID() }))
+    );
+    expect(results.filter((r) => r.status >= 500)).toEqual([]);
+    const ok = results.filter((r) => r.status === 201);
+    expect(results.every((r) => r.status === 201 || r.status === 409)).toBe(true);
+    // الشبكة 96 خانة (15 دقيقة × 24 ساعة) منها 3 مشغولة سلفًا ⇒ 93 كحد أقصى.
+    expect(ok.length).toBeGreaterThan(0);
+    expect(ok.length).toBeLessThanOrEqual(93);
+    const times = ok.map((r) => r.data.startTime as string);
+    expect(new Set(times).size).toBe(ok.length);
+    expect(times.every((t) => HHMM.test(t))).toBe(true);
+    const rows = await db.appointment.findMany({ where: { doctorId: d.doctorId, date: day, status: { not: "CANCELLED" } } });
+    expect(rows.length).toBe(3 + ok.length);
+    expect(new Set(rows.map((r) => r.startTime)).size).toBe(rows.length);
+    for (const s0 of seeded) {
+      const now = await db.appointment.findUniqueOrThrow({ where: { id: s0.id } });
+      expect([now.startTime, now.status, now.date.getTime()]).toEqual([s0.startTime, s0.status, s0.date.getTime()]);
+    }
+  }, 120000);
+
   it("14) إعادة إرسال نفس طلب موعد العودة (نفس المفتاح) لا ينشئ موعدين", async () => {
     const d = await mkDoctor();
     const parent = await mkToday(d.doctorId, "أصل", { status: "COMPLETED" });

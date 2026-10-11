@@ -57,8 +57,8 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const specialtyFr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "fr") : "";
   const specialtyAr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "ar") : "";
   const footerLine = [address, place].filter(Boolean).join(lang === "fr" ? " — " : " — ");
-  return (
-    <article className={`rx-sheet${standard ? " rx-standard" : ""}`} dir={lang === "fr" ? "ltr" : "rtl"} lang={lang} aria-label={text.sheet}>
+  const body = (
+    <>
       {standard && (
         <div className="rx-watermark" aria-hidden="true">
           <Logo className="rx-watermark-mark" />
@@ -137,8 +137,23 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
       )}
 
       {standard && footerLine && <p className="rx-foot"><Typed>{footerLine}</Typed></p>}
-    </article>
+    </>
   );
+  const articleProps = { className: `rx-sheet${standard ? " rx-standard" : ""}`, dir: lang === "fr" ? "ltr" : "rtl", lang, "aria-label": text.sheet } as const;
+  // الورقة القياسية: جدول إطار بصفّي حشو (أعلى/أسفل) يتكرران في كل صفحة مطبوعة، لأن هامش الصفحة صفر
+  // (لا هامش = لا مكان تضيف فيه المتصفحات الرابط والعنوان والوقت). الجدول للتنسيق فقط ولا معنى دلاليًا له.
+  if (standard) {
+    return (
+      <article {...articleProps}>
+        <table className="rx-frame" role="presentation">
+          <thead aria-hidden="true"><tr><td className="rx-pad" /></tr></thead>
+          <tbody><tr><td className="rx-frame-body"><div className="rx-inner">{body}</div></td></tr></tbody>
+          <tfoot aria-hidden="true"><tr><td className="rx-pad" /></tr></tfoot>
+        </table>
+      </article>
+    );
+  }
+  return <article {...articleProps}>{body}</article>;
 }
 
 const PAPER_PX = 148 * 96 / 25.4; // A5: 148mm بدقة 96dpi
@@ -235,7 +250,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
 
   return createPortal(
     <div className="rx-print-root fixed inset-0 z-50 flex flex-col bg-slate-800/80">
-      {!template && <style>{`@page { size: A5 portrait; margin: 10mm; }`}</style>}
+      {!template && <style>{`@page { size: A5 portrait; margin: 0; }`}</style>}
       {template && <style>{`@page { size: A5 portrait; margin: 0; } @media print { .rx-paper.rx-custom-paper { padding: ${template.top}mm ${template.side}mm ${template.bottom}mm !important; } }`}</style>}
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="flex min-h-0 flex-1 flex-col outline-none">
         {/* شريط الأدوات خارج الورقة وثابت أعلى المعاينة */}
@@ -267,7 +282,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
               <Printer className="h-4 w-4" aria-hidden="true" /> {t("طباعة")}
             </button>
           </div>
-          <p className="w-full text-xs leading-5 text-slate-600">{t("عند الطباعة: اختر ورق A5 والحجم الفعلي 100% (بدون «ملاءمة»)، وألغِ خيار «Headers and footers» من إعدادات المتصفح.")}</p>
+          <p className="w-full text-xs leading-5 text-slate-600">{t("عند الطباعة: اختر ورق A5 والحجم الفعلي 100%. إن ظهر في الورقة رابط الموقع أو عنوان الصفحة أو الوقت فهي إضافات المتصفح؛ ألغِ «Headers and footers» من إعدادات الطباعة.")}</p>
         </div>
 
         {/* مساحة المعاينة القابلة للتمرير (أفقيًا أيضًا عند التكبير) — الورقة بأبعاد A5 مصغّرة */}

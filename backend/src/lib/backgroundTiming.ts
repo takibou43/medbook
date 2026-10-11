@@ -2,8 +2,9 @@ import { AppointmentStatus, ReminderStatus, SubscriptionStatus } from "@prisma/c
 import { prisma } from "./prisma";
 import { algeriaDayOf, appointmentStartUtc } from "../modules/reminders/reminders.service";
 
-// Align quiet jobs to one hourly window, rather than waking Neon at staggered times.
-const QUIET_CHECK_MS = 60 * 60_000;
+// Share a three-hour recovery window only when there is no earlier real deadline.
+// Successful API mutations wake the jobs immediately through liveUpdates.
+const QUIET_CHECK_MS = 3 * 60 * 60_000;
 export function quietCheckDelay(now: Date): number {
   return QUIET_CHECK_MS - (now.getTime() % QUIET_CHECK_MS);
 }

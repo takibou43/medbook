@@ -50,7 +50,8 @@ router.get("/changes", asyncHandler(async (req, res) => {
   const unsubscribe = liveUpdates.subscribe(() => {
     if (revision !== current()) respond(current());
   });
-  const timer = setTimeout(() => respond(current()), 25_000);
+  // Changes still respond immediately; quiet connections recheck access less often.
+  const timer = setTimeout(() => respond(current()), 50_000);
   res.on("close", cleanup);
 }));
 

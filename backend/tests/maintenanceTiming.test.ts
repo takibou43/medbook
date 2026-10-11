@@ -23,13 +23,24 @@ beforeEach(() => {
   db.notification.findFirst.mockResolvedValue(null);
 });
 describe("quiet maintenance keeps real deadlines", () => {
-  it("waits one hour without work and aligns unrelated jobs to the same window", async () => {
+  it("backs off three hours without work and aligns unrelated jobs to the same window", async () => {
     expect(await nextMaintenanceDelay(now)).toBe(3_600_000);
     expect(quietCheckDelay(new Date("2026-10-07T14:17:00Z"))).toBe(43 * 60_000);
+    expect(quietCheckDelay(new Date("2026-10-07T15:00:00Z"))).toBe(180 * 60_000);
+    expect(quietCheckDelay(new Date("2026-10-07T23:59:00Z"))).toBe(60_000);
+    expect(await nextMaintenanceDelay(new Date("2026-10-07T15:00:00Z"))).toBe(180 * 60_000);
   });
   it("wakes just after clinic closing in Algeria instead of waiting an hour", async () => {
     db.doctor.findMany.mockResolvedValue([candidate("15:05")]);
     expect(await nextMaintenanceDelay(now)).toBe(300_001);
+  });
+  it("keeps deadlines inside a long quiet window instead of deferring them", async () => {
+    const quietStart = new Date("2026-10-07T15:00:00Z");
+    db.notification.findFirst.mockResolvedValue({ expiresAt: new Date("2026-10-07T16:30:00Z") });
+    expect(await nextMaintenanceDelay(quietStart)).toBe(90 * 60_000);
+    db.notification.findFirst.mockResolvedValue(null);
+    db.doctor.findMany.mockResolvedValue([candidate("17:30")]);
+    expect(await nextMaintenanceDelay(quietStart)).toBe(90 * 60_000 + 1);
   });
   it("uses the end-of-day fallback when no schedule exists", async () => {
     db.doctor.findMany.mockResolvedValue([{ ...candidate("15:05"), schedules: [] }]);

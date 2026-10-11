@@ -14,6 +14,8 @@ import { VerificationBadge } from "../../components/ui/Badge";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/ui/Toast";
 import { ReferralCard } from "../../components/ReferralCard";
+import { useLiveUpdates } from "../../context/LiveUpdatesContext";
+import { livePollInterval } from "../../lib/livePolling";
 
 // رابط موقع الحجز الخاص بالمرضى — يُستخدم لبناء رابط/رمز QR خاص بكل طبيب.
 // TODO: تحويله إلى متغيّر بيئة عند اعتماد نطاق مخصص للموقع مستقبلًا.
@@ -93,6 +95,7 @@ export default function DoctorOverview() {
   useLanguage();
   const { user } = useAuth();
   const queue = useQueue();
+  const live = useLiveUpdates();
   const { showToast } = useToast();
   // الصيغة الجاري تحميلها حاليًا — لمنع النقر المتكرر وإظهار حالة الزر.
   const [qrDownloading, setQrDownloading] = useState<"png" | "svg" | null>(null);
@@ -101,7 +104,7 @@ export default function DoctorOverview() {
     queryKey: ["doctor-dashboard"],
     queryFn: async () => (await api.get("/doctor/dashboard")).data.data,
     // تحديث تلقائي للأرقام دون إعادة تحميل الصفحة (يتوقف عندما يكون التبويب في الخلفية).
-    refetchInterval: 30000,
+    refetchInterval: livePollInterval(live, 30000),
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });

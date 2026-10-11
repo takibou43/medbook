@@ -111,6 +111,12 @@ export function medicationParts(m: PrescriptionMedication, lang: Lang): Medicati
   return { name: clean(m.name), detail: join(m.strength, m.form), facts, instructions: clean(m.instructions) };
 }
 
+/**
+ * يلصق الرقم بالكلمة التي تليه (مسافة غير قابلة للكسر) حتى لا تنفصل «jours» أو «أيام» أو «comprimés» عن عددها عند الالتفاف.
+ * تغيير في نوع المسافة فقط: لا حروف تُضاف ولا تُحذف، وبقية المسافات تبقى قابلة للالتفاف (فتلتف التعليمات الطويلة كالمعتاد).
+ */
+export const glueNumberUnit = (text: string): string => text.replace(/(\p{Nd})[ \t]+(?=[^\s\p{Nd}])/gu, "$1\u00A0");
+
 export function medicationSummary(m: PrescriptionMedication, lang: Lang): string {
   const p = medicationParts(m, lang);
   return [join(p.name, p.detail), ...p.facts, p.instructions].filter(Boolean).join(" — ");

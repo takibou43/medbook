@@ -15,11 +15,6 @@ import { PrescriptionSheet } from "./PrescriptionPrint";
 
 const PAPER_PX = (148 * 96) / 25.4;
 const PREVIEW_SCALE = 0.62;
-const FIELDS: { key: keyof PrescriptionProfessional; label: string }[] = [
-  { key: "doctorName", label: "اسم الطبيب للطباعة" },
-  { key: "clinicName", label: "اسم العيادة للطباعة" },
-  { key: "address", label: "العنوان للطباعة" },
-];
 const SHOW: { key: keyof PrescriptionSettings["show"]; label: string }[] = [
   { key: "specialty", label: "إظهار التخصص" },
   { key: "clinicName", label: "إظهار اسم العيادة" },
@@ -56,6 +51,9 @@ export function PrescriptionSettingsSection() {
     language: lang,
     doctor: user?.doctor,
     professional: form.professional[lang],
+    doctorNames: { ar: form.professional.ar?.doctorName, fr: form.professional.fr?.doctorName },
+    addresses: { ar: form.professional.ar?.address, fr: form.professional.fr?.address },
+    clinicNames: { ar: form.professional.ar?.clinicName, fr: form.professional.fr?.clinicName },
     show: form.show,
     patientName: lang === "fr" ? "Nom du patient" : "اسم المريض",
     day: new Date().toISOString().slice(0, 10),
@@ -85,20 +83,39 @@ export function PrescriptionSettingsSection() {
 
             <fieldset className="rounded-xl border border-slate-200 p-3">
               <legend className="px-1 text-sm font-semibold">{t("البيانات المهنية في رأس الوصفة")}</legend>
-              <p className="mb-2 text-xs text-slate-600">{t("اترك الحقل فارغًا لاستخدام بياناتك الأصلية. لا تُحفظ في ملفك المهني ولا تُترجم الأسماء تلقائيًا.")}</p>
-              {(["ar", "fr"] as const).map(l => (
-                <div key={l} className="mb-3 last:mb-0">
-                  <p className="mb-1 text-xs font-bold text-slate-700">{l === "ar" ? t("بالعربية") : t("بالفرنسية")}</p>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {FIELDS.map(f => (
-                      <label key={f.key} className="block text-xs">
-                        <span className="mb-1 block">{t(f.label)}</span>
-                        <input className="input" dir="auto" translate="no" maxLength={f.key === "address" ? 180 : 120} value={form.professional[l]?.[f.key] ?? ""} onChange={e => patchPro(l, f.key, e.target.value)} />
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <p className="mb-2 text-xs text-slate-600">{t("اترك الحقل فارغًا لاستخدام بياناتك الأصلية عندما تناسب لغة الجهة. لا تُحفظ في ملفك المهني ولا تُترجم الأسماء تلقائيًا.")}</p>
+              <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                <label className="block text-xs">
+                  <span className="mb-1 block font-bold text-slate-700">{t("اسم الطبيب بالعربية (يظهر يمين الوصفة بعد «د.»)")}</span>
+                  <input className="input" dir="rtl" lang="ar" translate="no" maxLength={120} value={form.professional.ar?.doctorName ?? ""} onChange={e => patchPro("ar", "doctorName", e.target.value)} />
+                  {!(form.professional.ar?.doctorName ?? "").trim() && <span role="status" className="mt-1 block text-amber-700">{t("يحتاج إدخال: اكتب اسمك بالعربية ليظهر في الجهة العربية، ولن يُترجم اسمك الفرنسي تلقائيًا.")}</span>}
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-bold text-slate-700">{t("اسم الطبيب بالفرنسية/اللاتينية (يظهر يسار الوصفة بعد «Dr»)")}</span>
+                  <input className="input" dir="ltr" lang="fr" translate="no" maxLength={120} value={form.professional.fr?.doctorName ?? ""} onChange={e => patchPro("fr", "doctorName", e.target.value)} />
+                </label>
+              </div>
+              <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                <label className="block text-xs">
+                  <span className="mb-1 block font-bold text-slate-700">{t("اسم العيادة بالعربية (يظهر يمين الوصفة)")}</span>
+                  <input className="input" dir="rtl" lang="ar" translate="no" maxLength={120} value={form.professional.ar?.clinicName ?? ""} onChange={e => patchPro("ar", "clinicName", e.target.value)} />
+                  {!(form.professional.ar?.clinicName ?? "").trim() && <span role="status" className="mt-1 block text-slate-500">{t("اتركه فارغًا لاستعمال اسم عيادتك المسجل إن كان بالعربية.")}</span>}
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-bold text-slate-700">{t("اسم العيادة بالفرنسية/اللاتينية (يظهر يسار الوصفة)")}</span>
+                  <input className="input" dir="ltr" lang="fr" translate="no" maxLength={120} value={form.professional.fr?.clinicName ?? ""} onChange={e => patchPro("fr", "clinicName", e.target.value)} />
+                </label>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="block text-xs">
+                  <span className="mb-1 block font-bold text-slate-700">{t("العنوان بالعربية (يظهر أسفل الوصفة)")}</span>
+                  <input className="input" dir="rtl" lang="ar" translate="no" maxLength={180} value={form.professional.ar?.address ?? ""} onChange={e => patchPro("ar", "address", e.target.value)} />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-bold text-slate-700">{t("العنوان بالفرنسية/اللاتينية (يظهر أسفل الوصفة)")}</span>
+                  <input className="input" dir="ltr" lang="fr" translate="no" maxLength={180} value={form.professional.fr?.address ?? ""} onChange={e => patchPro("fr", "address", e.target.value)} />
+                </label>
+              </div>
             </fieldset>
 
             <fieldset className="rounded-xl border border-slate-200 p-3">

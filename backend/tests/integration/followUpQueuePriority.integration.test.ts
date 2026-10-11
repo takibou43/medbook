@@ -316,7 +316,8 @@ describe.skipIf(!TEST_URL)("أولوية موعد العودة في الطابو
     const ord = await order(d.token);
     expect(ord[0]).toBe(u.id);
     expect(ord.indexOf(u.id)).toBeLessThan(ord.indexOf(f.id));
-    expect(ord.indexOf(n1.id)).toBeLessThan(ord.indexOf(f.id));
+    // المحمي هو التالي مباشرة (وهو الطوارئ هنا)، فيتقدم موعد العودة على n1 الذي هو الثاني فقط.
+    expect(ord).toEqual([u.id, f.id, n1.id]);
   });
 
   it("11) صفحة «حالة دوري» وتقدير الدور يتبعان الترتيب نفسه (من يسبق المريض يزيد بموعد العودة)", async () => {

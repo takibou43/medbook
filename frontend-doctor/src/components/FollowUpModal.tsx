@@ -76,8 +76,12 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
           idempotencyKey,
         })
       ).data,
-    onSuccess: () => {
-      showToast(t(ctx?.hasAccount === false ? "تمت برمجة موعد العودة للمريض دون حساب." : "تمت برمجة موعد العودة وإشعار المريض داخل MedBook."), "success");
+    onSuccess: (res: any) => {
+      const created = res?.data;
+      // الخادم يعطي أقرب وقت شاغر عند تعارض الوقت المطلوب دون المساس بأي حجز قائم.
+      if (created?.shiftedFromRequested && created?.startTime) {
+        showToast(t("تمت برمجة موعد العودة في الساعة {0} (أقرب وقت شاغر لأن {1} محجوز).", { "0": created.startTime, "1": created.requestedStartTime ?? time }), "success");
+      } else showToast(t(ctx?.hasAccount === false ? "تمت برمجة موعد العودة للمريض دون حساب." : "تمت برمجة موعد العودة وإشعار المريض داخل MedBook."), "success");
       qc.invalidateQueries({ queryKey: ["appointments"] });
       qc.invalidateQueries({ queryKey: ["treatment-plan"] });
       qc.invalidateQueries({ queryKey: ["treatment-plans"] });

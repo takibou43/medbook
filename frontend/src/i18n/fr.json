@@ -1930,5 +1930,6 @@
   "الاشتراك": "Abonnement",
   "حالة اشتراكك وتفاصيله": "État et détails de votre abonnement",
   "لا تتوفر بيانات الاشتراك الآن.": "Les données d’abonnement ne sont pas disponibles pour le moment.",
-  "مراسلة الإدارة للتفعيل أو التجديد": "Écrire à l’administration pour l’activation ou le renouvellement"
+  "مراسلة الإدارة للتفعيل أو التجديد": "Écrire à l’administration pour l’activation ou le renouvellement",
+  "تمت برمجة موعد العودة في الساعة {0} (أقرب وقت شاغر لأن {1} محجوز).": "Rendez-vous de suivi programmé à {0} (premier créneau libre, {1} étant déjà pris)."
 }

@@ -2,7 +2,7 @@ import { GuestFollowUpNotice } from "../../components/GuestFollowUpNotice";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import { CalendarPlus, ChevronDown, Phone, Search } from "lucide-react";
@@ -11,7 +11,8 @@ import { EmptyState, ErrorState, SkeletonRows } from "../../components/ui/States
 import { Button } from "../../components/ui/Button";
 import { Pagination } from "../../components/ui/Pagination";
 import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
-import { RELATIONSHIP_LABELS } from "../../lib/features";
+import { RELATIONSHIP_LABELS, usesStandaloneFollowUp } from "../../lib/features";
+import { useAuth } from "../../context/AuthContext";
 import { formatDayAr, relativeDayAr } from "../../lib/doctorUi";
 
 interface VisitRef {
@@ -123,6 +124,9 @@ export default function DoctorPatients() {
 
   // «برمجة موعد عودة» من ملف المريض: مرجعه آخر موعد غير ملغى لهذا المستفيد عندك.
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
+  const { user } = useAuth();
+  // أطباء الأسنان: برمجة العودة من «خطط العلاج» فقط (بلا زر مستقل).
+  const standaloneFollowUp = usesStandaloneFollowUp(user?.doctor?.specialty);
   const followUp = (p: PatientRow) =>
     p.lastAppointmentId &&
     setFollowUpCtx({
@@ -219,7 +223,9 @@ export default function DoctorPatients() {
                       <p className="min-w-0 truncate">{t("البريد: ")}<span className="ltr-nums">{p.email}</span>
                       </p>
                     )}
-                    {p.lastAppointmentId ? (
+                    {!standaloneFollowUp ? (
+                      <Link to="/treatment-plans" className="text-sm font-semibold text-primary-700 underline">{t("خطط العلاج")}</Link>
+                    ) : p.lastAppointmentId ? (
                       <Button variant="outline" className="w-full" onClick={() => followUp(p)}>
                         <CalendarPlus className="h-4 w-4" aria-hidden="true" />{t(" برمجة موعد عودة ")}</Button>
                     ) : (
@@ -266,7 +272,9 @@ export default function DoctorPatients() {
                     </td>
                     <td className="px-4 py-3 text-slate-700">{p.totalAppointments}</td>
                     <td className="px-4 py-3">
-                      {p.lastAppointmentId ? (
+                      {!standaloneFollowUp ? (
+                        <Link to="/treatment-plans" className="text-sm font-semibold text-primary-700 underline">{t("خطط العلاج")}</Link>
+                      ) : p.lastAppointmentId ? (
                         <Button variant="outline" className="whitespace-nowrap" onClick={() => followUp(p)}>
                           <CalendarPlus className="h-4 w-4" aria-hidden="true" />{t(" برمجة موعد عودة ")}</Button>
                       ) : p.isGuest ? <GuestFollowUpNotice /> : <span className="text-xs text-slate-500">{t("لا توجد زيارة سابقة مؤهلة لبرمجة العودة.")}</span>}

@@ -13,6 +13,7 @@ import {
 import { estimateSessionMinutes } from "../appointments/appointments.service";
 import { ALGERIA_OFFSET_MINUTES } from "../../lib/slots";
 import { appointmentDayEndsAt, appointmentNotificationTag } from "../../lib/appointmentExpiry";
+import { lockDoctorCalls } from "../../lib/doctorLock";
 
 /**
  * تذكيرات مواعيد المرضى عبر Web Push: تذكير قبل الموعد بساعة، وآخر قبله بخمس دقائق.
@@ -474,9 +475,15 @@ async function tryQueueApproach(
     data: [{ appointmentId, type: ReminderType.QUEUE_APPROACH, scheduledFor: now }],
     skipDuplicates: true,
   });
-  const claim = await prisma.appointmentReminder.updateMany({
-    where: { appointmentId, type: ReminderType.QUEUE_APPROACH, status: ReminderStatus.PENDING },
-    data: { status: ReminderStatus.PROCESSING, scheduledFor: now },
+  // الحجز يتم تحت قفل مناداة الطبيب نفسه (lockDoctorCalls): المناداة تقرأ الترتيب وتكتب تحت هذا القفل، وحالة
+  // PROCESSING تحمي المريض من أولوية موعد العودة (lib/queueNotified.ts)؛ فإما أن تراها المناداة محميًا، أو تنتهي
+  // المناداة أولًا ثم نُعيد التقييم أدناه على الطابور الجديد قبل أي إرسال. لا نافذة يُنبَّه فيها مريض ثم يُتجاوز.
+  const claim = await prisma.$transaction(async (tx) => {
+    await lockDoctorCalls(tx, doctorId);
+    return tx.appointmentReminder.updateMany({
+      where: { appointmentId, type: ReminderType.QUEUE_APPROACH, status: ReminderStatus.PENDING },
+      data: { status: ReminderStatus.PROCESSING, scheduledFor: now },
+    });
   });
   if (claim.count !== 1) return;
 

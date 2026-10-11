@@ -1,12 +1,16 @@
-import { AppointmentStatus } from "@prisma/client";
+import { orderQueue, type QueueOrderRow } from "./queuePriority";
 
-/** Admission priority is the original appointment time, never a lateness penalty. */
-export function firstPresent<T extends { id: string; startTime: string; status: string; arrivedAt: Date | string | null; urgencyStatus?: string }>(rows: T[]): T | null {
-  return rows.filter(a => a.arrivedAt && (a.status === AppointmentStatus.CONFIRMED || a.status === AppointmentStatus.LATE))
-    .sort((a, b) => Number(b.urgencyStatus === "APPROVED") - Number(a.urgencyStatus === "APPROVED") || a.startTime.localeCompare(b.startTime) || a.id.localeCompare(b.id))[0] ?? null;
+/**
+ * واجهة الترتيب القديمة محفوظة (الاسمان presentQueueOrder وfirstPresent يستعملهما كل الكود القائم)،
+ * لكن المنطق كله صار في الدالة المركزية lib/queuePriority.ts — لا نسخة ثانية للترتيب في أي مكان.
+ * Admission priority is the original appointment time, never a lateness penalty.
+ */
+export function presentQueueOrder<T extends QueueOrderRow>(rows: T[]): T[] {
+  return orderQueue(rows);
 }
 
-/** Present patients first; absent patients retain their original appointment order. */
-export function presentQueueOrder<T extends { id: string; startTime: string; arrivedAt?: Date | string | null; urgencyStatus?: string }>(rows: T[]): T[] {
-  return [...rows].sort((a,b) => Number(!!b.arrivedAt) - Number(!!a.arrivedAt) || Number(b.urgencyStatus === "APPROVED") - Number(a.urgencyStatus === "APPROVED") || a.startTime.localeCompare(b.startTime) || a.id.localeCompare(b.id));
+/** أول مريض حاضر (CONFIRMED/LATE) بحسب الترتيب المركزي نفسه — هو من تتم مناداته. */
+export function firstPresent<T extends QueueOrderRow & { status: string; arrivedAt: Date | string | null }>(rows: T[]): T | null {
+  const present = rows.filter((a) => a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE"));
+  return orderQueue(present)[0] ?? null;
 }

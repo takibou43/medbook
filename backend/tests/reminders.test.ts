@@ -92,6 +92,9 @@ const h = vi.hoisted(() => {
     pushSubscription: {
       count: async ({ where }: any) => state.devices.get(where.userId) ?? 0,
     },
+    // حجز «دورك اقترب» صار داخل معاملة تأخذ قفل مناداة الطبيب (lockDoctorCalls → $executeRaw)؛ هنا بلا قفل فعلي.
+    $transaction: async (fn: (tx: any) => Promise<unknown>) => fn(db),
+    $executeRaw: async () => 0,
   };
 
   const sendPushToUser = vi.fn(async (userId: string, _payload: any, _opts?: any) => ({ sent: state.devices.get(userId) ?? 0, removed: 0 }));

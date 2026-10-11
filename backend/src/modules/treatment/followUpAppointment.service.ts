@@ -5,7 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
 import { ApiError } from "../../utils/ApiError";
 import { algeriaTodayUTCMidnight, generateAvailableSlots, isPast } from "../../lib/slots";
-import { reserveExactSlot, slotMinutesFor, ExactSlotUnavailableError } from "../../lib/slotAssign";
+import { reserveExactSlot, reserveRequestedOrNextSlot, slotMinutesFor, ExactSlotUnavailableError, NoSlotAvailableError, SlotRaceExhaustedError } from "../../lib/slotAssign";
 import { DoctorQueueBusyError } from "../../lib/doctorLock";
 import { assertDoctorMayCreateAppointments } from "../../lib/doctorAssistants";
 import { writeAudit } from "../../lib/audit";
@@ -205,12 +205,15 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
   const beneficiaryLast = member ? member.lastName : parent.patient?.lastName ?? parent.guestLastName!;
 
   let created: ResultRow;
+  let shiftedFromRequested = false;
   try {
-    created = (
-      await reserveExactSlot({
+    // الوقت المطلوب أو أقرب وقت شاغر بعده (نفس قواعد الحجز العادي): موعد العودة لا يحذف حجزًا قائمًا ولا يعدّله،
+    // وإن كان الوقت مشغولًا يأخذ أقرب وقت شاغر في اليوم نفسه. الوقت يبقى HH:mm دائمًا.
+    const reserved = (
+      await reserveRequestedOrNextSlot({
         doctor,
         date,
-        startTime: input.startTime,
+        requestedStart: input.startTime,
         create: async (tx, slot) => {
           const row = await tx.appointment.create({
             data: {
@@ -235,6 +238,8 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
               createdBy: "DOCTOR",
               createdByUserId: userId,
               idempotencyKey: input.idempotencyKey,
+              // أولوية موعد العودة في الطابور (انظر lib/queuePriority.ts) — الوقت HH:mm وقيد الحجز كما هما.
+              isFollowUp: true,
             },
             select: RESULT_SELECT,
           });
@@ -266,9 +271,11 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
           return row;
         },
       })
-    ).result;
+    );
+    created = reserved.result;
+    shiftedFromRequested = reserved.shifted;
   } catch (err) {
-    if (err instanceof ExactSlotUnavailableError) {
+    if (err instanceof ExactSlotUnavailableError || err instanceof NoSlotAvailableError || err instanceof SlotRaceExhaustedError) {
       // خسر سباقًا — قد يكون أمام نفس الطلب المكرر (نفس المفتاح): نعيد ما أنشأه الطلب الفائز.
       const again = await findByIdempotencyKey(doctor.id, input.idempotencyKey);
       if (again) {
@@ -303,7 +310,7 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
     console.error("تعذّر إنشاء إشعار موعد العودة (الموعد محفوظ):", safeErrorCode(err));
   }
 
-  return { appointment: view(created), replayed: false };
+  return { appointment: { ...view(created), requestedStartTime: input.startTime, shiftedFromRequested }, replayed: false };
 }
 
 /**

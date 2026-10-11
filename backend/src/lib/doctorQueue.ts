@@ -1,5 +1,6 @@
 import { AppointmentStatus, Prisma, PrismaClient } from "@prisma/client";
 import { presentQueueOrder } from "./presentQueue";
+import { withNearTurnFlags } from "./queueNotified";
 import { ALGERIA_OFFSET_MINUTES, closingTimeForDate } from "./slots";
 
 /**
@@ -30,6 +31,11 @@ export interface DayQueueRow {
   calledAt: Date | null;
   arrivedAt?: Date | null;
   urgencyStatus?: string;
+  /** أولوية موعد العودة وحماية المنبَّهين — تدخل الترتيب المركزي (lib/queuePriority.ts). */
+  isFollowUp?: boolean;
+  followUpAnchorId?: string | null;
+  deferredCount?: number;
+  nearTurnNotified?: boolean;
 }
 
 export interface QueuePosition {
@@ -102,7 +108,7 @@ export async function loadDoctorDayQueue(db: Db, doctorId: string, now: Date): P
     db.doctor.findUnique({ where: { id: doctorId }, select: { schedules: true, dutyEndsAt: true } }),
     db.appointment.findMany({
       where: { doctorId, date: { gte: day, lte: end }, status: { in: DAY_QUEUE_STATUSES } },
-      select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true, arrivedAt: true, urgencyStatus: true },
+      select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true, arrivedAt: true, urgencyStatus: true, isFollowUp: true, followUpAnchorId: true, deferredCount: true },
       orderBy: [{ startTime: "asc" }],
     }),
     db.appointment.aggregate({
@@ -111,10 +117,14 @@ export async function loadDoctorDayQueue(db: Db, doctorId: string, now: Date): P
     }),
   ]);
   const closed = !doctor?.dutyEndsAt || doctor.dutyEndsAt <= now;
+  // حالة تنبيه «دورك اقترب» المحفوظة لكل موعد منتظر: مصدر حماية المنبَّهين في الترتيب المركزي.
+  const flagged = await withNearTurnFlags(db, rows.filter((r) => WAITING_QUEUE_STATUSES.includes(r.status)));
+  const flags = new Map(flagged.map((r) => [r.id, r.nearTurnNotified]));
+  const rowsWithFlags = rows.map((r) => ({ ...r, nearTurnNotified: flags.get(r.id) ?? false }));
   const times = [activity._max.calledAt, activity._max.endedAt].filter((d): d is Date => Boolean(d));
   const lastActivityAt = times.length ? new Date(Math.max(...times.map((d) => d.getTime()))) : null;
   // بعد الإغلاق لا أحد في الطابور (نفس نتيجة الكنس الذي سيحوّلهم إلى NO_SHOW/COMPLETED).
-  return { day, closed, rows, lastActivityAt };
+  return { day, closed, rows: rowsWithFlags, lastActivityAt };
 }
 
 // ===== تقدير وقت الدور (لتنبيه «دورك اقترب») =====

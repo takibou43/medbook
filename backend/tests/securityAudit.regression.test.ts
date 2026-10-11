@@ -17,6 +17,7 @@ const h = vi.hoisted(() => {
     patient: { findUnique: vi.fn(async () => ({ id: "p" })) },
     appointmentFinancial: { findUnique: vi.fn(async () => ({ priceDzd: 1500 })) },
     patientBlock: { findUnique: vi.fn(async () => null) },
+    appointmentReminder: { findMany: vi.fn(async () => []) },
     pushSubscription: { upsert: vi.fn(async () => ({ id: "s" })), findMany: vi.fn(async () => []), delete: vi.fn() },
     appointment: { findUnique: vi.fn(async () => ({ id: "a", date: new Date("2099-01-01"), startTime: "08:00", status: "CONFIRMED", guestFirstName: "PRIVATE", guestLastName: "PATIENT", doctor: { slotDurationMin: 20 } })) },
   };

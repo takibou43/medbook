@@ -7,7 +7,15 @@ vi.mock("../src/lib/prisma", () => ({ prisma: mocks.db }));
 vi.mock("../src/lib/clinicBilling", () => ({ isDoctorSubscriptionActive: vi.fn(async () => true) }));
 vi.mock("../src/lib/clinicFinance", async importOriginal => ({ ...await importOriginal<object>(), loadFinancialCreate: vi.fn(async () => undefined) }));
 vi.mock("../src/lib/slots", async importOriginal => ({ ...await importOriginal<object>(), isPast: vi.fn(() => false), generateAvailableSlots: vi.fn(() => ["09:00"]) }));
-vi.mock("../src/lib/slotAssign", () => ({ reserveExactSlot: mocks.reserve, slotMinutesFor: () => 15, ExactSlotUnavailableError: class extends Error {} }));
+vi.mock("../src/lib/slotAssign", () => ({
+  reserveExactSlot: mocks.reserve,
+  // موعد العودة صار «الوقت المطلوب أو أقرب شاغر»: نفس المحاكاة تُرجع shifted=false.
+  reserveRequestedOrNextSlot: (o: { requestedStart: string }) => mocks.reserve({ ...o, startTime: o.requestedStart }),
+  slotMinutesFor: () => 15,
+  ExactSlotUnavailableError: class extends Error {},
+  NoSlotAvailableError: class extends Error {},
+  SlotRaceExhaustedError: class extends Error {},
+}));
 vi.mock("../src/lib/audit", () => ({ writeAudit: vi.fn() }));
 vi.mock("../src/modules/notifications/notifications.service", () => ({ createNotification: mocks.notify }));
 import { createFollowUpAppointment, createGuestAppointment } from "../src/modules/treatment/followUpAppointment.service";
@@ -20,7 +28,7 @@ describe("guest follow-up appointments", () => {
     mocks.db.doctor.findUnique.mockResolvedValue({ id: "d", verificationStatus: "VERIFIED", schedules: [], firstName: "Doctor", lastName: "Test" });
     mocks.db.appointment.findUnique.mockImplementation(async ({ where }) => where.id ? parent() : null);
     mocks.db.appointment.create.mockImplementation(async ({ data }) => ({ ...data, id: "follow-up", familyMember: null }));
-    mocks.reserve.mockImplementation(async ({ create }) => ({ result: await create(mocks.db, { startTime: "09:00", endTime: "09:15" }) }));
+    mocks.reserve.mockImplementation(async ({ create }) => ({ result: await create(mocks.db, { startTime: "09:00", endTime: "09:15" }), shifted: false }));
   });
   it("copies the guest identity and links the original without creating an account", async () => {
     const result = await createFollowUpAppointment("doctor", "parent", input());

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { profileSchema } from "./doctorProfile.schema";
-import { prescriptionTemplateSchema } from "./prescriptionTemplate.schema";
+import { prescriptionTemplateSchema, prescriptionSettingsSchema } from "./prescriptionTemplate.schema";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { authenticate, authorize } from "../../middleware/auth";
@@ -77,6 +77,22 @@ router.delete("/prescription-template", asyncHandler(async (req, res) => {
   const doctorId = await templateOwner(req.user!.id);
   await prisma.prescriptionTemplate.deleteMany({ where: { doctorId } });
   res.json({ success: true, data: null });
+}));
+
+// إعدادات الوصفة (اللغة الافتراضية والبيانات المهنية وإظهار/إخفاء الاختياري) — doctorId من الجلسة وحدها.
+const defaultPrescriptionSettings = { language: "ar" as const, professional: {}, show: { clinicName: true, address: true, phone: true, specialty: true } };
+router.get("/prescription-settings", asyncHandler(async (req, res) => {
+  const doctorId = await templateOwner(req.user!.id);
+  const row = await prisma.prescriptionSettings.findUnique({ where: { doctorId }, select: { language: true, professional: true, show: true } });
+  const parsed = row ? prescriptionSettingsSchema.safeParse({ language: row.language, professional: row.professional ?? undefined, show: row.show ?? undefined }) : null;
+  res.json({ success: true, data: parsed?.success ? { ...defaultPrescriptionSettings, ...parsed.data } : defaultPrescriptionSettings });
+}));
+router.put("/prescription-settings", validate({ body: prescriptionSettingsSchema }), asyncHandler(async (req, res) => {
+  const doctorId = await templateOwner(req.user!.id);
+  const value = prescriptionSettingsSchema.parse(req.body);
+  const saved = { language: value.language, professional: value.professional ?? Prisma.JsonNull, show: value.show ?? Prisma.JsonNull };
+  await prisma.prescriptionSettings.upsert({ where: { doctorId }, create: { doctorId, ...saved }, update: saved });
+  res.json({ success: true, data: { ...defaultPrescriptionSettings, ...value } });
 }));
 
 // تقييمات المرضى للطبيب الحالي (طبيب فقط): متوسط، عدد، توزيع النجوم، والتقييمات مع التعليقات.

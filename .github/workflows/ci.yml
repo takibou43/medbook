@@ -67,6 +67,15 @@ jobs:
         run: bash scripts/ci-prepare-test-db.sh
       - name: Run all backend tests (unit + integration)
         run: npx vitest run --reporter=default --reporter=json --outputFile.json=vitest-report.json
+      - name: Report failing tests as annotations
+        if: failure()
+        run: |
+          node -e '
+          const r=JSON.parse(require("fs").readFileSync("vitest-report.json","utf8"));
+          for(const f of r.testResults){
+            if(f.status==="failed"&&!f.assertionResults.some(a=>a.status==="failed")) console.log("::error::"+f.name.split("/backend/")[1]+" :: "+String(f.message).replace(/\s+/g," ").slice(0,400));
+            for(const a of f.assertionResults) if(a.status==="failed") console.log("::error::"+f.name.split("/backend/")[1]+" :: "+a.fullName+" :: "+String((a.failureMessages||[])[0]).replace(/\s+/g," ").slice(0,400));
+          }'
       - name: Fail if any integration file was skipped
         run: node scripts/assert-integration-ran.mjs vitest-report.json
       - name: Build with production dependencies (Render parity)

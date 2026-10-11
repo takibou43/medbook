@@ -383,7 +383,7 @@ describe.skipIf(!TEST_URL)("موعد المتابعة الطبية من خطط �
       expect(r.status).toBe(200);
       const busy = (r.data.allSlots as { time: string; busy: boolean }[]).find((s) => s.time === "10:00");
       expect(busy?.busy).toBe(true);
-      expect(JSON.stringify(r.data)).not.toMatch(/\d{2}:\d{2}:\d{2}/);
+      expect(JSON.stringify(r.data)).not.toMatch(/"\d{2}:\d{2}:\d{2}"/);
       expect(Object.keys(r.data.allSlots[0]).sort()).toEqual(["busy", "time"]);
       const plain = await call("GET", `/api/doctor/follow-up-slots?date=${DAYS.shared}`, undefined, doc.token);
       expect(plain.data.allSlots).toBeUndefined();

@@ -136,16 +136,6 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </section>
       )}
 
-      {standard && <footer className="rx-sign">
-        <div className="rx-sign-area">
-          <p className="rx-small-title">{text.signature}</p>
-          <div className="rx-sign-line" />
-        </div>
-        <div className="rx-sign-area">
-          <p className="rx-small-title">{text.stamp}</p>
-          <div className="rx-stamp-space" />
-        </div>
-      </footer>}
       {standard && footerLine && <p className="rx-foot"><Typed>{footerLine}</Typed></p>}
     </article>
   );

@@ -4,7 +4,7 @@ import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
 import type { PrescriptionMedication, PrescriptionRequestItem } from "../../lib/prescription";
 import { DEFAULT_PRESCRIPTION_SETTINGS, type PrescriptionShow } from "../../lib/prescriptionSettings";
-import { prescriptionLabels, prescriptionDate, prescriptionCatalogName, professionalText, doctorHeaderName, clinicHeaderName, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
+import { prescriptionLabels, prescriptionDate, prescriptionCatalogName, doctorHeaderName, clinicHeaderName, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
@@ -19,6 +19,8 @@ export interface PrescriptionSheetData {
   doctorNames?: { ar?: string; fr?: string };
   /** اسم العيادة لكل جهة، بنفس منطق اسم الطبيب. */
   clinicNames?: { ar?: string; fr?: string };
+  /** العنوان لكل جهة (سطر أسفل الورقة لكل لغة). */
+  addresses?: { ar?: string; fr?: string };
   doctor: Doctor | null | undefined;
   /** اسم المستفيد الفعلي كما كتبه/أكّده الطبيب (لا يُطبع صاحب الحساب ولا صلة القرابة). */
   patientName: string;
@@ -49,9 +51,11 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const text = prescriptionLabels(lang);
   const d = data.doctor;
   const clinic = d?.clinic ?? null;
-  const place = [d?.city ? prescriptionCatalogName(d.city, lang) : "", d?.wilaya ? prescriptionCatalogName(d.wilaya, lang) : ""].filter(Boolean).join(lang === "fr" ? ", " : "، ");
+  // الفرنسية: لا نعرض اسم المدينة العربي في السطر الفرنسي (لا ترجمة ولا اختلاق)؛ نستعمل nameFr إن وُجد.
+  const placeOf = (side: PrescriptionLanguage) => [d?.city, d?.wilaya].map(item => side === "ar" ? item?.nameAr?.trim() : (item as { nameFr?: string | null } | null | undefined)?.nameFr?.trim()).filter(Boolean).join(side === "fr" ? ", " : "، ");
   const show = data.show ?? DEFAULT_PRESCRIPTION_SETTINGS.show;
-  const address = show.address ? professionalText(data.professional?.address, clinic?.address || d?.address) : "";
+  const originalAddress = clinic?.address || d?.address;
+  const addressFor = (side: PrescriptionLanguage) => show.address ? clinicHeaderName(data.addresses?.[side], originalAddress, side) : "";
   const accountName = d ? `${d.firstName} ${d.lastName}` : "";
   const doctorNameFr = doctorHeaderName(data.doctorNames?.fr, accountName, "fr");
   const doctorNameAr = doctorHeaderName(data.doctorNames?.ar, accountName, "ar");
@@ -63,7 +67,8 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const ar = prescriptionLabels("ar");
   const specialtyFr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "fr") : "";
   const specialtyAr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "ar") : "";
-  const footerLine = [address, place].filter(Boolean).join(lang === "fr" ? " — " : " — ");
+  const footerAr = [addressFor("ar"), placeOf("ar")].filter(Boolean).join(" — ");
+  const footerFr = [addressFor("fr"), placeOf("fr")].filter(Boolean).join(" — ");
   const body = (
     <>
       {standard && (
@@ -152,7 +157,10 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </section>
       )}
 
-      {standard && footerLine && <p className="rx-foot"><Typed>{footerLine}</Typed></p>}
+      {standard && (footerAr || footerFr) && <div className="rx-foot">
+        {footerAr && <p lang="ar" dir="rtl"><Typed>{footerAr}</Typed></p>}
+        {footerFr && <p lang="fr" dir="ltr"><Typed>{footerFr}</Typed></p>}
+      </div>}
     </>
   );
   const articleProps = { className: `rx-sheet${standard ? " rx-standard" : ""}`, dir: lang === "fr" ? "ltr" : "rtl", lang, "aria-label": text.sheet } as const;

@@ -67,3 +67,9 @@ test2("اسم العيادة: حقل لكل جهة بلا ترجمة", () => {
   assert2.equal(clinicHeaderName("", "Clinique El Amel", "ar"), "");
   assert2.equal(clinicHeaderName(undefined, undefined, "ar"), "");
 });
+
+test2("العنوان: يعاد استعمال منطق الجهة نفسه", () => {
+  assert2.equal(clinicHeaderName("12 Rue Didouche, Mila", "حي النصر", "fr"), "12 Rue Didouche, Mila");
+  assert2.equal(clinicHeaderName("", "حي النصر", "fr"), "");
+  assert2.equal(clinicHeaderName("حي النصر، ميلة", "Cité 5 Juillet", "ar"), "حي النصر، ميلة");
+});

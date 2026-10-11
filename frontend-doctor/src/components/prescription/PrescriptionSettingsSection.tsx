@@ -15,9 +15,6 @@ import { PrescriptionSheet } from "./PrescriptionPrint";
 
 const PAPER_PX = (148 * 96) / 25.4;
 const PREVIEW_SCALE = 0.62;
-const FIELDS: { key: keyof PrescriptionProfessional; label: string }[] = [
-  { key: "address", label: "العنوان للطباعة" },
-];
 const SHOW: { key: keyof PrescriptionSettings["show"]; label: string }[] = [
   { key: "specialty", label: "إظهار التخصص" },
   { key: "clinicName", label: "إظهار اسم العيادة" },
@@ -55,6 +52,7 @@ export function PrescriptionSettingsSection() {
     doctor: user?.doctor,
     professional: form.professional[lang],
     doctorNames: { ar: form.professional.ar?.doctorName, fr: form.professional.fr?.doctorName },
+    addresses: { ar: form.professional.ar?.address, fr: form.professional.fr?.address },
     clinicNames: { ar: form.professional.ar?.clinicName, fr: form.professional.fr?.clinicName },
     show: form.show,
     patientName: lang === "fr" ? "Nom du patient" : "اسم المريض",
@@ -108,19 +106,16 @@ export function PrescriptionSettingsSection() {
                   <input className="input" dir="ltr" lang="fr" translate="no" maxLength={120} value={form.professional.fr?.clinicName ?? ""} onChange={e => patchPro("fr", "clinicName", e.target.value)} />
                 </label>
               </div>
-              {(["ar", "fr"] as const).map(l => (
-                <div key={l} className="mb-3 last:mb-0">
-                  <p className="mb-1 text-xs font-bold text-slate-700">{l === "ar" ? t("بالعربية") : t("بالفرنسية")}</p>
-                  <div className="grid gap-2 sm:grid-cols-1">
-                    {FIELDS.map(f => (
-                      <label key={f.key} className="block text-xs">
-                        <span className="mb-1 block">{t(f.label)}</span>
-                        <input className="input" dir="auto" translate="no" maxLength={f.key === "address" ? 180 : 120} value={form.professional[l]?.[f.key] ?? ""} onChange={e => patchPro(l, f.key, e.target.value)} />
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="block text-xs">
+                  <span className="mb-1 block font-bold text-slate-700">{t("العنوان بالعربية (يظهر أسفل الوصفة)")}</span>
+                  <input className="input" dir="rtl" lang="ar" translate="no" maxLength={180} value={form.professional.ar?.address ?? ""} onChange={e => patchPro("ar", "address", e.target.value)} />
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-bold text-slate-700">{t("العنوان بالفرنسية/اللاتينية (يظهر أسفل الوصفة)")}</span>
+                  <input className="input" dir="ltr" lang="fr" translate="no" maxLength={180} value={form.professional.fr?.address ?? ""} onChange={e => patchPro("fr", "address", e.target.value)} />
+                </label>
+              </div>
             </fieldset>
 
             <fieldset className="rounded-xl border border-slate-200 p-3">

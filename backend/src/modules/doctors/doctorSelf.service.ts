@@ -11,6 +11,8 @@ import { syncDentalFollowUpsSafe } from "../../lib/dentalFollowUpSync";
 import { FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
 import { countPatients, queryPatients, summarizePatients, type PatientQuery } from "../../lib/doctorPatients";
 import { clinicSharePercent, effectiveAppointmentPrice, revenueFromGroups } from "../../lib/clinicFinance";
+import { doctorHasActiveAssistant } from "../../lib/doctorAssistants";
+import { loadSubscriptionSummary } from "../../lib/doctorSubscriptionSummary";
 
 const SCHEDULE_ACTIVE_STATUSES: AppointmentStatus[] = [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
 
@@ -361,7 +363,15 @@ export async function getDashboardStats(userId: string, role: Role) {
     subscriptionStatus: doctor.subscriptionStatus,
   };
 
-  if (role === Role.DOCTOR) return fullStats;
+  if (role === Role.DOCTOR) {
+    // «حجز موعد» من حساب الطبيب مسموح فقط حين لا يكون لديه مساعد فعلي. الواجهة تخفي الزر بهذه القيمة،
+    // لكن المنع الحقيقي في الـ Backend (assertDoctorMayCreateAppointments) داخل معاملة الحجز نفسها.
+    const [hasActiveAssistant, subscription] = await Promise.all([
+      doctorHasActiveAssistant(doctor.id),
+      loadSubscriptionSummary(doctor),
+    ]);
+    return { ...fullStats, hasActiveAssistant, canCreateAppointments: !hasActiveAssistant, subscription };
+  }
 
   // ASSISTANT: عرض تشغيلي "اليوم فقط" — لا شهري، لا إجمالي، لا سعر الاستشارة، لا حالة
   // الاشتراك، لا عدد المرضى، لا نسبة الغياب الإجمالية. هذه الحقول محذوفة من الكائن هنا

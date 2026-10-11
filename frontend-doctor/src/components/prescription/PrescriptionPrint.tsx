@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
@@ -9,7 +9,7 @@ import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 import { Logo } from "../ui/Logo";
-import { medicationParts } from "../../lib/prescriptionMedication";
+import { medicationParts, glueNumberUnit } from "../../lib/prescriptionMedication";
 
 export interface PrescriptionSheetData {
   template?: PrescriptionTemplate | null;
@@ -101,18 +101,27 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
           return (
             <li key={m.id} className="rx-med">
               <span className="rx-index" aria-hidden="true">{i + 1}</span>
-              <p className="rx-med-line">
-                <span className="rx-med-head">
+              <div className="rx-med-body">
+                {/* السطر 1: الاسم والتركيز بخط بارز */}
+                <p className="rx-med-title">
                   <Typed className="rx-med-name">{p.name}</Typed>
-                  {p.detail && <> <Typed className="rx-med-detail">{p.detail}</Typed></>}
-                </span>
-                {p.facts.map((v, k) => (
-                  <span key={k} className="rx-fact"><span className="rx-sep" aria-hidden="true">{"\u00A0—"}</span>{" "}<Typed>{v}</Typed></span>
-                ))}
-                {p.instructions && (
-                  <span className="rx-instr"><span className="rx-sep" aria-hidden="true">{"\u00A0—"}</span>{" "}<Typed>{p.instructions}</Typed></span>
+                  {p.detail && <> <Typed className="rx-med-detail">{glueNumberUnit(p.detail)}</Typed></>}
+                </p>
+                {/* السطر 2: الجرعة، التكرار، التوقيت، المدة — كل رقم ملصوق بوحدته؛ الفاصل ملصوق بما قبله فلا يبدأ سطر به */}
+                {p.facts.length > 0 && (
+                  <p className="rx-med-facts">
+                    {p.facts.map((v, k) => (
+                      <Fragment key={k}>
+                        {/* عنصر قصير = وحدة لا تنكسر («4 fois par jour»، «10 jours»)؛ النص الطويل المخصص يلتف عادي */}
+                        <span className={v.length <= 28 ? "rx-fact rx-fact-keep" : "rx-fact"}><Typed>{glueNumberUnit(v)}</Typed>{k < p.facts.length - 1 && <span className="rx-sep" aria-hidden="true">{"\u00A0·"}</span>}</span>
+                        {k < p.facts.length - 1 && " "}
+                      </Fragment>
+                    ))}
+                  </p>
                 )}
-              </p>
+                {/* التعليمات: تلتف بحرّية، وتبدأ محاذية للنص لا لرقم الدواء */}
+                {p.instructions && <p className="rx-med-instr"><Typed>{glueNumberUnit(p.instructions)}</Typed></p>}
+              </div>
             </li>
           );
         })}

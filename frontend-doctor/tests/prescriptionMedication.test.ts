@@ -78,3 +78,27 @@ test("restoreMedication puts a deleted medication back with every value and its 
   assert.equal(restoreMedication(restored, b, 0), restored); // لا تكرار
   assert.deepEqual(restoreMedication([a], c, 9).map((m) => m.id), ["a", "c"]);
 });
+
+import { glueNumberUnit } from "../src/lib/prescriptionMedication.ts";
+
+test("glueNumberUnit keeps each number with its unit, changing only the kind of space", () => {
+  assert.equal(glueNumberUnit("10 jours"), "10 jours");
+  assert.equal(glueNumberUnit("2 comprimés — 20 jours"), "2 comprimés — 20 jours");
+  assert.equal(glueNumberUnit("10 أيام"), "10 أيام");
+  assert.equal(glueNumberUnit("١٠ أيام"), "١٠ أيام");
+  assert.equal(glueNumberUnit("1 صباحًا و1 مساءً"), "1 صباحًا و1 مساءً");
+  // no characters added or removed: only the space kind differs
+  const src = "pendant 10 jours, 2 comprimés le matin";
+  assert.equal(glueNumberUnit(src).replace(/ /g, " "), src);
+  // plain words stay breakable so long instructions can wrap
+  assert.equal(glueNumberUnit("avec un grand verre d'eau"), "avec un grand verre d'eau");
+});
+
+test("medicationParts feeds line 1 (name+strength) and line 2 (dose, frequency, timing, duration) separately", () => {
+  const m = { id: "x", name: "Amoxicilline", dose: "", frequency: "", duration: "", instructions: "avec de l'eau", directionsMode: "structured" as const, strength: "500 mg", doseQty: "2", doseUnit: "tablet", freqKey: "three", timingKey: "afterMeal", durQty: "10", durUnit: "day" };
+  const p = medicationParts(m, "fr");
+  assert.equal(p.name, "Amoxicilline");
+  assert.equal(p.detail, "500 mg");
+  assert.deepEqual(p.facts, ["2 comprimés", "3 fois par jour", "après les repas", "10 jours"]);
+  assert.equal(p.instructions, "avec de l'eau");
+});

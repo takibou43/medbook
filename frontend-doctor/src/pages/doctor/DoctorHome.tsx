@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { AlertTriangle, ArrowLeft, CalendarClock, CalendarPlus, Check, CheckCircle2, Hourglass } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarCheck, CalendarClock, CalendarPlus, Check, CheckCircle2, Hourglass, ListOrdered, UserRound, Users } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { useLiveUpdates } from "../../context/LiveUpdatesContext";
@@ -16,6 +16,8 @@ import { Button } from "../../components/ui/Button";
 import { VerificationBadge } from "../../components/ui/Badge";
 import { StatCard } from "../../components/StatCard";
 import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
+import { GuestBookingModal } from "../../components/GuestBooking";
+import { TONE_CLASS, bookingHandledByAssistantNote, quickActions, subscriptionAlert, subscriptionBadge, type QuickActionId, type SubscriptionSummary } from "../../lib/doctorHeader";
 import { useCallNext, useFinishAppointment, useQueue } from "../../hooks/useQueue";
 import { useMyAppointments } from "../../hooks/useAppointments";
 import { appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
@@ -71,6 +73,7 @@ export default function DoctorHome() {
 
   const [planSubject, setPlanSubject] = useState<{ patientId: string; memberId: string; name: string } | null>(null);
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
+  const [bookingOpen, setBookingOpen] = useState(false);
   // إعادة التركيز إلى زر الصف بعد إغلاق القائمة أو نافذة التأكيد أو انتهاء الإجراء.
   const triggerEls = useRef(new Map<string, HTMLElement>());
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
@@ -134,12 +137,18 @@ export default function DoctorHome() {
     });
   }
 
-  // ---- اشتراك/توثيق: تنبيهات مختصرة ----
-  const clinicSubscription = user?.doctor?.clinic?.ownerId ? user.doctor.clinic : null;
-  const effectiveExpiry = clinicSubscription ? clinicSubscription.subscriptionExpiresAt : user?.doctor?.subscriptionExpiresAt;
-  const endsAt = effectiveExpiry ? new Date(effectiveExpiry) : null;
-  const validEnd = endsAt && !isNaN(endsAt.getTime()) ? endsAt : null;
-  const daysLeft = validEnd ? Math.max(0, Math.ceil((validEnd.getTime() - Date.now()) / 86400000)) : null;
+  // ---- رأس اللوحة: كل ما يلي يأتي من /doctor/dashboard (مصدر الحقيقة في الـ Backend) ----
+  const subscription: SubscriptionSummary | null = stats.data?.subscription ?? null;
+  const subBadge = subscriptionBadge(subscription);
+  const subAlert = subscriptionAlert(subscription);
+  const actions = quickActions({
+    role: user?.role,
+    verificationStatus: stats.data?.verificationStatus,
+    subscriptionActive: subscription?.active,
+    canCreateAppointments: stats.data?.canCreateAppointments,
+  });
+  const assistantNote = bookingHandledByAssistantNote({ hasActiveAssistant: stats.data?.hasActiveAssistant, canCreateAppointments: stats.data?.canCreateAppointments });
+  const ACTION_ICONS: Record<QuickActionId, typeof CalendarCheck> = { book: CalendarPlus, appointments: CalendarCheck, queue: ListOrdered, patients: Users };
 
   // عند فشل التحميل نعرض «—» بدل 0 حتى لا يُفهم أن العيادة فارغة.
   const waitingCount: number | string = queue.isError ? "—" : queue.data?.waiting.length ?? 0;
@@ -151,32 +160,57 @@ export default function DoctorHome() {
       {planSubject && <CurrentPatientPlansModal {...planSubject} onClose={() => setPlanSubject(null)} />}
       <FollowUpModal open={Boolean(followUpCtx)} ctx={followUpCtx} onClose={() => setFollowUpCtx(null)} onDone={refreshAll} />
 
-      {/* ترحيب */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">{t("مرحباً ")}{doctor ? t("د. {0} {1}", { "0": doctor.firstName, "1": doctor.lastName }) : ""}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">{t("إدارة عيادتك بسهولة")}</p>
+      <GuestBookingModal open={bookingOpen} onClose={() => setBookingOpen(false)} />
+
+      {/* رأس اللوحة: الهوية وشارة التوثيق بجانب الاسم، شارة اشتراك مختصرة (التفاصيل في صفحة الاشتراك)،
+          ثم الإجراءات السريعة حسب الصلاحيات الفعلية. */}
+      <header className="card p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="min-w-0 flex-1">
+            <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl font-extrabold text-slate-900 sm:text-2xl">
+              <span className="min-w-0 break-words">{doctor ? t("د. {0} {1}", { "0": doctor.firstName, "1": doctor.lastName }) : ""}</span>
+              {stats.data?.verificationStatus && <VerificationBadge status={stats.data.verificationStatus} />}
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">{t("لوحة إدارة العيادة")}</p>
+          </div>
+          {subBadge && (
+            <Link to="/subscription" title={t("تفاصيل الاشتراك")} className={clsx("badge max-w-full whitespace-nowrap", TONE_CLASS[subBadge.tone])}>
+              {subBadge.label}
+            </Link>
+          )}
         </div>
-        {stats.data && <VerificationBadge status={stats.data.verificationStatus} />}
+
+        <section aria-label={t("الإجراءات السريعة")} className="mt-4 border-t border-slate-100 pt-3">
+          <h2 className="text-sm font-bold text-slate-700">{t("الإجراءات السريعة")}</h2>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {actions.map((a) => {
+              const Icon = ACTION_ICONS[a.id] ?? UserRound;
+              return a.to ? (
+                <Link key={a.id} to={a.to} className="btn-outline w-full min-w-0 !px-2">
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{a.label}</span>
+                </Link>
+              ) : (
+                <button key={a.id} type="button" className="btn-primary w-full min-w-0 !px-2" onClick={() => setBookingOpen(true)}>
+                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{a.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {assistantNote && <p className="mt-2 text-xs text-slate-500">{assistantNote}</p>}
+        </section>
       </header>
 
-      {/* تنبيهات مختصرة */}
+      {/* تنبيهات مختصرة: فقط حين يلزم إجراء — لا نكرر حالة الاشتراك المعروضة في الشارة. */}
       {stats.data?.verificationStatus === "PENDING" && (
         <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{t("ملفك قيد المراجعة من الإدارة، ولن تظهر للمرضى حتى تتم الموافقة. ")}</p>
       )}
-      {clinicSubscription ? (
-        <p className="rounded-xl bg-primary-50 p-3 text-sm text-primary-800">{t("اشتراكك مشمول في اشتراك ")}{clinicSubscription.nameAr}.</p>
-      ) : (
-        daysLeft !== null &&
-        validEnd && (
-          <p role="status" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            {daysLeft > 0
-              ? t("اشتراكك المجاني ينتهي بعد {0} {1}، وبعده يتوقف ظهورك للمرضى حتى التجديد.", { "0": daysLeft, "1": daysLeft === 1 ? t("يوم") : t("أيام") })
-              : t("انتهت مدة اشتراكك المجاني. تواصل مع الإدارة للتجديد والعودة إلى الظهور للمرضى.")}
-          </p>
-        )
+      {subAlert && (
+        <Link to="/subscription" role="status" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 break-words">{subAlert}</span>
+        </Link>
       )}
       {stats.data?.rescheduleRequired > 0 && (
         <Link className="block rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800" to={appointmentsLink({ status: "RESCHEDULE_REQUIRED" })}>

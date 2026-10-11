@@ -6,6 +6,7 @@ import { hashPassword } from "../../utils/password";
 import { hashToken } from "../../lib/tokens";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
 import { ASSISTANT_SAFE_SELECT } from "../../lib/assistantView";
+import { clinicDoctorIds, lockDoctorsForAssistantChange } from "../../lib/doctorAssistants";
 
 const INVITE_TTL_DAYS = 7;
 
@@ -131,7 +132,11 @@ export async function setAssistantActive(doctorUserId: string, assistantId: stri
   const assistant = await prisma.assistant.findUnique({ where: { id: assistantId } });
   if (!assistant || assistant.doctorId !== doctorId) throw ApiError.notFound("المساعد غير موجود.");
 
-  return prisma.assistant.update({ where: { id: assistantId }, data: { isActive } });
+  // قفل طابور الطبيب قبل التغيير: تفعيل مساعد يجب أن يُسلسَل مع أي حجز جارٍ من حساب الطبيب.
+  return prisma.$transaction(async (tx) => {
+    await lockDoctorsForAssistantChange(tx, [doctorId]);
+    return tx.assistant.update({ where: { id: assistantId }, data: { isActive } });
+  });
 }
 
 /** عام (بدون مصادقة): تُستهلك من صفحة قبول الدعوة لعرض اسم الطبيب/العيادة قبل ملء النموذج. */
@@ -184,6 +189,15 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
       const count = await tx.doctor.count({ where: { clinicId: invite.clinicId, id: { in: invite.allowedDoctorIds }, user: { isActive: true } } });
       if (count !== invite.allowedDoctorIds.length) throw ApiError.forbidden("تغيّر الأطباء المحددون. اطلب دعوة جديدة من المالك.");
     }
+    // إنشاء المساعد يغيّر «هل لدى الطبيب مساعد؟»: نأخذ قفل الطابور لكل طبيب يغطّيه قبل الالتزام.
+    await lockDoctorsForAssistantChange(
+      tx,
+      invitingDoctor.clinicId
+        ? invite.allDoctors
+          ? await clinicDoctorIds(tx, invitingDoctor.clinicId)
+          : invite.allowedDoctorIds
+        : [invite.doctorId]
+    );
     const user = await tx.user.create({
       data: {
         email: invite.email,

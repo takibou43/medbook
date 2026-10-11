@@ -1,7 +1,7 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import { Link } from "react-router-dom";
-import { BarChart3, Building2, ClipboardList, Clock, KeyRound, LucideIcon, MessageSquare, Settings, Star, UserCog } from "lucide-react";
+import { BarChart3, BadgeCheck, Building2, ClipboardList, Clock, KeyRound, LucideIcon, MessageSquare, Settings, Star, UserCog } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useDoctorUnread } from "../../hooks/useMessaging";
 import { isDentalSpecialty } from "../../lib/features";
@@ -36,6 +36,7 @@ export default function DoctorSettingsHub() {
     { to: "/schedule", title: t("أوقات العمل"), hint: t("أيام وساعات الدوام والعطل"), icon: Clock },
     { to: "/reviews", title: t("التقييمات"), hint: t("آراء المرضى بعد المواعيد"), icon: Star },
     ...(!clinic ? [{ to: "/assistants", title: t("المساعدون"), hint: t("دعوة المساعدين وإدارة حساباتهم"), icon: UserCog }] : []),
+    { to: "/subscription", title: t("الاشتراك"), hint: t("حالة اشتراكك وتفاصيله"), icon: BadgeCheck },
     { to: "/profile", title: t("الملف المهني"), hint: t("بياناتك التي تظهر للمرضى"), icon: Settings },
     { to: "/account", title: t("إعدادات الحساب"), hint: t("البريد وكلمة المرور والجلسات"), icon: KeyRound },
     {

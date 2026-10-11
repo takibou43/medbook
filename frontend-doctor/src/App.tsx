@@ -32,6 +32,7 @@ const DoctorHome = lazy(() => import("./pages/doctor/DoctorHome"));
 const AssistantBoard = lazy(() => import("./pages/doctor/AssistantBoard"));
 const DoctorOverview = lazy(() => import("./pages/doctor/DoctorOverview"));
 const DoctorSettingsHub = lazy(() => import("./pages/doctor/DoctorSettingsHub"));
+const DoctorSubscription = lazy(() => import("./pages/doctor/DoctorSubscription"));
 const DoctorAppointments = lazy(() => import("./pages/doctor/DoctorAppointments"));
 const DoctorSchedule = lazy(() => import("./pages/doctor/DoctorSchedule"));
 const DoctorPatients = lazy(() => import("./pages/doctor/DoctorPatients"));
@@ -77,7 +78,7 @@ const doctorMainNav = [
     // يظهر في أسفل القائمة الجانبية بجانب «تسجيل الخروج» (ويبقى ضمن شريط الهاتف السفلي).
     footer: true,
     // الصفحات التابعة لـ«الإعدادات» تُبقي العنصر مضيئًا (القائمة تبقى أربعة عناصر).
-    activeFor: ["/overview", "/schedule", "/reviews", "/assistants", "/profile", "/account", "/messages", "/treatment-plans"],
+    activeFor: ["/overview", "/schedule", "/reviews", "/assistants", "/profile", "/account", "/messages", "/treatment-plans", "/subscription"],
   },
 ];
 
@@ -189,6 +190,7 @@ export default function App() {
           <Route element={<ProtectedRoute allow={["DOCTOR"]} />}>
             <Route path="/overview" element={<DoctorOverview />} />
             <Route path="/settings" element={<DoctorSettingsHub />} />
+            <Route path="/subscription" element={<DoctorSubscription />} />
             <Route path="/messages" element={<DoctorMessages />} />
             <Route path="/schedule" element={<DoctorSchedule />} />
             <Route path="/patients" element={<DoctorPatients />} />

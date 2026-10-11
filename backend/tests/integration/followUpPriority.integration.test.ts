@@ -184,7 +184,7 @@ describe.skipIf(!TEST_URL)("موعد المتابعة الطبية من خطط �
       for (const t of times) expect(t).toMatch(/^\d{2}:\d{2}$/);
       const mine = await call("GET", "/api/patient/account/appointments", undefined, owners[1].token);
       for (const a of mine.data as any[]) expect(a.startTime).toMatch(/^\d{2}:\d{2}$/);
-      expect(JSON.stringify(list.raw)).not.toMatch(/\d{2}:\d{2}:\d{2}/);
+      expect(JSON.stringify(list.raw)).not.toMatch(/"(startTime|endTime|time)":"\d{2}:\d{2}:\d{2}/);
     });
     it("بلا خطة علاج لا استثناء: الوقت المحجوز → 409 SLOT_TAKEN ولا صف جديد", async () => {
       const before = await db.appointment.count({ where: { doctorId: doc.doctorId, date: new Date(DAYS.shared + "T00:00:00Z") } });

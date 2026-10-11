@@ -178,9 +178,9 @@ body {
 /* الورقة القياسية لمادبوك: ترويسة فرنسية يسارًا وعربية يمينًا، وشعار الطبيب (اختياري) في الوسط */
 .rx-standard { position: relative; display: flex; flex-direction: column; min-height: 190mm; --rx-blue: #1769c2; }
 .rx-standard > * { position: relative; z-index: 1; }
-.rx-standard .rx-watermark { position: absolute; z-index: 0; inset-inline: 0; top: 50%; transform: translateY(-46%); display: flex; flex-direction: column; align-items: center; gap: 3mm; opacity: 0.045; pointer-events: none; }
-.rx-watermark-mark { width: 85mm; height: 85mm; }
-.rx-watermark-name { font-size: 18pt; font-weight: 800; color: var(--rx-blue); white-space: nowrap; }
+.rx-standard .rx-watermark { position: absolute; z-index: 0; inset-inline: 0; top: 56%; transform: translateY(-40%); display: flex; flex-direction: column; align-items: center; gap: 3mm; opacity: 0.03; pointer-events: none; }
+.rx-watermark-mark { width: 60mm; height: 60mm; }
+.rx-watermark-name { font-size: 14pt; font-weight: 800; color: var(--rx-blue); white-space: nowrap; }
 .rx-head-std { display: grid; grid-template-columns: 1fr 22mm 1fr; align-items: start; gap: 3mm; border-bottom-color: var(--rx-blue); }
 .rx-side { min-width: 0; display: flex; flex-direction: column; gap: 0.6mm; }
 .rx-side-fr { font-family: Calibri, Carlito, Arial, sans-serif; text-align: left; }
@@ -193,7 +193,7 @@ body {
 .rx-standard .rx-title { color: var(--rx-blue); text-decoration: underline; text-underline-offset: 1.2mm; margin: 3mm 0 2mm; }
 .rx-standard .rx-meta { border-bottom: 0; padding-bottom: 1mm; }
 .rx-standard .rx-meds { flex: 1; }
-.rx-foot { margin-top: 4mm !important; padding-top: 2mm; border-top: 0.4mm solid var(--rx-blue); text-align: center; font-size: 9pt; color: #2b4f78; }
+.rx-foot { margin-top: 4mm !important; padding-top: 2mm; border-top: 0.4mm solid var(--rx-blue); text-align: center; font-size: 10pt; line-height: 1.5; color: #1e3a5f; }
 .rx-id { min-width: 0; }
 .rx-doctor { font-size: 16pt; font-weight: 800; line-height: 1.3; color: #0f2523; }
 .rx-specialty { margin-top: 0.5mm !important; font-size: 11pt; color: #166661; font-weight: 600; }
@@ -211,20 +211,26 @@ body {
 .rx-index { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 6mm; height: 6mm; margin-top: 0.8mm; border: 0.3mm solid #187f77; border-radius: 999px; font-size: 9pt; font-weight: 700; color: #166661; }
 .rx-med-body { min-width: 0; flex: 1; }
 .rx-med-name { font-size: 12.5pt; font-weight: 800; line-height: 1.45; }
-.rx-med-line { min-width: 0; flex: 1; font-size: 11pt; line-height: 1.6; }
-.rx-sep { color: #6b7280; }
+.rx-med-line { min-width: 0; flex: 1; font-size: 11pt; line-height: 1.65; color: #1f2937; }
+.rx-med-detail { font-weight: 600; color: #111827; }
+.rx-instr { font-size: 11.5pt; font-weight: 600; color: #000; }
+.rx-sep { color: #4b5563; }
 .rx-facts { display: flex; flex-wrap: wrap; gap: 1mm 6mm; margin-top: 1mm !important; font-size: 10.5pt; }
 .rx-fact { min-width: 0; }
-.rx-fact-label { color: #6b7280; font-weight: 600; }
+.rx-fact-label { color: #4b5563; font-weight: 600; }
 .rx-instructions { margin-top: 1mm !important; font-size: 10.5pt; color: #1f2937; }
-.rx-small-title { font-size: 9.5pt; font-weight: 700; color: #6b7280; }
+.rx-requests { margin-top: 3mm; break-inside: avoid; page-break-inside: avoid; }
+.rx-req-list { list-style: none; margin: 1mm 0 0; padding: 0; }
+.rx-req { font-size: 11pt; line-height: 1.6; color: #1f2937; break-inside: avoid; page-break-inside: avoid; }
+.rx-req-name { font-weight: 700; color: #111827; }
+.rx-small-title { font-size: 9.5pt; font-weight: 700; color: #374151; }
 .rx-notes { margin-top: 5mm; padding-top: 3mm; border-top: 0.2mm solid #d1d5db; }
 .rx-notes h2 { break-after: avoid; page-break-after: avoid; }
 .rx-notes-body { margin-top: 1mm !important; white-space: pre-wrap; orphans: 3; widows: 3; }
 .rx-sign { display: flex; justify-content: space-between; gap: 10mm; margin-top: 7mm; break-inside: avoid; page-break-inside: avoid; }
 .rx-sign-area { flex: 1; max-width: 70mm; }
-.rx-sign-line { height: 16mm; border-bottom: 0.3mm solid #9ca3af; }
-.rx-stamp-space { height: 20mm; }
+.rx-sign-line { height: 18mm; border-bottom: 0.3mm solid #6b7280; }
+.rx-stamp-space { height: 18mm; border: 0.3mm dashed #6b7280; border-radius: 2mm; }
 
 .rx-stage { -webkit-overflow-scrolling: touch; }
 .rx-scaler { position: relative; }
@@ -238,6 +244,7 @@ body {
   html, body.rx-printing { height: auto !important; overflow: visible !important; background: #fff !important; }
   body.rx-printing > *:not(.rx-print-root) { display: none !important; }
   .rx-print-root { position: static !important; display: block !important; inset: auto !important; overflow: visible !important; background: none !important; }
+  .rx-print-root [role="dialog"] { outline: none !important; box-shadow: none !important; } /* حلقة التركيز لا تُطبع */
   .rx-print-root [role="dialog"], .rx-stage { display: block !important; overflow: visible !important; padding: 0 !important; }
   .rx-print-root .rx-no-print { display: none !important; }
   .rx-scaler { width: auto !important; height: auto !important; margin: 0 !important; }

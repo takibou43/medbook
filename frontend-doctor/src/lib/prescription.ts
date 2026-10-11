@@ -1,5 +1,6 @@
 import type { Appointment } from "../types/index.ts";
 import type { PrescriptionLanguage, PrescriptionProfessional } from "./prescriptionPrint.ts";
+import { structuredErrors } from "./prescriptionMedication.ts";
 
 /**
  * منطق «كتابة وصفة» (نقي، يُختبر بـnode --test).
@@ -17,6 +18,19 @@ export interface PrescriptionMedication {
   duration: string;
   instructions: string;
   directionsMode?: "structured" | "freeText";
+  /** حقول اختيارية جديدة: التركيز والشكل، والجرعة/التكرار/التوقيت/المدة المنظمة (القيم النصية القديمة تبقى كما كُتبت). */
+  strength?: string;
+  form?: string;
+  doseQty?: string;
+  doseUnit?: string;
+  doseCustom?: string;
+  freqKey?: string;
+  freqCustom?: string;
+  timingKey?: string;
+  timingCustom?: string;
+  durQty?: string;
+  durUnit?: string;
+  durCustom?: string;
 }
 
 /** المستفيد كما يُشتق من الموعد — لقطة ثابتة لا تتغيّر بتغيّر المريض الحالي. */
@@ -36,7 +50,18 @@ export interface PrescriptionPatient {
   startTime: string;
 }
 
+/** عنصر طلب (تحليل أو أشعة/فحص) كما يكتبه الطبيب؛ الملاحظة اختيارية. */
+export interface PrescriptionRequestItem { id: string; name: string; note: string }
+
+export function newRequestItem(): PrescriptionRequestItem {
+  seq += 1;
+  return { id: `req-${Date.now().toString(36)}-${seq}`, name: "", note: "" };
+}
+export const requestFilled = (r: PrescriptionRequestItem) => r.name.trim() !== "" || r.note.trim() !== "";
+
 export interface PrescriptionDraft {
+  labs?: PrescriptionRequestItem[];
+  imaging?: PrescriptionRequestItem[];
   printLanguage?: PrescriptionLanguage;
   professional?: Partial<Record<PrescriptionLanguage, PrescriptionProfessional>>;
   /** الحساب الذي كتب المسودة — لا تُعرض لحساب آخر على نفس الجهاز. */
@@ -102,12 +127,21 @@ export function shouldAutoRebind(d: PrescriptionDraft | null, currentAppointment
   return d.source === "current" && !draftHasContent(d);
 }
 
-const filled = (m: PrescriptionMedication) => [m.name, m.dose, m.frequency, m.duration, m.instructions].some((v) => v.trim() !== "");
+export const filled = (m: PrescriptionMedication) => [m.name, m.dose, m.frequency, m.duration, m.instructions, m.strength, m.form, m.doseQty, m.doseUnit, m.doseCustom, m.freqKey, m.freqCustom, m.timingKey, m.durQty, m.durUnit, m.durCustom].some((v) => (v ?? "").trim() !== "");
+
+/** يعيد دواءً محذوفًا بكل قيمه وفي ترتيبه الأصلي؛ إن كانت القائمة الحالية صفًا فارغًا واحدًا (بعد حذف الأخير) يحلّ محله. */
+export function restoreMedication(list: PrescriptionMedication[], med: PrescriptionMedication, index: number): PrescriptionMedication[] {
+  if (list.some((m) => m.id === med.id)) return list;
+  if (list.length === 1 && !filled(list[0])) return [med];
+  const next = [...list];
+  next.splice(Math.min(Math.max(index, 0), next.length), 0, med);
+  return next;
+}
 
 /** هل كتب الطبيب شيئًا يُفقد؟ (تعديل الاسم وحده لا يُعدّ محتوى طبيًا لكنه يُحتسب كتعديل). */
 export function draftHasContent(d: PrescriptionDraft | null | undefined): boolean {
   if (!d) return false;
-  return d.medications.some(filled) || d.notes.trim() !== "" || d.patientName.trim() !== d.patient.bookedName.trim()
+  return d.medications.some(filled) || (d.labs ?? []).some(requestFilled) || (d.imaging ?? []).some(requestFilled) || d.notes.trim() !== "" || d.patientName.trim() !== d.patient.bookedName.trim()
     || Object.values(d.professional ?? {}).some(fields => Object.values(fields).some(value => Boolean(value?.trim())));
 }
 
@@ -117,6 +151,9 @@ export interface DraftValidation {
   medicationErrors: Record<string, Partial<Record<"name" | "dose" | "frequency" | "duration" | "instructions", string>>>;
   /** الأدوية التي ستُطبع فعلًا (الصفوف الفارغة كليًا تُتجاهل). */
   printable: PrescriptionMedication[];
+  labs: PrescriptionRequestItem[];
+  imaging: PrescriptionRequestItem[];
+  requestErrors: Record<string, string>;
 }
 
 export function validateDraft(d: PrescriptionDraft): DraftValidation {
@@ -124,21 +161,26 @@ export function validateDraft(d: PrescriptionDraft): DraftValidation {
   const medicationErrors: DraftValidation["medicationErrors"] = {};
   if (!d.patientName.trim()) errors.push("اكتب اسم المريض.");
   const rows = d.medications.filter(filled);
-  if (rows.length === 0) errors.push("أضف دواءً واحدًا على الأقل.");
+  const labs = (d.labs ?? []).filter(requestFilled).map(r => ({ ...r, name: r.name.trim(), note: r.note.trim() }));
+  const imaging = (d.imaging ?? []).filter(requestFilled).map(r => ({ ...r, name: r.name.trim(), note: r.note.trim() }));
+  const requestErrors: Record<string, string> = {};
+  for (const [label, list] of [["التحاليل", labs], ["الأشعة والفحوصات", imaging]] as const) {
+    list.forEach((r, i) => { if (!r.name) { requestErrors[r.id] = "اكتب اسم الطلب."; errors.push(`${label} رقم ${i + 1}: اكتب اسم الطلب.`); } });
+  }
+  // وصفة بتحاليل أو أشعة فقط مقبولة؛ لا يُشترط دواء إن وُجد طلب.
+  if (rows.length === 0 && labs.length === 0 && imaging.length === 0) errors.push("أضف دواءً واحدًا على الأقل.");
   rows.forEach((m, i) => {
     const fields: DraftValidation["medicationErrors"][string] = {};
     if (!m.name.trim()) fields.name = "اسم الدواء مطلوب.";
     if (m.directionsMode === "freeText") {
       if (!m.instructions.trim()) fields.instructions = "اكتب تعليمات الاستخدام الكاملة لهذه الحالة.";
     } else {
-      if (!m.dose.trim()) fields.dose = "اكتب الجرعة أو الكمية لكل استخدام.";
-      if (!m.frequency.trim()) fields.frequency = "اكتب تكرار الاستخدام أو شرطه عند الحاجة.";
-      if (!m.duration.trim()) fields.duration = "اكتب مدة العلاج أو شرط انتهائه.";
+      Object.assign(fields, structuredErrors(m));
     }
     if (Object.keys(fields).length) medicationErrors[m.id] = fields;
     Object.values(fields).forEach(message => errors.push(`الدواء رقم ${i + 1}: ${message}`));
   });
-  return { ok: errors.length === 0, errors, medicationErrors, printable: rows.map((m) => ({ ...m, name: m.name.trim() })) };
+  return { ok: errors.length === 0, errors, medicationErrors, labs, imaging, requestErrors, printable: rows.map((m) => ({ ...m, name: m.name.trim() })) };
 }
 
 /** Compare immutable identifiers, never names. */

@@ -2,12 +2,14 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { createPortal, flushSync } from "react-dom";
 import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
-import type { PrescriptionMedication } from "../../lib/prescription";
+import type { PrescriptionMedication, PrescriptionRequestItem } from "../../lib/prescription";
+import { DEFAULT_PRESCRIPTION_SETTINGS, type PrescriptionShow } from "../../lib/prescriptionSettings";
 import { prescriptionLabels, prescriptionDate, prescriptionCatalogName, professionalText, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 import { Logo } from "../ui/Logo";
+import { medicationParts } from "../../lib/prescriptionMedication";
 
 export interface PrescriptionSheetData {
   template?: PrescriptionTemplate | null;
@@ -19,6 +21,11 @@ export interface PrescriptionSheetData {
   /** YYYY-MM-DD بتوقيت الجزائر. */
   day: string;
   medications: PrescriptionMedication[];
+  /** تحاليل وأشعة/فحوصات يطلبها الطبيب (اختيارية). */
+  labs?: PrescriptionRequestItem[];
+  imaging?: PrescriptionRequestItem[];
+  /** إظهار/إخفاء البيانات الاختيارية في الترويسة (من إعدادات الطبيب). */
+  show?: PrescriptionShow;
   notes: string;
   /** شعار الطبيب الخاص (اختياري) في وسط الترويسة؛ علامة مادبوك تبقى مائية خلف النص. */
   logo?: string | null;
@@ -39,15 +46,16 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const d = data.doctor;
   const clinic = d?.clinic ?? null;
   const place = [d?.city ? prescriptionCatalogName(d.city, lang) : "", d?.wilaya ? prescriptionCatalogName(d.wilaya, lang) : ""].filter(Boolean).join(lang === "fr" ? ", " : "، ");
-  const address = professionalText(data.professional?.address, clinic?.address || d?.address);
+  const show = data.show ?? DEFAULT_PRESCRIPTION_SETTINGS.show;
+  const address = show.address ? professionalText(data.professional?.address, clinic?.address || d?.address) : "";
   const doctorName = professionalText(data.professional?.doctorName, d ? `${d.firstName} ${d.lastName}` : "");
-  const clinicName = professionalText(data.professional?.clinicName, clinic?.nameAr);
-  const phone = (clinic?.phone || d?.phone || "").trim();
+  const clinicName = show.clinicName ? professionalText(data.professional?.clinicName, clinic?.nameAr) : "";
+  const phone = show.phone ? (clinic?.phone || d?.phone || "").trim() : "";
     const standard = !data.template;
   const fr = prescriptionLabels("fr");
   const ar = prescriptionLabels("ar");
-  const specialtyFr = d?.specialty ? prescriptionCatalogName(d.specialty, "fr") : "";
-  const specialtyAr = d?.specialty ? prescriptionCatalogName(d.specialty, "ar") : "";
+  const specialtyFr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "fr") : "";
+  const specialtyAr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "ar") : "";
   const footerLine = [address, place].filter(Boolean).join(lang === "fr" ? " — " : " — ");
   return (
     <article className={`rx-sheet${standard ? " rx-standard" : ""}`} dir={lang === "fr" ? "ltr" : "rtl"} lang={lang} aria-label={text.sheet}>
@@ -86,26 +94,40 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </div>
       </dl>
 
-      <ol className="rx-meds" aria-label={text.medications}>
+      {data.medications.length > 0 && <ol className="rx-meds" aria-label={text.medications}>
         {data.medications.map((m, i) => {
-          // سطر واحد: اسم الدواء ثم الجرعة والتكرار والمدة والتعليمات، وينتقل للسطر التالي تلقائيًا فقط إن طال.
-          const parts = [m.dose, m.frequency, m.duration, m.instructions].map((v) => v.trim()).filter(Boolean);
+          // نفس منطق التنسيق للمعاينة والطباعة والملخص: lib/prescriptionMedication.
+          const p = medicationParts(m, lang);
           return (
             <li key={m.id} className="rx-med">
               <span className="rx-index" aria-hidden="true">{i + 1}</span>
               <p className="rx-med-line">
-                <Typed className="rx-med-name">{m.name}</Typed>
-                {parts.map((v, k) => (
-                  <span key={k}>
-                    <span className="rx-sep" aria-hidden="true">{"\u00A0—"}</span>{" "}
-                    <Typed>{v}</Typed>
-                  </span>
+                <span className="rx-med-head">
+                  <Typed className="rx-med-name">{p.name}</Typed>
+                  {p.detail && <> <Typed className="rx-med-detail">{p.detail}</Typed></>}
+                </span>
+                {p.facts.map((v, k) => (
+                  <span key={k} className="rx-fact"><span className="rx-sep" aria-hidden="true">{"\u00A0—"}</span>{" "}<Typed>{v}</Typed></span>
                 ))}
+                {p.instructions && (
+                  <span className="rx-instr"><span className="rx-sep" aria-hidden="true">{"\u00A0—"}</span>{" "}<Typed>{p.instructions}</Typed></span>
+                )}
               </p>
             </li>
           );
         })}
-      </ol>
+      </ol>}
+
+      {([["labs", data.labs ?? []], ["imaging", data.imaging ?? []]] as const).map(([key, list]) => list.length > 0 && (
+        <section key={key} className="rx-requests">
+          <h2 className="rx-small-title">{text[key]}</h2>
+          <ol className="rx-req-list">
+            {list.map((r, i) => (
+              <li key={r.id} className="rx-req"><span className="rx-req-n" aria-hidden="true">{i + 1}.</span>{" "}<Typed className="rx-req-name">{r.name}</Typed>{r.note && <><span className="rx-sep" aria-hidden="true">{"\u00A0—"}</span>{" "}<Typed>{r.note}</Typed></>}</li>
+            ))}
+          </ol>
+        </section>
+      ))}
 
       {data.notes.trim() && (
         <section className="rx-notes">
@@ -114,16 +136,6 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </section>
       )}
 
-      {standard && <footer className="rx-sign">
-        <div className="rx-sign-area">
-          <p className="rx-small-title">{text.signature}</p>
-          <div className="rx-sign-line" />
-        </div>
-        <div className="rx-sign-area">
-          <p className="rx-small-title">{text.stamp}</p>
-          <div className="rx-stamp-space" />
-        </div>
-      </footer>}
       {standard && footerLine && <p className="rx-foot"><Typed>{footerLine}</Typed></p>}
     </article>
   );

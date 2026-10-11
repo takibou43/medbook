@@ -417,10 +417,24 @@ model PrescriptionTemplate {
   @@map("prescription_templates")
 }
 
+/// Per-doctor prescription preferences (default language, printed professional text, optional header lines).
+/// Additive table: no existing table is altered. The blank-stationery template stays in PrescriptionTemplate.
+model PrescriptionSettings {
+  doctorId String @id
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  language String @default("ar")
+  professional Json?
+  show Json?
+  updatedAt DateTime @updatedAt
+
+  @@map("prescription_settings")
+}
+
 model Doctor {
   dutyEndsAt DateTime?
   queueRequestedAt DateTime?
   prescriptionTemplate PrescriptionTemplate?
+  prescriptionSettings PrescriptionSettings?
   // A delegation belongs to this exact clinic; changing clinics never carries it over.
   clinicManagerForId String?
   clinicPermissions String[] @default([])

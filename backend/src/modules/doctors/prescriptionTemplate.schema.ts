@@ -33,3 +33,16 @@ export const prescriptionTemplateSchema = z.object({
   bottom: z.number().int().min(10).max(60),
   side: z.number().int().min(5).max(30),
 }).strict();
+
+const professionalText = z.object({
+  doctorName: z.string().trim().max(120).optional(),
+  clinicName: z.string().trim().max(120).optional(),
+  address: z.string().trim().max(180).optional(),
+}).strict();
+
+/** Doctor-owned prescription preferences. Never carries ownership, patient or prescription data. */
+export const prescriptionSettingsSchema = z.object({
+  language: z.enum(["ar", "fr"]),
+  professional: z.object({ ar: professionalText.optional(), fr: professionalText.optional() }).strict().optional(),
+  show: z.object({ clinicName: z.boolean(), address: z.boolean(), phone: z.boolean(), specialty: z.boolean() }).strict().optional(),
+}).strict();

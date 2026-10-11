@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import clsx from "clsx";
-import { AlertTriangle, Eye, FileText, Plus, RotateCcw, X, UserRound } from "lucide-react";
+import { AlertTriangle, Eye, FileText, RotateCcw, UserRound } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import type { Appointment } from "../../types";
 import { Button } from "../ui/Button";
@@ -8,24 +8,17 @@ import { Spinner } from "../ui/States";
 import { algeriaToday } from "../../lib/doctorUi";
 import { beneficiaryName } from "../../lib/appointmentPeople";
 import {
-  draftHasContent, emptyDraft, getStoredDraft, newMedication, prescriptionPatientFrom, shouldAutoRebind, storeDraft, validateDraft, samePrescriptionVisit, prescriptionVisitLabel,
-  type PrescriptionDraft, type PrescriptionMedication, type DraftValidation,
+  draftHasContent, emptyDraft, restoreMedication, getStoredDraft, newMedication, prescriptionPatientFrom, shouldAutoRebind, storeDraft, validateDraft, samePrescriptionVisit, prescriptionVisitLabel,
+  type PrescriptionDraft, type DraftValidation,
 } from "../../lib/prescription";
 import { PrescriptionPreview, type PrescriptionSheetData } from "./PrescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
-import { api } from "../../lib/api";
-import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
-import { PrescriptionTemplateEditor } from "./PrescriptionTemplateEditor";
+import { Link } from "react-router-dom";
+import { usePrescriptionSetup } from "../../hooks/usePrescriptionSetup";
+import { RequestItems } from "./RequestItems";
+import { MedicationList } from "./MedicationFields";
 
-// بلا أمثلة جرعات في placeholder عمدًا: لا اقتراحات دوائية ولا جرعات تلقائية — كل شيء يكتبه الطبيب.
-const MED_FIELDS: { key: keyof Omit<PrescriptionMedication, "id" | "directionsMode">; label: string; placeholder?: string; wide?: boolean }[] = [
-  { key: "name", label: "اسم الدواء", wide: true },
-  { key: "dose", label: "الجرعة" },
-  { key: "frequency", label: "عدد مرات الاستخدام" },
-  { key: "duration", label: "مدة العلاج" },
-  { key: "instructions", label: "تعليمات إضافية", placeholder: "اختياري", wide: true },
-];
 
 const DISCARD_MSG = (name: string) => t("لديك وصفة غير مطبوعة لـ «{name}» لم تُحفظ. ستُحذف هذه المسودة نهائيًا. هل تريد المتابعة؟", { name });
 
@@ -55,15 +48,10 @@ export function PrescriptionCard({
   const [errors, setErrors] = useState<string[]>([]);
   const [validation, setValidation] = useState<DraftValidation | null>(null);
   const [preview, setPreview] = useState<PrescriptionSheetData | null>(null);
-  const [template, setTemplate] = useState<PrescriptionTemplate | null>(null);
-  const [templateError, setTemplateError] = useState(false);
-  const [templateLoading, setTemplateLoading] = useState(Boolean(uid));
-  useEffect(() => {
-    let active = true;
-    setTemplate(null); setTemplateError(false); setTemplateLoading(Boolean(uid));
-    if (uid) api.get("/doctor/prescription-template").then(res => { if (active) setTemplate(res.data.data); }).catch(() => { if (active) setTemplateError(true); }).finally(() => { if (active) setTemplateLoading(false); });
-    return () => { active = false; };
-  }, [uid]);
+  // لغة الوصفة والقالب والبيانات المهنية تأتي من إعدادات الطبيب المحفوظة (صفحة إعدادات الحساب) لا من هذه الصفحة.
+  const setup = usePrescriptionSetup(uid);
+  const lang = setup.settings?.language ?? "ar";
+  const [listKey, setListKey] = useState(0);
 
   const setDraft = (d: PrescriptionDraft | null) => {
     storeDraft(d);
@@ -130,11 +118,7 @@ export function PrescriptionCard({
   function clearAll() {
     if (!draft || !confirmDiscard()) return;
     setDraft({ ...emptyDraft(uid, draft.patient, draft.source) });
-  }
-
-  function updateMed(id: string, key: keyof PrescriptionMedication, value: string) {
-    if (!draft) return;
-    patch({ medications: draft.medications.map((m) => (m.id === id ? { ...m, [key]: value } : m)) });
+    setListKey((k) => k + 1);
   }
 
   function removeMed(id: string) {
@@ -144,8 +128,7 @@ export function PrescriptionCard({
   }
 
   function openPreview() {
-    if (templateLoading) return;
-    if (!draft) return;
+    if (!draft || setup.loading || !setup.settings) return;
     const v = validateDraft(draft);
     setValidation(v);
     if (!v.ok) {
@@ -154,10 +137,13 @@ export function PrescriptionCard({
     }
     setErrors([]);
     setPreview({
-      template,
+      template: setup.template,
       doctor: user?.doctor,
-      language: draft.printLanguage ?? "ar",
-      professional: draft.professional?.[draft.printLanguage ?? "ar"],
+      language: setup.settings.language,
+      professional: setup.settings.professional[setup.settings.language],
+      show: setup.settings.show,
+      labs: v.labs,
+      imaging: v.imaging,
       patientName: draft.patientName.trim(),
       day: algeriaToday(),
       medications: v.printable,
@@ -172,9 +158,6 @@ export function PrescriptionCard({
   return (
     <section className="card p-4 sm:p-5" aria-labelledby={`${formId}-title`}>
       <PrescriptionPreview open={Boolean(preview)} data={preview} onClose={() => setPreview(null)} />
-      {templateError && <p role="alert" className="text-sm text-amber-800">{t("تعذر تحميل قالب الوصفة. أعد تحميل الصفحة للمحاولة مجددًا.")}</p>}
-      {templateLoading && <p role="status" className="text-sm text-slate-600">{t("جارٍ تحميل قالب الوصفة…")}</p>}
-      {!templateLoading && !templateError && <PrescriptionTemplateEditor key={uid} value={template} onChange={setTemplate} doctor={user?.doctor} />}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -193,6 +176,20 @@ export function PrescriptionCard({
           </button>
         )}
       </div>
+
+      <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-slate-600" role={setup.error ? "alert" : "status"}>
+        {setup.loading ? t("جارٍ تحميل إعدادات الوصفة…") : setup.error || !setup.settings ? (
+          <>
+            <span className="text-amber-800">{t("تعذّر تحميل إعدادات الوصفة. لا يمكن المعاينة قبل تحميلها.")}</span>
+            <button type="button" className="min-h-11 px-2 font-semibold text-primary-700 hover:underline" onClick={setup.refetch}>{t("إعادة المحاولة")}</button>
+          </>
+        ) : (
+          <>
+            <span>{t("لغة الوصفة:")} <bdi>{setup.settings.language === "fr" ? "Français" : "العربية"}</bdi>{setup.template ? ` · ${t("قالبك الشخصي مفعّل")}` : ""}</span>
+            <Link to="/account" className="inline-flex min-h-11 items-center font-semibold text-primary-700 hover:underline">{t("تغيير إعدادات الوصفة")}</Link>
+          </>
+        )}
+      </p>
 
       {currentChanged && current && draft && (
         <div role="alert" className="mt-3 flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
@@ -251,28 +248,6 @@ export function PrescriptionCard({
           }}
           aria-describedby={`${formId}-note`}
         >
-          <label className="block">
-            <span className="label">{t("لغة الوصفة والطباعة")}</span>
-            <select className="input" value={draft.printLanguage ?? "ar"} onChange={e => patch({ printLanguage: e.target.value === "fr" ? "fr" : "ar" })}>
-              <option value="ar">العربية</option><option value="fr">Français</option>
-            </select>
-            <span className="mt-1 block text-xs text-slate-500">{t("تغيير لغة الوصفة لا يغيّر لغة لوحة الطبيب أو النصوص التي كتبتها.")}</span>
-          </label>
-          <details className="rounded-xl border border-slate-200 p-3">
-            <summary className="min-h-11 cursor-pointer content-center text-sm font-semibold">{t("بيانات مهنية اختيارية لهذه الوصفة")}</summary>
-            <p className="my-2 text-xs text-slate-600">{t("تُطبق على لغة الوصفة المختارة فقط. اترك الحقول فارغة لاستخدام البيانات الأصلية. لا تُحفظ في الملف المهني ولا تُترجم الأسماء تلقائيًا.")}</p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {([{ key: "doctorName", label: "اسم الطبيب للطباعة" }, { key: "clinicName", label: "اسم العيادة للطباعة" }, { key: "address", label: "العنوان للطباعة" }] as const).map(field => (
-                <label key={field.key} className="block text-xs">
-                  <span className="mb-1 block">{t(field.label)}</span>
-                  <input className="input" dir="auto" translate="no" value={draft.professional?.[draft.printLanguage ?? "ar"]?.[field.key] ?? ""} onChange={e => {
-                    const lang = draft.printLanguage ?? "ar";
-                    patch({ professional: { ...draft.professional, [lang]: { ...draft.professional?.[lang], [field.key]: e.target.value } } });
-                  }} />
-                </label>
-              ))}
-            </div>
-          </details>
           {/* المريض */}
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -309,60 +284,23 @@ export function PrescriptionCard({
             )}
           </div>
 
-          {/* الأدوية: الاسم بعرض كامل، ثم الجرعة/التكرار/المدة في صف (عمود واحد على الهاتف)، ثم التعليمات */}
           <fieldset>
             <legend className="mb-2 text-sm font-bold text-slate-800">{t("الأدوية")} ({draft.medications.length})</legend>
-            <ol className="divide-y divide-slate-200 rounded-xl border border-slate-200">
-              {draft.medications.map((m, i) => (
-                <li key={m.id} className="p-2.5 sm:p-3" role="group" aria-label={t("الدواء رقم {n}", { n: i + 1 })}>
-                  <div className="flex items-start gap-2">
-                    <span className="mt-6 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-700" aria-hidden="true">{i + 1}</span>
-                    <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-6">
-                      <label className="block text-xs sm:col-span-6">
-                        <span className="mb-1 block">{t("طريقة كتابة تعليمات الدواء")}</span>
-                        <select className="input" value={m.directionsMode ?? "structured"} onChange={e => updateMed(m.id, "directionsMode", e.target.value)}>
-                          <option value="structured">{t("جرعة وتكرار ومدة")}</option>
-                          <option value="freeText">{t("تعليمات حرة مكتملة لحالة خاصة")}</option>
-                        </select>
-                        {m.directionsMode === "freeText" && <span className="mt-1 block text-slate-600">{t("اكتب طريقة الاستخدام كاملة، بما يناسب الدواء والحالة. لا يتحقق النظام من ملاءمتها الطبية.")}</span>}
-                      </label>
-                      {MED_FIELDS.map((f) => (
-                        <label key={f.key} className={clsx("block min-w-0", f.key === "name" ? "sm:col-span-6" : f.key === "instructions" ? "sm:col-span-6" : "sm:col-span-2")}>
-                          <span className="mb-0.5 block text-xs font-medium text-slate-600">{t(f.label)}{m.directionsMode === "freeText" && ["dose", "frequency", "duration"].includes(f.key) ? ` (${t("اختياري")})` : ""}</span>
-                          <input
-                            className={clsx("input py-2", f.key === "name" && "font-semibold")}
-                            dir="auto"
-                            value={m[f.key]}
-                            placeholder={f.key === "instructions" && m.directionsMode === "freeText" ? undefined : f.placeholder ? t(f.placeholder) : undefined}
-                            onChange={(e) => updateMed(m.id, f.key, e.target.value)}
-                            autoComplete="off"
-                            spellCheck={false}
-                            translate="no"
-                            data-field={f.key}
-                            aria-invalid={Boolean(validation?.medicationErrors[m.id]?.[f.key])}
-                            aria-describedby={validation?.medicationErrors[m.id]?.[f.key] ? formId + m.id + f.key : undefined}
-                          />
-                          {validation?.medicationErrors[m.id]?.[f.key] && <span id={formId + m.id + f.key} className="mt-1 block text-xs text-red-700">{t(validation.medicationErrors[m.id][f.key]!)}</span>}
-                        </label>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeMed(m.id)}
-                      className="mt-5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-700"
-                      aria-label={t("حذف الدواء رقم {n}", { n: i + 1 })}
-                      title={t("حذف الدواء")}
-                    >
-                      <X className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ol>
-            <Button type="button" variant="outline" className="mt-2" onClick={() => patch({ medications: [...draft.medications, newMedication()] })}>
-              <Plus className="h-4 w-4" aria-hidden="true" /> {t("إضافة دواء")}
-            </Button>
+            <MedicationList
+              key={`${draft.patient.appointmentId}-${listKey}`}
+              medications={draft.medications}
+              lang={lang}
+              errors={validation?.medicationErrors ?? {}}
+              formId={formId}
+              onUpdate={(id, p) => draft && patch({ medications: draft.medications.map((m) => (m.id === id ? { ...m, ...p } : m)) })}
+              onRemove={removeMed}
+              onRestore={(med, index) => draft && patch({ medications: restoreMedication(draft.medications, med, index) })}
+              onAdd={() => patch({ medications: [...draft.medications, newMedication()] })}
+            />
           </fieldset>
+
+          <RequestItems kind="labs" title={t("التحاليل الطبية")} addLabel={t("إضافة تحليل")} items={draft.labs ?? []} errors={validation?.requestErrors} onChange={labs => patch({ labs })} />
+          <RequestItems kind="imaging" title={t("الأشعة والفحوصات")} addLabel={t("إضافة أشعة أو فحص")} items={draft.imaging ?? []} errors={validation?.requestErrors} onChange={imaging => patch({ imaging })} />
 
           <label className="block">
             <span className="mb-1 block text-sm font-bold text-slate-800">{t("ملاحظات عامة")} <span className="font-normal text-slate-500">({t("اختياري")})</span></span>
@@ -373,13 +311,14 @@ export function PrescriptionCard({
             <ul role="alert" className="space-y-1 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
               {errors.map((e) => {
                 const medication = /^الدواء رقم (\d+): (.+)$/.exec(e);
-                return <li key={e}>{medication ? `${t("الدواء رقم {n}", { n: medication[1] })}: ${t(medication[2])}` : t(e)}</li>;
+                const request = /^(التحاليل|الأشعة والفحوصات) رقم (\d+): (.+)$/.exec(e);
+                return <li key={e}>{medication ? `${t("الدواء رقم {n}", { n: medication[1] })}: ${t(medication[2])}` : request ? `${t(request[1])} ${request[2]}: ${t(request[3])}` : t(e)}</li>;
               })}
             </ul>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-            <Button type="submit" className="flex-1 sm:flex-none">
+          <div className="sticky bottom-0 z-10 -mx-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white/95 px-4 py-2 backdrop-blur sm:-mx-5 sm:px-5" data-testid="rx-actions">
+            <Button type="submit" className="flex-1 sm:flex-none" disabled={setup.loading || !setup.settings}>
               <Eye className="h-4 w-4" aria-hidden="true" /> {t("معاينة وطباعة")}
             </Button>
             <button type="button" onClick={clearAll} disabled={!dirty} className="min-h-11 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-red-700 disabled:opacity-40">

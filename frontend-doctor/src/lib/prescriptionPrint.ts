@@ -7,8 +7,8 @@ export interface PrescriptionProfessional {
 }
 
 const labels = {
-  ar: { sheet: "الوصفة الطبية", doctor: "د.", phone: "الهاتف:", title: "وصفة طبية", patient: "المريض", date: "التاريخ", medications: "الأدوية", dose: "الجرعة", frequency: "التكرار", duration: "المدة", instructions: "تعليمات:", notes: "ملاحظات", signature: "توقيع الطبيب", stamp: "الختم" },
-  fr: { sheet: "Ordonnance médicale", doctor: "Dr", phone: "Téléphone :", title: "Ordonnance médicale", patient: "Patient", date: "Date", medications: "Médicaments", dose: "Dose", frequency: "Fréquence", duration: "Durée", instructions: "Instructions :", notes: "Remarques", signature: "Signature du médecin", stamp: "Cachet" },
+  ar: { sheet: "الوصفة الطبية", doctor: "د.", phone: "الهاتف:", title: "وصفة طبية", patient: "المريض", date: "التاريخ", medications: "الأدوية", labs: "التحاليل المطلوبة", imaging: "الأشعة والفحوصات", dose: "الجرعة", frequency: "التكرار", duration: "المدة", instructions: "تعليمات:", notes: "ملاحظات", signature: "توقيع الطبيب", stamp: "الختم" },
+  fr: { sheet: "Ordonnance médicale", doctor: "Dr", phone: "Téléphone :", title: "Ordonnance médicale", patient: "Patient", date: "Date", medications: "Médicaments", labs: "Analyses demandées", imaging: "Imagerie et examens", dose: "Dose", frequency: "Fréquence", duration: "Durée", instructions: "Instructions :", notes: "Remarques", signature: "Signature du médecin", stamp: "Cachet" },
 };
 
 export function prescriptionLabels(language: PrescriptionLanguage) { return labels[language]; }

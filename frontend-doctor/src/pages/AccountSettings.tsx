@@ -11,6 +11,7 @@ import { Spinner, ErrorState } from "../components/ui/States";
 import { useToast } from "../components/ui/Toast";
 import { useAuth } from "../context/AuthContext";
 import { ProfilesCard } from "../components/ProfilesCard";
+import { PrescriptionSettingsSection } from "../components/prescription/PrescriptionSettingsSection";
 
 interface FormValues {
   currentPassword: string;
@@ -65,13 +66,15 @@ export default function AccountSettings() {
   if (isLoading || isError) return <div className="space-y-5"><h1 className="text-2xl font-extrabold text-slate-900">{t("إعدادات الحساب")}</h1>{isLoading ? <Spinner /> : <ErrorState message={apiErrorMessage(error)} onRetry={() => void refetch()} />}</div>;
 
   return (
-    <div className="max-w-xl space-y-6">
+    <div className="max-w-3xl space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">{t("إعدادات الحساب")}</h1>
         <p className="mt-1 text-sm text-slate-500">{t("غيّر بريدك الإلكتروني أو كلمة مرورك. كلمة المرور الحالية مطلوبة لتأكيد هويتك. ")}</p>
       </div>
 
       <ProfilesCard />
+
+      <PrescriptionSettingsSection />
 
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-4 p-6">
         <section className="space-y-3" aria-labelledby="change-email"><h2 id="change-email" className="text-lg font-bold">{t("تغيير البريد الإلكتروني")}</h2>

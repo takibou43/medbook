@@ -17,6 +17,7 @@ import { PUBLIC_DOCTOR_SELECT } from "../doctors/doctors.service";
 import { ClinicProfileInput, registerClinicSchema, acceptClinicInviteSchema } from "./clinics.schema";
 import { ClinicPermission, CLINIC_PERMISSIONS } from "../../lib/clinicPermissions";
 import * as assistantsService from "../assistants/assistants.service";
+import { clinicDoctorIds, lockDoctorsForAssistantChange } from "../../lib/doctorAssistants";
 
 export const PUBLIC_CLINIC_SELECT = {
   id: true, nameAr: true, address: true, phone: true, description: true, photoUrl: true,
@@ -268,9 +269,13 @@ export async function findOwnClinicAssistant(userId: string, email: string) {
 export async function setOwnClinicAssistantActive(userId: string, doctorId: string, assistantId: string, isActive: boolean) {
   const doctor = await clinicDoctor(userId, doctorId);
   const clinic = await ownedClinic(userId, prisma, "MANAGE_ASSISTANT_STATUS");
-  const changed = await prisma.assistant.updateMany({
-    where: { id: assistantId, OR: [{ clinicId: clinic.id }, { clinicId: null, doctorId: doctor.id }] },
-    data: { isActive },
+  const changed = await prisma.$transaction(async (tx) => {
+    // تفعيل مساعد عيادة قد يغطّي عدة أطباء: نقفل طابورهم (نفس قفل الحجز) قبل التغيير.
+    await lockDoctorsForAssistantChange(tx, [doctor.id, ...(await clinicDoctorIds(tx, clinic.id))]);
+    return tx.assistant.updateMany({
+      where: { id: assistantId, OR: [{ clinicId: clinic.id }, { clinicId: null, doctorId: doctor.id }] },
+      data: { isActive },
+    });
   });
   if (!changed.count) throw ApiError.notFound("المساعد غير موجود في عيادتك.");
   return prisma.assistant.findUnique({ where: { id: assistantId }, select: clinicAssistantSelect });
@@ -305,6 +310,7 @@ export async function setOwnClinicAssistantScope(userId: string, assistantId: st
   return prisma.$transaction(async tx => {
     const clinic = await ownedClinic(userId, tx, "OWNER");
     await lockClinic(tx, clinic.id);
+    await lockDoctorsForAssistantChange(tx, await clinicDoctorIds(tx, clinic.id));
     const scope = await validateAssistantScope(clinic.id, input, tx);
     const changed = await tx.assistant.updateMany({ where: { id: assistantId, clinicId: clinic.id }, data: scope });
     if (!changed.count) throw ApiError.notFound("المساعد غير موجود في عيادتك.");

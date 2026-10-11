@@ -22,7 +22,7 @@ const h = vi.hoisted(() => {
       update: vi.fn(async (args: any) => { st.updates.push(args); return { ...st.doctor, ...args.data }; }),
     },
     clinic: { findUnique: vi.fn(async () => st.clinic) },
-    assistant: { findUnique: vi.fn(async () => ({ isActive: true, doctorId: st.doctor.id, doctor: { user: { isActive: true } } })) },
+    assistant: { findFirst: vi.fn(async () => null), findUnique: vi.fn(async () => ({ isActive: true, doctorId: st.doctor.id, doctor: { user: { isActive: true } } })) },
     appointment: {
       count: vi.fn(async ({ where }: any) => (where.status === "COMPLETED" ? completed[window(where.date)] : 0)),
       findMany: vi.fn(async () => []),

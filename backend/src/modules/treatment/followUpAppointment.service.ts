@@ -7,6 +7,7 @@ import { ApiError } from "../../utils/ApiError";
 import { algeriaTodayUTCMidnight, generateAvailableSlots, isPast } from "../../lib/slots";
 import { reserveExactSlot, reserveFollowUpTime, slotMinutesFor, ExactSlotUnavailableError, SlotRaceExhaustedError } from "../../lib/slotAssign";
 import { DoctorQueueBusyError } from "../../lib/doctorLock";
+import { assertDoctorMayCreateAppointments } from "../../lib/doctorAssistants";
 import { writeAudit } from "../../lib/audit";
 import { beneficiaryOf, FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiary";
 import { appointmentNotificationTag } from "../../lib/appointmentExpiry";
@@ -98,6 +99,9 @@ async function findByIdempotencyKey(doctorId: string, key: string) {
 
 export async function createGuestAppointment(userId: string, input: FollowUpAppointmentInput & { firstName: string; lastName: string; phone: string }) {
   const doctor = await requireBookingDoctor(userId);
+  // الطبيب الذي لديه مساعد فعلي لا يحجز بنفسه (المساعد وحده يسجّل الحجوزات). فحص سريع قبل أي عمل،
+  // والفحص الحاسم يتكرّر داخل المعاملة بعد قفل الطابور أدناه فلا يتجاوزه تغيّر متزامن لحالة المساعد.
+  await assertDoctorMayCreateAppointments(doctor.id);
   const replay = await findByIdempotencyKey(doctor.id, input.idempotencyKey);
   if (replay) {
     if (replay.parentAppointmentId || replay.patientId || replay.guestFirstName !== input.firstName || replay.guestLastName !== input.lastName || replay.guestPhone !== input.phone || replay.date.toISOString().slice(0,10) !== input.date || replay.startTime !== input.startTime)
@@ -108,6 +112,8 @@ export async function createGuestAppointment(userId: string, input: FollowUpAppo
   const financial = await loadFinancialCreate(doctor.id);
   try {
     const { result } = await reserveExactSlot({ doctor, date, startTime: input.startTime, create: async (tx, slot) => {
+      // نحن الآن داخل المعاملة وتحت قفل طابور الطبيب: إضافة/تفعيل مساعد تأخذ القفل نفسه فتُسلسَل مع هذا الحجز.
+      await assertDoctorMayCreateAppointments(doctor.id, tx);
       const row = await tx.appointment.create({ data: { doctorId: doctor.id, patientId: null,
         guestFirstName: input.firstName, guestLastName: input.lastName, guestPhone: input.phone,
         date, startTime: slot.startTime, endTime: slot.endTime, type: "IN_PERSON", status: "CONFIRMED",

@@ -67,22 +67,14 @@ jobs:
         run: bash scripts/ci-prepare-test-db.sh
       - name: Run all backend tests (unit + integration)
         run: npx vitest run --reporter=default --reporter=json --outputFile.json=vitest-report.json
-      - name: Annotate failed backend tests
+      - name: Report failing tests as annotations
         if: failure()
-        working-directory: backend
         run: |
           node -e '
-          const fs=require("fs");
-          if(!fs.existsSync("vitest-report.json")){console.log("::error::no vitest-report.json");process.exit(0);}
-          const r=JSON.parse(fs.readFileSync("vitest-report.json","utf8"));
+          const r=JSON.parse(require("fs").readFileSync("vitest-report.json","utf8"));
           for(const f of r.testResults){
-            if(f.status==="failed"||f.message){
-              const m=(f.message||"").split("\n")[0].slice(0,200);
-              if(m) console.log("::error::FILE "+f.name.split("/backend/")[1]+" :: "+m);
-              for(const a of f.assertionResults||[]){
-                if(a.status==="failed") console.log("::error::TEST "+a.fullName+" :: "+(a.failureMessages||[]).join(" ").replace(/\s+/g," ").slice(0,300));
-              }
-            }
+            if(f.status==="failed"&&!f.assertionResults.some(a=>a.status==="failed")) console.log("::error::"+f.name.split("/backend/")[1]+" :: "+String(f.message).replace(/\s+/g," ").slice(0,400));
+            for(const a of f.assertionResults) if(a.status==="failed") console.log("::error::"+f.name.split("/backend/")[1]+" :: "+a.fullName+" :: "+String((a.failureMessages||[])[0]).replace(/\s+/g," ").slice(0,400));
           }'
       - name: Fail if any integration file was skipped
         run: node scripts/assert-integration-ran.mjs vitest-report.json

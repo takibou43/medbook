@@ -4,6 +4,7 @@ const db = vi.hoisted(() => ({
   doctor: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
   assistant: { findFirst: vi.fn(), findUnique: vi.fn() },
   appointment: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+  appointmentReminder: { findMany: vi.fn(async () => []) },
   $transaction: vi.fn(),
 }));
 vi.mock("../src/lib/prisma", () => ({ prisma: db }));

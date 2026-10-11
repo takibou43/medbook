@@ -664,6 +664,12 @@ model Appointment {
   createdByUserId String?
   // مفتاح منع التكرار عند إعادة إرسال نفس طلب «برمجة موعد عودة» (فريد لكل طبيب؛ NULL لا يتعارض).
   idempotencyKey  String?
+  // موعد عودة طبي برمجه الطبيب (أولوية في ترتيب الطابور فقط، لا في وقت الحجز). false للحجوزات العادية والقديمة.
+  // تُعبَّأ القديمة المرتبطة بـ parentAppointmentId عند الإقلاع (backfillFollowUpFlag) وفي migration الإضافة.
+  isFollowUp      Boolean @default(false)
+  // مرساة الحماية المحفوظة لحظة حضور موعد العودة: آخر مريض محمي حينها ("none" إن لم يوجد). بلا مفتاح أجنبي عمدًا.
+  // تمنع تراجع موعد العودة خطوة مع كل مناداة؛ انظر lib/queuePriority.ts (followUpAnchorFor). NULL = لم تُحفظ.
+  followUpAnchorId String?
 
   // الجلسة (من خطة علاج) التي يحققها هذا الموعد، والمتابعة التي حُوّلت إليه.
   treatmentSessionLink DentalTreatmentSession? @relation("SessionAppointment")

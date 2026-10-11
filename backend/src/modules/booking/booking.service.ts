@@ -20,6 +20,7 @@ const QUEUE_TURN_MAX_WAIT_MS = 30_000;
 import { GuestBookingInput, GuestSlotsQuery, AvailabilityQuery } from "./booking.schema";
 import { estimateSessionMinutes } from "../appointments/appointments.service";
 import { locateInQueue, DAY_QUEUE_STATUSES } from "../../lib/doctorQueue";
+import { withNearTurnFlags } from "../../lib/queueNotified";
 import { getDoctorAvailability as getDoctorDaySlots } from "../doctors/doctors.service";
 
 /**
@@ -675,15 +676,19 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
   const endOfDay = new Date(today);
   endOfDay.setUTCHours(23, 59, 59, 999);
 
-  const dayQueue = await prisma.appointment.findMany({
-    where: {
-      doctorId: doctor.id,
-      date: { gte: today, lte: endOfDay },
-      status: { in: DAY_QUEUE_STATUSES },
-    },
-    select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true, arrivedAt: true, urgencyStatus: true },
-    orderBy: [{ startTime: "asc" }],
-  });
+  // الترتيب المركزي (lib/queuePriority.ts) يحتاج isFollowUp وحالة تنبيه «دورك اقترب» المحفوظة.
+  const dayQueue = await withNearTurnFlags(
+    prisma,
+    await prisma.appointment.findMany({
+      where: {
+        doctorId: doctor.id,
+        date: { gte: today, lte: endOfDay },
+        status: { in: DAY_QUEUE_STATUSES },
+      },
+      select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true, arrivedAt: true, urgencyStatus: true, isFollowUp: true, followUpAnchorId: true, deferredCount: true },
+      orderBy: [{ startTime: "asc" }],
+    })
+  );
 
   const someoneInside = dayQueue.some((a) => a.status === AppointmentStatus.IN_PROGRESS);
 

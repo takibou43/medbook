@@ -21,7 +21,7 @@ import { TONE_CLASS, bookingHandledByAssistantNote, quickActions, subscriptionAl
 import { useCallNext, useFinishAppointment, useQueue } from "../../hooks/useQueue";
 import { useMyAppointments } from "../../hooks/useAppointments";
 import { appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
-import { canScheduleFollowUp, isDentalSpecialty } from "../../lib/features";
+import { canScheduleFollowUp, isDentalSpecialty, usesStandaloneFollowUp } from "../../lib/features";
 import { beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import { PrescriptionCard } from "../../components/prescription/PrescriptionCard";
 import type { Appointment } from "../../types";
@@ -268,7 +268,7 @@ export default function DoctorHome() {
                   <Check className="h-4 w-4" aria-hidden="true" />{t(" إنهاء الكشف ")}</Button>
               )}
               {current ? (
-                <Button
+                !usesStandaloneFollowUp(user?.doctor?.specialty) ? null : <Button
                   className="flex-1"
                   variant="outline"
                   disabled={busy || !canScheduleFollowUp(current)}
@@ -295,7 +295,7 @@ export default function DoctorHome() {
                 ? t("لا يوجد مريض في الانتظار.")
                 : t("ينادى المريض الأول في ترتيب الطابور أدناه.")}
             </p>}
-            {current && !canScheduleFollowUp(current) && (
+            {current && usesStandaloneFollowUp(user?.doctor?.specialty) && !canScheduleFollowUp(current) && (
               <p id="follow-up-hint" className="mt-2 text-xs text-slate-500">{t("أكمل اسم المريض ولقبه ورقم هاتفه قبل برمجة المتابعة.")}</p>
             )}
           </section>

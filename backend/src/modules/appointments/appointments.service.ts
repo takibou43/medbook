@@ -1,5 +1,7 @@
 import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
 import { firstPresent, presentQueueOrder } from "../../lib/presentQueue";
+import { withNearTurnFlags } from "../../lib/queueNotified";
+import { followUpAnchorFor } from "../../lib/queuePriority";
 import { assertReception, hasOnDutyAssistant } from "../shifts/shifts.service";
 import { algeriaDayStart } from "../../lib/doctorQueue";
 import { assertNotOwnDoctor } from "../../lib/accountProfiles";
@@ -671,8 +673,8 @@ async function readDoctorQueue(doctorId: string) {
   // ordered: الترتيب الفعلي المتوقع للمناداة (المنتظرون والمتأخرون معًا) بنفس قواعد callNextPatient —
   // حقل إضافي، والحقول السابقة (waiting/late) باقية كما هي لأي واجهة قديمة.
   const ordered = presentQueueOrder(
-    appointments.filter((a) => a.status === AppointmentStatus.CONFIRMED || a.status === AppointmentStatus.LATE)
-  ).map((a, i) => ({ ...a, position: i + 1 }));
+    await withNearTurnFlags(prisma, appointments.filter((a) => a.status === AppointmentStatus.CONFIRMED || a.status === AppointmentStatus.LATE))
+  ).map(({ nearTurnNotified: _notified, ...a }, i) => ({ ...a, position: i + 1 }));
 
   return {
     awaitingAssistant: !!duty.queueRequestedAt && !!duty.dutyEndsAt && duty.dutyEndsAt > new Date(),
@@ -713,7 +715,8 @@ export async function callNextPatient(doctorUserId: string, role: Role) {
       await tx.doctor.update({ where: { id: doctor.id }, data: { queueRequestedAt: profile.queueRequestedAt ?? new Date() } });
       return { awaitingAssistant: true };
     }
-    const rows = await tx.appointment.findMany({ where: { doctorId: doctor.id, date: todayRangeUTC(), status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] } } });
+    // حالة تنبيه «دورك اقترب» المحفوظة تدخل الترتيب (حماية المنبَّهين من أولوية موعد العودة)، وتُقرأ تحت قفل المناداة نفسه.
+    const rows = await withNearTurnFlags(tx, await tx.appointment.findMany({ where: { doctorId: doctor.id, date: todayRangeUTC(), status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] } } }));
     const next = firstPresent(rows);
     if (!next) throw ApiError.badRequest("لا يوجد مريض حاضر. سجّل الحضور أولًا.");
     const called = await tx.appointment.update({ where: { id: next.id }, data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date(), callCount: { increment: 1 }, skipCredits: 0 }, include: QUEUE_INCLUDE });
@@ -821,7 +824,8 @@ export async function callSpecificPatient(doctorUserId: string, appointmentId: s
     if (!profile.dutyEndsAt || profile.dutyEndsAt <= new Date()) throw ApiError.badRequest("الطبيب خارج المداومة.");
     if (await tx.appointment.findFirst({ where: { doctorId: doctor.id, status: AppointmentStatus.IN_PROGRESS } })) throw ApiError.conflict("هناك مريض بالداخل الآن.");
     if (role === Role.ASSISTANT && !profile.queueRequestedAt) throw ApiError.badRequest("انتظر طلب الطبيب للمريض التالي.");
-    const rows = await tx.appointment.findMany({ where: { doctorId: doctor.id, date: todayRangeUTC(), status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] } } });
+    // حالة تنبيه «دورك اقترب» المحفوظة تدخل الترتيب (حماية المنبَّهين من أولوية موعد العودة)، وتُقرأ تحت قفل المناداة نفسه.
+    const rows = await withNearTurnFlags(tx, await tx.appointment.findMany({ where: { doctorId: doctor.id, date: todayRangeUTC(), status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] } } }));
     const next = firstPresent(rows);
     if (!next || next.id !== appointmentId) throw ApiError.conflict("يجب إدخال أول مريض حاضر حسب وقت الموعد. حدّث القائمة.");
     const called = await tx.appointment.update({ where: { id: next.id }, data: { status: AppointmentStatus.IN_PROGRESS, calledAt: new Date(), callCount: { increment: 1 }, skipCredits: 0 }, include: QUEUE_INCLUDE });
@@ -844,7 +848,14 @@ export async function markPatientArrived(doctorUserId: string, appointmentId: st
     if (!appointment || appointment.doctorId !== doctor.id) throw ApiError.notFound("الموعد غير موجود.");
     if (appointment.date.toISOString().slice(0,10) !== algeriaTodayUTCMidnight().toISOString().slice(0,10)) throw ApiError.badRequest("الحضور لمواعيد اليوم فقط.");
     if (![AppointmentStatus.CONFIRMED, AppointmentStatus.LATE].includes(appointment.status as any)) throw ApiError.badRequest("لا يمكن تسجيل الحضور في هذه الحالة.");
-    const updated = await tx.appointment.update({ where: { id: appointmentId }, data: { arrivedAt: appointment.arrivedAt ?? new Date(), skipCredits: 0 }, include: QUEUE_INCLUDE });
+    // موعد عودة يحضر الآن: نحفظ مرساة الحماية (آخر مريض محمي حاضر لحظة حضوره) تحت قفل المناداة نفسه، فلا يتراجع
+    // لاحقًا خطوة مع كل مناداة ولا يتجاوز المنبَّه أو التالي مباشرة أو الطوارئ المعتمدة (lib/queuePriority.ts).
+    let followUpAnchorId: string | undefined;
+    if (appointment.isFollowUp && !appointment.arrivedAt && appointment.status === AppointmentStatus.CONFIRMED) {
+      const waiting = await tx.appointment.findMany({ where: { doctorId: doctor.id, date: todayRangeUTC(), status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] } } });
+      followUpAnchorId = followUpAnchorFor(await withNearTurnFlags(tx, waiting), appointmentId);
+    }
+    const updated = await tx.appointment.update({ where: { id: appointmentId }, data: { arrivedAt: appointment.arrivedAt ?? new Date(), skipCredits: 0, ...(followUpAnchorId ? { followUpAnchorId } : {}) }, include: QUEUE_INCLUDE });
     if (!appointment.arrivedAt) await writeAudit({ userId: doctorUserId, action: "PATIENT_ARRIVED", entity: "Appointment", entityId: appointmentId }, tx);
     return updated;
   });

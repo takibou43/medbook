@@ -19,7 +19,7 @@ import { AppointmentStatus } from "../../types";
 import DoctorQueue from "./DoctorQueue";
 import { useAuth } from "../../context/AuthContext";
 import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
-import { canScheduleFollowUp, RELATIONSHIP_LABELS } from "../../lib/features";
+import { canScheduleFollowUp, RELATIONSHIP_LABELS, usesStandaloneFollowUp } from "../../lib/features";
 import { padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import {
   activePreset, algeriaToday, appointmentActions, formatDayAr, parseAppointmentFilters, presetRange, serializeAppointmentFilters,
@@ -302,6 +302,8 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
   useLanguage();
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
+  // أطباء الأسنان: العودة من «خطط العلاج» فقط. المساعد ممنوع دائمًا (الخادم يرفضه).
+  const standaloneFollowUp = !isAssistant && usesStandaloneFollowUp(user?.doctor?.specialty);
   const canManageAttendance = useAttendanceActions();
   const { status: filter, from, to } = filters;
   // البحث يُكتب محليًا فورًا ويُحفظ في الرابط بعد توقف الكتابة قليلًا (يبقى عند الرجوع/التنقل).
@@ -369,7 +371,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
     try {
       await updateStatus.mutateAsync({ id, status });
       showToast(status === "COMPLETED" ? t("سُجّل الموعد مكتملًا.") : t("تم تحديث حالة الموعد."), "success");
-      if (status === "COMPLETED" && appointment && canScheduleFollowUp(appointment) && !isAssistant) setJustCompleted(appointment);
+      if (status === "COMPLETED" && appointment && canScheduleFollowUp(appointment) && standaloneFollowUp) setJustCompleted(appointment);
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
     } finally {
@@ -534,7 +536,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
               onArrivedLate={() => markArrivedLate(a.id)}
               busy={updateStatus.isPending}
               pending={pendingId === a.id}
-              onFollowUp={isAssistant ? undefined : () => openFollowUp(a)}
+              onFollowUp={standaloneFollowUp ? () => openFollowUp(a) : undefined}
             />
           ))}
         </div>

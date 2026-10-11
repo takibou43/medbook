@@ -414,16 +414,23 @@ describe.skipIf(!TEST_URL)("الميزات الجديدة (PostgreSQL حقيقي
       expect(mine.data.map((a: any) => a.id)).toContain(ok.data.id);
     });
 
-    it("الوقت المحجوز → 409 برسالة واضحة، والتسابق على نفس الوقت يعطي فائزًا واحدًا فقط", async () => {
+    it("الوقت المحجوز → أقرب وقت شاغر دون المساس بالحجز القائم، والتسابق على نفس الوقت لا يكرر وقتًا", async () => {
+      const d = new Date(followDate() + "T00:00:00Z");
+      const before = await db.appointment.findFirstOrThrow({ where: { doctorId: dentist.doctorId, date: d, startTime: "08:00", status: { not: "CANCELLED" } } });
       const taken = await call("POST", `/api/doctor/appointments/${parent.id}/follow-up`, { date: followDate(), startTime: "08:00", idempotencyKey: randomUUID() }, dentist.token);
-      expect(taken.status).toBe(409);
-      expect(taken.message).toBe("هذا الموعد حُجز للتو، يرجى اختيار وقت آخر.");
+      expect(taken.status).toBe(201);
+      expect(taken.data.shiftedFromRequested).toBe(true);
+      expect(taken.data.requestedStartTime).toBe("08:00");
+      expect(taken.data.startTime).toMatch(/^\d{2}:\d{2}$/);
+      expect(taken.data.startTime).not.toBe("08:00");
+      const after = await db.appointment.findUniqueOrThrow({ where: { id: before.id } });
+      expect(after.startTime).toBe("08:00");
+      expect(after.status).toBe(before.status);
       const rs = await Promise.all(
         Array.from({ length: 6 }, () => call("POST", `/api/doctor/appointments/${parent.id}/follow-up`, { date: followDate(), startTime: "10:00", idempotencyKey: randomUUID() }, dentist.token))
       );
-      expect(rs.filter((r) => r.status === 201)).toHaveLength(1);
-      expect(rs.filter((r) => r.status === 409)).toHaveLength(5);
-      const d = new Date(followDate() + "T00:00:00Z");
+      expect(rs.every((r) => r.status === 201)).toBe(true);
+      expect(new Set(rs.map((r) => r.data.startTime)).size).toBe(6);
       expect(await db.appointment.count({ where: { doctorId: dentist.doctorId, date: d, startTime: "10:00", status: { not: "CANCELLED" } } })).toBe(1);
     });
 

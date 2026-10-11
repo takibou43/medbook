@@ -1939,5 +1939,6 @@
   "اسم العيادة بالفرنسية/اللاتينية (يظهر يسار الوصفة)": "Nom de la clinique en français/latin (affiché à gauche de l’ordonnance)",
   "اتركه فارغًا لاستعمال اسم عيادتك المسجل إن كان بالعربية.": "Laissez vide pour utiliser le nom enregistré de votre clinique s’il est en arabe.",
   "العنوان بالعربية (يظهر أسفل الوصفة)": "Adresse en arabe (affichée en bas de l’ordonnance)",
-  "العنوان بالفرنسية/اللاتينية (يظهر أسفل الوصفة)": "Adresse en français/latin (affichée en bas de l’ordonnance)"
+  "العنوان بالفرنسية/اللاتينية (يظهر أسفل الوصفة)": "Adresse en français/latin (affichée en bas de l’ordonnance)",
+  "تمت برمجة موعد العودة في الساعة {0} (أقرب وقت شاغر لأن {1} محجوز).": "Rendez-vous de suivi programmé à {0} (premier créneau libre, {1} étant déjà pris)."
 }

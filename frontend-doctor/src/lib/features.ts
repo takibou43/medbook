@@ -32,6 +32,14 @@ export function isDentalSpecialty(s: { nameAr?: string | null; nameFr?: string |
   return /(dent|stomato|odonto|orthodont)/i.test(fr);
 }
 
+/**
+ * جدولة موعد العودة لأطباء الأسنان تتم داخل «خطط العلاج» حصريًا (بلا زر مستقل). غير أطباء الأسنان لا صفحة خطط علاج لهم
+ * (الخادم يرفضهم)، فيبقى لهم مدخل الجدولة القائم كي لا تضيع الميزة عندهم.
+ */
+export function usesStandaloneFollowUp(s: { nameAr?: string | null; nameFr?: string | null } | null | undefined): boolean {
+  return !isDentalSpecialty(s);
+}
+
 /** A registered beneficiary or a guest with complete identity may receive follow-up. */
 export function canScheduleFollowUp(a: Pick<Appointment, "patientId" | "status" | "guestFirstName" | "guestLastName" | "guestPhone">): boolean {
   return a.status !== "CANCELLED" && Boolean(a.patientId || (a.guestFirstName?.trim() && a.guestLastName?.trim() && a.guestPhone?.trim()));

@@ -13,6 +13,7 @@ import { adaptiveJob } from "./lib/adaptiveJob";
 import { nextReminderDelay } from "./lib/backgroundTiming";
 import { nextMaintenanceDelay } from "./lib/maintenanceTiming";
 import { liveUpdates } from "./lib/liveUpdates";
+import { backfillFollowUpFlag } from "./lib/backfillFollowUpFlag";
 
 const app = createApp();
 
@@ -42,6 +43,16 @@ async function grandfatherExistingDoctors() {
 // المستخدم بنفسه في إعدادات Render (ADMIN_BOOTSTRAP_EMAIL / ADMIN_BOOTSTRAP_PASSWORD) — لا
 // نستعمل كلمة مرور ثابتة مكتوبة في الكود لأن هذا المستودع عام على GitHub. آمنة للتكرار:
 // إن كان الحساب موجودًا مسبقًا بنفس البريد، أو لم تُضبط المتغيرات، لا تُنفَّذ أي عملية.
+// ترحيل آمن للتكرار: يعلّم مواعيد العودة القديمة (isFollowUp) — انظر lib/backfillFollowUpFlag.ts. يطبع عددًا فقط.
+async function backfillFollowUps() {
+  try {
+    const count = await backfillFollowUpFlag(prisma);
+    if (count > 0) console.log(`✅ Flagged ${count} existing follow-up appointment(s) as isFollowUp.`);
+  } catch (err) {
+    console.error("Failed to backfill follow-up flag:", safeErrorCode(err));
+  }
+}
+
 async function bootstrapAdminUser() {
   try {
     const email = process.env.ADMIN_BOOTSTRAP_EMAIL;
@@ -84,6 +95,7 @@ function startSelfPing() {
 
 Promise.all([
   grandfatherExistingDoctors(),
+  backfillFollowUps(),
   bootstrapAdminUser(),
 ]).finally(() => {
   // One serialized maintenance cycle. Quiet checks share an hourly window;

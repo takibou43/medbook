@@ -76,6 +76,18 @@ jobs:
             if(f.status==="failed"&&!f.assertionResults.some(a=>a.status==="failed")) console.log("::error::"+f.name.split("/backend/")[1]+" :: "+String(f.message).replace(/\s+/g," ").slice(0,400));
             for(const a of f.assertionResults) if(a.status==="failed") console.log("::error::"+f.name.split("/backend/")[1]+" :: "+a.fullName+" :: "+String((a.failureMessages||[])[0]).replace(/\s+/g," ").slice(0,400));
           }'
+      - name: Backend test summary
+        if: always()
+        working-directory: backend
+        run: |
+          node -e '
+          const fs=require("fs");
+          if(!fs.existsSync("vitest-report.json")){console.log("::warning::no vitest-report.json");process.exit(0);}
+          const r=JSON.parse(fs.readFileSync("vitest-report.json","utf8"));
+          console.log("::notice::backend vitest: "+r.numPassedTests+" passed, "+r.numFailedTests+" failed, "+r.numPendingTests+" skipped of "+r.numTotalTests+" tests; files "+(r.numTotalTestSuites!==undefined?r.testResults.length:r.testResults.length)+" ("+r.numFailedTestSuites+" failed)");
+          const ints=r.testResults.filter(f=>f.name.includes("/tests/integration/"));
+          console.log("::notice::integration files: "+ints.length+", tests passed "+ints.reduce((a,f)=>a+f.assertionResults.filter(x=>x.status==="passed").length,0)+", failed "+ints.reduce((a,f)=>a+f.assertionResults.filter(x=>x.status==="failed").length,0)+", skipped "+ints.reduce((a,f)=>a+f.assertionResults.filter(x=>x.status!=="passed"&&x.status!=="failed").length,0));
+          '
       - name: Fail if any integration file was skipped
         run: node scripts/assert-integration-ran.mjs vitest-report.json
       - name: Build with production dependencies (Render parity)

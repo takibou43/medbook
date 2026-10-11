@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  db: { doctor: { findUnique: vi.fn() }, appointment: { findUnique: vi.fn(), create: vi.fn() }, familyMember: { findFirst: vi.fn() } },
+  db: { doctor: { findUnique: vi.fn() }, assistant: { findFirst: vi.fn(async () => null) }, appointment: { findUnique: vi.fn(), create: vi.fn() }, familyMember: { findFirst: vi.fn() } },
   reserve: vi.fn(), notify: vi.fn(),
 }));
 vi.mock("../src/lib/prisma", () => ({ prisma: mocks.db }));

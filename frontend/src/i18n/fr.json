@@ -1930,5 +1930,9 @@
   "الاشتراك": "Abonnement",
   "حالة اشتراكك وتفاصيله": "État et détails de votre abonnement",
   "لا تتوفر بيانات الاشتراك الآن.": "Les données d’abonnement ne sont pas disponibles pour le moment.",
-  "مراسلة الإدارة للتفعيل أو التجديد": "Écrire à l’administration pour l’activation ou le renouvellement"
+  "مراسلة الإدارة للتفعيل أو التجديد": "Écrire à l’administration pour l’activation ou le renouvellement",
+  "اسم الطبيب بالعربية (يظهر يمين الوصفة بعد «د.»)": "Nom du médecin en arabe (affiché à droite de l’ordonnance après « د. »)",
+  "اسم الطبيب بالفرنسية/اللاتينية (يظهر يسار الوصفة بعد «Dr»)": "Nom du médecin en français/latin (affiché à gauche de l’ordonnance après « Dr »)",
+  "يحتاج إدخال: اكتب اسمك بالعربية ليظهر في الجهة العربية، ولن يُترجم اسمك الفرنسي تلقائيًا.": "À renseigner : saisissez votre nom en arabe pour le côté arabe ; votre nom français n’est pas traduit automatiquement.",
+  "اترك الحقل فارغًا لاستخدام بياناتك الأصلية عندما تناسب لغة الجهة. لا تُحفظ في ملفك المهني ولا تُترجم الأسماء تلقائيًا.": "Laissez un champ vide pour utiliser vos données d’origine lorsqu’elles correspondent à la langue du côté. Elles ne modifient pas votre profil professionnel et les noms ne sont pas traduits automatiquement."
 }

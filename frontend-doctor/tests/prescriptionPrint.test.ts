@@ -33,3 +33,28 @@ test('language and per-language professional edits preserve beneficiary and all 
   assert.equal(changed.patientName, patient.bookedName);
   assert.equal(changed.professional.ar.clinicName, 'عيادة عربية');
 });
+
+import { doctorHeaderName, stripDoctorPrefix } from "../src/lib/prescriptionPrint.ts";
+import test2 from "node:test";
+import assert2 from "node:assert/strict";
+
+test2("اسم الطبيب: حقل لكل جهة بلا ترجمة ولا اختلاق", () => {
+  assert2.equal(doctorHeaderName("أحمد بن علي", "Alger Mila", "ar"), "أحمد بن علي");
+  assert2.equal(doctorHeaderName("Ahmed Ben Ali", "Alger Mila", "fr"), "Ahmed Ben Ali");
+  // الجهة العربية فارغة واسم الحساب لاتيني: لا يُعرض الاسم الفرنسي ولا يُختلق اسم عربي
+  assert2.equal(doctorHeaderName("", "Alger Mila", "ar"), "");
+  assert2.equal(doctorHeaderName(undefined, "Alger Mila", "fr"), "Alger Mila");
+  // اسم حساب عربي قديم يبقى في الجهة العربية فقط
+  assert2.equal(doctorHeaderName("", "أحمد علي", "ar"), "أحمد علي");
+  assert2.equal(doctorHeaderName("", "أحمد علي", "fr"), "");
+});
+
+test2("اسم الطبيب: عدم تكرار البادئة ولا قصّ أسماء تبدأ بحرف الدال", () => {
+  assert2.equal(stripDoctorPrefix("د. أحمد", "ar"), "أحمد");
+  assert2.equal(stripDoctorPrefix("د/ أحمد", "ar"), "أحمد");
+  assert2.equal(stripDoctorPrefix("الدكتور أحمد", "ar"), "أحمد");
+  assert2.equal(stripDoctorPrefix("دليلة بوعلام", "ar"), "دليلة بوعلام");
+  assert2.equal(stripDoctorPrefix("Dr. Ahmed", "fr"), "Ahmed");
+  assert2.equal(stripDoctorPrefix("Docteur Ahmed", "fr"), "Ahmed");
+  assert2.equal(stripDoctorPrefix("Drissi Karim", "fr"), "Drissi Karim");
+});

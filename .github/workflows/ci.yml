@@ -76,6 +76,12 @@ jobs:
             if(f.status==="failed"&&!f.assertionResults.some(a=>a.status==="failed")) console.log("::error::"+f.name.split("/backend/")[1]+" :: "+String(f.message).replace(/\s+/g," ").slice(0,400));
             for(const a of f.assertionResults) if(a.status==="failed") console.log("::error::"+f.name.split("/backend/")[1]+" :: "+a.fullName+" :: "+String((a.failureMessages||[])[0]).replace(/\s+/g," ").slice(0,400));
           }'
+      - name: TEMP diagnose follow-up integration file
+        if: failure()
+        working-directory: backend
+        run: |
+          out=$(npx vitest run tests/integration/followUpPriority.integration.test.ts --reporter=verbose 2>&1 | grep -v "^$" | tail -70 | cut -c1-300 || true)
+          echo "::error::${out//$'\n'/%0A}"
       - name: Fail if any integration file was skipped
         run: node scripts/assert-integration-ran.mjs vitest-report.json
       - name: Build with production dependencies (Render parity)

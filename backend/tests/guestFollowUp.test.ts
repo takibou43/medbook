@@ -7,7 +7,7 @@ vi.mock("../src/lib/prisma", () => ({ prisma: mocks.db }));
 vi.mock("../src/lib/clinicBilling", () => ({ isDoctorSubscriptionActive: vi.fn(async () => true) }));
 vi.mock("../src/lib/clinicFinance", async importOriginal => ({ ...await importOriginal<object>(), loadFinancialCreate: vi.fn(async () => undefined) }));
 vi.mock("../src/lib/slots", async importOriginal => ({ ...await importOriginal<object>(), isPast: vi.fn(() => false), generateAvailableSlots: vi.fn(() => ["09:00"]) }));
-vi.mock("../src/lib/slotAssign", () => ({ reserveExactSlot: mocks.reserve, slotMinutesFor: () => 15, ExactSlotUnavailableError: class extends Error {} }));
+vi.mock("../src/lib/slotAssign", () => ({ reserveExactSlot: mocks.reserve, reserveFollowUpTime: (_priority: boolean, opts: unknown) => mocks.reserve(opts), slotMinutesFor: () => 15, ExactSlotUnavailableError: class extends Error {}, SlotRaceExhaustedError: class extends Error {} }));
 vi.mock("../src/lib/audit", () => ({ writeAudit: vi.fn() }));
 vi.mock("../src/modules/notifications/notifications.service", () => ({ createNotification: mocks.notify }));
 import { createFollowUpAppointment, createGuestAppointment } from "../src/modules/treatment/followUpAppointment.service";

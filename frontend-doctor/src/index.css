@@ -175,6 +175,25 @@ body {
 .rx-fact { break-inside: avoid; }
 .rx-instructions { white-space: pre-wrap; orphans: 3; widows: 3; }
 .rx-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 5mm; padding-bottom: 3mm; border-bottom: 0.4mm solid #187f77; }
+/* الورقة القياسية لمادبوك: ترويسة فرنسية يسارًا وعربية يمينًا، وشعار الطبيب (اختياري) في الوسط */
+.rx-standard { position: relative; display: flex; flex-direction: column; min-height: 190mm; --rx-blue: #1769c2; }
+.rx-standard > * { position: relative; z-index: 1; }
+.rx-standard .rx-watermark { position: absolute; z-index: 0; inset-inline: 0; top: 50%; transform: translateY(-46%); display: flex; flex-direction: column; align-items: center; gap: 3mm; opacity: 0.045; pointer-events: none; }
+.rx-watermark-mark { width: 85mm; height: 85mm; }
+.rx-watermark-name { font-size: 18pt; font-weight: 800; color: var(--rx-blue); white-space: nowrap; }
+.rx-head-std { display: grid; grid-template-columns: 1fr 22mm 1fr; align-items: start; gap: 3mm; border-bottom-color: var(--rx-blue); }
+.rx-side { min-width: 0; display: flex; flex-direction: column; gap: 0.6mm; }
+.rx-side-fr { font-family: Calibri, Carlito, Arial, sans-serif; text-align: left; }
+.rx-side-ar { font-family: "Cairo", Tahoma, sans-serif; text-align: right; }
+.rx-head-std .rx-doctor { font-size: 14pt; color: var(--rx-blue); }
+.rx-head-std .rx-specialty { color: #2b4f78; font-size: 10.5pt; }
+.rx-head-std .rx-clinic, .rx-head-std .rx-line { font-size: 10pt; color: #2b4f78; }
+.rx-logo-slot { height: 18mm; display: flex; justify-content: center; align-items: flex-start; }
+.rx-logo-slot img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.rx-standard .rx-title { color: var(--rx-blue); text-decoration: underline; text-underline-offset: 1.2mm; margin: 3mm 0 2mm; }
+.rx-standard .rx-meta { border-bottom: 0; padding-bottom: 1mm; }
+.rx-standard .rx-meds { flex: 1; }
+.rx-foot { margin-top: 4mm !important; padding-top: 2mm; border-top: 0.4mm solid var(--rx-blue); text-align: center; font-size: 9pt; color: #2b4f78; }
 .rx-id { min-width: 0; }
 .rx-doctor { font-size: 16pt; font-weight: 800; line-height: 1.3; color: #0f2523; }
 .rx-specialty { margin-top: 0.5mm !important; font-size: 11pt; color: #166661; font-weight: 600; }
@@ -220,6 +239,7 @@ body {
   .rx-print-root [role="dialog"], .rx-stage { display: block !important; overflow: visible !important; padding: 0 !important; }
   .rx-print-root .rx-no-print { display: none !important; }
   .rx-scaler { width: auto !important; height: auto !important; margin: 0 !important; }
+  .rx-standard { min-height: 188mm; }
   .rx-paper { transform: none !important; width: auto !important; min-height: 0 !important; padding: 0 !important; box-shadow: none !important; }
   .rx-sheet { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   body.rx-printing:has(.rx-custom-paper) { margin: 0 !important; }

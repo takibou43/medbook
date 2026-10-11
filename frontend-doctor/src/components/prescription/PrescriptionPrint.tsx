@@ -7,6 +7,7 @@ import { prescriptionLabels, prescriptionDate, prescriptionCatalogName, professi
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
+import { Logo } from "../ui/Logo";
 
 export interface PrescriptionSheetData {
   template?: PrescriptionTemplate | null;
@@ -19,6 +20,8 @@ export interface PrescriptionSheetData {
   day: string;
   medications: PrescriptionMedication[];
   notes: string;
+  /** شعار الطبيب الخاص (اختياري) في وسط الترويسة؛ علامة مادبوك تبقى مائية خلف النص. */
+  logo?: string | null;
 }
 
 /** نص كتبه الطبيب: يُعرض كما هو، معزول الاتجاه حتى لا تنقلب الأرقام والوحدات في النص المختلط. */
@@ -40,34 +43,46 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const doctorName = professionalText(data.professional?.doctorName, d ? `${d.firstName} ${d.lastName}` : "");
   const clinicName = professionalText(data.professional?.clinicName, clinic?.nameAr);
   const phone = (clinic?.phone || d?.phone || "").trim();
-  const hasContact = Boolean(address || place || phone);
+    const standard = !data.template;
+  const fr = prescriptionLabels("fr");
+  const ar = prescriptionLabels("ar");
+  const specialtyFr = d?.specialty ? prescriptionCatalogName(d.specialty, "fr") : "";
+  const specialtyAr = d?.specialty ? prescriptionCatalogName(d.specialty, "ar") : "";
+  const footerLine = [address, place].filter(Boolean).join(lang === "fr" ? " — " : " — ");
   return (
-    <article className="rx-sheet" dir={lang === "fr" ? "ltr" : "rtl"} lang={lang} aria-label={text.sheet}>
-      {!data.template && <header className="rx-head">
-        <div className="rx-id">
-          {doctorName && <p className="rx-doctor">{text.doctor} <Typed>{doctorName}</Typed></p>}
-          {d?.specialty && <p className="rx-specialty">{prescriptionCatalogName(d.specialty, lang)}</p>}
-          {clinicName && <p className="rx-clinic"><Typed>{clinicName}</Typed></p>}
+    <article className={`rx-sheet${standard ? " rx-standard" : ""}`} dir={lang === "fr" ? "ltr" : "rtl"} lang={lang} aria-label={text.sheet}>
+      {standard && (
+        <div className="rx-watermark" aria-hidden="true">
+          <Logo className="rx-watermark-mark" />
+          <span className="rx-watermark-name" dir="ltr">MadBook | مادبوك</span>
         </div>
-        {hasContact && (
-          <div className="rx-contact">
-            {address && <p><Typed>{address}</Typed></p>}
-            {place && <p><Typed>{place}</Typed></p>}
-            {phone && <p>{text.phone} <bdi dir="ltr" translate="no">{phone}</bdi></p>}
-          </div>
-        )}
+      )}
+      {standard && <header className="rx-head rx-head-std">
+        <div className="rx-side rx-side-fr" lang="fr" dir="ltr">
+          {doctorName && <p className="rx-doctor"><bdi dir="ltr">{fr.doctor}</bdi> <Typed>{doctorName}</Typed></p>}
+          {specialtyFr && <p className="rx-specialty">{specialtyFr}</p>}
+          {clinicName && <p className="rx-clinic"><Typed>{clinicName}</Typed></p>}
+          {phone && <p className="rx-line">Télé : <bdi dir="ltr" translate="no">{phone}</bdi></p>}
+        </div>
+        <div className="rx-logo-slot">{data.logo && <img src={data.logo} alt="" />}</div>
+        <div className="rx-side rx-side-ar" lang="ar" dir="rtl">
+          {doctorName && <p className="rx-doctor"><bdi dir="rtl">{ar.doctor}</bdi> <Typed>{doctorName}</Typed></p>}
+          {specialtyAr && <p className="rx-specialty">{specialtyAr}</p>}
+          {clinicName && <p className="rx-clinic"><Typed>{clinicName}</Typed></p>}
+          {phone && <p className="rx-line">الهاتف : <bdi dir="ltr" translate="no">{phone}</bdi></p>}
+        </div>
       </header>}
 
-      {!data.template && <h1 className="rx-title">{text.title}</h1>}
+      {standard && <h1 className="rx-title">{text.title}</h1>}
 
       <dl className="rx-meta">
         <div>
-          <dt>{text.patient}</dt>
-          <dd className="rx-patient"><Typed>{data.patientName}</Typed></dd>
-        </div>
-        <div>
           <dt>{text.date}</dt>
           <dd>{prescriptionDate(data.day, lang)}</dd>
+        </div>
+        <div>
+          <dt>{text.patient}</dt>
+          <dd className="rx-patient"><Typed>{data.patientName}</Typed></dd>
         </div>
       </dl>
 
@@ -109,7 +124,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </section>
       )}
 
-      {!data.template && <footer className="rx-sign">
+      {standard && <footer className="rx-sign">
         <div className="rx-sign-area">
           <p className="rx-small-title">{text.signature}</p>
           <div className="rx-sign-line" />
@@ -119,6 +134,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
           <div className="rx-stamp-space" />
         </div>
       </footer>}
+      {standard && footerLine && <p className="rx-foot"><Typed>{footerLine}</Typed></p>}
     </article>
   );
 }
@@ -217,6 +233,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
 
   return createPortal(
     <div className="rx-print-root fixed inset-0 z-50 flex flex-col bg-slate-800/80">
+      {!template && <style>{`@page { size: A5 portrait; margin: 10mm; }`}</style>}
       {template && <style>{`@page { size: A5 portrait; margin: 0; } @media print { .rx-paper.rx-custom-paper { padding: ${template.top}mm ${template.side}mm ${template.bottom}mm !important; } }`}</style>}
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="flex min-h-0 flex-1 flex-col outline-none">
         {/* شريط الأدوات خارج الورقة وثابت أعلى المعاينة */}
@@ -255,7 +272,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
           <div className="rx-scaler mx-auto" style={{ width: PAPER_PX * scale, height: paperHeight * scale }}>
             <div ref={paperRef} className={`rx-paper${template ? " rx-custom-paper" : ""}`} style={{ transform: `scale(${scale})`, ...(template ? { paddingTop: `${template.top}mm`, paddingBottom: `${template.bottom}mm`, paddingLeft: `${template.side}mm`, paddingRight: `${template.side}mm` } : {}) }}>
               {template && <img className="rx-template-image" src={template.image} alt="" onLoad={() => { setImageReady(true); setImageError(false); measure(); }} onError={() => { setImageReady(false); setImageError(true); }} />}
-              <PrescriptionSheet data={{ ...data, template }} />
+              <PrescriptionSheet data={{ ...data, template, logo: data.logo ?? data.template?.design?.logo ?? null }} />
             </div>
           </div>
         </div>

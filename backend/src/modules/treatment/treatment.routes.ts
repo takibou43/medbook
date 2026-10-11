@@ -132,7 +132,7 @@ doctorTreatmentRouter.get(
   ...doctorOnly,
   validate({ query: doctorSlotsQuerySchema }),
   asyncHandler(async (req, res) => {
-    res.json({ success: true, data: await followUps.followUpSlotsForDate(req.user!.id, req.query.date as string) });
+    res.json({ success: true, data: await followUps.followUpSlotsForDate(req.user!.id, req.query.date as string, Boolean(req.query.includeBooked)) });
   })
 );
 

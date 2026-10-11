@@ -119,7 +119,11 @@ export const rescheduleSchema = z
   .strict("يحتوي الطلب على حقول غير مسموح بها.");
 
 export const doctorSlotsQuerySchema = z
-  .object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "صيغة التاريخ يجب أن تكون YYYY-MM-DD") })
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "صيغة التاريخ يجب أن تكون YYYY-MM-DD"),
+    // «موعد المتابعة الطبية» داخل خطط العلاج: يُرجع كل أوقات الدوام مع علامة busy (الطبيب فقط).
+    includeBooked: z.enum(["true", "1"]).optional(),
+  })
   .strict("يحتوي الطلب على حقول غير مسموح بها.");
 
 export const patientPlansQuerySchema = z

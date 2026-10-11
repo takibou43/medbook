@@ -16,7 +16,6 @@ import { PrescriptionSheet } from "./PrescriptionPrint";
 const PAPER_PX = (148 * 96) / 25.4;
 const PREVIEW_SCALE = 0.62;
 const FIELDS: { key: keyof PrescriptionProfessional; label: string }[] = [
-  { key: "clinicName", label: "اسم العيادة للطباعة" },
   { key: "address", label: "العنوان للطباعة" },
 ];
 const SHOW: { key: keyof PrescriptionSettings["show"]; label: string }[] = [
@@ -56,6 +55,7 @@ export function PrescriptionSettingsSection() {
     doctor: user?.doctor,
     professional: form.professional[lang],
     doctorNames: { ar: form.professional.ar?.doctorName, fr: form.professional.fr?.doctorName },
+    clinicNames: { ar: form.professional.ar?.clinicName, fr: form.professional.fr?.clinicName },
     show: form.show,
     patientName: lang === "fr" ? "Nom du patient" : "اسم المريض",
     day: new Date().toISOString().slice(0, 10),
@@ -97,10 +97,21 @@ export function PrescriptionSettingsSection() {
                   <input className="input" dir="ltr" lang="fr" translate="no" maxLength={120} value={form.professional.fr?.doctorName ?? ""} onChange={e => patchPro("fr", "doctorName", e.target.value)} />
                 </label>
               </div>
+              <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                <label className="block text-xs">
+                  <span className="mb-1 block font-bold text-slate-700">{t("اسم العيادة بالعربية (يظهر يمين الوصفة)")}</span>
+                  <input className="input" dir="rtl" lang="ar" translate="no" maxLength={120} value={form.professional.ar?.clinicName ?? ""} onChange={e => patchPro("ar", "clinicName", e.target.value)} />
+                  {!(form.professional.ar?.clinicName ?? "").trim() && <span role="status" className="mt-1 block text-slate-500">{t("اتركه فارغًا لاستعمال اسم عيادتك المسجل إن كان بالعربية.")}</span>}
+                </label>
+                <label className="block text-xs">
+                  <span className="mb-1 block font-bold text-slate-700">{t("اسم العيادة بالفرنسية/اللاتينية (يظهر يسار الوصفة)")}</span>
+                  <input className="input" dir="ltr" lang="fr" translate="no" maxLength={120} value={form.professional.fr?.clinicName ?? ""} onChange={e => patchPro("fr", "clinicName", e.target.value)} />
+                </label>
+              </div>
               {(["ar", "fr"] as const).map(l => (
                 <div key={l} className="mb-3 last:mb-0">
                   <p className="mb-1 text-xs font-bold text-slate-700">{l === "ar" ? t("بالعربية") : t("بالفرنسية")}</p>
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-1">
                     {FIELDS.map(f => (
                       <label key={f.key} className="block text-xs">
                         <span className="mb-1 block">{t(f.label)}</span>

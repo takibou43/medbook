@@ -142,6 +142,7 @@ export function PrescriptionCard({
       language: setup.settings.language,
       professional: setup.settings.professional[setup.settings.language],
       doctorNames: { ar: setup.settings.professional.ar?.doctorName, fr: setup.settings.professional.fr?.doctorName },
+      clinicNames: { ar: setup.settings.professional.ar?.clinicName, fr: setup.settings.professional.fr?.clinicName },
       show: setup.settings.show,
       labs: v.labs,
       imaging: v.imaging,

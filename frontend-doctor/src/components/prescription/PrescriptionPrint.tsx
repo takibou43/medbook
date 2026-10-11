@@ -4,7 +4,7 @@ import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
 import type { PrescriptionMedication, PrescriptionRequestItem } from "../../lib/prescription";
 import { DEFAULT_PRESCRIPTION_SETTINGS, type PrescriptionShow } from "../../lib/prescriptionSettings";
-import { prescriptionLabels, prescriptionDate, prescriptionCatalogName, professionalText, doctorHeaderName, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
+import { prescriptionLabels, prescriptionDate, prescriptionCatalogName, professionalText, doctorHeaderName, clinicHeaderName, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
@@ -17,6 +17,8 @@ export interface PrescriptionSheetData {
   professional?: PrescriptionProfessional;
   /** اسم الطبيب كما كتبه بنفسه لكل جهة: ar يمين الترويسة، fr يسارها. */
   doctorNames?: { ar?: string; fr?: string };
+  /** اسم العيادة لكل جهة، بنفس منطق اسم الطبيب. */
+  clinicNames?: { ar?: string; fr?: string };
   doctor: Doctor | null | undefined;
   /** اسم المستفيد الفعلي كما كتبه/أكّده الطبيب (لا يُطبع صاحب الحساب ولا صلة القرابة). */
   patientName: string;
@@ -53,7 +55,8 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const accountName = d ? `${d.firstName} ${d.lastName}` : "";
   const doctorNameFr = doctorHeaderName(data.doctorNames?.fr, accountName, "fr");
   const doctorNameAr = doctorHeaderName(data.doctorNames?.ar, accountName, "ar");
-  const clinicName = show.clinicName ? professionalText(data.professional?.clinicName, clinic?.nameAr) : "";
+  const clinicNameFr = show.clinicName ? clinicHeaderName(data.clinicNames?.fr, clinic?.nameAr, "fr") : "";
+  const clinicNameAr = show.clinicName ? clinicHeaderName(data.clinicNames?.ar, clinic?.nameAr, "ar") : "";
   const phone = show.phone ? (clinic?.phone || d?.phone || "").trim() : "";
     const standard = !data.template;
   const fr = prescriptionLabels("fr");
@@ -73,14 +76,14 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         <div className="rx-side rx-side-fr" lang="fr" dir="ltr">
           {doctorNameFr && <p className="rx-doctor"><bdi dir="ltr">{fr.doctor}</bdi> <Typed>{doctorNameFr}</Typed></p>}
           {specialtyFr && <p className="rx-specialty">{specialtyFr}</p>}
-          {clinicName && <p className="rx-clinic"><Typed>{clinicName}</Typed></p>}
+          {clinicNameFr && <p className="rx-clinic"><Typed>{clinicNameFr}</Typed></p>}
           {phone && <p className="rx-line">Télé : <bdi dir="ltr" translate="no">{phone}</bdi></p>}
         </div>
         <div className="rx-logo-slot">{data.logo && <img src={data.logo} alt="" />}</div>
         <div className="rx-side rx-side-ar" lang="ar" dir="rtl">
           {doctorNameAr && <p className="rx-doctor"><bdi dir="rtl">{ar.doctor}</bdi> <Typed>{doctorNameAr}</Typed></p>}
           {specialtyAr && <p className="rx-specialty">{specialtyAr}</p>}
-          {clinicName && <p className="rx-clinic"><Typed>{clinicName}</Typed></p>}
+          {clinicNameAr && <p className="rx-clinic"><Typed>{clinicNameAr}</Typed></p>}
           {phone && <p className="rx-line">الهاتف : <bdi dir="ltr" translate="no">{phone}</bdi></p>}
         </div>
       </header>}

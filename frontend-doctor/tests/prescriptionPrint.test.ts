@@ -58,3 +58,12 @@ test2("اسم الطبيب: عدم تكرار البادئة ولا قصّ أس�
   assert2.equal(stripDoctorPrefix("Docteur Ahmed", "fr"), "Ahmed");
   assert2.equal(stripDoctorPrefix("Drissi Karim", "fr"), "Drissi Karim");
 });
+
+import { clinicHeaderName } from "../src/lib/prescriptionPrint.ts";
+test2("اسم العيادة: حقل لكل جهة بلا ترجمة", () => {
+  assert2.equal(clinicHeaderName("Clinique El Amel", "عيادة الأمل", "fr"), "Clinique El Amel");
+  assert2.equal(clinicHeaderName("", "عيادة الأمل", "fr"), "");
+  assert2.equal(clinicHeaderName("", "عيادة الأمل", "ar"), "عيادة الأمل");
+  assert2.equal(clinicHeaderName("", "Clinique El Amel", "ar"), "");
+  assert2.equal(clinicHeaderName(undefined, undefined, "ar"), "");
+});

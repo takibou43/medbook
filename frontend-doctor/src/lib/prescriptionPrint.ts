@@ -52,3 +52,12 @@ export function doctorHeaderName(manual: string | undefined, accountName: string
   if (!original) return "";
   return ARABIC_SCRIPT.test(original) === (side === "ar") ? original : "";
 }
+
+/** اسم العيادة لجهة واحدة: الحقل اليدوي أولًا، ثم الاسم الأصلي فقط إن طابق خط الجهة؛ بلا ترجمة ولا اختلاق. */
+export function clinicHeaderName(manual: string | undefined, original: string | null | undefined, side: PrescriptionLanguage): string {
+  const typed = manual?.trim() ?? "";
+  if (typed) return typed;
+  const base = original?.trim() ?? "";
+  if (!base) return "";
+  return ARABIC_SCRIPT.test(base) === (side === "ar") ? base : "";
+}

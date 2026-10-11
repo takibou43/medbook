@@ -1824,5 +1824,6 @@
   "يُحفظ الموعد بالاسم واللقب والهاتف. أخبر المريض بتفاصيله من العيادة.": "Le rendez-vous est enregistré avec le nom, le prénom et le téléphone. Informez le patient à la clinique.",
   "أكمل اسم المريض ولقبه ورقم هاتفه قبل برمجة المتابعة.": "Complétez le nom, le prénom et le téléphone du patient avant de programmer le suivi.",
   "لم يبدأ المداومة": "N’a pas commencé sa permanence",
-  "تعذّر تحديث المداومة. حاول مرة أخرى.": "Impossible de mettre à jour la permanence. Réessayez."
+  "تعذّر تحديث المداومة. حاول مرة أخرى.": "Impossible de mettre à jour la permanence. Réessayez.",
+  "عند الطباعة: اختر ورق A5 والحجم الفعلي 100% (بدون «ملاءمة»)، وألغِ خيار «Headers and footers» من إعدادات المتصفح.": "À l'impression : choisissez le papier A5 et l'échelle 100 % (sans « Ajuster »), et décochez « En-têtes et pieds de page » dans les réglages du navigateur."
 }

@@ -11,6 +11,8 @@ vi.mock("../src/lib/slotAssign", () => ({
   reserveExactSlot: mocks.reserve,
   // موعد العودة صار «الوقت المطلوب أو أقرب شاغر»: نفس المحاكاة تُرجع shifted=false.
   reserveRequestedOrNextSlot: (o: { requestedStart: string }) => mocks.reserve({ ...o, startTime: o.requestedStart }),
+  reserveFollowUpTime: (_sharesMinute: boolean, o: object) => mocks.reserve(o),
+  reserveDoctorFollowUpSlot: mocks.reserve,
   slotMinutesFor: () => 15,
   ExactSlotUnavailableError: class extends Error {},
   NoSlotAvailableError: class extends Error {},

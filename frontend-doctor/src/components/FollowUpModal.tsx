@@ -28,6 +28,9 @@ export interface FollowUpContext {
 }
 
 /**
+ * عند فتحها من «خطط العلاج» (ctx.treatmentPlanId) تصير «موعد المتابعة الطبية»: يعرض الخادم كل أوقات الدوام مع علامة «محجوز»،
+ * ويستطيع الطبيب اختيار وقت محجوز: يُسجَّل موعده بأولوية دون تغيير موعد المريض الآخر. لا يظهر أي ثوانٍ في أي مكان.
+ *
  * نافذة «برمجة موعد عودة»: المستفيد ظاهر بوضوح، الأوقات المتاحة فقط (من الخادم)، ملخص قبل التأكيد.
  * مفتاح منع التكرار يتولّد مرة لكل فتح للنافذة: الضغط المزدوج أو إعادة الإرسال لا ينشئ موعدين.
  * بلا رسائل هاتفية: المريض يُشعَر داخل MedBook فقط.
@@ -54,12 +57,21 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
     setError(null);
   }, [open, ctx?.parentAppointmentId, ctx?.suggestedDate]);
 
+  const planMode = Boolean(ctx?.treatmentPlanId);
   const slots = useQuery({
-    queryKey: ["follow-up-slots", date],
-    queryFn: async () => (await api.get<{ data: { slots: string[]; slotMinutes: number } }>("/doctor/follow-up-slots", { params: { date } })).data.data,
+    queryKey: ["follow-up-slots", date, planMode],
+    queryFn: async () =>
+      (
+        await api.get<{ data: { slots: string[]; slotMinutes: number; allSlots?: { time: string; busy: boolean }[] } }>("/doctor/follow-up-slots", {
+          params: { date, ...(planMode ? { includeBooked: "true" } : {}) },
+        })
+      ).data.data,
     enabled: open && /^\d{4}-\d{2}-\d{2}$/.test(date),
     retry: false,
   });
+  // أوقات العرض: في وضع خطط العلاج كل أوقات الدوام (المحجوز منها مُعلَّم)، وإلا الأوقات الشاغرة فقط كما كان.
+  const shown: { time: string; busy: boolean }[] = planMode && slots.data?.allSlots ? slots.data.allSlots : (slots.data?.slots ?? []).map((time) => ({ time, busy: false }));
+  const timeBusy = shown.find((x) => x.time === time)?.busy ?? false;
 
   const create = useMutation({
     mutationFn: async () =>
@@ -93,7 +105,7 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
       if (e?.response?.status === 409) {
         setTime(null);
         setConfirming(false);
-        qc.invalidateQueries({ queryKey: ["follow-up-slots", date] });
+        qc.invalidateQueries({ queryKey: ["follow-up-slots", date, planMode] });
       }
       setError(apiErrorMessage(e, t("تعذّرت برمجة الموعد.")));
     },
@@ -103,7 +115,7 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
   const who = forAccountHolder && ctx.accountHolderName ? ctx.accountHolderName : ctx.beneficiaryName;
 
   return (
-    <Modal open={open} onClose={onClose} title={t("برمجة موعد عودة")}>
+    <Modal open={open} onClose={onClose} title={t(planMode ? "موعد المتابعة الطبية" : "برمجة موعد عودة")}>
       <div className="space-y-4 text-start">
         <div className="rounded-xl bg-primary-50 p-3 text-sm">
           <p className="text-slate-600">{t("المستفيد")}</p>
@@ -136,31 +148,38 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
             </div>
 
             <div>
-              <p className="label">{t("الأوقات المتاحة")}</p>
+              <p className="label">{t(planMode ? "اختر الساعة والدقيقة" : "الأوقات المتاحة")}</p>
               {slots.isLoading ? (
                 <p className="text-sm text-slate-500">{t("جارٍ تحميل الأوقات...")}</p>
               ) : slots.isError ? (
                 <p className="text-sm text-red-600" role="alert">{apiErrorMessage(slots.error, t("تعذّر تحميل الأوقات."))}</p>
-              ) : (slots.data?.slots.length ?? 0) === 0 ? (
+              ) : shown.length === 0 ? (
                 <p className="text-sm text-slate-500">{t("لا توجد أوقات متاحة في هذا اليوم (عطلة أو خارج الدوام أو محجوز بالكامل). اختر يومًا آخر.")}</p>
               ) : (
-                <div className="grid max-h-48 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-5" dir="ltr">
-                  {slots.data!.slots.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => { setTime(s); setError(null); }}
-                      className={clsx("min-h-[44px] rounded-lg border text-sm font-semibold", time === s ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-primary-400")}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className="grid max-h-48 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-5" dir="ltr">
+                    {shown.map(({ time: s, busy }) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => { setTime(s); setError(null); }}
+                        title={busy ? t("هذا الوقت محجوز لمريض آخر") : undefined}
+                        className={clsx(
+                          "min-h-[44px] rounded-lg border text-sm font-semibold",
+                          time === s ? "border-primary-600 bg-primary-600 text-white" : busy ? "border-amber-300 bg-amber-50 text-amber-900 hover:border-amber-500" : "border-slate-300 bg-white text-slate-700 hover:border-primary-400"
+                        )}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                  {planMode && shown.some((x) => x.busy) && <p className="mt-2 text-xs text-amber-800">{t("الأوقات المظلّلة محجوزة لمرضى آخرين. يمكنك اختيارها: تُسجَّل المتابعة بأولوية دون تغيير موعد أي مريض.")}</p>}
+                </>
               )}
             </div>
 
             <div>
-              <label className="label" htmlFor="fu-notes">{t("سبب العودة أو ملاحظة (اختياري)")}</label>
+              <label className="label" htmlFor="fu-notes">{t(planMode ? "سبب المتابعة (اختياري)" : "سبب العودة أو ملاحظة (اختياري)")}</label>
               <textarea id="fu-notes" className="input min-h-[70px]" maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
           </>
@@ -169,7 +188,8 @@ export function FollowUpModal({ open, onClose, ctx, onDone }: { open: boolean; o
             <div className="flex justify-between py-2"><dt className="text-slate-500">{t("المستفيد")}</dt><dd className="font-semibold">{who}</dd></div>
             <div className="flex justify-between py-2"><dt className="text-slate-500">{t("التاريخ")}</dt><dd className="font-semibold" dir="ltr">{date}</dd></div>
             <div className="flex justify-between py-2"><dt className="text-slate-500">{t("الوقت")}</dt><dd className="font-semibold" dir="ltr">{time}</dd></div>
-            <div className="flex justify-between py-2"><dt className="text-slate-500">{t("النوع")}</dt><dd className="font-semibold">{t("موعد عودة (مؤكَّد مباشرة)")}</dd></div>
+            {planMode && timeBusy && <div className="py-2 text-xs text-amber-800">{t("هذا الوقت محجوز لمريض آخر؛ لن يتغير موعده، وستُسجَّل المتابعة بأولوية.")}</div>}
+            <div className="flex justify-between py-2"><dt className="text-slate-500">{t("النوع")}</dt><dd className="font-semibold">{t(planMode ? "موعد متابعة طبية (مؤكَّد مباشرة)" : "موعد عودة (مؤكَّد مباشرة)")}</dd></div>
             {notes.trim() && <div className="flex justify-between gap-4 py-2"><dt className="text-slate-500">{t("ملاحظة")}</dt><dd className="break-words">{notes.trim()}</dd></div>}
           </dl>
         )}

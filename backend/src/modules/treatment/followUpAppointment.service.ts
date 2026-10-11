@@ -5,7 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
 import { ApiError } from "../../utils/ApiError";
 import { algeriaTodayUTCMidnight, generateAvailableSlots, isPast } from "../../lib/slots";
-import { reserveExactSlot, reserveRequestedOrNextSlot, slotMinutesFor, ExactSlotUnavailableError, NoSlotAvailableError, SlotRaceExhaustedError } from "../../lib/slotAssign";
+import { reserveExactSlot, reserveFollowUpReschedule, reserveFollowUpTime, slotMinutesFor, ExactSlotUnavailableError, NoSlotAvailableError, SlotRaceExhaustedError } from "../../lib/slotAssign";
 import { DoctorQueueBusyError } from "../../lib/doctorLock";
 import { assertDoctorMayCreateAppointments } from "../../lib/doctorAssistants";
 import { writeAudit } from "../../lib/audit";
@@ -70,6 +70,7 @@ const RESULT_SELECT = {
   type: true,
   createdBy: true,
   parentAppointmentId: true,
+  isFollowUp: true,
   treatmentPlanId: true,
   treatmentSessionId: true,
   familyMemberId: true,
@@ -204,16 +205,17 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
   const beneficiaryFirst = member ? member.firstName : parent.patient?.firstName ?? parent.guestFirstName!;
   const beneficiaryLast = member ? member.lastName : parent.patient?.lastName ?? parent.guestLastName!;
 
+  // متابعة طبية من خطة علاج صالحة (planId) → تشارك الدقيقة المشغولة بقيمة داخلية slotSeq دون تعديل أي موعد قائم.
+  // غير ذلك → سلوك PR #48 كما هو: الوقت المطلوب أو أقرب وقت شاغر بعده. الوقت يبقى HH:mm دائمًا.
+  const sharesMinute = planId !== null;
   let created: ResultRow;
   let shiftedFromRequested = false;
   try {
-    // الوقت المطلوب أو أقرب وقت شاغر بعده (نفس قواعد الحجز العادي): موعد العودة لا يحذف حجزًا قائمًا ولا يعدّله،
-    // وإن كان الوقت مشغولًا يأخذ أقرب وقت شاغر في اليوم نفسه. الوقت يبقى HH:mm دائمًا.
     const reserved = (
-      await reserveRequestedOrNextSlot({
+      await reserveFollowUpTime(sharesMinute, {
         doctor,
         date,
-        requestedStart: input.startTime,
+        startTime: input.startTime,
         create: async (tx, slot) => {
           const row = await tx.appointment.create({
             data: {
@@ -240,6 +242,8 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
               idempotencyKey: input.idempotencyKey,
               // أولوية موعد العودة في الطابور (انظر lib/queuePriority.ts) — الوقت HH:mm وقيد الحجز كما هما.
               isFollowUp: true,
+              // تمييز داخلي لمشاركة الدقيقة (0 إن كان الوقت شاغرًا) — لا يظهر في أي واجهة ولا يدخل الترتيب.
+              slotSeq: slot.slotSeq,
             },
             select: RESULT_SELECT,
           });
@@ -264,7 +268,7 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
               action: "FOLLOW_UP_APPOINTMENT_CREATED",
               entity: "Appointment",
               entityId: row.id,
-              meta: { parentAppointmentId: parent.id, date: input.date, startTime: slot.startTime, treatmentPlanId: planId },
+              meta: { parentAppointmentId: parent.id, date: input.date, startTime: slot.startTime, treatmentPlanId: planId, sharedMinute: slot.sharedMinute },
             },
             tx
           );
@@ -321,7 +325,7 @@ export async function rescheduleFollowUpAppointment(userId: string, appointmentI
   const doctor = await requireBookingDoctor(userId);
   const appt = await prisma.appointment.findUnique({
     where: { id: appointmentId },
-    select: { id: true, doctorId: true, createdBy: true, type: true, status: true, date: true, startTime: true, patient: { select: { userId: true } } },
+    select: { id: true, doctorId: true, createdBy: true, type: true, status: true, date: true, startTime: true, isFollowUp: true, slotSeq: true, treatmentPlanId: true, patient: { select: { userId: true } } },
   });
   if (!appt || appt.doctorId !== doctor.id) throw ApiError.notFound("الموعد غير موجود.");
   if (appt.createdBy !== "DOCTOR" || appt.type !== "FOLLOW_UP") throw ApiError.badRequest("إعادة الجدولة هنا خاصة بمواعيد العودة التي برمجتها.");
@@ -329,18 +333,20 @@ export async function rescheduleFollowUpAppointment(userId: string, appointmentI
   if (!reschedulable.includes(appt.status)) throw ApiError.badRequest("لا يمكن إعادة جدولة هذا الموعد في حالته الحالية.");
 
   const date = assertSlotInSchedule(doctor, input.date, input.startTime);
+  // متابعة طبية من خطة علاج تحتفظ بامتياز مشاركة الدقيقة عند إعادة جدولتها؛ غيرها كما كان (وقت شاغر بالضبط).
+  const sharesMinute = appt.isFollowUp && appt.treatmentPlanId !== null;
   let updated: ResultRow;
   try {
     updated = (
-      await reserveExactSlot({
+      await reserveFollowUpReschedule(sharesMinute, {
         doctor,
         date,
         startTime: input.startTime,
         create: async (tx, slot) => {
           // compare-and-swap على الحالة والوقت القديمين: لا نكتب فوق تغيير متزامن.
           const r = await tx.appointment.updateMany({
-            where: { id: appt.id, status: appt.status, date: appt.date, startTime: appt.startTime },
-            data: { date, startTime: slot.startTime, endTime: slot.endTime, status: AppointmentStatus.CONFIRMED },
+            where: { id: appt.id, status: appt.status, date: appt.date, startTime: appt.startTime, slotSeq: appt.slotSeq },
+            data: { date, startTime: slot.startTime, endTime: slot.endTime, status: AppointmentStatus.CONFIRMED, slotSeq: slot.slotSeq },
           });
           if (r.count !== 1) throw ApiError.conflict("تغيّر هذا الموعد للتو. حدّث الصفحة وأعد المحاولة.");
           await writeAudit(
@@ -362,7 +368,7 @@ export async function rescheduleFollowUpAppointment(userId: string, appointmentI
     ).result;
   } catch (err) {
     if (err instanceof ExactSlotUnavailableError) throw ApiError.conflict(SLOT_TAKEN_MESSAGE, { code: "SLOT_TAKEN" });
-    if (err instanceof DoctorQueueBusyError) throw ApiError.unavailable("الازدحام مرتفع الآن. لم يُغيَّر الموعد، الرجاء المحاولة بعد لحظات.");
+    if (err instanceof DoctorQueueBusyError || err instanceof SlotRaceExhaustedError) throw ApiError.unavailable("الازدحام مرتفع الآن. لم يُغيَّر الموعد، الرجاء المحاولة بعد لحظات.");
     throw err;
   }
 
@@ -384,12 +390,21 @@ export async function rescheduleFollowUpAppointment(userId: string, appointmentI
   return view(updated);
 }
 
-/** أوقات الطبيب المتاحة ليوم معيّن (لنافذة «برمجة موعد عودة») — نفس دالة الأوقات المتاحة الموجودة. */
-export async function followUpSlotsForDate(userId: string, dateStr: string) {
+/**
+ * أوقات الطبيب المتاحة ليوم معيّن (لنافذة «برمجة موعد عودة») — نفس دالة الأوقات المتاحة الموجودة.
+ * includeBooked (لنافذة «موعد المتابعة الطبية» داخل خطط العلاج فقط): نُرجع كذلك كل أوقات شبكة الدوام مع علامة busy
+ * لتمكين الطبيب من اختيار وقت مشغول؛ لا نُرجع أي معلومة عن المريض الحاجز ولا أي ثوانٍ.
+ */
+export async function followUpSlotsForDate(userId: string, dateStr: string, includeBooked = false) {
   const doctor = await requireBookingDoctor(userId);
   const date = new Date(dateStr + "T00:00:00Z");
   if (isNaN(date.getTime())) throw ApiError.badRequest("تاريخ غير صالح.");
-  if (!withinFollowUpHorizon(date, algeriaTodayUTCMidnight())) return { date: dateStr, slotMinutes: slotMinutesFor(doctor), slots: [] as string[] };
+  if (!withinFollowUpHorizon(date, algeriaTodayUTCMidnight())) {
+    return { date: dateStr, slotMinutes: slotMinutesFor(doctor), slots: [] as string[], ...(includeBooked ? { allSlots: [] as { time: string; busy: boolean }[] } : {}) };
+  }
   const { slots } = await getDoctorDaySlots(doctor.id, dateStr);
-  return { date: dateStr, slotMinutes: slotMinutesFor(doctor), slots };
+  if (!includeBooked) return { date: dateStr, slotMinutes: slotMinutesFor(doctor), slots };
+  const free = new Set(slots);
+  const grid = generateAvailableSlots(date, doctor.schedules, [], slotMinutesFor(doctor)).filter((s) => !isPast(date, s));
+  return { date: dateStr, slotMinutes: slotMinutesFor(doctor), slots, allSlots: grid.map((time) => ({ time, busy: !free.has(time) })) };
 }

@@ -671,11 +671,23 @@ model Appointment {
   // تمنع تراجع موعد العودة خطوة مع كل مناداة؛ انظر lib/queuePriority.ts (followUpAnchorFor). NULL = لم تُحفظ.
   followUpAnchorId String?
 
+  // ---- مشاركة الدقيقة المشغولة لموعد المتابعة الطبية من «خطط العلاج» (الطبيب فقط) ----
+  // تمييز داخلي فقط (لا يظهر في أي واجهة؛ الوقت الظاهر startTime يبقى "HH:mm"):
+  //   0 = الحجز العادي وكل موعد عودة في وقت شاغر؛ >0 = متابعة من خطة علاج تشارك دقيقة مشغولة بموعد آخر.
+  // لا يُستعمل في أي ترتيب: الأولوية والترتيب مصدرهما الوحيد lib/queuePriority.ts عبر isFollowUp.
+  // يحرسه CHECK في SQL: slotSeq > 0 لا يجوز إلا إن كان isFollowUp وله treatmentPlanId.
+  slotSeq         Int     @default(0)
+  // مهجور: كان علامة في مسودة أولى (PR #47). لا يقرؤه ولا يكتبه أي كود. أُبقي في المخطط حتى لا يطلب prisma db push
+  // حذف عمود يحوي قيمًا في قاعدة الإنتاج؛ يُحذف لاحقًا بترحيل صريح بعد نسخة احتياطية وموافقة (انظر docs).
+  doctorFollowUp  Boolean @default(false)
+
   // الجلسة (من خطة علاج) التي يحققها هذا الموعد، والمتابعة التي حُوّلت إليه.
   treatmentSessionLink DentalTreatmentSession? @relation("SessionAppointment")
   dentalFollowUp       DentalFollowUp?
 
-  @@unique([doctorId, date, startTime, activeSlot])
+  // القيد الفريد يشمل slotSeq: الحجز العادي دائمًا slotSeq = 0 (فيبقى منع التكرار كما كان تمامًا).
+  // الاسم (map) ثابت كما كان كي لا تنكسر الفحوص القديمة التي تتحقق من وجود القيد.
+  @@unique([doctorId, date, startTime, slotSeq, activeSlot], map: "appointments_doctorId_date_startTime_activeSlot_key")
   @@unique([doctorId, idempotencyKey])
   @@index([patientId])
   @@index([doctorId, date])

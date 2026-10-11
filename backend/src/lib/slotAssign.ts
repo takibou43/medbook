@@ -210,3 +210,105 @@ export async function reserveExactSlot<T>(opts: {
     throw err;
   }
 }
+
+// ===== موعد المتابعة الطبية من «خطط العلاج» (الطبيب فقط) =====
+
+export interface FollowUpAssignedSlot extends AssignedSlot {
+  /** 0 = الوقت كان شاغرًا (حجز عادي الشكل)؛ >0 = يشارك دقيقة مشغولة. تمييز داخلي لا يظهر في أي واجهة. */
+  slotSeq: number;
+  /** true إن كان الوقت مشغولًا بموعد آخر وقت الحجز. */
+  sharedMinute: boolean;
+}
+
+/**
+ * دالة نقية: القيمة الداخلية الفريدة للمتابعة عند الوقت startTime.
+ * rowsAtStart = كل المواعيد غير الملغاة المخزّنة بنفس startTime بالضبط (نفس الطبيب واليوم).
+ * لا صفوف → 0 (وقت شاغر)، وإلا أكبر slotSeq موجودة + 1. لا تلمس أي موعد قائم.
+ */
+export function nextFollowUpSeq(rowsAtStart: { slotSeq: number }[]): number {
+  if (rowsAtStart.length === 0) return 0;
+  return rowsAtStart.reduce((m, r) => Math.max(m, r.slotSeq), 0) + 1;
+}
+
+/**
+ * حجز وقت لمتابعة يحددها الطبيب من «خطط العلاج»، حتى لو كان الوقت محجوزًا لمريض آخر.
+ *
+ *  - الوقت يجب أن يكون ضمن شبكة دوام الطبيب (أيام العمل/العطل/الاستراحات/مدة الجلسة) ولم يمضِ — نفس تحقق
+ *    reserveExactSlot لكن بلا اعتبار للمحجوز.
+ *  - لا يُعدَّل ولا يُلغى أي موعد قائم: نُنشئ صفًا جديدًا فقط، يحمل slotSeq فريدًا داخليًا (startTime يبقى "HH:mm").
+ *  - نفس طبقات الحماية: قفل طابور الطبيب + معاملة + القيد الفريد (doctorId, date, startTime, slotSeq, activeSlot)
+ *    خط دفاع أخير؛ عند P2002 (كاتب خارج القفل) نُعيد حساب slotSeq ونحاول مجددًا (حد أقصى MAX_SLOT_ATTEMPTS).
+ *  - الحجز العادي لا يمر من هنا أبدًا: يبقى slotSeq = 0 ويخضع للقيد كما كان (ويحرسه CHECK في قاعدة البيانات).
+ */
+export async function reserveDoctorFollowUpSlot<T>(opts: {
+  doctor: SlotDoctor;
+  date: Date;
+  startTime: string;
+  create: (tx: Prisma.TransactionClient, slot: FollowUpAssignedSlot) => Promise<T>;
+}): Promise<{ result: T; slot: FollowUpAssignedSlot }> {
+  const { doctor, date, startTime, create } = opts;
+  const slotMinutes = slotMinutesFor(doctor);
+  const startOfDay = new Date(date);
+  const endOfDay = new Date(date);
+  endOfDay.setUTCHours(23, 59, 59, 999);
+
+  for (let attempt = 1; attempt <= MAX_SLOT_ATTEMPTS; attempt++) {
+    try {
+      return await withDoctorQueueTurn(doctor.id, QUEUE_TURN_MAX_WAIT_MS, () =>
+        prisma.$transaction(
+          async (tx) => {
+            await lockDoctorQueue(tx, doctor.id);
+            const grid = generateAvailableSlots(date, doctor.schedules, [], slotMinutes);
+            if (!grid.includes(startTime) || isPast(date, startTime)) throw new ExactSlotUnavailableError();
+            const rows = await tx.appointment.findMany({
+              where: { doctorId: doctor.id, date: { gte: startOfDay, lte: endOfDay }, ...SLOT_OCCUPYING_WHERE },
+              select: { startTime: true, endTime: true, slotSeq: true },
+            });
+            const atStart = rows.filter((r) => r.startTime === startTime);
+            const slotSeq = nextFollowUpSeq(atStart);
+            const free = generateAvailableSlots(date, doctor.schedules, rows, slotMinutes);
+            const slot: FollowUpAssignedSlot = {
+              startTime,
+              endTime: addMinutes(startTime, slotMinutes),
+              slotMinutes,
+              slotSeq,
+              sharedMinute: !free.includes(startTime),
+            };
+            const result = await create(tx, slot);
+            return { result, slot };
+          },
+          { maxWait: 20000, timeout: 30000 }
+        )
+      );
+    } catch (err) {
+      // سباق نادر مع كاتب لا يستعمل القفل: نعيد قراءة المشغول ونحسب slotSeq من جديد.
+      if (!isUniqueViolation(err)) throw err;
+      // تكرار مفتاح منع التكرار (ضغط مزدوج متزامن) ليس سباق وقت: لا نعيد المحاولة، والمستدعي يعيد الموعد الفائز.
+      if (JSON.stringify((err as Prisma.PrismaClientKnownRequestError).meta ?? {}).includes("idempotencyKey")) throw new ExactSlotUnavailableError();
+      slotAssignStats.p2002Retries += 1;
+    }
+  }
+  throw new SlotRaceExhaustedError();
+}
+
+/**
+ * نقطة دخول واحدة لمواعيد العودة: priority=true (متابعة طبية من خطة علاج) → reserveDoctorFollowUpSlot (يسمح بالوقت المشغول
+ * بقيمة داخلية)، وإلا → reserveExactSlot كما كان تمامًا (الوقت يجب أن يكون شاغرًا، slotSeq = 0).
+ */
+export async function reserveFollowUpTime<T>(
+  priority: boolean,
+  opts: {
+    doctor: SlotDoctor;
+    date: Date;
+    startTime: string;
+    create: (tx: Prisma.TransactionClient, slot: FollowUpAssignedSlot) => Promise<T>;
+  }
+): Promise<{ result: T }> {
+  if (priority) return reserveDoctorFollowUpSlot(opts);
+  return reserveExactSlot<T>({
+    doctor: opts.doctor,
+    date: opts.date,
+    startTime: opts.startTime,
+    create: (tx, slot) => opts.create(tx, { ...slot, slotSeq: 0, sharedMinute: false }),
+  });
+}

@@ -665,11 +665,21 @@ model Appointment {
   // مفتاح منع التكرار عند إعادة إرسال نفس طلب «برمجة موعد عودة» (فريد لكل طبيب؛ NULL لا يتعارض).
   idempotencyKey  String?
 
+  // ---- موعد المتابعة الطبية الذي يحدده الطبيب من «خطط العلاج» ----
+  // علامة مستقلة (لا تُستنتج من الثواني ولا من النوع): تُعطي الموعد أولوية على الحجوزات العادية في نفس الدقيقة الظاهرة.
+  // الصفوف القديمة false فلا يتغير ترتيبها.
+  doctorFollowUp Boolean @default(false)
+  // تمييز داخلي فقط (لا يظهر في أي واجهة): 0 = الحجز العادي، >0 = متابعة تشارك دقيقة مشغولة. الوقت الظاهر startTime يبقى "HH:mm".
+  slotSeq        Int     @default(0)
+
   // الجلسة (من خطة علاج) التي يحققها هذا الموعد، والمتابعة التي حُوّلت إليه.
   treatmentSessionLink DentalTreatmentSession? @relation("SessionAppointment")
   dentalFollowUp       DentalFollowUp?
 
-  @@unique([doctorId, date, startTime, activeSlot])
+  // القيد الفريد يشمل slotSeq: الحجز العادي دائمًا slotSeq = 0 (فيبقى منع التكرار كما كان تمامًا)،
+  // ولا يأخذ قيمة > 0 إلا موعد متابعة يحدده الطبيب من «خطط العلاج» في وقت مشغول (يحرسه CHECK في SQL).
+  // الاسم (map) ثابت كما كان كي لا تنكسر الفحوص القديمة التي تتحقق من وجود القيد.
+  @@unique([doctorId, date, startTime, slotSeq, activeSlot], map: "appointments_doctorId_date_startTime_activeSlot_key")
   @@unique([doctorId, idempotencyKey])
   @@index([patientId])
   @@index([doctorId, date])

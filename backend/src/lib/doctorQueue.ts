@@ -30,6 +30,8 @@ export interface DayQueueRow {
   calledAt: Date | null;
   arrivedAt?: Date | null;
   urgencyStatus?: string;
+  doctorFollowUp?: boolean;
+  slotSeq?: number;
 }
 
 export interface QueuePosition {
@@ -102,7 +104,7 @@ export async function loadDoctorDayQueue(db: Db, doctorId: string, now: Date): P
     db.doctor.findUnique({ where: { id: doctorId }, select: { schedules: true, dutyEndsAt: true } }),
     db.appointment.findMany({
       where: { doctorId, date: { gte: day, lte: end }, status: { in: DAY_QUEUE_STATUSES } },
-      select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true, arrivedAt: true, urgencyStatus: true },
+      select: { id: true, startTime: true, status: true, skipCredits: true, calledAt: true, arrivedAt: true, urgencyStatus: true, doctorFollowUp: true, slotSeq: true },
       orderBy: [{ startTime: "asc" }],
     }),
     db.appointment.aggregate({

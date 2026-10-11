@@ -246,6 +246,16 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
         )}
       </section>
 
+      {p.status !== "CANCELLED" && (
+        <section className="card p-4" aria-labelledby="medical-follow-up-title">
+          <h3 id="medical-follow-up-title" className="mb-1 flex items-center gap-2 font-bold text-slate-900"><CalendarPlus className="h-4 w-4" />{t("موعد المتابعة الطبية")}</h3>
+          <p className="mb-3 text-xs text-slate-600">{t("حدّد التاريخ والساعة والدقيقة وسبب المتابعة. يجوز اختيار وقت محجوز: لا يتغير موعد أي مريض، وتأخذ المتابعة أولوية عند تساوي الوقت.")}</p>
+          <Button variant="outline" disabled={!anchorAppointmentId || run.isPending} onClick={() => setFollowUpCtx({ parentAppointmentId: anchorAppointmentId!, beneficiaryName: p.beneficiary.name, familyMemberId: p.familyMemberId ?? null, treatmentPlanId: p.id })}>
+            <CalendarPlus className="h-4 w-4" />{t(" تحديد موعد المتابعة ")}</Button>
+          {!anchorAppointmentId && <p className="mt-2 text-xs text-slate-500">{t("لا يوجد موعد سابق لهذا المستفيد عندك، لذلك لا يمكن تحديد موعد متابعة من هنا بعد.")}</p>}
+        </section>
+      )}
+
       <section className="card p-4">
         <h3 className="mb-3 flex items-center gap-2 font-bold text-slate-900"><CalendarClock className="h-4 w-4" />{t(" المتابعات")}</h3>
         {p.followUps.length === 0 ? (

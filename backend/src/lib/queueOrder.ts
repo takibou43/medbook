@@ -1,4 +1,5 @@
 import { AppointmentStatus } from "@prisma/client";
+import { followUpRankCompare } from "./presentQueue";
 
 /**
  * ترتيب طابور اليوم — منطق واحد مشترك (دوال نقية بلا قاعدة بيانات) يستعمله:
@@ -30,10 +31,15 @@ export interface QueueItem {
   status: AppointmentStatus | string;
   startTime: string;
   skipCredits: number;
+  /** علامة موعد المتابعة الطبية (اختيارية — الصفوف القديمة false). */
+  doctorFollowUp?: boolean | null;
+  slotSeq?: number | null;
 }
 
 function byTimeThenId(a: QueueItem, b: QueueItem) {
-  return a.startTime === b.startTime ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.startTime < b.startTime ? -1 : 1;
+  if (a.startTime !== b.startTime) return a.startTime < b.startTime ? -1 : 1;
+  // نفس الوقت الظاهر: موعد المتابعة الطبية أولًا (ثم ترتيبه الداخلي)، وبعدها المعرّف كما كان.
+  return followUpRankCompare(a, b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
 const isLate = (a: QueueItem) => a.status === AppointmentStatus.LATE;

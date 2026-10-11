@@ -37,6 +37,7 @@ GUARDS=(
   ../prisma/migrations/20260930120000_family_treatment_referrals_stats/migration.sql
   ../prisma/migrations/20261001193000_clinic_referral_discount/migration.sql
   ../prisma/migrations/20261003180000_clinic_doctor_terms/migration.sql
+  ../prisma/migrations/20261011160000_doctor_follow_up_priority/migration.sql
 )
 for f in "${GUARDS[@]}"; do
   echo "تطبيق حراسات SQL: $f"

@@ -101,6 +101,9 @@ export default function DoctorHome() {
   const current = queue.data?.current ?? null;
   const nextList = (queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])]).slice(0, 3);
   const canCallNext = !current && nextList.length > 0;
+  // «خطط العلاج» متاحة لهذا المريض (طبيب أسنان + مريض بحساب): جدولة المتابعة تنتقل إلى قسم «موعد المتابعة الطبية» داخلها.
+  // في غير ذلك (تخصصات أخرى أو حجز ضيف) لا خطط، فيبقى زر «جدولة موعد آخر» حتى لا تُفقد الوظيفة.
+  const hasPlans = Boolean(current?.patientId) && isDentalSpecialty(user?.doctor?.specialty);
 
   function refreshAll() {
     void qc.invalidateQueries({ queryKey: ["queue"] });
@@ -233,7 +236,7 @@ export default function DoctorHome() {
                 >
                   <Check className="h-4 w-4" aria-hidden="true" />{t(" إنهاء الكشف ")}</Button>
               )}
-              {current ? (
+              {current && hasPlans ? null : current ? (
                 <Button
                   className="flex-1"
                   variant="outline"
@@ -261,7 +264,7 @@ export default function DoctorHome() {
                 ? t("لا يوجد مريض في الانتظار.")
                 : t("ينادى المريض الأول في ترتيب الطابور أدناه.")}
             </p>}
-            {current && !canScheduleFollowUp(current) && (
+            {current && !hasPlans && !canScheduleFollowUp(current) && (
               <p id="follow-up-hint" className="mt-2 text-xs text-slate-500">{t("أكمل اسم المريض ولقبه ورقم هاتفه قبل برمجة المتابعة.")}</p>
             )}
           </section>

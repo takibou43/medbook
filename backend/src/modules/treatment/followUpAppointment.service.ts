@@ -5,7 +5,7 @@ import { prisma } from "../../lib/prisma";
 import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
 import { ApiError } from "../../utils/ApiError";
 import { algeriaTodayUTCMidnight, generateAvailableSlots, isPast } from "../../lib/slots";
-import { reserveExactSlot, reserveDoctorFollowUpSlot, reserveFollowUpTime, slotMinutesFor, ExactSlotUnavailableError, NoSlotAvailableError, SlotRaceExhaustedError } from "../../lib/slotAssign";
+import { reserveExactSlot, reserveFollowUpReschedule, reserveFollowUpTime, slotMinutesFor, ExactSlotUnavailableError, NoSlotAvailableError, SlotRaceExhaustedError } from "../../lib/slotAssign";
 import { DoctorQueueBusyError } from "../../lib/doctorLock";
 import { assertDoctorMayCreateAppointments } from "../../lib/doctorAssistants";
 import { writeAudit } from "../../lib/audit";
@@ -335,13 +335,10 @@ export async function rescheduleFollowUpAppointment(userId: string, appointmentI
   const date = assertSlotInSchedule(doctor, input.date, input.startTime);
   // متابعة طبية من خطة علاج تحتفظ بامتياز مشاركة الدقيقة عند إعادة جدولتها؛ غيرها كما كان (وقت شاغر بالضبط).
   const sharesMinute = appt.isFollowUp && appt.treatmentPlanId !== null;
-  const reserve: typeof reserveDoctorFollowUpSlot = sharesMinute
-    ? reserveDoctorFollowUpSlot
-    : (o) => reserveExactSlot({ doctor: o.doctor, date: o.date, startTime: o.startTime, create: (tx, slot) => o.create(tx, { ...slot, slotSeq: 0, sharedMinute: false }) });
   let updated: ResultRow;
   try {
     updated = (
-      await reserve({
+      await reserveFollowUpReschedule(sharesMinute, {
         doctor,
         date,
         startTime: input.startTime,

@@ -318,3 +318,28 @@ export async function reserveFollowUpTime<T>(
   });
   return { result: r.result, shifted: r.shifted };
 }
+
+/**
+ * إعادة جدولة موعد عودة: sharesMinute=true (متابعة طبية من خطة علاج) → قد يشارك دقيقة مشغولة؛
+ * وإلا → الوقت يجب أن يكون شاغرًا بالضبط (reserveExactSlot كما كان) وslotSeq = 0.
+ */
+export async function reserveFollowUpReschedule<T>(
+  sharesMinute: boolean,
+  opts: {
+    doctor: SlotDoctor;
+    date: Date;
+    startTime: string;
+    create: (tx: Prisma.TransactionClient, slot: FollowUpAssignedSlot) => Promise<T>;
+  }
+): Promise<{ result: T }> {
+  if (sharesMinute) {
+    const r = await reserveDoctorFollowUpSlot<T>(opts);
+    return { result: r.result };
+  }
+  return reserveExactSlot<T>({
+    doctor: opts.doctor,
+    date: opts.date,
+    startTime: opts.startTime,
+    create: (tx, slot) => opts.create(tx, { ...slot, slotSeq: 0, sharedMinute: false }),
+  });
+}

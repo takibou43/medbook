@@ -317,8 +317,8 @@ export function PrescriptionCard({
                 <li key={m.id} className="p-2.5 sm:p-3" role="group" aria-label={t("الدواء رقم {n}", { n: i + 1 })}>
                   <div className="flex items-start gap-2">
                     <span className="mt-6 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-bold text-primary-700" aria-hidden="true">{i + 1}</span>
-                    <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
-                      <label className="block text-xs sm:col-span-3">
+                    <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-6">
+                      <label className="block text-xs sm:col-span-6">
                         <span className="mb-1 block">{t("طريقة كتابة تعليمات الدواء")}</span>
                         <select className="input" value={m.directionsMode ?? "structured"} onChange={e => updateMed(m.id, "directionsMode", e.target.value)}>
                           <option value="structured">{t("جرعة وتكرار ومدة")}</option>
@@ -327,7 +327,7 @@ export function PrescriptionCard({
                         {m.directionsMode === "freeText" && <span className="mt-1 block text-slate-600">{t("اكتب طريقة الاستخدام كاملة، بما يناسب الدواء والحالة. لا يتحقق النظام من ملاءمتها الطبية.")}</span>}
                       </label>
                       {MED_FIELDS.map((f) => (
-                        <label key={f.key} className={clsx("block min-w-0", f.wide && "sm:col-span-3")}>
+                        <label key={f.key} className={clsx("block min-w-0", f.key === "name" ? "sm:col-span-6" : f.key === "instructions" ? "sm:col-span-6" : "sm:col-span-2")}>
                           <span className="mb-0.5 block text-xs font-medium text-slate-600">{t(f.label)}{m.directionsMode === "freeText" && ["dose", "frequency", "duration"].includes(f.key) ? ` (${t("اختياري")})` : ""}</span>
                           <input
                             className={clsx("input py-2", f.key === "name" && "font-semibold")}

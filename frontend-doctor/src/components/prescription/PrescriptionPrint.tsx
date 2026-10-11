@@ -88,30 +88,20 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
 
       <ol className="rx-meds" aria-label={text.medications}>
         {data.medications.map((m, i) => {
-          const facts = [
-            { label: text.dose, value: m.dose.trim() },
-            { label: text.frequency, value: m.frequency.trim() },
-            { label: text.duration, value: m.duration.trim() },
-          ].filter((f) => f.value);
-          const instructions = m.instructions.trim();
+          // سطر واحد: اسم الدواء ثم الجرعة والتكرار والمدة والتعليمات، وينتقل للسطر التالي تلقائيًا فقط إن طال.
+          const parts = [m.dose, m.frequency, m.duration, m.instructions].map((v) => v.trim()).filter(Boolean);
           return (
             <li key={m.id} className="rx-med">
               <span className="rx-index" aria-hidden="true">{i + 1}</span>
-              <div className="rx-med-body">
-                <p className="rx-med-name"><Typed>{m.name}</Typed></p>
-                {facts.length > 0 && (
-                  <p className="rx-facts">
-                    {facts.map((f) => (
-                      <span key={f.label} className="rx-fact">
-                        <span className="rx-fact-label">{f.label}:</span> <Typed>{f.value}</Typed>
-                      </span>
-                    ))}
-                  </p>
-                )}
-                {instructions && (
-                  <p className="rx-instructions"><span className="rx-fact-label">{text.instructions}</span> <Typed>{instructions}</Typed></p>
-                )}
-              </div>
+              <p className="rx-med-line">
+                <Typed className="rx-med-name">{m.name}</Typed>
+                {parts.map((v, k) => (
+                  <span key={k}>
+                    <span className="rx-sep" aria-hidden="true">{"\u00A0—"}</span>{" "}
+                    <Typed>{v}</Typed>
+                  </span>
+                ))}
+              </p>
             </li>
           );
         })}

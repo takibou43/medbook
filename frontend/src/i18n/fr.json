@@ -1898,5 +1898,15 @@
   "إظهار العنوان في أسفل الوصفة": "Afficher l’adresse en bas de l’ordonnance",
   "التحاليل": "Analyses",
   "اكتب اسم الطلب.": "Saisissez le nom de la demande.",
-  "عند الطباعة: اختر ورق A5 والحجم الفعلي 100%. إن ظهر في الورقة رابط الموقع أو عنوان الصفحة أو الوقت فهي إضافات المتصفح؛ ألغِ «Headers and footers» من إعدادات الطباعة.": "À l'impression : choisissez le papier A5 et l'échelle réelle 100 %. Si l'adresse du site, le titre de la page ou l'heure apparaissent sur la feuille, ils sont ajoutés par le navigateur : décochez « En-têtes et pieds de page » dans les réglages d'impression."
+  "عند الطباعة: اختر ورق A5 والحجم الفعلي 100%. إن ظهر في الورقة رابط الموقع أو عنوان الصفحة أو الوقت فهي إضافات المتصفح؛ ألغِ «Headers and footers» من إعدادات الطباعة.": "À l'impression : choisissez le papier A5 et l'échelle réelle 100 %. Si l'adresse du site, le titre de la page ou l'heure apparaissent sur la feuille, ils sont ajoutés par le navigateur : décochez « En-têtes et pieds de page » dans les réglages d'impression.",
+  "موعد المتابعة الطبية": "Rendez-vous de suivi médical",
+  "اختر الساعة والدقيقة": "Choisissez l’heure et les minutes",
+  "هذا الوقت محجوز لمريض آخر": "Ce créneau est réservé à un autre patient",
+  "الأوقات المظلّلة محجوزة لمرضى آخرين. يمكنك اختيارها: تُسجَّل المتابعة بأولوية دون تغيير موعد أي مريض.": "Les créneaux en surbrillance sont réservés à d’autres patients. Vous pouvez les choisir : le suivi est enregistré en priorité, sans modifier le rendez-vous d’aucun patient.",
+  "سبب المتابعة (اختياري)": "Motif du suivi (facultatif)",
+  "موعد متابعة طبية (مؤكَّد مباشرة)": "Rendez-vous de suivi médical (confirmé directement)",
+  "هذا الوقت محجوز لمريض آخر؛ لن يتغير موعده، وستُسجَّل المتابعة بأولوية.": "Ce créneau est réservé à un autre patient ; son rendez-vous ne change pas et le suivi sera enregistré en priorité.",
+  "حدّد التاريخ والساعة والدقيقة وسبب المتابعة. يجوز اختيار وقت محجوز: لا يتغير موعد أي مريض، وتأخذ المتابعة أولوية عند تساوي الوقت.": "Choisissez la date, l’heure, les minutes et le motif du suivi. Vous pouvez choisir un créneau déjà réservé : aucun rendez-vous patient n’est modifié et le suivi passe en priorité à heure égale.",
+  "تحديد موعد المتابعة": "Définir le rendez-vous de suivi",
+  "لا يوجد موعد سابق لهذا المستفيد عندك، لذلك لا يمكن تحديد موعد متابعة من هنا بعد.": "Aucun rendez-vous antérieur pour ce bénéficiaire chez vous : impossible de définir un suivi d’ici pour l’instant."
 }

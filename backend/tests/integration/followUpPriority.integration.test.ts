@@ -106,6 +106,10 @@ describe.skipIf(!TEST_URL)("موعد المتابعة الطبية من خطط �
     const c = await db.city.create({ data: { nameAr: `مدينة ${tag}`, wilayaId: w.id } });
     const dental = await db.specialty.create({ data: { nameAr: `طب الأسنان ${tag}`, nameFr: "Dentisterie" } });
     Object.assign(ids, { wilaya: w.id, city: c.id, dental: dental.id });
+    const { createApp } = await import("../../src/app");
+    server = http.createServer(createApp());
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     doc = await mkDoctor("A", true);
     docNoAssistant = await mkDoctor("B", false);
     otherDoc = await mkDoctor("C", false);
@@ -119,10 +123,6 @@ describe.skipIf(!TEST_URL)("موعد المتابعة الطبية من خطط �
       expect(pl.status).toBe(201);
       plans.push(pl.data.id);
     }
-    const { createApp } = await import("../../src/app");
-    server = http.createServer(createApp());
-    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
-    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   }, 90000);
 
   afterAll(async () => {

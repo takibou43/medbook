@@ -202,7 +202,7 @@ body {
 .rx-title { margin: 4mm 0 3mm; text-align: center; font-size: 14pt; font-weight: 700; letter-spacing: 0.02em; color: #111827; }
 .rx-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2mm 10mm; padding-bottom: 3mm; margin-bottom: 2mm; border-bottom: 0.2mm solid #d1d5db; }
 .rx-meta > div { display: flex; align-items: baseline; gap: 2.5mm; min-width: 0; }
-.rx-meta dt { font-size: 9.5pt; color: #6b7280; font-weight: 600; }
+.rx-meta dt { flex-shrink: 0; white-space: nowrap; font-size: 9.5pt; color: #6b7280; font-weight: 600; }
 .rx-meta dd { margin: 0; font-weight: 600; }
 .rx-patient { font-size: 12.5pt; font-weight: 800 !important; }
 .rx-meds { list-style: none; margin: 0; padding: 0; }

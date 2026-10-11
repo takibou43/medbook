@@ -255,6 +255,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
               <Printer className="h-4 w-4" aria-hidden="true" /> {t("طباعة")}
             </button>
           </div>
+          <p className="w-full text-xs leading-5 text-slate-600">{t("عند الطباعة: اختر ورق A5 والحجم الفعلي 100% (بدون «ملاءمة»)، وألغِ خيار «Headers and footers» من إعدادات المتصفح.")}</p>
         </div>
 
         {/* مساحة المعاينة القابلة للتمرير (أفقيًا أيضًا عند التكبير) — الورقة بأبعاد A5 مصغّرة */}

@@ -1,4 +1,5 @@
 import { isKeepAwakeWindow } from "./lib/awakeWindow";
+import { createHealthPing } from "./lib/healthPing";
 import { safeErrorCode } from "./lib/safeError";
 import { createApp } from "./app";
 import { env } from "./config/env";
@@ -82,10 +83,11 @@ const SELF_PING_INTERVAL_MS = 10 * 60 * 1000;
 function startSelfPing() {
   const baseUrl = process.env.RENDER_EXTERNAL_URL;
   if (!baseUrl) return;
+  const ping = createHealthPing(baseUrl);
 
   setInterval(() => {
     if (!isKeepAwakeWindow(new Date())) return;
-    fetch(baseUrl + "/health").catch(() => undefined);
+    void ping();
   }, SELF_PING_INTERVAL_MS);
 
   console.log(
@@ -98,7 +100,7 @@ Promise.all([
   backfillFollowUps(),
   bootstrapAdminUser(),
 ]).finally(() => {
-  // One serialized maintenance cycle. Quiet checks share an hourly window;
+  // One serialized maintenance cycle. Quiet checks share a three-hour window;
   // clinic closing, subscription expiry and notification expiry wake it sooner.
   const maintenanceJob = adaptiveJob(async () => {
     await syncTrialSubscriptions();

@@ -4,7 +4,7 @@ import { algeriaTimeOnDay } from "./doctorQueue";
 import { closingTimeForDate } from "./slots";
 import { listAppointmentExpiryCandidates } from "../modules/appointments/appointments.service";
 
-/** Keep clinical deadlines precise; the hourly fallback is only for quiet periods. */
+/** Keep clinical deadlines precise; the recovery fallback is only for quiet periods. */
 export async function nextMaintenanceDelay(now = new Date()): Promise<number> {
   const [trialDelay, notification, doctors] = await Promise.all([
     nextTrialDelay(now),

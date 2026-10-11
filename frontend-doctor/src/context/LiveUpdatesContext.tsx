@@ -36,7 +36,7 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
         const res = await api.get<{ data: { revision: string } }>("/live/changes", {
           params: revision ? { since: revision } : undefined,
           signal: request.signal,
-          timeout: 45_000,
+          timeout: 65_000,
         });
         if (stopped || request.signal.aborted) return;
         const next = res.data.data.revision;

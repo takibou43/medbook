@@ -12,11 +12,16 @@ export function required(name: string): string {
   return v;
 }
 
-/** سرّ JWT: في الإنتاج يجب ألا يقل عن 32 محرفًا (يُفشل الإقلاع بدل العمل بسرّ ضعيف). */
+/**
+ * سرّ JWT: في الإنتاج يُنصح بـ32 محرفًا فأكثر. افتراضيًا نطبع تحذيرًا واضحًا (بلا طباعة القيمة) كي لا
+ * يتعطل إقلاع بيئة قائمة بسرّ أقصر؛ اضبط JWT_STRICT_SECRETS=true لجعل الأمر يوقف الإقلاع.
+ */
 function requiredSecret(name: string): string {
   const v = required(name);
   if ((process.env.NODE_ENV ?? "development") === "production" && v.trim().length < 32) {
-    throw new Error(`متغير البيئة ${name} قصير جدًا: يلزم 32 محرفًا على الأقل في الإنتاج.`);
+    const msg = `متغير البيئة ${name} قصير (أقل من 32 محرفًا). ولّد قيمة أقوى: openssl rand -base64 48`;
+    if (process.env.JWT_STRICT_SECRETS === "true") throw new Error(msg);
+    console.error(`⚠️ تحذير أمني: ${msg}`);
   }
   return v;
 }

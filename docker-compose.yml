@@ -1,40 +1,44 @@
 version: "3.9"
 
+# تشغيل محلي/تجريبي. الأسرار تُقرأ من ملف .env بجانب هذا الملف (غير متتبَّع في Git)؛
+# غياب أي سرّ إلزامي يوقف compose برسالة واضحة بدل العمل بقيمة افتراضية معروفة.
+# لتعديل الكود أثناء التطوير استعمل docker-compose.override.yml محليًا (bind mounts) ولا تضعه في الإنتاج.
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: medbook_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: medbook
-      POSTGRES_PASSWORD: medbook
-      POSTGRES_DB: medbook
+      POSTGRES_USER: ${POSTGRES_USER:-medbook}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?اضبط POSTGRES_PASSWORD في ملف .env}
+      POSTGRES_DB: ${POSTGRES_DB:-medbook}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432" # محلي فقط، لا يُكشف على الشبكة
     volumes:
       - medbook_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U medbook -d medbook"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medbook} -d ${POSTGRES_DB:-medbook}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: medbook_backend
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: "postgresql://medbook:medbook@postgres:5432/medbook?schema=public"
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-medbook}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-medbook}?schema=public"
       PORT: 4000
       NODE_ENV: production
-      CLIENT_URL: "http://localhost:5173"
-      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_me}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_change_me}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
+      JWT_SECRET: ${JWT_SECRET:?اضبط JWT_SECRET (32 محرفًا فأكثر)}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?اضبط JWT_REFRESH_SECRET (32 محرفًا فأكثر)}
       JWT_ACCESS_EXPIRES: "15m"
       JWT_REFRESH_EXPIRES: "7d"
       AI_PROVIDER: ${AI_PROVIDER:-mock}
@@ -42,9 +46,6 @@ services:
       AI_MODEL: ${AI_MODEL:-}
     ports:
       - "4000:4000"
-    volumes:
-      - ./backend:/app/backend
-      - ./prisma:/app/prisma
 
   frontend:
     build:
@@ -58,8 +59,6 @@ services:
       VITE_API_URL: "http://localhost:4000/api"
     ports:
       - "5173:5173"
-    volumes:
-      - ./frontend:/app/frontend
 
 volumes:
   medbook_pgdata:

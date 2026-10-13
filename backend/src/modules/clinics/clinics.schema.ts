@@ -1,3 +1,4 @@
+import { personName } from "../../lib/personName";
 import { z } from "zod";
 import { inviteTermsFields } from "../../lib/clinicFinance";
 import { specialtyNameSchema } from "../../lib/specialtySelection";
@@ -10,7 +11,7 @@ export const clinicProfileSchema = z.object({
   photoUrl: z.string().url().max(1000).startsWith("https://").optional(),
 }).strict();
 export const clinicDoctorProfileSchema = z.object({
-  firstName: z.string().trim().min(2).max(100), lastName: z.string().trim().min(2).max(100),
+  firstName: personName("الاسم قصير جدًا", 100), lastName: personName("اللقب قصير جدًا", 100),
   specialtyId: z.string().uuid().optional(), specialtyName: specialtyNameSchema.optional(), gender: z.enum(["MALE", "FEMALE"]).optional(),
   yearsExperience: z.coerce.number().int().min(0).max(80).optional(),
   bio: z.string().trim().max(2000).optional(),

@@ -28,3 +28,12 @@ export const bookingLookupLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: "محاولات كثيرة. الرجاء المحاولة بعد قليل." },
 });
+
+// تجديد الجلسة/الخروج: يحدث تلقائيًا كل ~15 دقيقة لكل مستخدم، فالحد سخيّ لكنه يقطع الإساءة والتخمين.
+export const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "طلبات تجديد كثيرة. الرجاء المحاولة لاحقًا." },
+});

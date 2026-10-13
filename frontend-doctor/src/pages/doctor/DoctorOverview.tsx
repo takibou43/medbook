@@ -15,6 +15,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../components/ui/Toast";
 import { ReferralCard } from "../../components/ReferralCard";
 import { useLiveUpdates } from "../../context/LiveUpdatesContext";
+import { escapeHtml } from "../../lib/escapeHtml";
 import { livePollInterval } from "../../lib/livePolling";
 
 // رابط موقع الحجز الخاص بالمرضى — يُستخدم لبناء رابط/رمز QR خاص بكل طبيب.
@@ -160,16 +161,20 @@ export default function DoctorOverview() {
   }
 
   function printQrCode() {
-    if (!qrImageUrl) return;
+    if (!qrImageUrl || !bookingUrl) return;
     const doctorName = effectiveDoctor ? t("د. ") + effectiveDoctor.firstName + " " + effectiveDoctor.lastName : "";
     const printWindow = window.open("", "_blank", "width=480,height=640");
     if (!printWindow) {
       showToast(t("يرجى السماح بالنوافذ المنبثقة للطباعة."), "error");
       return;
     }
+    // كل قيمة تدخل HTML تُرمَّز (الاسم يأتي من حساب قد لا يكون المستخدم الحالي)، + CSP يمنع أي سكربت داخل النافذة.
+    const lang = getLanguage() === "fr" ? "fr" : "ar";
+    const safeName = escapeHtml(doctorName);
     const html =
-      "<!DOCTYPE html><html dir='" + (getLanguage() === "fr" ? "ltr" : "rtl") + "' lang='" + getLanguage() + "'><head><meta charset='utf-8' />" +
-      "<title>" + t("رمز QR للحجز") + "</title><style>" +
+      "<!DOCTYPE html><html dir='" + (lang === "fr" ? "ltr" : "rtl") + "' lang='" + lang + "'><head><meta charset='utf-8' />" +
+      "<meta http-equiv='Content-Security-Policy' content=\"default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline'\" />" +
+      "<title>" + escapeHtml(t("رمز QR للحجز")) + "</title><style>" +
       "*{box-sizing:border-box;}" +
       "body{font-family:Tahoma,Arial,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:32px;text-align:center;}" +
       "h1{font-size:20px;margin:0 0 4px;}" +
@@ -179,11 +184,11 @@ export default function DoctorOverview() {
       ".brand{margin-top:32px;font-size:12px;color:#999;}" +
       "@media print{body{padding:0;}}" +
       "</style></head><body>" +
-      "<h1>MedBook" + (doctorName ? " — " + doctorName : "") + "</h1>" +
-      "<p class='sub'>" + t("امسح الرمز لحجز موعد") + "</p>" +
-      "<img src='" + qrImageUrl + "' alt='QR' />" +
-      "<p class='instructions'>" + t("لحجز موعد، امسح الرمز بكاميرا هاتفك.") + "</p>" +
-      "<p class='brand' dir='ltr'>" + bookingUrl + "</p>" +
+      "<h1>MedBook" + (safeName ? " — " + safeName : "") + "</h1>" +
+      "<p class='sub'>" + escapeHtml(t("امسح الرمز لحجز موعد")) + "</p>" +
+      "<img src=\"" + escapeHtml(qrImageUrl) + "\" alt=\"QR\" />" +
+      "<p class='instructions'>" + escapeHtml(t("لحجز موعد، امسح الرمز بكاميرا هاتفك.")) + "</p>" +
+      "<p class='brand' dir='ltr'>" + escapeHtml(bookingUrl) + "</p>" +
       "</body></html>";
     printWindow.document.write(html);
     printWindow.document.close();

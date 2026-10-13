@@ -12,6 +12,15 @@ export function required(name: string): string {
   return v;
 }
 
+/** سرّ JWT: في الإنتاج يجب ألا يقل عن 32 محرفًا (يُفشل الإقلاع بدل العمل بسرّ ضعيف). */
+function requiredSecret(name: string): string {
+  const v = required(name);
+  if ((process.env.NODE_ENV ?? "development") === "production" && v.trim().length < 32) {
+    throw new Error(`متغير البيئة ${name} قصير جدًا: يلزم 32 محرفًا على الأقل في الإنتاج.`);
+  }
+  return v;
+}
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? 4000),
@@ -27,8 +36,8 @@ export const env = {
   // لا قيمة افتراضية هنا عمدًا (خلافًا للسابق): وجود سرّ ثابت في كود مستودع عام كان يعني
   // أن الخادم قد يعمل بصمت بتوقيع JWT معروف للجميع إن نُسي ضبط المتغير في أي بيئة.
   // الآن يفشل الإقلاع فورًا بدل ذلك، تمامًا كما هو الحال مع DATABASE_URL أعلاه.
-  jwtSecret: required("JWT_SECRET"),
-  jwtRefreshSecret: required("JWT_REFRESH_SECRET"),
+  jwtSecret: requiredSecret("JWT_SECRET"),
+  jwtRefreshSecret: requiredSecret("JWT_REFRESH_SECRET"),
   jwtAccessExpires: process.env.JWT_ACCESS_EXPIRES ?? "15m",
   jwtRefreshExpires: process.env.JWT_REFRESH_EXPIRES ?? "7d",
 

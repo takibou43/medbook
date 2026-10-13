@@ -6,7 +6,7 @@ import type { Doctor } from "../../types";
 import { VisualPrescriptionDesigner as PrescriptionDesigner } from "./VisualPrescriptionDesigner";
 import { Modal } from "../ui/Modal";
 
-export function PrescriptionTemplateEditor({ value, onChange, doctor }: { value: PrescriptionTemplate | null; onChange: (value: PrescriptionTemplate | null) => void; doctor?: Doctor | null }) {
+export function PrescriptionTemplateEditor({ value, onChange, doctor, names }: { value: PrescriptionTemplate | null; onChange: (value: PrescriptionTemplate | null) => void; doctor?: Doctor | null; names?: { ar?: string; fr?: string } }) {
   const fr = useLanguage() === "fr";
   const [editing, setEditing] = useState(false);
   const [designerOpen, setDesignerOpen] = useState(false);
@@ -56,7 +56,7 @@ export function PrescriptionTemplateEditor({ value, onChange, doctor }: { value:
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     </div>}
     <Modal wide open={designerOpen} onClose={() => { if (!busy) setDesignerOpen(false); }} title={fr ? "Créer / modifier mon ordonnance" : "إنشاء وتعديل تصميم الوصفة"}>
-      {designerOpen && <PrescriptionDesigner value={value} doctor={doctor} saving={busy} onSave={next => save(false, next)} />}
+      {designerOpen && <PrescriptionDesigner value={value} doctor={doctor} names={names} saving={busy} onSave={next => save(false, next)} />}
       {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
     </Modal>
   </div>;

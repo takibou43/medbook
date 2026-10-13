@@ -12,6 +12,38 @@ export interface DesignElement {
   align: "left" | "center" | "right";
 }
 
+export interface SimplePrescriptionHeader {
+  nameAr: string; nameFr: string; specialty: string; clinic: string; address: string; phone: string; footer: string; color: string;
+}
+
+export function readSimpleHeader(design: PrescriptionDesign, names?: { ar?: string; fr?: string }): SimplePrescriptionHeader {
+  const text = (id: string, fallback = "") => design.elements?.find(e => e.id === id)?.text ?? fallback;
+  const oldName = text("doctor", design.doctorName);
+  return {
+    nameAr: text("name-ar", names?.ar ?? (/[\u0600-\u06ff]/.test(oldName) ? oldName : "")),
+    nameFr: text("name-fr", names?.fr ?? (!/[\u0600-\u06ff]/.test(oldName) ? oldName : "")),
+    specialty: text("specialty", design.specialty), clinic: text("clinic", design.clinicName),
+    address: text("address", design.address), phone: text("phone", design.phone), footer: text("footer", design.footer), color: design.color,
+  };
+}
+
+/** Reflow known header fields; retain any extra elements created in advanced mode. */
+export function arrangeSimpleHeader(design: PrescriptionDesign, fields: SimplePrescriptionHeader): PrescriptionDesign {
+  const item = (id: string, text: string, x: number, y: number, width: number, height: number, fontSize: number, align: DesignElement["align"] = "center"): DesignElement => ({ id, kind: "text", text, x, y, width, height, fontSize, align, font: /[\u0600-\u06ff]/.test(text) ? "Cairo" : "Arial", color: fields.color, bold: id.startsWith("name-") });
+  const elements = [item("name-fr", fields.nameFr, 8, 10, 43, 20, 4.5, "left"), item("name-ar", fields.nameAr, 97, 10, 43, 20, 4.5, "right")];
+  if (design.logo) elements.push({ ...item("logo", "", 56, 8, 36, 24, 4), kind: "logo" });
+  let y = 36;
+  for (const [id, text] of [["specialty", fields.specialty], ["clinic", fields.clinic], ["address", fields.address], ["phone", fields.phone]]) {
+    if (!text.trim()) continue;
+    const height = id === "address" ? 10 : 6;
+    elements.push(item(id, text, 8, y, 132, height, 3.4)); y += height + 2;
+  }
+  if (fields.footer.trim()) elements.push(item("footer", fields.footer, 8, 191, 132, 12, 3.2));
+  const managed = new Set(["doctor", "name-ar", "name-fr", "specialty", "clinic", "address", "phone", "footer", "logo"]);
+  const extras = (design.elements ?? []).filter(e => !managed.has(e.id) && e.kind !== "logo");
+  return { ...design, doctorName: fields.nameAr || fields.nameFr || design.doctorName, specialty: fields.specialty, clinicName: fields.clinic, address: fields.address, phone: fields.phone, footer: fields.footer, color: fields.color, logoPosition: "center", elements: [...elements, ...extras], writingArea: { top: Math.min(75, Math.max(45, y + 3)), bottom: 20, side: 10 } };
+}
+
 export interface PrescriptionDesign {
   version: 1;
   language: "ar" | "fr";

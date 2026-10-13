@@ -10,7 +10,7 @@ export function VisualPrescriptionDesigner({ value, doctor, saving, onSave, name
   const [design, setDesign] = useState<PrescriptionDesign>(() => {
     const base: PrescriptionDesign = value?.design ?? { version: 1, language: fr ? "fr" : "ar", doctorName: doctor ? `${doctor.firstName} ${doctor.lastName}` : "", specialty: (fr ? doctor?.specialty?.nameFr : doctor?.specialty?.nameAr) || "", clinicName: doctor?.clinic?.nameAr || "", address: doctor?.clinic?.address || doctor?.address || "", phone: doctor?.clinic?.phone || doctor?.phone || "", footer: "", color: "#187f77", layout: "split", logo: null, logoPosition: "left", headerSize: 18 };
     const next = { ...base, elements: initialDesignElements(base), writingArea: base.writingArea ?? { top: 60, bottom: 30, side: 12 } };
-    return arrangeSimpleHeader(next, readSimpleHeader(next, names));
+    return base.elements?.some(e => e.id === "name-ar" || e.id === "name-fr") ? next : arrangeSimpleHeader(next, readSimpleHeader(next, names));
   });
   const [advanced, setAdvanced] = useState(false);
   const [selected, setSelected] = useState<string | null>(design.elements?.[0]?.id ?? null);

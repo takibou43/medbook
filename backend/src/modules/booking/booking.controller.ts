@@ -7,6 +7,7 @@ import { assertPatientCanBook } from "../patientBlocks/patientBlocks.service";
 import { resolveBookableFamilyMember } from "../family/family.service";
 import { redactDoctorSecrets } from "../../lib/redact";
 import { assertNotOwnDoctor } from "../../lib/accountProfiles";
+import { assertBookingQuota } from "../../lib/bookingQuota";
 
 export const getSlots = asyncHandler(async (req: Request, res: Response) => {
   const slots = await service.getAggregatedSlots({
@@ -42,6 +43,8 @@ export const createGuestBooking = asyncHandler(async (req: Request, res: Respons
   const { familyMemberId, ...input } = req.body as import("./booking.schema").GuestBookingInput;
   // حساب الطبيب الذي فعّل ملف مريض لا يحجز لدى ملفه المهني.
   await assertNotOwnDoctor(req.user!.id, input.doctorId);
+  // سقوف مواعيد المريض (نشطة / لدى الطبيب نفسه / خلال 24 ساعة) — تمنع إغراق جدول المواعيد.
+  await assertBookingQuota(patientId, input.doctorId);
   // حجز لفرد من العائلة: الملكية تُفحص هنا (المعرّف + صاحب الجلسة + غير مؤرشف)، والاسم الذي يظهر للطبيب
   // في الطابور يؤخذ من قاعدة البيانات لا من الطلب. الهاتف يبقى هاتف صاحب الحساب (لا هاتف لكل فرد).
   let bookingInput = input;

@@ -21,11 +21,7 @@ vi.mock("../src/lib/bookingQuota", async (importOriginal) => ({
   assertBookingQuota: async () => undefined,
 }));
 
-vi.mock("../src/middleware/rateLimiter", async (importOriginal) => {
+vi.mock("../src/middleware/bookingLimiters", () => {
   const pass = (_req: unknown, _res: unknown, next: () => void) => next();
-  return {
-    ...(await importOriginal<typeof import("../src/middleware/rateLimiter")>()),
-    bookingCreateBurstLimiter: pass,
-    bookingCreateDailyLimiter: pass,
-  };
+  return { bookingCreateBurstLimiter: pass, bookingCreateDailyLimiter: pass };
 });

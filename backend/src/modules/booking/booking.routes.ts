@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { validate } from "../../middleware/validate";
-import { bookingLookupLimiter, bookingCreateBurstLimiter, bookingCreateDailyLimiter } from "../../middleware/rateLimiter";
+import { bookingLookupLimiter } from "../../middleware/rateLimiter";
+import { bookingCreateBurstLimiter, bookingCreateDailyLimiter } from "../../middleware/bookingLimiters";
 import {
   guestBookingSchema,
   guestSlotsQuerySchema,

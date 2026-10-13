@@ -10,13 +10,14 @@ vi.mock("@prisma/client", () => ({
 vi.mock("../src/lib/prisma", () => ({ prisma: { appointment: { count } } }));
 vi.mock("../src/lib/slots", () => ({ algeriaTodayUTCMidnight: () => new Date("2026-10-13T00:00:00Z") }));
 
-import {
+// setup.ts يحاكي bookingQuota للاختبارات القديمة؛ هنا نختبر المنطق الحقيقي.
+const {
   assertBookingQuota,
   MAX_ACTIVE_APPOINTMENTS_PER_PATIENT,
   MAX_ACTIVE_PER_PATIENT_PER_DOCTOR,
   MAX_CREATED_PER_PATIENT_PER_24H,
   MAX_CREATED_PER_PATIENT_PER_30D,
-} from "../src/lib/bookingQuota";
+} = await vi.importActual<typeof import("../src/lib/bookingQuota")>("../src/lib/bookingQuota");
 
 // الترتيب داخل assertBookingQuota: [نشطة كلها، نشطة لدى الطبيب، منشأة خلال 24 ساعة، منشأة خلال 30 يومًا]
 const setCounts = (a: number, d: number, c: number, m = 0) => {

@@ -1,8 +1,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderPrescriptionDesign, initialDesignElements, overlapsWritingArea, type PrescriptionDesign } from '../src/lib/prescriptionDesign.ts';
+import { arrangeSimpleHeader, readSimpleHeader, renderPrescriptionDesign, initialDesignElements, overlapsWritingArea, type PrescriptionDesign } from '../src/lib/prescriptionDesign.ts';
 
 const base: PrescriptionDesign = { version: 1, language: 'ar', doctorName: 'طبيب تجريبي', specialty: 'تخصص تجريبي', clinicName: 'عيادة تجريبية', address: 'عنوان تجريبي', phone: '0000000000', footer: 'تذييل تجريبي', color: '#187f77', layout: 'split', logo: null, logoPosition: 'left', headerSize: 18 };
+
+test('simple header keeps explicit names, centers the logo and reserves writing space without dropping custom text', () => {
+  const fields = { ...readSimpleHeader(base), nameAr: 'اسم تجريبي', nameFr: 'Test Doctor', color: '#112233' };
+  const extra = { ...initialDesignElements(base)[0], id: 'custom-note', y: 193, height: 9, text: 'Custom note' };
+  const result = arrangeSimpleHeader({ ...base, logo: 'fixture', elements: [extra] }, fields);
+  const elements = result.elements!;
+  assert.equal(elements.find(e => e.id === 'name-ar')?.align, 'right');
+  assert.equal(elements.find(e => e.id === 'name-fr')?.align, 'left');
+  const logo = elements.find(e => e.kind === 'logo')!;
+  assert.equal(logo.x + logo.width / 2, 74);
+  assert.ok(elements.every(e => !overlapsWritingArea(e, result.writingArea!)));
+  assert.deepEqual(elements.find(e => e.id === extra.id), extra);
+  assert.equal(readSimpleHeader(result).nameFr, 'Test Doctor');
+  assert.equal(readSimpleHeader({ ...base, doctorName: 'Test Doctor' }).nameAr, '');
+  const cleared = arrangeSimpleHeader(result, { ...fields, nameAr: '' });
+  assert.equal(readSimpleHeader(cleared, { ar: 'Saved old name' }).nameAr, '');
+  assert.deepEqual(arrangeSimpleHeader(result, fields), result);
+});
 
 test('blank designs reserve bounded writing space, preserve editable metadata and exclude patient data', async () => {
   const text: string[] = [];

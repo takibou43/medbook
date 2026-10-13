@@ -134,7 +134,7 @@ export function PrescriptionSettingsSection() {
               <p>{t("ورقة A5 عمودية ثابتة (148 × 210 مم) بهوامش 10 مم وخط واضح، واتجاه النص حسب لغة الوصفة. عند الطباعة اختر ورق A5 والحجم الفعلي 100% وألغِ الرؤوس والتذييلات.")}</p>
             </div>
 
-            <PrescriptionTemplateEditor key={uid} value={setup.template} onChange={setup.setTemplate} doctor={user?.doctor} />
+            <PrescriptionTemplateEditor key={uid} value={setup.template} onChange={setup.setTemplate} doctor={user?.doctor} names={{ ar: form.professional.ar?.doctorName, fr: form.professional.fr?.doctorName }} />
           </div>
 
           <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">

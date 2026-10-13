@@ -3,11 +3,13 @@ import { api } from "../../lib/api";
 import { readTemplateImage, type PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import type { Doctor } from "../../types";
-import { PrescriptionDesigner } from "./PrescriptionDesigner";
+import { VisualPrescriptionDesigner as PrescriptionDesigner } from "./VisualPrescriptionDesigner";
+import { Modal } from "../ui/Modal";
 
 export function PrescriptionTemplateEditor({ value, onChange, doctor }: { value: PrescriptionTemplate | null; onChange: (value: PrescriptionTemplate | null) => void; doctor?: Doctor | null }) {
   const fr = useLanguage() === "fr";
   const [editing, setEditing] = useState(false);
+  const [designerOpen, setDesignerOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -17,7 +19,7 @@ export function PrescriptionTemplateEditor({ value, onChange, doctor }: { value:
     try {
       if (remove) await api.delete("/doctor/prescription-template");
       else await api.put("/doctor/prescription-template", next);
-      onChange(remove ? null : next); setEditing(false);
+      onChange(remove ? null : next); setEditing(false); setDesignerOpen(false);
     } catch { setError(fr ? "Enregistrement impossible. Réessayez." : "تعذر حفظ القالب. أعد المحاولة."); }
     finally { setBusy(false); }
   }
@@ -26,10 +28,10 @@ export function PrescriptionTemplateEditor({ value, onChange, doctor }: { value:
     {value && <span className="mx-2 text-sm text-emerald-700">{fr ? "Enregistré dans votre compte" : "محفوظ في حسابك"}</span>}
     {editing && <div className="mt-3 space-y-3">
       <div className="flex flex-wrap gap-2" role="group" aria-label={fr ? "Source du modèle" : "طريقة إنشاء القالب"}>
-        <button type="button" disabled={busy} aria-pressed={mode === "design"} className={mode === "design" ? "btn-primary" : "btn-outline"} onClick={() => { setMode("design"); setError(""); }}>{fr ? "Créer / modifier mon design" : "إنشاء وتعديل تصميمي"}</button>
+        <button type="button" disabled={busy} aria-haspopup="dialog" className="btn-primary" onClick={() => { setMode("design"); setError(""); setDesignerOpen(true); }}>{fr ? "Créer / modifier mon design" : "إنشاء وتعديل تصميمي"}</button>
         <button type="button" disabled={busy} aria-pressed={mode === "image"} className={mode === "image" ? "btn-primary" : "btn-outline"} onClick={() => { setMode("image"); setError(""); }}>{fr ? "Importer une feuille vierge" : "رفع صورة وصفة فارغة"}</button>
       </div>
-      {mode === "design" ? <PrescriptionDesigner value={value} doctor={doctor} saving={busy} onSave={next => save(false, next)} /> : <>
+      {mode === "design" ? <p className="text-sm text-slate-600">{fr ? "Ouvrez le concepteur pour modifier votre ordonnance et ajouter votre logo." : "افتح نافذة التصميم لتعديل الوصفة وإضافة شعارك وتحديد موضعه وحجمه."}</p> : <>
       <p className="text-sm text-slate-600">{fr ? "Importez une ordonnance vierge, sans données de patient. Photo verticale de toute la feuille A5, puis réglez la zone d’écriture (mm)." : "ارفع صورة وصفة فارغة دون بيانات مرضى. صوّر ورقة A5 كاملة بشكل مستقيم، ثم اضبط مساحة الكتابة بالميليمتر."}</p>
       <input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} aria-label={fr ? "Image du modèle vierge" : "صورة قالب الوصفة الفارغة"} onChange={async e => {
         const file = e.target.files?.[0]; e.target.value = "";
@@ -53,5 +55,9 @@ export function PrescriptionTemplateEditor({ value, onChange, doctor }: { value:
       {value && <button type="button" disabled={busy} className="btn-outline mx-2" onClick={() => save(true)}>{fr ? "Supprimer le modèle" : "حذف القالب"}</button>}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     </div>}
+    <Modal wide open={designerOpen} onClose={() => { if (!busy) setDesignerOpen(false); }} title={fr ? "Créer / modifier mon ordonnance" : "إنشاء وتعديل تصميم الوصفة"}>
+      {designerOpen && <PrescriptionDesigner value={value} doctor={doctor} saving={busy} onSave={next => save(false, next)} />}
+      {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+    </Modal>
   </div>;
 }

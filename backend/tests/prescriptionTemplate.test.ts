@@ -6,6 +6,21 @@ const valid = { image, top: 40, bottom: 30, side: 12 };
 const logo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY9sAAAAASUVORK5CYII=";
 const design = { version: 1, language: "ar", doctorName: "اسم تجريبي", specialty: "", clinicName: "", address: "", phone: "", footer: "", color: "#187f77", layout: "split", logo, logoPosition: "left", headerSize: 18 };
 describe("editable blank prescription design", () => {
+  it("preserves free elements and rejects invalid geometry and unsupported styling", () => {
+    const element = { id: "doctor", kind: "text", text: "Dr Alger Mila", x: 20, y: 12, width: 100, height: 12, fontSize: 6, font: "Arial", color: "#187f77", bold: true, align: "center" };
+    const next = { ...design, elements: [element], writingArea: { top: 60, bottom: 30, side: 12 } };
+    expect(prescriptionDesignSchema.parse(next)).toEqual(next);
+    for (const patch of [{ x: 100 }, { y: 205 }, { width: -1 }, { font: "url(remote)" }, { color: "red" }, { text: "a".repeat(501) }]) {
+      expect(prescriptionDesignSchema.safeParse({ ...next, elements: [{ ...element, ...patch }] }).success).toBe(false);
+    }
+  });
+  it("preserves logo placement and rejects out-of-page or excessive sizing settings", () => {
+    const next = { ...design, logoPosition: "center", logoSize: 30, logoTop: 15 };
+    expect(prescriptionDesignSchema.parse(next)).toEqual(next);
+    for (const change of [{ logoSize: 41 }, { logoSize: 9 }, { logoTop: 21 }, { logoTop: 4 }, { logoPosition: "bottom" }]) {
+      expect(prescriptionDesignSchema.safeParse({ ...next, ...change }).success).toBe(false);
+    }
+  });
   it("accepts bounded settings alongside the printable image and preserves image-only compatibility", () => {
     expect(prescriptionTemplateSchema.parse({ ...valid, design }).design).toEqual(design);
     expect(prescriptionTemplateSchema.parse({ ...valid, design: null }).design).toBeNull();

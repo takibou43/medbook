@@ -19,8 +19,18 @@ export const prescriptionDesignSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   layout: z.enum(["centered", "split"]),
   logo: logoSchema.nullable(),
-  logoPosition: z.enum(["left", "right"]),
+  logoPosition: z.enum(["left", "right", "center"]),
+  logoSize: z.number().int().min(10).max(40).optional(),
+  logoTop: z.number().int().min(5).max(20).optional(),
   headerSize: z.number().int().min(14).max(22),
+  elements: z.array(z.object({
+    id: z.string().min(1).max(80), kind: z.enum(["text", "logo"]), text: z.string().max(500),
+    x: z.number().finite().min(0).max(148), y: z.number().finite().min(0).max(210),
+    width: z.number().finite().min(5).max(148), height: z.number().finite().min(5).max(210),
+    fontSize: z.number().finite().min(2).max(12), font: z.enum(["Cairo", "Arial", "Tahoma"]),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/), bold: z.boolean(), align: z.enum(["left", "center", "right"]),
+  }).strict().refine(e => e.x + e.width <= 148.01 && e.y + e.height <= 210.01, "Element outside A5 page")).max(30).optional(),
+  writingArea: z.object({ top: z.number().int().min(10).max(75), bottom: z.number().int().min(10).max(60), side: z.number().int().min(5).max(30) }).strict().optional(),
 }).strict();
 
 export const prescriptionTemplateSchema = z.object({

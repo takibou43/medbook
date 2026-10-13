@@ -1,5 +1,17 @@
 import type { PrescriptionTemplate } from "./prescriptionTemplate";
 
+export interface DesignElement {
+  id: string;
+  kind: "text" | "logo";
+  text: string;
+  x: number; y: number; width: number; height: number;
+  fontSize: number;
+  font: "Cairo" | "Arial" | "Tahoma";
+  color: string;
+  bold: boolean;
+  align: "left" | "center" | "right";
+}
+
 export interface PrescriptionDesign {
   version: 1;
   language: "ar" | "fr";
@@ -12,8 +24,59 @@ export interface PrescriptionDesign {
   color: string;
   layout: "centered" | "split";
   logo: string | null;
-  logoPosition: "left" | "right";
+  logoPosition: "left" | "right" | "center";
+  logoSize?: number;
+  logoTop?: number;
   headerSize: number;
+  elements?: DesignElement[];
+  writingArea?: { top: number; bottom: number; side: number };
+}
+
+export function initialDesignElements(design: PrescriptionDesign): DesignElement[] {
+  if (design.elements) return design.elements;
+  const make = (id: string, text: string, y: number, size = 4): DesignElement => ({ id, kind: "text", text, x: 42, y, width: 94, height: size * 1.5, fontSize: size, font: design.language === "ar" ? "Cairo" : "Arial", color: design.color, bold: id === "doctor", align: design.language === "ar" ? "right" : "left" });
+  return [make("doctor", design.doctorName, 10, 6), make("specialty", design.specialty, 21), make("clinic", design.clinicName, 30), make("address", design.address, 39), make("phone", design.phone, 48), { ...make("footer", design.footer, 191), x: 12, width: 124, align: "center" as const }, ...(design.logo ? [{ ...make("logo", "", 10), kind: "logo" as const, x: 12, width: 24, height: 24 }] : [])].filter(e => e.kind === "logo" || e.text.trim());
+}
+
+export function overlapsWritingArea(element: DesignElement, area: { top: number; bottom: number; side: number }): boolean {
+  return element.x < 148 - area.side && element.x + element.width > area.side && element.y < 210 - area.bottom && element.y + element.height > area.top;
+}
+
+async function renderFreeDesign(design: PrescriptionDesign): Promise<PrescriptionTemplate> {
+  await document.fonts.ready;
+  const canvas = document.createElement("canvas"); canvas.width = 1480; canvas.height = 2100;
+  const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("تعذر إنشاء القالب.");
+  ctx.scale(10, 10); ctx.fillStyle = "white"; ctx.fillRect(0, 0, 148, 210);
+  for (const e of design.elements ?? []) {
+    ctx.save(); ctx.beginPath(); ctx.rect(e.x, e.y, e.width, e.height); ctx.clip();
+    if (e.kind === "logo" && design.logo) {
+      const img = new Image(); img.src = design.logo; await img.decode();
+      const ratio = Math.min(e.width / img.width, e.height / img.height);
+      const w = img.width * ratio, h = img.height * ratio;
+      ctx.drawImage(img, e.x + (e.width - w) / 2, e.y + (e.height - h) / 2, w, h);
+    } else if (e.kind === "text") {
+      ctx.font = `${e.bold ? "bold " : ""}${e.fontSize}px "${e.font}", sans-serif`;
+      ctx.fillStyle = e.color; ctx.textAlign = e.align; ctx.textBaseline = "top";
+      ctx.direction = /[\u0600-\u06ff]/.test(e.text) ? "rtl" : "ltr";
+      const x = e.align === "center" ? e.x + e.width / 2 : e.align === "right" ? e.x + e.width : e.x;
+      let y = e.y;
+      for (const paragraph of e.text.split("\n")) {
+        let row = "";
+        for (const word of paragraph.split(/\s+/)) {
+          const next = row ? `${row} ${word}` : word;
+          if (ctx.measureText(word).width > e.width) throw new Error(design.language === "fr" ? "Élargissez le cadre du texte ou réduisez la police." : "وسّع مربع النص أو صغّر الخط حتى تظهر الكلمات كاملة.");
+          if (row && ctx.measureText(next).width > e.width) { ctx.fillText(row, x, y); y += e.fontSize * 1.5; row = word; }
+          else row = next;
+        }
+        if (y + e.fontSize > e.y + e.height + 0.01) throw new Error(design.language === "fr" ? "Agrandissez le cadre pour afficher tout le texte." : "كبّر مربع النص حتى يظهر النص كاملًا.");
+        ctx.fillText(row, x, y); y += e.fontSize * 1.5;
+      }
+    }
+    ctx.restore();
+  }
+  const image = canvas.toDataURL("image/jpeg", 0.9);
+  if (image.length > 1400000) throw new Error("حجم القالب كبير جدًا.");
+  return { image, ...(design.writingArea ?? { top: 60, bottom: 30, side: 12 }), design: { ...design } };
 }
 
 export async function readPrescriptionLogo(file: File): Promise<string> {
@@ -36,6 +99,7 @@ export async function readPrescriptionLogo(file: File): Promise<string> {
 
 /** Draws blank stationery only. Prescription content never enters this canvas or the saved design. */
 export async function renderPrescriptionDesign(design: PrescriptionDesign): Promise<PrescriptionTemplate> {
+  if (design.elements) return renderFreeDesign(design);
   if (!design.doctorName.trim()) throw new Error(design.language === "fr" ? "Saisissez le nom du médecin." : "أدخل اسم الطبيب.");
   await document.fonts.ready;
   const canvas = document.createElement("canvas"); canvas.width = 1480; canvas.height = 2100;
@@ -48,14 +112,15 @@ export async function renderPrescriptionDesign(design: PrescriptionDesign): Prom
   let start = 12, end = 136, y = 13;
   if (design.logo) {
     const img = new Image(); img.src = design.logo; await img.decode();
-    const logoSize = centered ? 18 : 24;
+    const logoSize = Math.min(40, Math.max(10, design.logoSize ?? (centered ? 18 : 24)));
+    const logoTop = Math.min(20, Math.max(5, design.logoTop ?? 10));
     const factor = Math.min(logoSize / img.width, logoSize / img.height);
     const w = img.width * factor, h = img.height * factor;
-    const x = centered ? (148 - w) / 2 : design.logoPosition === "left" ? 12 : 136 - w;
-    ctx.drawImage(img, x, 10, w, h);
-    if (centered) y = 10 + h + 5;
-    else if (design.logoPosition === "left") start = 42;
-    else end = 106;
+    const x = design.logoPosition === "center" ? (148 - w) / 2 : design.logoPosition === "left" ? 12 : 136 - w;
+    ctx.drawImage(img, x, logoTop, w, h);
+    if (centered || design.logoPosition === "center") y = logoTop + h + 5;
+    else if (design.logoPosition === "left") start = 12 + w + 6;
+    else end = 136 - w - 6;
   }
   const align: CanvasTextAlign = centered ? "center" : design.language === "ar" ? "right" : "left";
   const x = centered ? 74 : align === "right" ? end : start;
@@ -76,7 +141,7 @@ export async function renderPrescriptionDesign(design: PrescriptionDesign): Prom
   line(design.doctorName, design.headerSize / 3, true);
   ctx.fillStyle = "#1f2937";
   for (const text of [design.specialty, design.clinicName, design.address, design.phone]) line(text, 3.6);
-  if (!centered && design.logo) y = Math.max(y, 37);
+  if (design.logo) y = Math.max(y, (design.logoTop ?? 10) + (design.logoSize ?? (centered ? 18 : 24)) + 3);
   const top = Math.ceil(y + 7);
   if (top > 75) throw new Error(design.language === "fr" ? "L’en-tête est trop haut. Réduisez le texte, la taille ou choisissez la disposition latérale." : "الترويسة كبيرة. اختصر النص أو صغّر حجمه أو اختر التخطيط الجانبي.");
   ctx.strokeStyle = design.color; ctx.lineWidth = 0.5; ctx.beginPath(); ctx.moveTo(12, y); ctx.lineTo(136, y); ctx.stroke();

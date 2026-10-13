@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderPrescriptionDesign, type PrescriptionDesign } from '../src/lib/prescriptionDesign.ts';
+import { renderPrescriptionDesign, initialDesignElements, overlapsWritingArea, type PrescriptionDesign } from '../src/lib/prescriptionDesign.ts';
 
 const base: PrescriptionDesign = { version: 1, language: 'ar', doctorName: 'طبيب تجريبي', specialty: 'تخصص تجريبي', clinicName: 'عيادة تجريبية', address: 'عنوان تجريبي', phone: '0000000000', footer: 'تذييل تجريبي', color: '#187f77', layout: 'split', logo: null, logoPosition: 'left', headerSize: 18 };
 
 test('blank designs reserve bounded writing space, preserve editable metadata and exclude patient data', async () => {
   const text: string[] = [];
-  const context = { scale() {}, fillRect() {}, drawImage() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, measureText(value: string) { return { width: value.length * 1.6 }; }, fillText(value: string) { text.push(value); } };
+  const images: number[][] = [];
+  const context = { save() {}, restore() {}, rect() {}, clip() {}, scale() {}, fillRect() {}, drawImage(_image: unknown, ...bounds: number[]) { images.push(bounds); }, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, measureText(value: string) { return { width: value.length * 1.6 }; }, fillText(value: string) { text.push(value); } };
   const oldDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
   const oldImage = Object.getOwnPropertyDescriptor(globalThis, 'Image');
   Object.defineProperty(globalThis, 'document', { configurable: true, value: { fonts: { ready: Promise.resolve() }, createElement() { return { getContext() { return context; }, toDataURL() { return 'data:image/jpeg;base64,fixture'; } }; } } });
@@ -22,6 +23,23 @@ test('blank designs reserve bounded writing space, preserve editable metadata an
       assert.deepEqual(Object.keys(result).sort(), ['bottom', 'design', 'image', 'side', 'top']);
     }
     assert.ok(text.includes(base.doctorName));
+    const elements = initialDesignElements(base);
+    const custom = { ...designFixture(), elements: [...elements, { ...elements[0], id: 'logo-free', kind: 'logo' as const, x: 95, y: 185, width: 40, height: 20 }], writingArea: { top: 60, bottom: 30, side: 12 } };
+    function designFixture() { return { ...base, logo: 'fixture' }; }
+    const free = await renderPrescriptionDesign(custom);
+    assert.deepEqual(images.at(-1), [95, 185, 40, 20]);
+    assert.deepEqual(free.design, custom);
+    assert.equal(free.top, 60);
+    assert.equal(free.bottom, 30);
+    assert.equal(overlapsWritingArea(custom.elements.at(-1)!, custom.writingArea), false);
+    assert.equal(overlapsWritingArea({ ...elements[0], y: 80 }, custom.writingArea), true);
+    for (const logoPosition of ['left', 'center', 'right'] as const) {
+      const result = await renderPrescriptionDesign({ ...base, logo: 'fixture', logoPosition, logoSize: 30, logoTop: 15 });
+      assert.deepEqual(images.at(-1), [logoPosition === 'left' ? 12 : logoPosition === 'center' ? 59 : 106, 15, 30, 15]);
+      assert.ok(result.top > 45, 'writing area must remain below the logo');
+      assert.equal(result.design?.logoSize, 30);
+      assert.equal(result.design?.logoTop, 15);
+    }
     assert.ok(text.includes(base.footer));
     assert.ok(text.includes('توقيع الطبيب / الختم'));
     await assert.rejects(renderPrescriptionDesign({ ...base, doctorName: '' }), /اسم الطبيب/);

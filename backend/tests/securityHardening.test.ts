@@ -8,12 +8,12 @@ import { env } from "../src/config/env";
 describe("personName — يمنع حقن HTML في الأسماء", () => {
   const schema = personName();
   it("يقبل أسماء عربية ولاتينية عادية", () => {
-    for (const n of ["محمد", "عبد الرحمن", "Jean-Pierre", "O'Brien", "Amélie", "بن عيسى"]) {
+    for (const n of ["محمد", "عبد الرحمن", "Jean-Pierre", "O'Brien", "Amélie", "بن عيسى", "اختبار-1"]) {
       expect(schema.safeParse(n).success).toBe(true);
     }
   });
-  it("يرفض وسوم HTML وأرقامًا ورموزًا", () => {
-    for (const n of ["<img src=x onerror=alert(1)>", "a<b", "x\"y", "x&y", "Dr 7", "<script>"]) {
+  it("يرفض وسوم HTML ومحارف الحقن", () => {
+    for (const n of ["<img src=x onerror=alert(1)>", "a<b", "x\"y", "x&y", "<script>", "a`b"]) {
       expect(schema.safeParse(n).success).toBe(false);
     }
   });

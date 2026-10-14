@@ -25,7 +25,12 @@ test('simple header keeps explicit names, centers the logo and reserves writing 
   const bilingual = arrangeSimpleHeader(base, { ...fields, specialtyFr: 'Spécialité', clinicFr: 'Cabinet test', addressFr: 'Adresse test' });
   assert.equal(readSimpleHeader(bilingual).clinicFr, 'Cabinet test');
   assert.equal(readSimpleHeader(bilingual).addressFr, 'Adresse test');
-  assert.ok(bilingual.elements!.filter(e => e.id.endsWith('-fr')).every(e => e.x + e.width <= 56));
+  const contact = bilingual.elements!.filter(e => e.id.startsWith('address-') || e.id === 'phone');
+  assert.ok(contact.every(e => e.y >= 173), 'contact information belongs below the footer rule');
+  assert.ok(contact.every(e => e.x + e.width <= 68 || e.x >= 80), 'contacts must leave the small central QR clear');
+  assert.equal(bilingual.elements!.find(e => e.id === 'phone')?.text, fields.phone);
+  assert.ok(bilingual.writingArea!.top < 40, 'moving contacts down leaves a compact header');
+  assert.ok(bilingual.elements!.filter(e => e.id.endsWith('-fr') && !e.id.startsWith('address-')).every(e => e.x + e.width <= 56));
   assert.ok(bilingual.elements!.filter(e => e.id.endsWith('-ar')).every(e => e.x >= 92));
   assert.ok(bilingual.elements!.every(e => !overlapsWritingArea(e, bilingual.writingArea!)));
 });
@@ -69,7 +74,7 @@ test('blank designs reserve bounded writing space, preserve editable metadata an
     assert.ok(text.includes(base.footer));
     const branded = await renderPrescriptionDesign(arrangeSimpleHeader(base, readSimpleHeader(base)), { specialtyLogo: 'specialty-fixture', watermark: 'brand-fixture', bookingQr: 'booking-fixture' });
     assert.equal(branded.design?.logo, null, 'specialty fallback must not become a personal logo');
-    assert.deepEqual(images.at(-1), [62, 183, 24, 24]);
+    assert.deepEqual(images.at(-1), [68, 188, 12, 12]);
     assert.ok(images.some(bounds => bounds.join(',') === '46.5,77.5,55,55'));
     assert.ok(!text.includes('توقيع الطبيب / الختم'));
     assert.ok(!text.includes('Signature du médecin / Cachet'));

@@ -76,6 +76,13 @@ test('blank designs reserve bounded writing space, preserve editable metadata an
     assert.equal(branded.design?.logo, null, 'specialty fallback must not become a personal logo');
     assert.deepEqual(images.at(-1), [68, 188, 12, 12]);
     assert.ok(images.some(bounds => bounds.join(',') === '39,70,70,70'));
+    text.length = 0;
+    const footerFields = { ...readSimpleHeader(base), address: 'عنوان عربي للتذييل', addressFr: 'Adresse footer' };
+    await renderPrescriptionDesign(arrangeSimpleHeader({ ...base, source: 'generated', language: 'fr' }, footerFields), { bookingQr: 'booking-fixture' });
+    assert.deepEqual(images.at(-1), [68, 192, 12, 12]);
+    assert.ok(text.includes(footerFields.addressFr));
+    assert.ok(!text.includes(footerFields.address), 'one footer address follows the prescription language');
+
     assert.ok(!text.includes('توقيع الطبيب / الختم'));
     assert.ok(!text.includes('Signature du médecin / Cachet'));
     await assert.rejects(renderPrescriptionDesign({ ...base, doctorName: '' }), /اسم الطبيب/);
@@ -95,4 +102,14 @@ test('blank designs reserve bounded writing space, preserve editable metadata an
   assert.equal(canBalancePrescriptionDesign({ ...simple, source: 'image' }), false);
   assert.equal(canBalancePrescriptionDesign({ ...simple, elements: [...simple.elements!, { ...simple.elements![0], id: 'custom-note' }] }), false);
   assert.equal(canBalancePrescriptionDesign(null), false);
+});
+
+test('A5 contact fields share one bottom row and preserve both saved address languages', () => {
+  const fields = { ...readSimpleHeader(base), address: 'حي تجريبي', addressFr: 'Adresse test' };
+  const design = arrangeSimpleHeader({ ...base, source: 'generated', language: 'fr' }, fields);
+  const contact = design.elements!.filter(e => e.id === 'phone' || e.id.startsWith('address-'));
+  assert.ok(contact.every(e => e.y === 192 && e.height === 12));
+  assert.equal(readSimpleHeader(design).address, fields.address);
+  assert.equal(readSimpleHeader(design).addressFr, fields.addressFr);
+  assert.ok(contact.every(e => e.y + e.height <= 205));
 });

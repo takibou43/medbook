@@ -59,6 +59,8 @@ export function newRequestItem(): PrescriptionRequestItem {
 }
 export const requestFilled = (r: PrescriptionRequestItem) => r.name.trim() !== "" || r.note.trim() !== "";
 
+export type PrescriptionAgeUnit = "years" | "months" | "days";
+
 export interface PrescriptionDraft {
   labs?: PrescriptionRequestItem[];
   imaging?: PrescriptionRequestItem[];
@@ -69,6 +71,8 @@ export interface PrescriptionDraft {
   patient: PrescriptionPatient;
   /** الاسم المطبوع على الوصفة: يبدأ باسم المستفيد ويمكن للطبيب تعديله (للوصفة فقط، لا يغيّر بيانات المريض). */
   patientName: string;
+  patientAge?: string;
+  patientAgeUnit?: PrescriptionAgeUnit;
   medications: PrescriptionMedication[];
   notes: string;
   /** «current» = رُبطت تلقائيًا بالاستشارة الحالية، «manual» = اختارها الطبيب من موعد قائم. */
@@ -113,7 +117,7 @@ export function prescriptionPatientFrom(a: Appointment): PrescriptionPatient {
 }
 
 export function emptyDraft(ownerUserId: string, patient: PrescriptionPatient, source: "current" | "manual" = "manual"): PrescriptionDraft {
-  return { ownerUserId, patient, patientName: patient.bookedName, medications: [newMedication()], notes: "", source };
+  return { ownerUserId, patient, patientName: patient.bookedName, patientAge: "", patientAgeUnit: "years", medications: [newMedication()], notes: "", source };
 }
 
 /**
@@ -141,7 +145,7 @@ export function restoreMedication(list: PrescriptionMedication[], med: Prescript
 /** هل كتب الطبيب شيئًا يُفقد؟ (تعديل الاسم وحده لا يُعدّ محتوى طبيًا لكنه يُحتسب كتعديل). */
 export function draftHasContent(d: PrescriptionDraft | null | undefined): boolean {
   if (!d) return false;
-  return d.medications.some(filled) || (d.labs ?? []).some(requestFilled) || (d.imaging ?? []).some(requestFilled) || d.notes.trim() !== "" || d.patientName.trim() !== d.patient.bookedName.trim()
+  return d.medications.some(filled) || (d.labs ?? []).some(requestFilled) || (d.imaging ?? []).some(requestFilled) || d.notes.trim() !== "" || (d.patientAge ?? "").trim() !== "" || d.patientName.trim() !== d.patient.bookedName.trim()
     || Object.values(d.professional ?? {}).some(fields => Object.values(fields).some(value => Boolean(value?.trim())));
 }
 
@@ -160,6 +164,7 @@ export function validateDraft(d: PrescriptionDraft): DraftValidation {
   const errors: string[] = [];
   const medicationErrors: DraftValidation["medicationErrors"] = {};
   if (!d.patientName.trim()) errors.push("اكتب اسم المريض.");
+  if ((d.patientAge ?? "").trim() && prescriptionAgeValue(d.patientAge, d.patientAgeUnit) === null) errors.push("اكتب عمرًا صحيحًا للمريض أو اتركه فارغًا.");
   const rows = d.medications.filter(filled);
   const labs = (d.labs ?? []).filter(requestFilled).map(r => ({ ...r, name: r.name.trim(), note: r.note.trim() }));
   const imaging = (d.imaging ?? []).filter(requestFilled).map(r => ({ ...r, name: r.name.trim(), note: r.note.trim() }));
@@ -209,4 +214,13 @@ export function storeDraft(d: PrescriptionDraft | null): void {
 /** يُستدعى عند تسجيل الخروج: لا تبقى أي وصفة في ذاكرة الصفحة. */
 export function clearPrescriptionDraft(): void {
   currentDraft = null;
+}
+
+/** Age belongs to this prescription only; never infer it from the account holder. */
+export function prescriptionAgeValue(value: string | undefined, unit: PrescriptionAgeUnit = "years"): number | null {
+  const text = (value ?? "").trim().replace(",", ".");
+  if (!/^\d+(?:\.\d{1,2})?$/.test(text)) return null;
+  const age = Number(text);
+  const max = { years: 150, months: 1800, days: 55000 }[unit];
+  return Number.isFinite(age) && age >= 0 && age <= max ? age : null;
 }

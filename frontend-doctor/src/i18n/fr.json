@@ -1950,5 +1950,7 @@
   "هذا الوقت محجوز لمريض آخر؛ لن يتغير موعده، وستُسجَّل المتابعة بأولوية.": "Ce créneau est réservé à un autre patient ; son rendez-vous ne change pas et le suivi sera enregistré en priorité.",
   "حدّد التاريخ والساعة والدقيقة وسبب المتابعة. يجوز اختيار وقت محجوز: لا يتغير موعد أي مريض، وتأخذ المتابعة أولوية عند تساوي الوقت.": "Choisissez la date, l’heure, les minutes et le motif du suivi. Vous pouvez choisir un créneau déjà réservé : aucun rendez-vous patient n’est modifié et le suivi passe en priorité à heure égale.",
   "تحديد موعد المتابعة": "Définir le rendez-vous de suivi",
-  "لا يوجد موعد سابق لهذا المستفيد عندك، لذلك لا يمكن تحديد موعد متابعة من هنا بعد.": "Aucun rendez-vous antérieur pour ce bénéficiaire chez vous : impossible de définir un suivi d’ici pour l’instant."
+  "لا يوجد موعد سابق لهذا المستفيد عندك، لذلك لا يمكن تحديد موعد متابعة من هنا بعد.": "Aucun rendez-vous antérieur pour ce bénéficiaire chez vous : impossible de définir un suivi d’ici pour l’instant.",
+  "عمر المريض (اختياري)": "Âge du patient (facultatif)",
+  "اكتب عمرًا صحيحًا للمريض أو اتركه فارغًا.": "Saisissez un âge valide ou laissez le champ vide."
 }

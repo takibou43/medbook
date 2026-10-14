@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  clearPrescriptionDraft, draftHasContent, emptyDraft, getStoredDraft, newMedication, prescriptionPatientFrom, shouldAutoRebind, storeDraft, validateDraft, samePrescriptionVisit, prescriptionVisitLabel,
+  prescriptionAgeValue, clearPrescriptionDraft, draftHasContent, emptyDraft, getStoredDraft, newMedication, prescriptionPatientFrom, shouldAutoRebind, storeDraft, validateDraft, samePrescriptionVisit, prescriptionVisitLabel,
 } from "../src/lib/prescription.ts";
 import type { Appointment } from "../src/types/index.ts";
 
@@ -126,3 +126,24 @@ test("المخزن المؤقت: لا يُعرض لحساب آخر ويُمسح 
   assert.equal(getStoredDraft("u1")?.patient.familyMemberId, "fm1");
   clearPrescriptionDraft();
  });
+
+test('patient age is optional, validated, retained with the draft, and never auto-rebound to another patient', () => {
+  const draft = emptyDraft('doctor', prescriptionPatientFrom(selfAppt), 'current');
+  assert.equal(draft.patientAge, '');
+  assert.equal(prescriptionAgeValue('23'), 23);
+  assert.equal(prescriptionAgeValue('0'), 0);
+  assert.equal(prescriptionAgeValue('2,5'), 2.5);
+  assert.equal(prescriptionAgeValue('-1'), null);
+  assert.equal(prescriptionAgeValue('151'), null);
+  assert.equal(prescriptionAgeValue('six'), null);
+  assert.equal(prescriptionAgeValue('6', 'months'), 6);
+  const aged = { ...draft, patientAge: '23' };
+  assert.equal(draftHasContent(aged), true);
+  assert.equal(shouldAutoRebind(aged, 'different-visit'), false);
+  storeDraft(aged);
+  assert.equal(getStoredDraft('doctor')?.patientAge, '23');
+  assert.equal(getStoredDraft('another-doctor'), null);
+  assert.ok(validateDraft({ ...aged, patientAge: '-1' }).errors.includes('اكتب عمرًا صحيحًا للمريض أو اتركه فارغًا.'));
+  assert.equal(emptyDraft('doctor', prescriptionPatientFrom(guestAppt)).patientAge, '');
+  clearPrescriptionDraft();
+});

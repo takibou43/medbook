@@ -27,8 +27,8 @@ describe("doctor-owned blank prescription templates", () => {
     const design = { version: 1, language: "fr", doctorName: "Médecin Démonstration", specialty: "", clinicName: "", address: "", phone: "", footer: "", color: "#187f77", layout: "centered", logo: null, logoPosition: "right", headerSize: 18 };
     expect((await request(app).put(url).set("Authorization", auth("d1")).send({ ...value, design })).status).toBe(200);
     expect((await request(app).get(url).set("Authorization", auth("d1"))).body.data.design).toEqual(design);
-    await request(app).put(url).set("Authorization", auth("d1")).send({ ...value, design: { ...design, color: "#125678", doctorName: "Updated" } });
-    expect((await request(app).get(url).set("Authorization", auth("d1"))).body.data.design).toMatchObject({ color: "#125678", doctorName: "Updated" });
+    await request(app).put(url).set("Authorization", auth("d1")).send({ ...value, design: { ...design, color: "#125678", doctorName: "Updated", printMode: "preprinted", source: "generated" } });
+    expect((await request(app).get(url).set("Authorization", auth("d1"))).body.data.design).toMatchObject({ color: "#125678", doctorName: "Updated", printMode: "preprinted", source: "generated" });
     expect((await request(app).get(url).set("Authorization", auth("d2"))).body.data).toBeNull();
     await request(app).put(url).set("Authorization", auth("d1")).send(value);
     expect((await request(app).get(url).set("Authorization", auth("d1"))).body.data.design).toBeNull();

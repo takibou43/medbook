@@ -20,6 +20,14 @@ test('simple header keeps explicit names, centers the logo and reserves writing 
   const cleared = arrangeSimpleHeader(result, { ...fields, nameAr: '' });
   assert.equal(readSimpleHeader(cleared, { ar: 'Saved old name' }).nameAr, '');
   assert.deepEqual(arrangeSimpleHeader(result, fields), result);
+  const customLogo = { ...extra, id: 'custom-logo', kind: 'logo' as const };
+  assert.deepEqual(arrangeSimpleHeader({ ...base, elements: [customLogo] }, fields).elements?.find(e => e.id === 'custom-logo'), customLogo);
+  const bilingual = arrangeSimpleHeader(base, { ...fields, specialtyFr: 'Spécialité', clinicFr: 'Cabinet test', addressFr: 'Adresse test' });
+  assert.equal(readSimpleHeader(bilingual).clinicFr, 'Cabinet test');
+  assert.equal(readSimpleHeader(bilingual).addressFr, 'Adresse test');
+  assert.ok(bilingual.elements!.filter(e => e.id.endsWith('-fr')).every(e => e.x + e.width <= 56));
+  assert.ok(bilingual.elements!.filter(e => e.id.endsWith('-ar')).every(e => e.x >= 92));
+  assert.ok(bilingual.elements!.every(e => !overlapsWritingArea(e, bilingual.writingArea!)));
 });
 
 test('blank designs reserve bounded writing space, preserve editable metadata and exclude patient data', async () => {
@@ -59,7 +67,12 @@ test('blank designs reserve bounded writing space, preserve editable metadata an
       assert.equal(result.design?.logoTop, 15);
     }
     assert.ok(text.includes(base.footer));
-    assert.ok(text.includes('توقيع الطبيب / الختم'));
+    const branded = await renderPrescriptionDesign(arrangeSimpleHeader(base, readSimpleHeader(base)), { specialtyLogo: 'specialty-fixture', watermark: 'brand-fixture', bookingQr: 'booking-fixture' });
+    assert.equal(branded.design?.logo, null, 'specialty fallback must not become a personal logo');
+    assert.deepEqual(images.at(-1), [62, 183, 24, 24]);
+    assert.ok(images.some(bounds => bounds.join(',') === '46.5,77.5,55,55'));
+    assert.ok(!text.includes('توقيع الطبيب / الختم'));
+    assert.ok(!text.includes('Signature du médecin / Cachet'));
     await assert.rejects(renderPrescriptionDesign({ ...base, doctorName: '' }), /اسم الطبيب/);
     await assert.rejects(renderPrescriptionDesign({ ...base, doctorName: 'a'.repeat(300) }), /كلمة طويلة/);
     await assert.rejects(renderPrescriptionDesign({ ...base, footer: 'a'.repeat(300) }), /كلمة طويلة/);

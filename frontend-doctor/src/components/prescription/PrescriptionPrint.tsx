@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
@@ -9,6 +9,8 @@ import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 import { Logo } from "../ui/Logo";
+import { SpecialtyIcon } from "../../lib/specialtyIcons";
+import { bookingQrImage, doctorBookingUrl } from "../../lib/doctorBooking";
 import { medicationParts, glueNumberUnit } from "../../lib/prescriptionMedication";
 
 export interface PrescriptionSheetData {
@@ -44,12 +46,14 @@ function Typed({ children, className }: { children: string; className?: string }
 
 /**
  * ورقة الوصفة (A5) — نفس المكوّن ونفس البيانات في المعاينة والطباعة.
- * يُطبع فقط ما هو موجود فعلًا: لا شعار ولا عمر ولا رقم وصفة ولا QR ولا توقيع/ختم رقمي.
+ * رمز الحجز يحمل رابط الطبيب العام فقط، ولا يحمل بيانات المريض أو الوصفة.
  */
 export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const lang = data.language;
   const text = prescriptionLabels(lang);
   const d = data.doctor;
+  const bookingUrl = doctorBookingUrl(d?.id, import.meta.env?.VITE_MAIN_SITE_URL || undefined);
+  const bookingQr = useMemo(() => bookingUrl && !data.template ? bookingQrImage(bookingUrl) : null, [bookingUrl, data.template]);
   const clinic = d?.clinic ?? null;
   // الفرنسية: لا نعرض اسم المدينة العربي في السطر الفرنسي (لا ترجمة ولا اختلاق)؛ نستعمل nameFr إن وُجد.
   const placeOf = (side: PrescriptionLanguage) => [d?.city, d?.wilaya].map(item => side === "ar" ? item?.nameAr?.trim() : (item as { nameFr?: string | null } | null | undefined)?.nameFr?.trim()).filter(Boolean).join(side === "fr" ? ", " : "، ");
@@ -67,8 +71,8 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const ar = prescriptionLabels("ar");
   const specialtyFr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "fr") : "";
   const specialtyAr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "ar") : "";
-  const footerAr = [addressFor("ar"), placeOf("ar")].filter(Boolean).join(" — ");
-  const footerFr = [addressFor("fr"), placeOf("fr")].filter(Boolean).join(" — ");
+  const footerAr = placeOf("ar");
+  const footerFr = placeOf("fr");
   const body = (
     <>
       {standard && (
@@ -82,13 +86,15 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
           {doctorNameFr && <p className="rx-doctor"><bdi dir="ltr">{fr.doctor}</bdi> <Typed>{doctorNameFr}</Typed></p>}
           {specialtyFr && <p className="rx-specialty">{specialtyFr}</p>}
           {clinicNameFr && <p className="rx-clinic"><Typed>{clinicNameFr}</Typed></p>}
+          {addressFor("fr") && <p className="rx-line"><Typed>{addressFor("fr")}</Typed></p>}
           {phone && <p className="rx-line">Télé : <bdi dir="ltr" translate="no">{phone}</bdi></p>}
         </div>
-        <div className="rx-logo-slot">{data.logo && <img src={data.logo} alt="" />}</div>
+        <div className="rx-logo-slot">{data.logo ? <img src={data.logo} alt="" /> : <SpecialtyIcon specialty={d?.specialty ?? {}} className="rx-specialty-logo" />}</div>
         <div className="rx-side rx-side-ar" lang="ar" dir="rtl">
           {doctorNameAr && <p className="rx-doctor"><bdi dir="rtl">{ar.doctor}</bdi> <Typed>{doctorNameAr}</Typed></p>}
           {specialtyAr && <p className="rx-specialty">{specialtyAr}</p>}
           {clinicNameAr && <p className="rx-clinic"><Typed>{clinicNameAr}</Typed></p>}
+          {addressFor("ar") && <p className="rx-line"><Typed>{addressFor("ar")}</Typed></p>}
           {phone && <p className="rx-line">الهاتف : <bdi dir="ltr" translate="no">{phone}</bdi></p>}
         </div>
       </header>}
@@ -161,6 +167,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         {footerAr && <p lang="ar" dir="rtl"><Typed>{footerAr}</Typed></p>}
         {footerFr && <p lang="fr" dir="ltr"><Typed>{footerFr}</Typed></p>}
       </div>}
+      {standard && bookingQr && <a className="rx-booking-qr" href={bookingUrl!} aria-label={lang === "fr" ? "Réserver un rendez-vous" : "حجز موعد لدى الطبيب"}><img src={bookingQr} alt="QR" /></a>}
     </>
   );
   const articleProps = { className: `rx-sheet${standard ? " rx-standard" : ""}`, dir: lang === "fr" ? "ltr" : "rtl", lang, "aria-label": text.sheet } as const;
@@ -276,6 +283,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
     <div className="rx-print-root fixed inset-0 z-50 flex flex-col bg-slate-800/80">
       {!template && <style>{`@page { size: A5 portrait; margin: 0; }`}</style>}
       {template && <style>{`@page { size: A5 portrait; margin: 0; } @media print { .rx-paper.rx-custom-paper { padding: ${template.top}mm ${template.side}mm ${template.bottom}mm !important; } }`}</style>}
+      {template?.design?.printMode === "preprinted" && <style>{`@media print { .rx-print-root .rx-template-image { display: none !important; } }`}</style>}
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="flex min-h-0 flex-1 flex-col outline-none">
         {/* شريط الأدوات خارج الورقة وثابت أعلى المعاينة */}
         <div className="rx-no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:px-5">

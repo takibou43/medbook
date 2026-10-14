@@ -9,6 +9,8 @@ const logoSchema = z.string().max(400000).regex(/^data:image\/png;base64,[A-Za-z
 
 export const prescriptionDesignSchema = z.object({
   version: z.literal(1),
+  source: z.enum(["image", "generated"]).optional(),
+  printMode: z.enum(["blank", "preprinted"]).optional(),
   language: z.enum(["ar", "fr"]),
   doctorName: z.string().trim().min(1).max(120),
   specialty: z.string().max(120),

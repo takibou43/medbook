@@ -5,6 +5,8 @@ import { useLanguage } from "../../i18n/LanguageRoot";
 import type { Doctor } from "../../types";
 import { VisualPrescriptionDesigner as PrescriptionDesigner } from "./VisualPrescriptionDesigner";
 import { Modal } from "../ui/Modal";
+import { PrescriptionPreview } from "./PrescriptionPrint";
+import type { PrescriptionDesign } from "../../lib/prescriptionDesign";
 
 export function PrescriptionTemplateEditor({ value, onChange, doctor, names }: { value: PrescriptionTemplate | null; onChange: (value: PrescriptionTemplate | null) => void; doctor?: Doctor | null; names?: { ar?: string; fr?: string } }) {
   const fr = useLanguage() === "fr";
@@ -13,7 +15,13 @@ export function PrescriptionTemplateEditor({ value, onChange, doctor, names }: {
   const [draft, setDraft] = useState(value);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<"image" | "design">(value?.design ? "design" : "image");
+  const [testOpen, setTestOpen] = useState(false);
+  const [mode, setMode] = useState<"image" | "design">(value?.design && value.design.source !== "image" ? "design" : "image");
+  function printMode(next: "blank" | "preprinted") {
+    if (!draft) return;
+    const design: PrescriptionDesign = draft.design ?? { version: 1, source: "image", language: fr ? "fr" : "ar", doctorName: "قالب مرفوع", specialty: "", clinicName: "", address: "", phone: "", footer: "", color: "#187f77", layout: "centered", logo: null, logoPosition: "center", headerSize: 18 };
+    setDraft({ ...draft, design: { ...design, printMode: next } });
+  }
   async function save(remove = false, next = draft) {
     setBusy(true); setError("");
     try {
@@ -24,14 +32,14 @@ export function PrescriptionTemplateEditor({ value, onChange, doctor, names }: {
     finally { setBusy(false); }
   }
   return <div className="my-3 rounded-xl border border-slate-200 p-3">
-    <button type="button" disabled={busy} className="btn-outline" onClick={() => { setDraft(value); setMode(value?.design ? "design" : "image"); setError(""); setEditing(!editing); }}>{fr ? "Modèle personnel A5" : "قالب الوصفة الشخصي A5"}</button>
+    <button type="button" disabled={busy} className="btn-outline" onClick={() => { setDraft(value); setMode(value?.design && value.design.source !== "image" ? "design" : "image"); setError(""); setEditing(!editing); }}>{fr ? "Mon modèle A5" : "قالب الطبيب A5"}</button>
     {value && <span className="mx-2 text-sm text-emerald-700">{fr ? "Enregistré dans votre compte" : "محفوظ في حسابك"}</span>}
     {editing && <div className="mt-3 space-y-3">
       <div className="flex flex-wrap gap-2" role="group" aria-label={fr ? "Source du modèle" : "طريقة إنشاء القالب"}>
         <button type="button" disabled={busy} aria-haspopup="dialog" className="btn-primary" onClick={() => { setMode("design"); setError(""); setDesignerOpen(true); }}>{fr ? "Créer / modifier mon design" : "إنشاء وتعديل تصميمي"}</button>
         <button type="button" disabled={busy} aria-pressed={mode === "image"} className={mode === "image" ? "btn-primary" : "btn-outline"} onClick={() => { setMode("image"); setError(""); }}>{fr ? "Importer une feuille vierge" : "رفع صورة وصفة فارغة"}</button>
       </div>
-      {mode === "design" ? <p className="text-sm text-slate-600">{fr ? "Ouvrez le concepteur pour modifier votre ordonnance et ajouter votre logo." : "افتح نافذة التصميم لتعديل الوصفة وإضافة شعارك وتحديد موضعه وحجمه."}</p> : <>
+      {mode === "design" ? <p className="text-sm text-slate-600">{fr ? "Renseignez vos informations. Mise en page automatique." : "أدخل بياناتك والشعار؛ نرتب القالب تلقائيًا."}</p> : <>
       <p className="text-sm text-slate-600">{fr ? "Importez une ordonnance vierge, sans données de patient. Photo verticale de toute la feuille A5, puis réglez la zone d’écriture (mm)." : "ارفع صورة وصفة فارغة دون بيانات مرضى. صوّر ورقة A5 كاملة بشكل مستقيم، ثم اضبط مساحة الكتابة بالميليمتر."}</p>
       <input type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} aria-label={fr ? "Image du modèle vierge" : "صورة قالب الوصفة الفارغة"} onChange={async e => {
         const file = e.target.files?.[0]; e.target.value = "";
@@ -42,22 +50,26 @@ export function PrescriptionTemplateEditor({ value, onChange, doctor, names }: {
         finally { setBusy(false); }
       }} />
       {draft && <>
-        <div className="flex flex-wrap gap-3">{(["top", "bottom", "side"] as const).map(key => <label key={key} className="text-sm">{({ top: fr ? "Marge haute" : "الهامش العلوي", bottom: fr ? "Marge basse" : "الهامش السفلي", side: fr ? "Marges latérales" : "الهوامش الجانبية" })[key]}
+        <label className="block text-sm">{fr ? "Imprimer sur" : "الطباعة على"}<select disabled={busy} className="input mt-1 w-full" value={draft.design?.printMode ?? "blank"} onChange={e => printMode(e.target.value as "blank" | "preprinted")}><option value="blank">{fr ? "Papier blanc — fond et contenu" : "ورق أبيض — الخلفية والمحتوى"}</option><option value="preprinted">{fr ? "Papier préimprimé — contenu seul" : "ورق مطبوع مسبقًا — المحتوى فقط"}</option></select></label>
+        <details><summary className="cursor-pointer text-sm">{fr ? "Calibrage d’impression" : "ضبط الطباعة عند الحاجة"}</summary><div className="mt-2 flex flex-wrap gap-3">{(["top", "bottom", "side"] as const).map(key => <label key={key} className="text-sm">{({ top: fr ? "Marge haute" : "الهامش العلوي", bottom: fr ? "Marge basse" : "الهامش السفلي", side: fr ? "Marges latérales" : "الهوامش الجانبية" })[key]}
           <input type="range" className="block" min={key === "side" ? 5 : 10} max={key === "top" ? 75 : key === "bottom" ? 60 : 30} value={draft[key]} disabled={busy} onChange={e => setDraft({ ...draft, [key]: Number(e.target.value) })} /><span dir="ltr">{draft[key]} mm</span>
-        </label>)}</div>
+        </label>)}</div></details>
         <div className="relative mx-auto border bg-white" style={{ width: 222, height: 315 }}>
           <img src={draft.image} alt="" className="absolute inset-0 h-full w-full" />
           <div className="absolute border-2 border-dashed border-teal-600 bg-white/30 text-center text-xs text-teal-900" style={{ top: draft.top * 1.5, bottom: draft.bottom * 1.5, left: draft.side * 1.5, right: draft.side * 1.5 }}>{fr ? "Zone d’écriture" : "مساحة الكتابة"}</div>
         </div>
-        <button type="button" disabled={busy} className="btn-primary" onClick={() => save()}>{busy ? (fr ? "Enregistrement…" : "جارٍ الحفظ…") : (fr ? "Enregistrer le modèle" : "حفظ القالب")}</button>
+        <button type="button" disabled={busy} className="btn-outline" onClick={() => setTestOpen(true)}>{fr ? "Impression test" : "طباعة اختبار"}</button>
+        <button type="button" disabled={busy} className="btn-primary mx-2" onClick={() => save()}>{busy ? (fr ? "Enregistrement…" : "جارٍ الحفظ…") : (fr ? "Enregistrer le modèle" : "حفظ القالب")}</button>
       </>}
+      <button type="button" disabled={busy} className="btn-outline" onClick={() => { setDraft(value); setEditing(false); }}>{fr ? "Annuler" : "إلغاء"}</button>
       </>}
       {value && <button type="button" disabled={busy} className="btn-outline mx-2" onClick={() => save(true)}>{fr ? "Supprimer le modèle" : "حذف القالب"}</button>}
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     </div>}
     <Modal wide open={designerOpen} onClose={() => { if (!busy) setDesignerOpen(false); }} title={fr ? "Créer / modifier mon ordonnance" : "إنشاء وتعديل تصميم الوصفة"}>
-      {designerOpen && <PrescriptionDesigner value={value} doctor={doctor} names={names} saving={busy} onSave={next => save(false, next)} />}
+      {designerOpen && <PrescriptionDesigner value={value} doctor={doctor} names={names} saving={busy} onSave={next => save(false, next)} onCancel={() => setDesignerOpen(false)} />}
       {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
     </Modal>
+    <PrescriptionPreview open={testOpen} onClose={() => setTestOpen(false)} data={draft ? { template: draft, doctor, language: fr ? "fr" : "ar", patientName: fr ? "Patient test" : "مريض تجريبي", day: "2026-10-14", medications: [], notes: fr ? "Texte de test. Aucune donnée patient." : "نص تجريبي لاختبار موضع الكتابة، دون بيانات مرضى." } : null} />
   </div>;
 }

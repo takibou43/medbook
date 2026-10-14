@@ -13,39 +13,42 @@ export interface DesignElement {
 }
 
 export interface SimplePrescriptionHeader {
-  nameAr: string; nameFr: string; specialty: string; clinic: string; address: string; phone: string; footer: string; color: string;
+  nameAr: string; nameFr: string; specialty: string; specialtyFr: string; clinic: string; clinicFr: string; address: string; addressFr: string; phone: string; footer: string; color: string;
 }
 
 export function readSimpleHeader(design: PrescriptionDesign, names?: { ar?: string; fr?: string }): SimplePrescriptionHeader {
   const text = (id: string, fallback = "") => design.elements?.find(e => e.id === id)?.text ?? fallback;
   const oldName = text("doctor", design.doctorName);
+  const sideText = (id: string, original: string, ar: boolean) => text(`${id}-${ar ? "ar" : "fr"}`, /[\u0600-\u06ff]/.test(text(id, original)) === ar ? text(id, original) : "");
   return {
     nameAr: text("name-ar", names?.ar ?? (/[\u0600-\u06ff]/.test(oldName) ? oldName : "")),
     nameFr: text("name-fr", names?.fr ?? (!/[\u0600-\u06ff]/.test(oldName) ? oldName : "")),
-    specialty: text("specialty", design.specialty), clinic: text("clinic", design.clinicName),
-    address: text("address", design.address), phone: text("phone", design.phone), footer: text("footer", design.footer), color: design.color,
+    specialty: sideText("specialty", design.specialty, true), specialtyFr: sideText("specialty", design.specialty, false),
+    clinic: sideText("clinic", design.clinicName, true), clinicFr: sideText("clinic", design.clinicName, false),
+    address: sideText("address", design.address, true), addressFr: sideText("address", design.address, false), phone: text("phone", design.phone), footer: text("footer", design.footer), color: design.color,
   };
 }
 
 /** Reflow known header fields; retain any extra elements created in advanced mode. */
 export function arrangeSimpleHeader(design: PrescriptionDesign, fields: SimplePrescriptionHeader): PrescriptionDesign {
   const item = (id: string, text: string, x: number, y: number, width: number, height: number, fontSize: number, align: DesignElement["align"] = "center"): DesignElement => ({ id, kind: "text", text, x, y, width, height, fontSize, align, font: /[\u0600-\u06ff]/.test(text) ? "Cairo" : "Arial", color: fields.color, bold: id.startsWith("name-") });
-  const elements = [item("name-fr", fields.nameFr, 8, 10, 43, 20, 4.5, "left"), item("name-ar", fields.nameAr, 97, 10, 43, 20, 4.5, "right")];
-  if (design.logo) elements.push({ ...item("logo", "", 56, 8, 36, 24, 4), kind: "logo" });
-  let y = 36;
-  for (const [id, text] of [["specialty", fields.specialty], ["clinic", fields.clinic], ["address", fields.address], ["phone", fields.phone]]) {
-    if (!text.trim()) continue;
-    const height = id === "address" ? 10 : 6;
-    elements.push(item(id, text, 8, y, 132, height, 3.4)); y += height + 2;
+  const elements = [item("name-fr", fields.nameFr, 8, 8, 48, 11, 4.3, "left"), item("name-ar", fields.nameAr, 92, 8, 48, 11, 4.3, "right"), { ...item("logo", "", 63, 8, 22, 22, 4), kind: "logo" as const }];
+  let y = 20;
+  for (const [id, ar, fr, height] of [["specialty", fields.specialty, fields.specialtyFr, 6], ["clinic", fields.clinic, fields.clinicFr, 6], ["address", fields.address, fields.addressFr, 10], ["phone", fields.phone, fields.phone, 5]] as const) {
+    if (!ar.trim() && !fr.trim()) continue;
+    elements.push(item(id + "-fr", fr, 8, y, 48, height, 3.2, "left"), item(id + "-ar", ar, 92, y, 48, height, 3.2, "right"));
+    y += height + 1;
   }
-  if (fields.footer.trim()) elements.push(item("footer", fields.footer, 8, 191, 132, 12, 3.2));
-  const managed = new Set(["doctor", "name-ar", "name-fr", "specialty", "clinic", "address", "phone", "footer", "logo"]);
-  const extras = (design.elements ?? []).filter(e => !managed.has(e.id) && e.kind !== "logo");
-  return { ...design, doctorName: fields.nameAr || fields.nameFr || design.doctorName, specialty: fields.specialty, clinicName: fields.clinic, address: fields.address, phone: fields.phone, footer: fields.footer, color: fields.color, logoPosition: "center", elements: [...elements, ...extras], writingArea: { top: Math.min(75, Math.max(45, y + 3)), bottom: 20, side: 10 } };
+  if (fields.footer.trim()) elements.push(item("footer", fields.footer, 8, 173, 132, 10, 3.2));
+  const managed = new Set(["doctor", "name-ar", "name-fr", "specialty", "clinic", "address", "phone", "footer", "logo", ...["specialty", "clinic", "address", "phone"].flatMap(id => [id + "-ar", id + "-fr"])]);
+  const extras = (design.elements ?? []).filter(e => !managed.has(e.id));
+  return { ...design, doctorName: fields.nameAr || fields.nameFr || design.doctorName, specialty: fields.specialty || fields.specialtyFr, clinicName: fields.clinic || fields.clinicFr, address: fields.address || fields.addressFr, phone: fields.phone, footer: fields.footer, color: fields.color, logoPosition: "center", elements: [...elements, ...extras], writingArea: { top: Math.min(75, Math.max(34, y + 2)), bottom: fields.footer.trim() ? 40 : 30, side: 10 } };
 }
 
 export interface PrescriptionDesign {
   version: 1;
+  source?: "image" | "generated";
+  printMode?: "blank" | "preprinted";
   language: "ar" | "fr";
   doctorName: string;
   specialty: string;
@@ -74,38 +77,63 @@ export function overlapsWritingArea(element: DesignElement, area: { top: number;
   return element.x < 148 - area.side && element.x + element.width > area.side && element.y < 210 - area.bottom && element.y + element.height > area.top;
 }
 
-async function renderFreeDesign(design: PrescriptionDesign): Promise<PrescriptionTemplate> {
+export interface PrescriptionBranding { specialtyLogo?: string; watermark?: string; bookingQr?: string }
+
+async function drawBrandImage(ctx: CanvasRenderingContext2D, src: string | undefined, x: number, y: number, size: number, opacity = 1) {
+  if (!src) return;
+  const img = new Image(); img.src = src; await img.decode();
+  ctx.save(); ctx.globalAlpha = opacity; ctx.drawImage(img, x, y, size, size); ctx.restore();
+}
+
+async function renderFreeDesign(design: PrescriptionDesign, branding: PrescriptionBranding): Promise<PrescriptionTemplate> {
   await document.fonts.ready;
   const canvas = document.createElement("canvas"); canvas.width = 1480; canvas.height = 2100;
-  const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("تعذر إنشاء القالب.");
+  const context = canvas.getContext("2d"); if (!context) throw new Error("تعذر إنشاء القالب.");
+  const ctx = context;
   ctx.scale(10, 10); ctx.fillStyle = "white"; ctx.fillRect(0, 0, 148, 210);
+  await drawBrandImage(ctx, branding.watermark, 46.5, 77.5, 55, 0.045);
+  const logo = design.logo || branding.specialtyLogo;
   for (const e of design.elements ?? []) {
     ctx.save(); ctx.beginPath(); ctx.rect(e.x, e.y, e.width, e.height); ctx.clip();
-    if (e.kind === "logo" && design.logo) {
-      const img = new Image(); img.src = design.logo; await img.decode();
+    if (e.kind === "logo" && logo) {
+      const img = new Image(); img.src = logo; await img.decode();
       const ratio = Math.min(e.width / img.width, e.height / img.height);
       const w = img.width * ratio, h = img.height * ratio;
       ctx.drawImage(img, e.x + (e.width - w) / 2, e.y + (e.height - h) / 2, w, h);
     } else if (e.kind === "text") {
-      ctx.font = `${e.bold ? "bold " : ""}${e.fontSize}px "${e.font}", sans-serif`;
       ctx.fillStyle = e.color; ctx.textAlign = e.align; ctx.textBaseline = "top";
       ctx.direction = /[\u0600-\u06ff]/.test(e.text) ? "rtl" : "ltr";
       const x = e.align === "center" ? e.x + e.width / 2 : e.align === "right" ? e.x + e.width : e.x;
-      let y = e.y;
-      for (const paragraph of e.text.split("\n")) {
-        let row = "";
-        for (const word of paragraph.split(/\s+/)) {
-          const next = row ? `${row} ${word}` : word;
-          if (ctx.measureText(word).width > e.width) throw new Error(design.language === "fr" ? "Élargissez le cadre du texte ou réduisez la police." : "وسّع مربع النص أو صغّر الخط حتى تظهر الكلمات كاملة.");
-          if (row && ctx.measureText(next).width > e.width) { ctx.fillText(row, x, y); y += e.fontSize * 1.5; row = word; }
-          else row = next;
+      let size = e.fontSize, rows: string[] = [];
+      function wrap(): string[] {
+        const result: string[] = [];
+        for (const paragraph of e.text.split("\n")) {
+          let row = "";
+          for (const word of paragraph.split(/\s+/)) {
+            if (ctx.measureText(word).width > e.width) {
+              if (row) { result.push(row); row = ""; }
+              for (const char of word) { if (row && ctx.measureText(row + char).width > e.width) { result.push(row); row = ""; } row += char; }
+            } else {
+              const next = row ? row + " " + word : word;
+              if (row && ctx.measureText(next).width > e.width) { result.push(row); row = word; } else row = next;
+            }
+          }
+          result.push(row);
         }
-        if (y + e.fontSize > e.y + e.height + 0.01) throw new Error(design.language === "fr" ? "Agrandissez le cadre pour afficher tout le texte." : "كبّر مربع النص حتى يظهر النص كاملًا.");
-        ctx.fillText(row, x, y); y += e.fontSize * 1.5;
+        return result;
       }
+      while (true) {
+        ctx.font = `${e.bold ? "bold " : ""}${size}px "${e.font}", sans-serif`;
+        rows = wrap();
+        if ((rows.length - 1) * size * 1.5 + size <= e.height + 0.01) break;
+        if (size <= 2.01) throw new Error(design.language === "fr" ? "Raccourcissez les informations de ce champ." : "اختصر معلومات هذا الحقل لتظهر كاملة.");
+        size = Math.max(2, size - 0.2);
+      }
+      rows.forEach((row, i) => ctx.fillText(row, x, e.y + i * size * 1.5));
     }
     ctx.restore();
   }
+  await drawBrandImage(ctx, branding.bookingQr, 62, 183, 24);
   const image = canvas.toDataURL("image/jpeg", 0.9);
   if (image.length > 1400000) throw new Error("حجم القالب كبير جدًا.");
   return { image, ...(design.writingArea ?? { top: 60, bottom: 30, side: 12 }), design: { ...design } };
@@ -130,14 +158,15 @@ export async function readPrescriptionLogo(file: File): Promise<string> {
 }
 
 /** Draws blank stationery only. Prescription content never enters this canvas or the saved design. */
-export async function renderPrescriptionDesign(design: PrescriptionDesign): Promise<PrescriptionTemplate> {
-  if (design.elements) return renderFreeDesign(design);
+export async function renderPrescriptionDesign(design: PrescriptionDesign, branding: PrescriptionBranding = {}): Promise<PrescriptionTemplate> {
+  if (design.elements) return renderFreeDesign(design, branding);
   if (!design.doctorName.trim()) throw new Error(design.language === "fr" ? "Saisissez le nom du médecin." : "أدخل اسم الطبيب.");
   await document.fonts.ready;
   const canvas = document.createElement("canvas"); canvas.width = 1480; canvas.height = 2100;
   const context = canvas.getContext("2d"); if (!context) throw new Error("تعذر إنشاء القالب.");
   const ctx = context;
   ctx.scale(10, 10); ctx.fillStyle = "white"; ctx.fillRect(0, 0, 148, 210);
+  await drawBrandImage(ctx, branding.watermark, 46.5, 77.5, 55, 0.045);
   ctx.direction = design.language === "ar" ? "rtl" : "ltr";
   const font = design.language === "ar" ? '"Cairo", Tahoma, sans-serif' : 'Arial, sans-serif';
   const centered = design.layout === "centered";
@@ -186,10 +215,10 @@ export async function renderPrescriptionDesign(design: PrescriptionDesign): Prom
   }
   if (row) rows.push(row);
   if (rows.length > 3) throw new Error(design.language === "fr" ? "Limitez le pied de page à trois lignes." : "اختصر التذييل ليظهر في ثلاثة أسطر كحد أقصى.");
-  const bottom = 23 + rows.length * 5;
-  ctx.fillText(design.language === "fr" ? "Signature du médecin / Cachet" : "توقيع الطبيب / الختم", 74, 210 - bottom + 4);
+  const bottom = 10 + rows.length * 5;
   ctx.strokeStyle = design.color; ctx.lineWidth = 0.3; ctx.beginPath(); ctx.moveTo(12, 197 - rows.length * 5); ctx.lineTo(136, 197 - rows.length * 5); ctx.stroke();
   rows.forEach((text, i) => ctx.fillText(text, 74, 202 - (rows.length - i - 1) * 5));
+  await drawBrandImage(ctx, branding.bookingQr, 62, 183, 24);
   const image = canvas.toDataURL("image/jpeg", 0.9);
   if (image.length > 1400000) throw new Error("حجم القالب كبير جدًا.");
   return { image, top, bottom, side: 12, design: { ...design } };

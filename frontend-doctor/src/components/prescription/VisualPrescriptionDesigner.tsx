@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Doctor } from "../../types";
 import { useLanguage } from "../../i18n/LanguageRoot";
-import { arrangeSimpleHeader, readSimpleHeader, overlapsWritingArea, readPrescriptionLogo, renderPrescriptionDesign, type PrescriptionDesign, type SimplePrescriptionHeader } from "../../lib/prescriptionDesign";
+import { arrangeSimpleHeader, canBalancePrescriptionDesign, readSimpleHeader, overlapsWritingArea, readPrescriptionLogo, renderPrescriptionDesign, type PrescriptionDesign, type SimplePrescriptionHeader } from "../../lib/prescriptionDesign";
 import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 import { PrescriptionPreview } from "./PrescriptionPrint";
 import { prescriptionBranding } from "./prescriptionBranding";
@@ -11,12 +11,16 @@ export function VisualPrescriptionDesigner({ value, doctor, saving, onSave, onCa
   const t = (ar: string, french: string) => fr ? french : ar;
   const branding = useMemo(() => prescriptionBranding(doctor), [doctor]);
   const [design, setDesign] = useState<PrescriptionDesign>(() => {
-    if (value?.design && value.design.source !== "image") return value.design;
+    if (value?.design && value.design.source !== "image") {
+      // Reflow generated stationery in the editor; saving remains an explicit action.
+      return canBalancePrescriptionDesign(value.design)
+        ? arrangeSimpleHeader(value.design, readSimpleHeader(value.design, names)) : value.design;
+    }
     const base: PrescriptionDesign = { version: 1, source: "generated", printMode: value?.design?.printMode ?? "blank", language: fr ? "fr" : "ar", doctorName: doctor ? `${doctor.firstName} ${doctor.lastName}` : "", specialty: (fr ? doctor?.specialty?.nameFr : doctor?.specialty?.nameAr) || "", clinicName: doctor?.clinic?.nameAr || "", address: doctor?.clinic?.address || doctor?.address || "", phone: doctor?.clinic?.phone || doctor?.phone || "", footer: "", color: "#187f77", layout: "split", logo: null, logoPosition: "center", headerSize: 18 };
     return arrangeSimpleHeader(base, { ...readSimpleHeader(base, names), specialty: doctor?.specialty?.nameAr || "", specialtyFr: doctor?.specialty?.nameFr || "" });
   });
   const [preview, setPreview] = useState<PrescriptionTemplate | null>(value?.design?.source !== "image" ? value : null);
-  const [changed, setChanged] = useState(!value?.design || value.design.source === "image");
+  const [changed, setChanged] = useState(!value?.design || value.design.source === "image" || JSON.stringify(design) !== JSON.stringify(value.design));
   const [rendering, setRendering] = useState(true), [uploading, setUploading] = useState(false), [error, setError] = useState("");
   const [testOpen, setTestOpen] = useState(false);
   const simple = readSimpleHeader(design, names);

@@ -11,6 +11,8 @@ import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 import { Logo } from "../ui/Logo";
 import { SpecialtyIcon } from "../../lib/specialtyIcons";
 import { bookingQrImage, doctorBookingUrl } from "../../lib/doctorBooking";
+import { arrangeSimpleHeader, canBalancePrescriptionDesign, readSimpleHeader, renderPrescriptionDesign } from "../../lib/prescriptionDesign";
+import { prescriptionBranding } from "./prescriptionBranding";
 import { medicationParts, glueNumberUnit } from "../../lib/prescriptionMedication";
 
 export interface PrescriptionSheetData {
@@ -106,7 +108,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </div>
       </dl>
 
-      {standard && <h1 className="rx-title">{text.title}</h1>}
+      <h1 className="rx-title">{text.title}</h1>
 
       {data.medications.length > 0 && <ol className="rx-meds" aria-label={text.medications}>
         {data.medications.map((m, i) => {
@@ -206,18 +208,39 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
   const [useTemplate, setUseTemplate] = useState(true);
   const [imageReady, setImageReady] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const template = useTemplate ? data?.template : null;
+  const sourceTemplate = data?.template ?? null;
+  const autoBalance = canBalancePrescriptionDesign(sourceTemplate?.design);
+  const [balanced, setBalanced] = useState<{ source: PrescriptionTemplate; value: PrescriptionTemplate } | null>(null);
+  const [balanceError, setBalanceError] = useState("");
+  const templatePreparing = Boolean(open && useTemplate && autoBalance && balanced?.source !== sourceTemplate);
+  const template = useTemplate ? (balanced?.source === sourceTemplate ? balanced?.value : sourceTemplate) : null;
+  useEffect(() => {
+    if (!open || !sourceTemplate || !autoBalance || !sourceTemplate.design) return;
+    let alive = true;
+    setBalanceError("");
+    const design = arrangeSimpleHeader(sourceTemplate.design, readSimpleHeader(sourceTemplate.design));
+    renderPrescriptionDesign(design, prescriptionBranding(data?.doctor)).then(value => {
+      if (alive) setBalanced({ source: sourceTemplate, value });
+    }).catch(() => {
+      // Keep the saved image available if local rendering fails, without changing server data.
+      if (alive) {
+        setBalanced({ source: sourceTemplate, value: sourceTemplate });
+        setBalanceError(data?.language === "fr" ? "Le modèle enregistré est conservé : la nouvelle mise en page n’a pas pu être préparée." : "تعذر تجهيز التنسيق الجديد؛ تم الاحتفاظ بالقالب المحفوظ.");
+      }
+    });
+    return () => { alive = false; };
+  }, [open, sourceTemplate, autoBalance, data?.doctor, data?.language]);
   const templateOverflow = Boolean(template && paperHeight > 210 * 96 / 25.4 + 2);
   const scale = zoom ?? fit;
   // Browser keyboard/menu printing must also preserve every medication when the custom sheet cannot fit.
   useEffect(() => {
     if (!open) return;
     const beforePrint = () => {
-      if (template && (templateOverflow || !imageReady || imageError)) flushSync(() => setUseTemplate(false));
+      if (template && (templatePreparing || templateOverflow || !imageReady || imageError)) flushSync(() => setUseTemplate(false));
     };
     window.addEventListener("beforeprint", beforePrint);
     return () => window.removeEventListener("beforeprint", beforePrint);
-  }, [open, template, templateOverflow, imageReady, imageError]);
+  }, [open, template, templatePreparing, templateOverflow, imageReady, imageError]);
 
   const measure = useCallback(() => {
     const stage = stageRef.current;
@@ -264,11 +287,12 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
 
   useEffect(() => {
     if (!open) return;
-    setUseTemplate(true);
     const img = paperRef.current?.querySelector("img");
     setImageReady(Boolean(img?.complete && img.naturalWidth));
     setImageError(false);
-  }, [open, data?.template?.image]);
+  }, [open, template?.image]);
+
+  useEffect(() => { if (open) setUseTemplate(true); }, [open, sourceTemplate?.image]);
 
   if (!open || !data) return null;
 
@@ -288,6 +312,8 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
         <div className="rx-no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:px-5">
           {data.template && <label className="text-sm"><input type="checkbox" checked={useTemplate} onChange={e => setUseTemplate(e.target.checked)} /> {data.language === "fr" ? "Utiliser mon modèle" : "استخدام قالبي المحفوظ"}</label>}
           {templateOverflow && <p role="alert" className="w-full text-sm text-red-700">{data.language === "fr" ? "Le contenu dépasse la zone du modèle. Désactivez le modèle pour imprimer toutes les pages sans couper le texte." : "المحتوى يتجاوز مساحة القالب. ألغِ استخدام القالب لطباعة الوصفة كاملة على عدة صفحات دون قص النص."}</p>}
+          {templatePreparing && <p role="status" className="text-sm">{data.language === "fr" ? "Préparation de la mise en page…" : "جارٍ تجهيز تنسيق الوصفة…"}</p>}
+          {balanceError && <p role="alert" className="text-sm text-amber-800">{balanceError}</p>}
           {imageError && <p role="alert" className="text-red-700">{data.language === "fr" ? "Image illisible. Désactivez le modèle." : "تعذر عرض الصورة. ألغِ استخدام القالب."}</p>}
           <div className="min-w-0 max-sm:sr-only">
             <h2 id={titleId} className="text-base font-bold text-slate-900">{t("معاينة الوصفة")}</h2>
@@ -309,7 +335,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
             <button type="button" onClick={onClose} className="btn-outline whitespace-nowrap px-2 text-xs sm:px-3 sm:text-sm">
               <X className="h-4 w-4" aria-hidden="true" /> {t("رجوع للتعديل")}
             </button>
-            <button type="button" disabled={templateOverflow || Boolean(template && (!imageReady || imageError))} onClick={() => window.print()} className="btn-primary whitespace-nowrap px-2 text-xs sm:px-3 sm:text-sm">
+            <button type="button" disabled={templatePreparing || templateOverflow || Boolean(template && (!imageReady || imageError))} onClick={() => window.print()} className="btn-primary whitespace-nowrap px-2 text-xs sm:px-3 sm:text-sm">
               <Printer className="h-4 w-4" aria-hidden="true" /> {t("طباعة")}
             </button>
           </div>

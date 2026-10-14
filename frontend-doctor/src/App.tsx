@@ -52,6 +52,7 @@ const AdminMessages = lazy(() => import("./pages/admin/AdminMessages"));
 const DoctorMessages = lazy(() => import("./pages/doctor/DoctorMessages"));
 const DoctorTreatmentPlans = lazy(() => import("./pages/doctor/DoctorTreatmentPlans"));
 const AdminReferrals = lazy(() => import("./pages/admin/AdminReferrals"));
+const KeyboardCheck = lazy(() => import("./pages/KeyboardCheck"));
 const AccountSettings = lazy(() => import("./pages/AccountSettings"));
 const ClinicRegister = lazy(() => import("./pages/clinic/ClinicRegister"));
 const ClinicManagement = lazy(() => import("./pages/clinic/ClinicManagement"));
@@ -190,6 +191,7 @@ export default function App() {
           <Route element={<ProtectedRoute allow={["DOCTOR"]} />}>
             <Route path="/overview" element={<DoctorOverview />} />
             <Route path="/settings" element={<DoctorSettingsHub />} />
+            <Route path="/keyboard-check" element={<KeyboardCheck />} />
             <Route path="/subscription" element={<DoctorSubscription />} />
             <Route path="/messages" element={<DoctorMessages />} />
             <Route path="/schedule" element={<DoctorSchedule />} />

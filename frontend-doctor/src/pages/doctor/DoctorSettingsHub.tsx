@@ -84,6 +84,7 @@ export default function DoctorSettingsHub() {
           </li>
         ))}
       </ul>
+      <Link to="/keyboard-check" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary-700 underline">فحص لوحة المفاتيح</Link>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { prescriptionLabels, prescriptionDate, prescriptionCatalogName, professionalText } from '../src/lib/prescriptionPrint.ts';
+import { prescriptionPlace, prescriptionNumericDate, prescriptionLabels, prescriptionDate, prescriptionCatalogName, professionalText } from '../src/lib/prescriptionPrint.ts';
 import { emptyDraft, draftHasContent, newMedication } from '../src/lib/prescription.ts';
 
 test('French print labels and calendar date are explicit; invalid days are rejected', () => {
@@ -72,4 +72,13 @@ test2("العنوان: يعاد استعمال منطق الجهة نفسه", ()
   assert2.equal(clinicHeaderName("12 Rue Didouche, Mila", "حي النصر", "fr"), "12 Rue Didouche, Mila");
   assert2.equal(clinicHeaderName("", "حي النصر", "fr"), "");
   assert2.equal(clinicHeaderName("حي النصر، ميلة", "Cité 5 Juillet", "ar"), "حي النصر، ميلة");
+});
+
+test('prescription date names the actual doctor municipality without substituting the wilaya', () => {
+  const city = { nameAr: 'وادي العثمانية', nameFr: 'Oued Athmania' };
+  assert.equal(prescriptionPlace(city, 'fr'), 'Oued Athmania');
+  assert.equal(prescriptionPlace(city, 'ar'), 'وادي العثمانية');
+  assert.equal(prescriptionPlace(null, 'fr'), '');
+  assert.equal(prescriptionNumericDate('2026-10-14'), '14/10/2026');
+  assert.equal(prescriptionNumericDate('2026-02-30'), '');
 });

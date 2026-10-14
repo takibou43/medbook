@@ -2,9 +2,9 @@ import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useR
 import { createPortal, flushSync } from "react-dom";
 import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
-import type { PrescriptionMedication, PrescriptionRequestItem } from "../../lib/prescription";
+import { prescriptionAgeValue, type PrescriptionAgeUnit, type PrescriptionMedication, type PrescriptionRequestItem } from "../../lib/prescription";
 import { DEFAULT_PRESCRIPTION_SETTINGS, type PrescriptionShow } from "../../lib/prescriptionSettings";
-import { prescriptionLabels, prescriptionDate, prescriptionCatalogName, doctorHeaderName, clinicHeaderName, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
+import { prescriptionLabels, prescriptionNumericDate, prescriptionPlace, prescriptionCatalogName, doctorHeaderName, clinicHeaderName, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
@@ -28,6 +28,8 @@ export interface PrescriptionSheetData {
   doctor: Doctor | null | undefined;
   /** اسم المستفيد الفعلي كما كتبه/أكّده الطبيب (لا يُطبع صاحب الحساب ولا صلة القرابة). */
   patientName: string;
+  patientAge?: string;
+  patientAgeUnit?: PrescriptionAgeUnit;
   /** YYYY-MM-DD بتوقيت الجزائر. */
   day: string;
   medications: PrescriptionMedication[];
@@ -52,13 +54,15 @@ function Typed({ children, className }: { children: string; className?: string }
  */
 export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const lang = data.language;
+  const age = prescriptionAgeValue(data.patientAge, data.patientAgeUnit);
+  const ageUnit = (lang === "fr" ? { years: "ans", months: "mois", days: "jours" } : { years: "سنة", months: "شهر", days: "يوم" })[data.patientAgeUnit ?? "years"];
   const text = prescriptionLabels(lang);
   const d = data.doctor;
+  const municipality = prescriptionPlace(d?.city, lang);
   const bookingUrl = doctorBookingUrl(d?.id, import.meta.env?.VITE_MAIN_SITE_URL || undefined);
   const bookingQr = useMemo(() => bookingUrl && !data.template ? bookingQrImage(bookingUrl) : null, [bookingUrl, data.template]);
   const clinic = d?.clinic ?? null;
   // الفرنسية: لا نعرض اسم المدينة العربي في السطر الفرنسي (لا ترجمة ولا اختلاق)؛ نستعمل nameFr إن وُجد.
-  const placeOf = (side: PrescriptionLanguage) => [d?.city, d?.wilaya].map(item => side === "ar" ? item?.nameAr?.trim() : (item as { nameFr?: string | null } | null | undefined)?.nameFr?.trim()).filter(Boolean).join(side === "fr" ? ", " : "، ");
   const show = data.show ?? DEFAULT_PRESCRIPTION_SETTINGS.show;
   const originalAddress = clinic?.address || d?.address;
   const addressFor = (side: PrescriptionLanguage) => show.address ? clinicHeaderName(data.addresses?.[side], originalAddress, side) : "";
@@ -73,8 +77,11 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const ar = prescriptionLabels("ar");
   const specialtyFr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "fr") : "";
   const specialtyAr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "ar") : "";
-  const footerAr = placeOf("ar");
-  const footerFr = placeOf("fr");
+  const addressLine = (side: PrescriptionLanguage) => {
+    const parts = [addressFor(side), ...[d?.city, d?.wilaya].map(item => side === "ar" ? item?.nameAr?.trim() : (item as { nameFr?: string | null } | null | undefined)?.nameFr?.trim())].filter((part): part is string => Boolean(part));
+    return parts.reduce<string[]>((result, part) => result.some(existing => existing.toLocaleLowerCase().includes(part.toLocaleLowerCase())) ? result : [...result, part], []).join(side === "fr" ? ", " : "، ");
+  };
+  const footerAddress = addressLine(lang) || addressLine(lang === "fr" ? "ar" : "fr");
   const body = (
     <>
       {standard && (
@@ -98,14 +105,15 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
       </header>}
 
       <dl className="rx-meta">
-        <div>
-          <dt>{text.date}</dt>
-          <dd>{prescriptionDate(data.day, lang)}</dd>
+        <div className="rx-meta-date">
+          <dt>{municipality ? `${municipality}${lang === "fr" ? ", le :" : "، في:"}` : text.date}</dt>
+          <dd><bdi dir="ltr">{prescriptionNumericDate(data.day)}</bdi></dd>
         </div>
-        <div>
+        <div className="rx-meta-patient">
           <dt>{text.patient}</dt>
           <dd className="rx-patient"><Typed>{data.patientName}</Typed></dd>
         </div>
+        {age !== null && <div className="rx-meta-age"><dt>{text.age} :</dt><dd><bdi dir="ltr">{age}</bdi> {ageUnit}</dd></div>}
       </dl>
 
       <h1 className="rx-title">{text.title}</h1>
@@ -161,12 +169,11 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </section>
       )}
 
-      {standard && (bookingQr || phone || addressFor("ar") || addressFor("fr") || footerAr || footerFr) && <footer className="rx-foot" dir="ltr">
+      {standard && (bookingQr || phone || footerAddress) && <footer className="rx-foot" dir="ltr">
         <p className="rx-foot-phone"><bdi dir="ltr" translate="no">{phone}</bdi></p>
         {bookingQr ? <a className="rx-booking-qr" href={bookingUrl!} aria-label={lang === "fr" ? "Réserver un rendez-vous" : "حجز موعد لدى الطبيب"}><img src={bookingQr} alt="QR" /></a> : <span />}
         <div className="rx-foot-address">
-          {(addressFor("fr") || footerFr) && <p lang="fr" dir="ltr"><Typed>{[addressFor("fr"), footerFr].filter(Boolean).join(", ")}</Typed></p>}
-          {(addressFor("ar") || footerAr) && <p lang="ar" dir="rtl"><Typed>{[addressFor("ar"), footerAr].filter(Boolean).join("، ")}</Typed></p>}
+          {footerAddress && <p dir="auto"><Typed>{footerAddress}</Typed></p>}
         </div>
       </footer>}
     </>
@@ -218,7 +225,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
     if (!open || !sourceTemplate || !autoBalance || !sourceTemplate.design) return;
     let alive = true;
     setBalanceError("");
-    const design = arrangeSimpleHeader(sourceTemplate.design, readSimpleHeader(sourceTemplate.design));
+    const design = arrangeSimpleHeader({ ...sourceTemplate.design, language: data?.language ?? sourceTemplate.design.language }, readSimpleHeader(sourceTemplate.design));
     renderPrescriptionDesign(design, prescriptionBranding(data?.doctor)).then(value => {
       if (alive) setBalanced({ source: sourceTemplate, value });
     }).catch(() => {

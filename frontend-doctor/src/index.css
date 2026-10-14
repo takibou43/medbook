@@ -155,7 +155,7 @@ body {
 .rx-paper {
   width: 148mm;
   min-height: 210mm;
-  padding: 10mm;
+  padding: 10mm 10mm 6mm;
   background: #fff;
   transform-origin: top right;
   box-shadow: 0 6px 24px rgba(2, 6, 23, 0.35); /* ظل الورقة في المعاينة فقط (يُلغى في الطباعة) */
@@ -181,7 +181,7 @@ body {
 .rx-frame { width: 100%; border-collapse: collapse; border-spacing: 0; }
 .rx-frame td { padding: 0; }
 .rx-pad { height: 0; } /* على الشاشة الحشو في .rx-paper؛ في الطباعة يصير 10mm ويتكرر في كل صفحة */
-.rx-inner { position: relative; display: flex; flex-direction: column; min-height: 190mm; }
+.rx-inner { position: relative; display: flex; flex-direction: column; min-height: 194mm; }
 .rx-inner > * { position: relative; z-index: 1; }
 .rx-inner > .rx-watermark { position: absolute; z-index: 0; inset-inline: 0; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 3mm; opacity: 0.12; pointer-events: none; }
 .rx-watermark-mark { width: 70mm; height: 70mm; }
@@ -190,10 +190,10 @@ body {
 .rx-side { min-width: 0; display: flex; flex-direction: column; gap: 0.6mm; }
 .rx-side-fr { font-family: Calibri, Carlito, Arial, sans-serif; text-align: left; }
 .rx-side-ar { font-family: "Cairo", Tahoma, sans-serif; text-align: right; }
-.rx-head-std .rx-doctor { font-size: 12.5pt; font-weight: 700; color: var(--rx-blue); }
-.rx-head-std .rx-specialty { color: #303030; font-size: 10.5pt; }
-.rx-head-std .rx-clinic, .rx-head-std .rx-line { font-size: 10pt; color: #303030; }
-.rx-logo-slot { height: 28mm; display: flex; justify-content: center; align-items: flex-start; }
+.rx-head-std .rx-doctor { font-size: 14pt; font-weight: 700; color: var(--rx-blue); }
+.rx-head-std .rx-specialty { color: #303030; font-size: 14pt; }
+.rx-head-std .rx-clinic, .rx-head-std .rx-line { font-size: 14pt; color: #303030; }
+.rx-logo-slot { height: 24mm; display: flex; justify-content: center; align-items: flex-start; }
 .rx-logo-slot img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .rx-specialty-logo { width: 25mm; height: 25mm; color: #737373; }
 .rx-head-std { direction: ltr; }
@@ -204,7 +204,7 @@ body {
 .rx-standard .rx-meds { flex: 0; }
 .rx-standard .rx-index { border: 0; color: #303030; }
 .rx-foot p { margin: 0; }
-.rx-foot { margin-top: auto !important; padding-top: 2mm; border-top: 0.25mm solid var(--rx-blue); display: grid; grid-template-columns: minmax(0, 1fr) 12mm minmax(0, 1fr); align-items: center; gap: 3mm; font-size: 9pt; line-height: 1.5; color: #303030; break-inside: avoid; }
+.rx-foot { margin-top: auto !important; padding-top: 2mm; border-top: 0.25mm solid var(--rx-blue); display: grid; grid-template-columns: minmax(0, 1fr) 12mm minmax(0, 1fr); align-items: center; gap: 3mm; font-size: 14pt; line-height: 1.4; color: #303030; break-inside: avoid; }
 .rx-foot-phone { min-width: 0; overflow-wrap: anywhere; text-align: left; }
 .rx-foot-address { min-width: 0; text-align: right; }
 .rx-id { min-width: 0; }
@@ -213,11 +213,13 @@ body {
 .rx-clinic { font-size: 10.5pt; color: #374151; }
 .rx-contact { flex: 0 1 48mm; min-width: 0; font-size: 9.5pt; line-height: 1.55; color: #374151; text-align: end; }
 .rx-title { margin: 4mm 0 3mm; text-align: center; font-size: 14pt; font-weight: 700; letter-spacing: 0.02em; color: #111827; }
-.rx-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2mm 10mm; padding-bottom: 3mm; margin-bottom: 2mm; border-bottom: 0.2mm solid #d1d5db; }
+.rx-meta { display: grid; grid-template-columns: minmax(0, 1fr) auto; direction: ltr; gap: 2mm 4mm; padding-bottom: 3mm; margin-bottom: 2mm; border-bottom: 0.2mm solid #d1d5db; }
 .rx-meta > div { display: flex; align-items: baseline; gap: 2.5mm; min-width: 0; }
-.rx-meta dt { flex-shrink: 0; white-space: nowrap; font-size: 9.5pt; color: #6b7280; font-weight: 600; }
-.rx-meta dd { margin: 0; font-weight: 600; }
-.rx-patient { font-size: 12.5pt; font-weight: 800 !important; }
+.rx-meta dt { flex-shrink: 0; white-space: nowrap; font-size: 14pt; color: #303030; font-weight: 600; }
+.rx-meta dd { margin: 0; font-size: 14pt; font-weight: 600; min-width: 0; }
+.rx-meta-date { grid-column: 1 / -1; justify-self: end; }
+.rx-meta-age { justify-self: end; white-space: nowrap; }
+.rx-patient { font-size: 14pt; font-weight: 800 !important; }
 .rx-meds { list-style: none; margin: 0; padding: 0; }
 .rx-med { display: grid; grid-template-columns: 6mm minmax(0, 1fr); column-gap: 3mm; align-items: start; padding: 2.4mm 0; border-bottom: 0.2mm solid #e5e7eb; break-inside: avoid; page-break-inside: avoid; }
 .rx-med:last-child { border-bottom: 0; }
@@ -269,8 +271,9 @@ body {
   .rx-print-root [role="dialog"], .rx-stage { display: block !important; overflow: visible !important; padding: 0 !important; }
   .rx-print-root .rx-no-print { display: none !important; }
   .rx-scaler { width: auto !important; height: auto !important; margin: 0 !important; }
-  .rx-inner { min-height: 186mm; }
+  .rx-inner { min-height: 194mm; }
   .rx-pad { height: 10mm; }
+  .rx-frame tfoot .rx-pad { height: 2mm; }
   .rx-paper { transform: none !important; width: auto !important; min-height: 0 !important; padding: 0 !important; box-shadow: none !important; }
   /* هامش الصفحة صفر (انظر @page في PrescriptionPrint): الهوامش الجانبية هنا والعلوية/السفلية في صفّي .rx-pad */
   .rx-paper:not(.rx-custom-paper) { padding: 0 10mm !important; }

@@ -148,6 +148,8 @@ export function PrescriptionCard({
       labs: v.labs,
       imaging: v.imaging,
       patientName: draft.patientName.trim(),
+      patientAge: draft.patientAge,
+      patientAgeUnit: draft.patientAgeUnit,
       day: algeriaToday(),
       medications: v.printable,
       notes: draft.notes,
@@ -276,6 +278,10 @@ export function PrescriptionCard({
                 aria-describedby={errors.length && !draft.patientName.trim() ? formId + '-patient-error' : undefined}
               />
               {errors.length > 0 && !draft.patientName.trim() && <span id={formId + '-patient-error'} className="block text-sm text-red-700">{t("اكتب اسم المريض.")}</span>}
+            </label>
+            <label className="mt-2 block max-w-40">
+              <span className="mb-1 block text-xs font-medium text-slate-600">{t("عمر المريض (اختياري)")}</span>
+              <input className="input py-2" type="number" min="0" step="1" max="150" placeholder="23" value={draft.patientAge ?? ""} onChange={e => patch({ patientAge: e.target.value, patientAgeUnit: "years" })} autoComplete="off" />
             </label>
             {nameEdited && (
               <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">

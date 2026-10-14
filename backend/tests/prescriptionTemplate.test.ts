@@ -6,6 +6,15 @@ const valid = { image, top: 40, bottom: 30, side: 12 };
 const logo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY9sAAAAASUVORK5CYII=";
 const design = { version: 1, language: "ar", doctorName: "اسم تجريبي", specialty: "", clinicName: "", address: "", phone: "", footer: "", color: "#187f77", layout: "split", logo, logoPosition: "left", headerSize: 18 };
 describe("editable blank prescription design", () => {
+  it("round-trips both print modes for uploaded and generated templates without allowing patient metadata", () => {
+    for (const printMode of ["blank", "preprinted"]) for (const source of ["image", "generated"]) {
+      const next = { ...valid, design: { ...design, printMode, source } };
+      expect(prescriptionTemplateSchema.parse(next)).toEqual(next);
+    }
+    expect(prescriptionDesignSchema.safeParse({ ...design, printMode: "other" }).success).toBe(false);
+    expect(prescriptionDesignSchema.safeParse({ ...design, source: "remote" }).success).toBe(false);
+    expect(prescriptionDesignSchema.safeParse({ ...design, printMode: "blank", patientId: "patient" }).success).toBe(false);
+  });
   it("preserves free elements and rejects invalid geometry and unsupported styling", () => {
     const element = { id: "doctor", kind: "text", text: "Dr Alger Mila", x: 20, y: 12, width: 100, height: 12, fontSize: 6, font: "Arial", color: "#187f77", bold: true, align: "center" };
     const next = { ...design, elements: [element], writingArea: { top: 60, bottom: 30, side: 12 } };

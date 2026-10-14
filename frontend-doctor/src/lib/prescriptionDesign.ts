@@ -29,24 +29,33 @@ export function readSimpleHeader(design: PrescriptionDesign, names?: { ar?: stri
   };
 }
 
+const SIMPLE_HEADER_IDS = new Set(["doctor", "name-ar", "name-fr", "specialty", "clinic", "address", "phone", "footer", "logo", ...["specialty", "clinic", "address", "phone"].flatMap(id => [id + "-ar", id + "-fr"])]);
+
+/** Only automatic stationery on blank paper can be reflowed without moving a custom element or preprinted content. */
+export function canBalancePrescriptionDesign(design?: PrescriptionDesign | null): boolean {
+  if (design?.source !== "generated" || design.printMode === "preprinted" || !design.elements) return false;
+  const managed = SIMPLE_HEADER_IDS;
+  return design.elements.some(e => e.id === "name-ar") && design.elements.some(e => e.id === "name-fr") && design.elements.every(e => managed.has(e.id));
+}
+
 /** Reflow known header fields; retain any extra elements created in advanced mode. */
 export function arrangeSimpleHeader(design: PrescriptionDesign, fields: SimplePrescriptionHeader): PrescriptionDesign {
   const item = (id: string, text: string, x: number, y: number, width: number, height: number, fontSize: number, align: DesignElement["align"] = "center"): DesignElement => ({ id, kind: "text", text, x, y, width, height, fontSize, align, font: /[\u0600-\u06ff]/.test(text) ? "Cairo" : "Arial", color: fields.color, bold: id.startsWith("name-") });
-  const elements = [item("name-fr", fields.nameFr, 8, 8, 48, 11, 4.3, "left"), item("name-ar", fields.nameAr, 92, 8, 48, 11, 4.3, "right"), { ...item("logo", "", 63, 8, 22, 22, 4), kind: "logo" as const }];
+  const elements = [item("name-fr", fields.nameFr, 8, 8, 48, 11, 4.3, "left"), item("name-ar", fields.nameAr, 92, 8, 48, 11, 4.3, "right"), { ...item("logo", "", 59, 7, 30, 28, 4), kind: "logo" as const }];
   let y = 20;
-  for (const [id, ar, fr, height] of [["specialty", fields.specialty, fields.specialtyFr, 6], ["clinic", fields.clinic, fields.clinicFr, 6]] as const) {
+  for (const [id, ar, fr, height] of [["specialty", fields.specialty, fields.specialtyFr, 11], ["clinic", fields.clinic, fields.clinicFr, 6]] as const) {
     if (!ar.trim() && !fr.trim()) continue;
     elements.push(item(id + "-fr", fr, 8, y, 48, height, 3.2, "left"), item(id + "-ar", ar, 92, y, 48, height, 3.2, "right"));
     y += height + 1;
   }
   // Contact information belongs below the writing area; leave the central booking QR clear.
-  if (fields.addressFr.trim()) elements.push(item("address-fr", fields.addressFr, 92, 176, 48, 12, 3.2, "left"));
-  if (fields.address.trim()) elements.push(item("address-ar", fields.address, 92, fields.addressFr.trim() ? 188 : 176, 48, 12, 3.2, "right"));
-  if (fields.phone.trim()) elements.push(item("phone", fields.phone, 8, 189, 48, 12, 3.2, "left"));
-  if (fields.footer.trim()) elements.push(item("footer", fields.footer, 8, 162, 132, 10, 3.2));
-  const managed = new Set(["doctor", "name-ar", "name-fr", "specialty", "clinic", "address", "phone", "footer", "logo", ...["specialty", "clinic", "address", "phone"].flatMap(id => [id + "-ar", id + "-fr"])]);
+  if (fields.addressFr.trim()) elements.push(item("address-fr", fields.addressFr, 92, 184, 48, fields.address.trim() ? 10 : 20, 3.2, "left"));
+  if (fields.address.trim()) elements.push(item("address-ar", fields.address, 92, fields.addressFr.trim() ? 194 : 184, 48, fields.addressFr.trim() ? 10 : 20, 3.2, "right"));
+  if (fields.phone.trim()) elements.push(item("phone", fields.phone, 8, 184, 48, 20, 3.2, "left"));
+  if (fields.footer.trim()) elements.push(item("footer", fields.footer, 8, 172, 132, 10, 3.2));
+  const managed = SIMPLE_HEADER_IDS;
   const extras = (design.elements ?? []).filter(e => !managed.has(e.id));
-  return { ...design, doctorName: fields.nameAr || fields.nameFr || design.doctorName, specialty: fields.specialty || fields.specialtyFr, clinicName: fields.clinic || fields.clinicFr, address: fields.address || fields.addressFr, phone: fields.phone, footer: fields.footer, color: fields.color, logoPosition: "center", elements: [...elements, ...extras], writingArea: { top: Math.min(75, Math.max(34, y + 2)), bottom: 50, side: 10 } };
+  return { ...design, doctorName: fields.nameAr || fields.nameFr || design.doctorName, specialty: fields.specialty || fields.specialtyFr, clinicName: fields.clinic || fields.clinicFr, address: fields.address || fields.addressFr, phone: fields.phone, footer: fields.footer, color: fields.color, logoPosition: "center", elements: [...elements, ...extras], writingArea: { top: Math.min(75, Math.max(34, y + 2)), bottom: fields.footer.trim() ? 40 : 30, side: 10 } };
 }
 
 export interface PrescriptionDesign {
@@ -89,21 +98,58 @@ async function drawBrandImage(ctx: CanvasRenderingContext2D, src: string | undef
   ctx.save(); ctx.globalAlpha = opacity; ctx.drawImage(img, x, y, size, size); ctx.restore();
 }
 
+/** Fit the visible logo, rather than its surrounding white/transparent canvas, into the header slot. */
+async function drawContainedLogo(ctx: CanvasRenderingContext2D, src: string, x: number, y: number, width: number, height: number) {
+  const img = new Image(); img.src = src; await img.decode();
+  let crop: { x: number; y: number; width: number; height: number } | null = null;
+  try {
+    const scan = document.createElement("canvas");
+    const scale = Math.min(1, 512 / Math.max(img.width, img.height));
+    scan.width = Math.max(1, Math.round(img.width * scale)); scan.height = Math.max(1, Math.round(img.height * scale));
+    const pixels = scan.getContext("2d");
+    if (pixels?.getImageData) {
+      pixels.drawImage(img, 0, 0, scan.width, scan.height);
+      const rgba = pixels.getImageData(0, 0, scan.width, scan.height).data;
+      let left = scan.width, top = scan.height, right = -1, bottom = -1;
+      for (let py = 0; py < scan.height; py++) for (let px = 0; px < scan.width; px++) {
+        const i = (py * scan.width + px) * 4;
+        if (rgba[i + 3] > 24 && Math.min(rgba[i], rgba[i + 1], rgba[i + 2]) < 240) {
+          left = Math.min(left, px); top = Math.min(top, py); right = Math.max(right, px); bottom = Math.max(bottom, py);
+        }
+      }
+      if (right >= left && bottom >= top) {
+        left = Math.max(0, left - 2); top = Math.max(0, top - 2);
+        right = Math.min(scan.width - 1, right + 2); bottom = Math.min(scan.height - 1, bottom + 2);
+        crop = { x: left / scale, y: top / scale, width: (right - left + 1) / scale, height: (bottom - top + 1) / scale };
+      }
+    }
+  } catch { /* Preserve an unreadable or cross-origin logo without cropping it. */ }
+  const contentWidth = crop?.width ?? img.width, contentHeight = crop?.height ?? img.height;
+  const ratio = Math.min(width / contentWidth, height / contentHeight);
+  const w = contentWidth * ratio, h = contentHeight * ratio;
+  const dx = x + (width - w) / 2, dy = y + (height - h) / 2;
+  if (crop) ctx.drawImage(img, crop.x, crop.y, crop.width, crop.height, dx, dy, w, h);
+  else ctx.drawImage(img, dx, dy, w, h);
+}
+
 async function renderFreeDesign(design: PrescriptionDesign, branding: PrescriptionBranding): Promise<PrescriptionTemplate> {
   await document.fonts.ready;
   const canvas = document.createElement("canvas"); canvas.width = 1480; canvas.height = 2100;
   const context = canvas.getContext("2d"); if (!context) throw new Error("تعذر إنشاء القالب.");
   const ctx = context;
   ctx.scale(10, 10); ctx.fillStyle = "white"; ctx.fillRect(0, 0, 148, 210);
-  await drawBrandImage(ctx, branding.watermark, 46.5, 77.5, 55, 0.045);
+  await drawBrandImage(ctx, branding.watermark, 39, 70, 70, 0.12);
+  if (branding.watermark) {
+    ctx.save(); ctx.globalAlpha = 0.16; ctx.fillStyle = "#303030";
+    ctx.font = 'bold 5px "Cairo", Arial, sans-serif'; ctx.textAlign = "center";
+    ctx.textBaseline = "top"; ctx.direction = "ltr";
+    ctx.fillText("MedBook | مادبوك", 74, 143); ctx.restore();
+  }
   const logo = design.logo || branding.specialtyLogo;
   for (const e of design.elements ?? []) {
     ctx.save(); ctx.beginPath(); ctx.rect(e.x, e.y, e.width, e.height); ctx.clip();
     if (e.kind === "logo" && logo) {
-      const img = new Image(); img.src = logo; await img.decode();
-      const ratio = Math.min(e.width / img.width, e.height / img.height);
-      const w = img.width * ratio, h = img.height * ratio;
-      ctx.drawImage(img, e.x + (e.width - w) / 2, e.y + (e.height - h) / 2, w, h);
+      await drawContainedLogo(ctx, logo, e.x, e.y, e.width, e.height);
     } else if (e.kind === "text") {
       ctx.fillStyle = e.color; ctx.textAlign = e.align; ctx.textBaseline = "top";
       ctx.direction = /[\u0600-\u06ff]/.test(e.text) ? "rtl" : "ltr";
@@ -133,7 +179,10 @@ async function renderFreeDesign(design: PrescriptionDesign, branding: Prescripti
         if (size <= 2.01) throw new Error(design.language === "fr" ? "Raccourcissez les informations de ce champ." : "اختصر معلومات هذا الحقل لتظهر كاملة.");
         size = Math.max(2, size - 0.2);
       }
-      rows.forEach((row, i) => ctx.fillText(row, x, e.y + i * size * 1.5));
+      const contact = e.id === "phone" || e.id.startsWith("address-");
+      const textHeight = (rows.length - 1) * size * 1.5 + size;
+      const textTop = e.y + (contact ? Math.max(0, (e.height - textHeight) / 2) : 0);
+      rows.forEach((row, i) => ctx.fillText(row, x, textTop + i * size * 1.5));
     }
     ctx.restore();
   }
@@ -141,7 +190,7 @@ async function renderFreeDesign(design: PrescriptionDesign, branding: Prescripti
   // Legacy free designs retain their original geometry until explicitly rearranged.
   if (design.elements?.some(e => e.id === "name-ar") && design.elements?.some(e => e.id === "name-fr")) {
     ctx.strokeStyle = design.color; ctx.lineWidth = 0.25;
-    for (const y of [(design.writingArea?.top ?? 34) - 3, 173]) {
+    for (const y of [(design.writingArea?.top ?? 34) - 3, 183]) {
       ctx.beginPath(); ctx.moveTo(8, y); ctx.lineTo(140, y); ctx.stroke();
     }
   }
@@ -178,7 +227,13 @@ export async function renderPrescriptionDesign(design: PrescriptionDesign, brand
   const context = canvas.getContext("2d"); if (!context) throw new Error("تعذر إنشاء القالب.");
   const ctx = context;
   ctx.scale(10, 10); ctx.fillStyle = "white"; ctx.fillRect(0, 0, 148, 210);
-  await drawBrandImage(ctx, branding.watermark, 46.5, 77.5, 55, 0.045);
+  await drawBrandImage(ctx, branding.watermark, 39, 70, 70, 0.12);
+  if (branding.watermark) {
+    ctx.save(); ctx.globalAlpha = 0.16; ctx.fillStyle = "#303030";
+    ctx.font = 'bold 5px "Cairo", Arial, sans-serif'; ctx.textAlign = "center";
+    ctx.textBaseline = "top"; ctx.direction = "ltr";
+    ctx.fillText("MedBook | مادبوك", 74, 143); ctx.restore();
+  }
   ctx.direction = design.language === "ar" ? "rtl" : "ltr";
   const font = design.language === "ar" ? '"Cairo", Tahoma, sans-serif' : 'Arial, sans-serif';
   const centered = design.layout === "centered";

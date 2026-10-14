@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { arrangeSimpleHeader, readSimpleHeader, renderPrescriptionDesign, initialDesignElements, overlapsWritingArea, type PrescriptionDesign } from '../src/lib/prescriptionDesign.ts';
+import { canBalancePrescriptionDesign, arrangeSimpleHeader, readSimpleHeader, renderPrescriptionDesign, initialDesignElements, overlapsWritingArea, type PrescriptionDesign } from '../src/lib/prescriptionDesign.ts';
 
 const base: PrescriptionDesign = { version: 1, language: 'ar', doctorName: 'طبيب تجريبي', specialty: 'تخصص تجريبي', clinicName: 'عيادة تجريبية', address: 'عنوان تجريبي', phone: '0000000000', footer: 'تذييل تجريبي', color: '#187f77', layout: 'split', logo: null, logoPosition: 'left', headerSize: 18 };
 
@@ -29,7 +29,7 @@ test('simple header keeps explicit names, centers the logo and reserves writing 
   assert.ok(contact.every(e => e.y >= 173), 'contact information belongs below the footer rule');
   assert.ok(contact.every(e => e.x + e.width <= 68 || e.x >= 80), 'contacts must leave the small central QR clear');
   assert.equal(bilingual.elements!.find(e => e.id === 'phone')?.text, fields.phone);
-  assert.ok(bilingual.writingArea!.top < 40, 'moving contacts down leaves a compact header');
+  assert.ok(bilingual.writingArea!.top <= 45, 'moving contacts down leaves a compact header');
   assert.ok(bilingual.elements!.filter(e => e.id.endsWith('-fr') && !e.id.startsWith('address-')).every(e => e.x + e.width <= 56));
   assert.ok(bilingual.elements!.filter(e => e.id.endsWith('-ar')).every(e => e.x >= 92));
   assert.ok(bilingual.elements!.every(e => !overlapsWritingArea(e, bilingual.writingArea!)));
@@ -75,7 +75,7 @@ test('blank designs reserve bounded writing space, preserve editable metadata an
     const branded = await renderPrescriptionDesign(arrangeSimpleHeader(base, readSimpleHeader(base)), { specialtyLogo: 'specialty-fixture', watermark: 'brand-fixture', bookingQr: 'booking-fixture' });
     assert.equal(branded.design?.logo, null, 'specialty fallback must not become a personal logo');
     assert.deepEqual(images.at(-1), [68, 188, 12, 12]);
-    assert.ok(images.some(bounds => bounds.join(',') === '46.5,77.5,55,55'));
+    assert.ok(images.some(bounds => bounds.join(',') === '39,70,70,70'));
     assert.ok(!text.includes('توقيع الطبيب / الختم'));
     assert.ok(!text.includes('Signature du médecin / Cachet'));
     await assert.rejects(renderPrescriptionDesign({ ...base, doctorName: '' }), /اسم الطبيب/);
@@ -86,4 +86,13 @@ test('blank designs reserve bounded writing space, preserve editable metadata an
     if (oldDocument) Object.defineProperty(globalThis, 'document', oldDocument); else Reflect.deleteProperty(globalThis, 'document');
     if (oldImage) Object.defineProperty(globalThis, 'Image', oldImage); else Reflect.deleteProperty(globalThis, 'Image');
   }
+});
+
+ test('automatic balancing preserves preprinted, uploaded and advanced custom stationery', () => {
+  const simple = arrangeSimpleHeader({ ...base, source: 'generated' }, readSimpleHeader(base));
+  assert.equal(canBalancePrescriptionDesign(simple), true);
+  assert.equal(canBalancePrescriptionDesign({ ...simple, printMode: 'preprinted' }), false);
+  assert.equal(canBalancePrescriptionDesign({ ...simple, source: 'image' }), false);
+  assert.equal(canBalancePrescriptionDesign({ ...simple, elements: [...simple.elements!, { ...simple.elements![0], id: 'custom-note' }] }), false);
+  assert.equal(canBalancePrescriptionDesign(null), false);
 });

@@ -183,19 +183,19 @@ body {
 .rx-pad { height: 0; } /* على الشاشة الحشو في .rx-paper؛ في الطباعة يصير 10mm ويتكرر في كل صفحة */
 .rx-inner { position: relative; display: flex; flex-direction: column; min-height: 190mm; }
 .rx-inner > * { position: relative; z-index: 1; }
-.rx-inner > .rx-watermark { position: absolute; z-index: 0; inset-inline: 0; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 3mm; opacity: 0.045; pointer-events: none; }
-.rx-watermark-mark { width: 60mm; height: 60mm; }
+.rx-inner > .rx-watermark { position: absolute; z-index: 0; inset-inline: 0; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 3mm; opacity: 0.12; pointer-events: none; }
+.rx-watermark-mark { width: 70mm; height: 70mm; }
 .rx-watermark-name { font-size: 14pt; font-weight: 800; color: var(--rx-blue); white-space: nowrap; }
-.rx-head-std { display: grid; grid-template-columns: 1fr 22mm 1fr; align-items: start; gap: 3mm; border-bottom: 0.25mm solid var(--rx-blue); }
+.rx-head-std { display: grid; grid-template-columns: 1fr 30mm 1fr; align-items: start; gap: 3mm; border-bottom: 0.25mm solid var(--rx-blue); }
 .rx-side { min-width: 0; display: flex; flex-direction: column; gap: 0.6mm; }
 .rx-side-fr { font-family: Calibri, Carlito, Arial, sans-serif; text-align: left; }
 .rx-side-ar { font-family: "Cairo", Tahoma, sans-serif; text-align: right; }
-.rx-head-std .rx-doctor { font-size: 14pt; color: var(--rx-blue); }
+.rx-head-std .rx-doctor { font-size: 12.5pt; font-weight: 700; color: var(--rx-blue); }
 .rx-head-std .rx-specialty { color: #303030; font-size: 10.5pt; }
 .rx-head-std .rx-clinic, .rx-head-std .rx-line { font-size: 10pt; color: #303030; }
-.rx-logo-slot { height: 18mm; display: flex; justify-content: center; align-items: flex-start; }
+.rx-logo-slot { height: 28mm; display: flex; justify-content: center; align-items: flex-start; }
 .rx-logo-slot img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.rx-specialty-logo { width: 18mm; height: 18mm; color: #737373; }
+.rx-specialty-logo { width: 25mm; height: 25mm; color: #737373; }
 .rx-head-std { direction: ltr; }
 .rx-booking-qr { display: block; width: 12mm; height: 12mm; align-self: center; }
 .rx-booking-qr img { width: 100%; height: 100%; }
@@ -257,6 +257,13 @@ body {
   /* أثناء معاينة الوصفة: لا يُطبع إلا الورقة — تختفي الواجهة والتنقل والأزرار والخلفية المعتمة. */
   html, body.rx-printing { height: auto !important; overflow: visible !important; background: #fff !important; }
   body.rx-printing > *:not(.rx-print-root) { display: none !important; }
+  /* Floating translation/extension widgets can attach outside body or inside the preview portal. */
+  html:has(body.rx-printing) > :not(head):not(body),
+  .rx-print-root > :not(style):not([role="dialog"]),
+  .rx-print-root [role="dialog"] > :not(.rx-stage),
+  .rx-print-root .rx-stage > :not(.rx-scaler),
+  .rx-print-root .rx-scaler > :not(.rx-paper),
+  .rx-print-root .rx-paper > :not(.rx-sheet):not(.rx-template-image) { display: none !important; }
   .rx-print-root { position: static !important; display: block !important; inset: auto !important; overflow: visible !important; background: none !important; }
   .rx-print-root [role="dialog"] { outline: none !important; box-shadow: none !important; } /* حلقة التركيز لا تُطبع */
   .rx-print-root [role="dialog"], .rx-stage { display: block !important; overflow: visible !important; padding: 0 !important; }

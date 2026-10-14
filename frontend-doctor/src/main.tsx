@@ -1,3 +1,4 @@
+import { preserveNativeKeyboardFocus } from "./lib/nativeKeyboardFocus";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -10,6 +11,8 @@ import { InstallPrompt } from "./components/InstallPrompt";
 import App from "./App";
 import "./index.css";
 import { LanguageRoot } from "./i18n/LanguageRoot";
+
+preserveNativeKeyboardFocus();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

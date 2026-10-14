@@ -66,7 +66,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const clinicNameFr = show.clinicName ? clinicHeaderName(data.clinicNames?.fr, clinic?.nameAr, "fr") : "";
   const clinicNameAr = show.clinicName ? clinicHeaderName(data.clinicNames?.ar, clinic?.nameAr, "ar") : "";
   const phone = show.phone ? (clinic?.phone || d?.phone || "").trim() : "";
-    const standard = !data.template;
+  const standard = !data.template;
   const fr = prescriptionLabels("fr");
   const ar = prescriptionLabels("ar");
   const specialtyFr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "fr") : "";
@@ -86,20 +86,14 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
           {doctorNameFr && <p className="rx-doctor"><bdi dir="ltr">{fr.doctor}</bdi> <Typed>{doctorNameFr}</Typed></p>}
           {specialtyFr && <p className="rx-specialty">{specialtyFr}</p>}
           {clinicNameFr && <p className="rx-clinic"><Typed>{clinicNameFr}</Typed></p>}
-          {addressFor("fr") && <p className="rx-line"><Typed>{addressFor("fr")}</Typed></p>}
-          {phone && <p className="rx-line">Télé : <bdi dir="ltr" translate="no">{phone}</bdi></p>}
         </div>
         <div className="rx-logo-slot">{data.logo ? <img src={data.logo} alt="" /> : <SpecialtyIcon specialty={d?.specialty ?? {}} className="rx-specialty-logo" />}</div>
         <div className="rx-side rx-side-ar" lang="ar" dir="rtl">
           {doctorNameAr && <p className="rx-doctor"><bdi dir="rtl">{ar.doctor}</bdi> <Typed>{doctorNameAr}</Typed></p>}
           {specialtyAr && <p className="rx-specialty">{specialtyAr}</p>}
           {clinicNameAr && <p className="rx-clinic"><Typed>{clinicNameAr}</Typed></p>}
-          {addressFor("ar") && <p className="rx-line"><Typed>{addressFor("ar")}</Typed></p>}
-          {phone && <p className="rx-line">الهاتف : <bdi dir="ltr" translate="no">{phone}</bdi></p>}
         </div>
       </header>}
-
-      {standard && <h1 className="rx-title">{text.title}</h1>}
 
       <dl className="rx-meta">
         <div>
@@ -111,6 +105,8 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
           <dd className="rx-patient"><Typed>{data.patientName}</Typed></dd>
         </div>
       </dl>
+
+      {standard && <h1 className="rx-title">{text.title}</h1>}
 
       {data.medications.length > 0 && <ol className="rx-meds" aria-label={text.medications}>
         {data.medications.map((m, i) => {
@@ -163,11 +159,14 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </section>
       )}
 
-      {standard && (footerAr || footerFr) && <div className="rx-foot">
-        {footerAr && <p lang="ar" dir="rtl"><Typed>{footerAr}</Typed></p>}
-        {footerFr && <p lang="fr" dir="ltr"><Typed>{footerFr}</Typed></p>}
-      </div>}
-      {standard && bookingQr && <a className="rx-booking-qr" href={bookingUrl!} aria-label={lang === "fr" ? "Réserver un rendez-vous" : "حجز موعد لدى الطبيب"}><img src={bookingQr} alt="QR" /></a>}
+      {standard && (bookingQr || phone || addressFor("ar") || addressFor("fr") || footerAr || footerFr) && <footer className="rx-foot" dir="ltr">
+        <p className="rx-foot-phone"><bdi dir="ltr" translate="no">{phone}</bdi></p>
+        {bookingQr ? <a className="rx-booking-qr" href={bookingUrl!} aria-label={lang === "fr" ? "Réserver un rendez-vous" : "حجز موعد لدى الطبيب"}><img src={bookingQr} alt="QR" /></a> : <span />}
+        <div className="rx-foot-address">
+          {(addressFor("fr") || footerFr) && <p lang="fr" dir="ltr"><Typed>{[addressFor("fr"), footerFr].filter(Boolean).join(", ")}</Typed></p>}
+          {(addressFor("ar") || footerAr) && <p lang="ar" dir="rtl"><Typed>{[addressFor("ar"), footerAr].filter(Boolean).join("، ")}</Typed></p>}
+        </div>
+      </footer>}
     </>
   );
   const articleProps = { className: `rx-sheet${standard ? " rx-standard" : ""}`, dir: lang === "fr" ? "ltr" : "rtl", lang, "aria-label": text.sheet } as const;

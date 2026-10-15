@@ -97,6 +97,15 @@ describe("security audit regression", () => {
     expect(r).toHaveProperty("priceDzd", 1500);
     expect(JSON.stringify(r)).not.toMatch(/SharePercent|clinicTerms|financial/);
   });
+  it("returns the recorded destination coordinates and full address context", async () => {
+    h.db.appointment.findUnique.mockResolvedValueOnce({
+      id: "a", date: new Date("2099-01-01"), startTime: "08:00", status: "CONFIRMED",
+      doctor: { slotDurationMin: 20, address: "حي المكي", latitude: 36.45, longitude: 6.26,
+        city: { nameAr: "ميلة" }, wilaya: { nameAr: "ميلة" } },
+    } as any);
+    const r = await getAppointmentQueueStatus("a");
+    expect(r.doctor).toMatchObject({ address: "حي المكي", city: "ميلة", wilaya: "ميلة", latitude: 36.45, longitude: 6.26 });
+  });
   it("does not log request bodies from parser errors", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {

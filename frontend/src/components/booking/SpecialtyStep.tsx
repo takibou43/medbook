@@ -1,7 +1,8 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, catalogName } from "../../i18n/locale.ts";
-import { forwardRef } from "react";
-import { DoctorNameSearch } from "./DoctorNameSearch";
+import { forwardRef, useState } from "react";
+import { Search } from "lucide-react";
+import { DoctorSearchModal } from "./DoctorSearchModal";
 import { EmptyState } from "../ui/States";
 import { Doctor, Specialty } from "../../types";
 import { doctorsCountLabel } from "../../lib/booking";
@@ -27,9 +28,17 @@ interface Props {
 
 // الخطوة 1: "اختر التخصص". التخصصات وأعدادها مشتقّة من الأطباء الموثّقين الفعليين المعروضين للمريض
 // (لا قائمة ثابتة ولا تخصصات وهمية) — فلا يظهر تخصص إلا إذا كان فيه طبيب حقيقي يستطيع المريض حجزه.
-export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, loading, error, errorMessage, onRetry, onSelect, onDoctorSelect }, ref) => { useLanguage(); return (
+export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, loading, error, errorMessage, onRetry, onSelect, onDoctorSelect }, ref) => {
+  useLanguage();
+  const [searchOpen, setSearchOpen] = useState(false);
+  return (
   <section aria-labelledby="step-specialty-title">
-    <DoctorNameSearch onSelect={onDoctorSelect} />
+    <div className="mb-2 flex justify-end">
+      <button type="button" aria-label={t("ابحث عن طبيب بالاسم")} title={t("ابحث عن طبيب بالاسم")} aria-haspopup="dialog" aria-expanded={searchOpen} onClick={() => setSearchOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-full border border-primary-200 bg-white text-primary-700 shadow-sm transition hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
+        <Search className="h-5 w-5" aria-hidden="true" />
+      </button>
+    </div>
+    {searchOpen && <DoctorSearchModal onClose={() => setSearchOpen(false)} onSelect={doctor => { setSearchOpen(false); onDoctorSelect(doctor); }} />}
     <StepHeading ref={ref} id="step-specialty-title" hint={t("اختر التخصص الذي تحتاجه، ثم الطبيب المناسب.")}>{t("اختر التخصص ")}</StepHeading>
 
     {loading ? (

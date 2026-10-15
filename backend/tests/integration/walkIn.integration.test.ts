@@ -389,6 +389,7 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
 
   it("حجز المساعد الآلي يعيد استخدام فترة مكتملة مبكرًا، ويحمي المفتاح القديم والحجز الجديد", async () => {
     vi.setSystemTime(new Date(today.getTime() + 13 * HOUR + 14 * 60000 + 30000)); // 14:14:30 Algeria
+    tokens.assistant = await tokenAtTestClock(tokens.assistant);
     const historical = await db.appointment.create({ data: {
       doctorId: ids.doctor, date: today, startTime: "14:15", endTime: "23:59", status: "COMPLETED",
       guestFirstName: "قديم", guestLastName: "مكتمل", activeSlot: true, endedAt: new Date(),

@@ -1969,5 +1969,6 @@
   "ورقة A5 كما ستُطبع. تُحفظ نسخة PDF على جهازك إذا فعّلت المجلد من إعدادات الوصفة.": "Feuille A5 telle qu’elle sera imprimée. Un PDF est enregistré sur votre appareil si vous activez un dossier dans les paramètres.",
   "جارٍ حفظ PDF…": "Enregistrement du PDF…",
   "تعذّر قراءة إعداد المجلد؛ الطباعة الحالية لن تحفظ نسخة تلقائية.": "Impossible de lire le réglage du dossier ; cette impression n’enregistrera pas de copie automatique.",
-  "تُحفظ النسخة عند الضغط على طباعة، حتى إذا ألغيت نافذة الطباعة لاحقًا.": "La copie est enregistrée au clic sur Imprimer, même si vous annulez ensuite l’impression."
+  "تُحفظ النسخة عند الضغط على طباعة، حتى إذا ألغيت نافذة الطباعة لاحقًا.": "La copie est enregistrée au clic sur Imprimer, même si vous annulez ensuite l’impression.",
+  "لا يوجد موعد قابل للجدولة لهذا المستفيد. المواعيد المكتملة للعرض فقط.": "Aucun rendez-vous admissible à la planification pour ce bénéficiaire. Les rendez-vous terminés sont en lecture seule."
 }

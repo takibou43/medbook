@@ -21,6 +21,12 @@ test("directions require recorded address or valid coordinates, never a city cen
   assert.match(directionsUrl("حي المكي", "ميلة", "ميلة")!, /destination=/);
   assert.match(directionsUrl(null,undefined,undefined,36.4,6.2)!, /36.4%2C6.2/);
 });
+test("recorded coordinates override ambiguous street names", () => {
+  const url = new URL(directionsUrl("حي المكي", "ميلة", "ميلة", 36.45, 6.26)!);
+  assert.equal(url.searchParams.get("destination"), "36.45,6.26");
+  const fallback = new URL(directionsUrl("حي المكي", "ميلة", "ميلة")!);
+  assert.match(fallback.searchParams.get("destination")!, /حي المكي.*ميلة.*الجزائر/);
+});
 test("Arabic appointment date is independent of browser timezone and ISO suffix", () => {
   assert.equal(arabicDate("2026-10-09"), arabicDate("2026-10-09T00:00:00.000Z"));
   assert.equal(arabicDate("2026-10-08T23:30:00Z"), arabicDate("2026-10-09"));

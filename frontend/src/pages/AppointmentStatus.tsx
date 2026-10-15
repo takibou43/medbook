@@ -33,6 +33,10 @@ interface QueueStatus {
     lastName: string;
     specialty: string | null;
     address: string | null;
+    city?: string | null;
+    wilaya?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
     phone: string | null;
   };
 }
@@ -81,7 +85,7 @@ export default function AppointmentStatus() {
 
   const doctorName = t("د. ") + data.doctor.firstName + " " + data.doctor.lastName;
   const dateLabel = arabicDate(data.date);
-  const directions = directionsUrl(data.doctor.address);
+  const directions = directionsUrl(data.doctor.address, data.doctor.city ?? undefined, data.doctor.wilaya ?? undefined, data.doctor.latitude, data.doctor.longitude);
 
   // الحالات المنتهية: لا رقم دور، فقط رسالة واضحة.
   const finished =

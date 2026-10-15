@@ -640,7 +640,7 @@ export async function cancelGuestAppointment(id: string, phone: string) {
 export async function getAppointmentQueueStatus(appointmentId: string) {
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
-    include: { doctor: { include: { specialty: true, clinic: true, city: true } } },
+    include: { doctor: { include: { specialty: true, clinic: true, city: true, wilaya: true } } },
   });
   if (!appointment) throw ApiError.notFound("الموعد غير موجود.");
 
@@ -664,6 +664,10 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
       lastName: doctor.lastName,
       specialty: doctor.specialty?.nameAr ?? null,
       address: doctor.clinic?.address ?? doctor.address ?? null,
+      city: doctor.city?.nameAr ?? null,
+      wilaya: doctor.wilaya?.nameAr ?? null,
+      latitude: doctor.latitude ?? null,
+      longitude: doctor.longitude ?? null,
       phone: doctor.clinic?.phone ?? doctor.phone ?? null,
     },
   };

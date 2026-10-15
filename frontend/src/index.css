@@ -118,3 +118,7 @@ body {
 }
 input, textarea { scroll-margin-block: 5rem; }
 html[lang="fr"] body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+
+/* Calm background and opaque cards keep the account readable on phones. */
+.account-surface { background: #f1f7f8; }
+.account-surface .glass { background: #fff; backdrop-filter: none; border-color: #e2e8f0; }

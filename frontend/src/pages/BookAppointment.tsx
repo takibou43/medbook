@@ -54,6 +54,8 @@ export default function BookAppointment() {
   // اختيار اختياري لليوم/الوقت. null = السلوك الحالي تمامًا (أول دور متاح يعيّنه الخادم).
   const [choice, setChoice] = useState<DayTimeChoice | null>(null);
   // الحساب العائلي: «الموعد لي» (الافتراضي، السلوك السابق) أو لفرد من العائلة.
+  const requestedMemberId = searchParams.get("member");
+  const appliedMember = useRef<string | null>(null);
   const [familyMode, setFamilyMode] = useState(false);
   const [familyMemberId, setFamilyMemberId] = useState<string | null>(null);
   // ولاية اختارها المريض في فلتر الأطباء — لعدّاد الحجوزات فقط.
@@ -111,6 +113,13 @@ export default function BookAppointment() {
     retry: false,
   });
   const members = bookableMembers(familyQuery.data);
+  useEffect(() => {
+    if (!requestedMemberId || !familyQuery.data || appliedMember.current === requestedMemberId) return;
+    appliedMember.current = requestedMemberId;
+    const member = bookableMembers(familyQuery.data).find(m => m.id === requestedMemberId);
+    if (member) { setFamilyMode(true); setFamilyMemberId(member.id); }
+    else showToast(t("هذا الفرد غير متاح للحجز. اختر المستفيد من الموعد."), "error");
+  }, [requestedMemberId, familyQuery.data, showToast]);
   const selectedMember = familyMode && familyMemberId ? members.find((m) => m.id === familyMemberId) ?? null : null;
   const selectedMemberLabel = selectedMember
     ? beneficiaryLabel({ type: "FAMILY_MEMBER", name: memberFullName(selectedMember), relationship: selectedMember.relationship, familyMemberId: selectedMember.id })

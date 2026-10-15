@@ -79,21 +79,25 @@ export default function TreatmentPlans() {
                     </div>
                     <span className={clsx("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold", PLAN_STATUS[p.status].cls)}>{t(PLAN_STATUS[p.status].label)}</span>
                   </div>
-                  {p.description && <p className="mt-2 whitespace-pre-line break-words text-sm text-slate-600">{p.description}</p>}
+
                   <p className="mt-2 text-xs text-slate-500">{t("الجلسات: ")}{done}{t(" من ")}{p.sessions.length || p.estimatedSessions || 0}
                     {p.estimatedTotalCost != null && <>{t(" · التكلفة التقديرية: ")}{p.estimatedTotalCost.toLocaleString(getLocale())}{t(" دج")}</>}
                   </p>
+                  <details className="mt-3 rounded-xl border border-slate-200 bg-white/80 p-3">
+                    <summary className="min-h-[48px] cursor-pointer text-sm font-semibold text-primary-700">{t("تفاصيل الخطة والجلسات")}</summary>
+                    {p.description && <p className="mt-2 whitespace-pre-line break-words text-sm text-slate-600">{p.description}</p>}
                   {p.sessions.length > 0 && (
                     <ol className="mt-3 space-y-1.5">
                       {p.sessions.map((s) => (
                         <li key={s.id} className="flex items-center gap-2 text-sm text-slate-700">
                           <SessionIcon status={s.status} />
-                          <span className="font-semibold">{s.sessionNumber}.</span> <span className="min-w-0 flex-1 truncate">{s.title}</span>
+                          <span className="font-semibold">{s.sessionNumber}.</span> <span className="min-w-0 flex-1 break-words">{s.title}</span>
                           {s.appointment && <span className="shrink-0 text-xs text-slate-500" dir="ltr">{s.appointment.date.slice(0, 10)} {s.appointment.startTime}</span>}
                         </li>
                       ))}
                     </ol>
                   )}
+                  </details>
                   {nextFollowUp && (
                     <p className="mt-3 flex items-center gap-1.5 rounded-xl bg-amber-50 p-2.5 text-sm text-amber-900">
                       <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />{t("متابعة ")}{t(FOLLOW_UP_LABEL[nextFollowUp.status])}:{" "}

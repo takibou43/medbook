@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { Bell, BellRing, CalendarDays, ClipboardList, Clock, LogOut, MapPin, Plus, RotateCcw, Users, WifiOff } from "lucide-react";
+import { Bell, BellRing, CalendarDays, ClipboardList, Clock, LogOut, MapPin, Plus, RotateCcw, Settings, Users, WifiOff } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { api, apiErrorMessage } from "../../lib/api";
 import { disablePatientPush } from "../../lib/patientPush";
@@ -52,6 +52,7 @@ function AppointmentItem({
   useLanguage();
   const address = a.doctor.clinic?.address || a.doctor.address;
   const [rating, setRating] = useState(false);
+  const [details, setDetails] = useState(false);
   return (
     <li id={`appointment-${a.id}`} className={clsx("glass p-4", highlight && "ring-2 ring-primary-500")}>
       <div className="flex items-start justify-between gap-2">
@@ -109,14 +110,20 @@ function AppointmentItem({
       {ACTIVE.has(a.status) && (
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           {a.status !== "RESCHEDULE_REQUIRED" && (
-            <Link to={`/status/${a.id}`} className="btn-outline min-h-[48px]">{t("متابعة دوري ")}</Link>
+            <Link to={`/status/${a.id}`} className="btn-outline min-h-[48px]">{t(a.date.slice(0, 10) === algeriaToday() ? "متابعة دوري" : "تفاصيل الموعد")}</Link>
           )}
           {a.status === "RESCHEDULE_REQUIRED" && (
             <Link to="/" className="btn-outline min-h-[48px]">{t("حجز موعد جديد")}</Link>
           )}
           {onCancel && CANCELLABLE.has(a.status) && (
-            <button type="button" onClick={onCancel} disabled={cancelling} className="ms-auto min-h-[48px] rounded-xl border border-red-200 px-4 font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">{t("إلغاء الموعد ")}</button>
+            <button type="button" aria-expanded={details} aria-controls={`actions-${a.id}`} onClick={() => setDetails(v => !v)} className="ms-auto min-h-[48px] rounded-xl px-3 font-semibold text-slate-600">{t("خيارات الموعد")}</button>
           )}
+        </div>
+      )}
+      {details && onCancel && CANCELLABLE.has(a.status) && (
+        <div id={`actions-${a.id}`} className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+          <p className="mb-2 text-sm text-slate-600">{t("يمكنك إلغاء هذا الموعد بعد مراجعة تفاصيله.")}</p>
+          <button type="button" onClick={onCancel} disabled={cancelling} className="btn-outline min-h-[48px] text-red-700 disabled:opacity-50">{t("إلغاء الموعد")}</button>
         </div>
       )}
     </li>
@@ -151,10 +158,12 @@ export default function MyAccount() {
   const [cancelCandidate, setCancelCandidate] = useState<MyAppointment | null>(null);
   // فلتر المستفيد: أنا / كل الأسرة / فرد محدد (فلترة محلية على نفس القائمة).
   const [pastLimit, setPastLimit] = useState(10);
+  const [panel, setPanel] = useState<"appointments" | "notifications" | "settings">("appointments");
+  const [history, setHistory] = useState(false);
   const [beneficiary, setBeneficiary] = useState<BeneficiaryFilter>("all");
   const [dismissed, setDismissed] = useState<string[]>(() => readDismissed());
   const { data: wilayas } = useWilayas();
-  const { data: notifications } = useNotifications(Boolean(user));
+  const { data: notifications, isError: notificationsFailed, refetch: refetchNotifications } = useNotifications(Boolean(user));
   const markAllNotificationsRead = useMarkAllNotificationsRead();
   const [areaWilayaId, setAreaWilayaId] = useState("");
   const [areaCityId, setAreaCityId] = useState("");
@@ -240,10 +249,13 @@ export default function MyAccount() {
     if (handledFocus.current === focusId || !data?.some(a => a.id === focusId)) return;
     handledFocus.current = focusId;
     setBeneficiary("all");
+    setPanel("appointments");
+    const focused = data.find(a => a.id === focusId)!;
+    setHistory(!ACTIVE.has(focused.status) || focused.date.slice(0, 10) < algeriaToday());
     setPastLimit(data.length);
     const timer = window.setTimeout(() => document.getElementById(`appointment-${focusId}`)?.scrollIntoView({ block: "center" }), 0);
     return () => window.clearTimeout(timer);
-  }, [focusId, data]);
+  }, [focusId, data, panel]);
 
   // «كيف تقيّم الطبيب؟»: الموعد المفتوح من الإشعار إن كان قابلًا للتقييم، وإلا آخر موعد مكتمل فقط (إن لم
   // يُقيَّم ولم يُخفَ) — لا نلاحق المريض بمواعيد أقدم؛ تلك يبقى تقييمها متاحًا في «المواعيد السابقة».
@@ -310,10 +322,12 @@ export default function MyAccount() {
     }
   }
 
+  const unreadCount = notifications?.filter(n => !n.isRead).length ?? 0;
   const fullName = [user.patient?.firstName, user.patient?.lastName].filter(Boolean).join(" ");
 
   return (
-    <div className="container-app py-8">
+    <div className="account-surface min-h-screen py-6">
+    <div className="container-app">
       <div className="patient-account mx-auto max-w-xl space-y-5">
         <div className="glass flex items-start justify-between gap-3 p-5">
           <div className="min-w-0">
@@ -322,8 +336,13 @@ export default function MyAccount() {
               {user.email}
             </p>
           </div>
-          <button type="button" onClick={handleLogout} className="flex shrink-0 items-center gap-1 text-sm font-semibold text-slate-600 hover:text-red-600">
-            <LogOut className="h-4 w-4" aria-hidden="true" />{t(" تسجيل الخروج ")}</button>
+          <div className="flex shrink-0 gap-1">
+            <button type="button" aria-label={t("الإشعارات") + (unreadCount ? ` (${unreadCount})` : "")} aria-pressed={panel === "notifications"} onClick={() => setPanel(p => p === "notifications" ? "appointments" : "notifications")} className="relative flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-primary-700">
+              <Bell className="h-5 w-5" aria-hidden="true" />
+              {unreadCount > 0 && <span className="absolute -end-1 -top-1 rounded-full bg-red-600 px-1.5 text-xs font-bold text-white">{unreadCount}</span>}
+            </button>
+            <button type="button" aria-label={t("الإعدادات")} aria-pressed={panel === "settings"} onClick={() => setPanel(p => p === "settings" ? "appointments" : "settings")} className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-primary-700"><Settings className="h-5 w-5" aria-hidden="true" /></button>
+          </div>
         </div>
 
         {isOffline && currentCache && (
@@ -333,7 +352,9 @@ export default function MyAccount() {
           </div>
         )}
 
-        {!isOffline && <GuestIdentity userId={user.id} />}
+        <AccountTasks />
+        {panel !== "appointments" && <button type="button" className="btn-outline min-h-[48px]" onClick={() => setPanel("appointments")}>{t("العودة إلى مواعيدي")}</button>}
+        {panel === "appointments" && <>
 
         {!isOffline && (familyMembers?.length ?? 0) > 0 && (
           <div className="flex flex-wrap gap-2" role="group" aria-label={t("عرض مواعيد")}>
@@ -358,10 +379,6 @@ export default function MyAccount() {
           </div>
         )}
 
-        {(isLoading && !data || isError || isOffline && !currentCache) && <>
-            <AccountTasks />
-
-        </>}
         {isLoading && !data ? (
           <Spinner label={t("جارٍ تحميل مواعيدك...")} />
         ) : isOffline && !currentCache ? (
@@ -373,19 +390,22 @@ export default function MyAccount() {
           </div>
         ) : (
           <>
-            <section>
+            <div className="grid grid-cols-2 gap-2" role="group" aria-label={t("عرض المواعيد")}>
+              <button type="button" aria-pressed={!history} onClick={() => setHistory(false)} className={clsx("min-h-[48px] rounded-xl border px-3 font-bold", !history ? "border-primary-600 bg-primary-600 text-white" : "border-slate-200 bg-white text-slate-600")}>{t("القادمة")} ({upcoming.length})</button>
+              <button type="button" aria-pressed={history} onClick={() => setHistory(true)} className={clsx("min-h-[48px] rounded-xl border px-3 font-bold", history ? "border-primary-600 bg-primary-600 text-white" : "border-slate-200 bg-white text-slate-600")}>{t("السابقة")} ({past.length})</button>
+            </div>
+            {!history && <section>
               <h2 className="mb-2 font-bold text-slate-900">{t("مواعيدي القادمة")}</h2>
               {upcoming.length === 0 ? (
                 <p className="glass p-4 text-sm text-slate-500">{t("لا توجد مواعيد قادمة.")}</p>
               ) : (
                 <ul className="space-y-3">
-                  {upcoming.map((a) => (
-                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onCancel={isOffline ? undefined : () => setCancelCandidate(a)} cancelling={cancellingId === a.id} offline={isOffline} />
+                  {upcoming.map((a, index) => (
+                    <AppointmentItem key={a.id} a={a} highlight={a.id === focusId || index === 0} onCancel={isOffline ? undefined : () => setCancelCandidate(a)} cancelling={cancellingId === a.id} offline={isOffline} />
                   ))}
                 </ul>
               )}
-            </section>
-            <AccountTasks />
+            </section>}
 
         {ratePromptFor && (
           <RatePrompt
@@ -399,9 +419,10 @@ export default function MyAccount() {
           />
         )}
 
-            {past.length > 0 && (
+            {history && (
               <section>
                 <h2 className="mb-2 font-bold text-slate-900">{t("المواعيد السابقة")}</h2>
+                {past.length === 0 && <p className="glass p-4 text-sm text-slate-500">{t("لا توجد مواعيد سابقة.")}</p>}
                 <ul className="space-y-3">
                   {past.slice(0, pastLimit).map((a) => (
                     <AppointmentItem key={a.id} a={a} highlight={a.id === focusId} onRated={isOffline ? undefined : afterRated} offline={isOffline} />
@@ -412,7 +433,14 @@ export default function MyAccount() {
             )}
           </>
         )}
-        {notifications && notifications.length > 0 && (
+        </>}
+        {panel === "notifications" && !notifications?.length && (
+          <section className="glass p-4" aria-label={t("الإشعارات")}>
+            <h2 className="font-bold">{t("الإشعارات")}</h2>
+            {notificationsFailed ? <button type="button" className="btn-outline mt-3" onClick={() => refetchNotifications()}>{t("إعادة المحاولة")}</button> : !notifications ? <Spinner label={t("جارٍ التحميل...")} /> : <p className="mt-3 text-sm text-slate-500">{t("لا توجد إشعارات.")}</p>}
+          </section>
+        )}
+        {panel === "notifications" && notifications && notifications.length > 0 && (
           <section className="glass p-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="flex items-center gap-2 font-bold text-slate-900"><Bell className="h-5 w-5 text-primary-600" />{t(" الإشعارات")}</h2>
@@ -421,22 +449,22 @@ export default function MyAccount() {
               )}
             </div>
             <ul className="mt-3 space-y-2">
-              {notifications.slice(0, 5).map((notification) => (
+              {notifications.map((notification) => (
                 <li key={notification.id} className={clsx("rounded-xl border p-3", notification.isRead ? "border-slate-200 bg-white/60" : "border-primary-200 bg-primary-50")}>
                   <p className="flex items-center gap-2 text-sm font-bold text-slate-800">
                     {!notification.isRead && <BellRing className="h-4 w-4 text-primary-600" />}{platformText(notification.title)}
                   </p>
                   <p className="mt-1 text-xs text-slate-600">{platformText(notification.message)}</p>
                   <p className="mt-1 text-xs text-slate-500">{arabicDate(notification.createdAt)}</p>
-                  {notification.appointmentId && data?.some(a => a.id === notification.appointmentId) && <Link className="btn-outline mt-2 min-h-[48px]" to={`/account?appointment=${encodeURIComponent(notification.appointmentId)}`}>{t("عرض الموعد")}</Link>}
+                  {notification.appointmentId && data?.some(a => a.id === notification.appointmentId) && <Link onClick={() => { handledFocus.current = null; setPanel("appointments"); }} className="btn-outline mt-2 min-h-[48px]" to={`/account?appointment=${encodeURIComponent(notification.appointmentId)}`}>{t("عرض الموعد")}</Link>}
                 </li>
               ))}
             </ul>
           </section>
         )}
 
-        <details className="glass p-4">
-          <summary className="min-h-[48px] cursor-pointer font-bold">{t("الإعدادات: المنطقة وتفضيلات الإشعارات")}</summary>
+        {panel === "settings" && <section className="glass p-4" aria-label={t("الإعدادات")}>
+          <h2 className="font-bold">{t("الإعدادات")}</h2>
           <div className="mt-3 space-y-4">
         <section className="glass p-4">
           <h2 className="flex items-center gap-2 font-bold text-slate-900"><MapPin className="h-5 w-5 text-primary-600" />{t(" منطقتي")}</h2>
@@ -462,12 +490,19 @@ export default function MyAccount() {
         </section>
 
         <ReminderCard />
+        {!isOffline && <details className="rounded-xl border border-slate-200 bg-white p-3">
+          <summary className="min-h-[48px] cursor-pointer font-semibold">{t("استرجاع مواعيدي القديمة")}</summary>
+          <GuestIdentity userId={user.id} />
+        </details>}
+        <ProfilesCard />
+        <button type="button" onClick={handleLogout} className="flex min-h-[48px] items-center gap-2 px-3 text-sm font-semibold text-red-700"><LogOut className="h-4 w-4" aria-hidden="true" />{t("تسجيل الخروج")}</button>
 
           </div>
-        </details>
-        <ProfilesCard />
+        </section>}
+        {panel !== "settings" && <ProfilesCard compact />}
         {cancelCandidate && <CancelAppointmentDialog appointment={cancelCandidate} busy={Boolean(cancellingId)} onClose={() => setCancelCandidate(null)} onConfirm={() => void cancel(cancelCandidate.id)} />}
       </div>
+    </div>
     </div>
   );
 }

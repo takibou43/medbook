@@ -84,6 +84,11 @@ export function ReminderCard({ compact = false }: { compact?: boolean }) {
           <p className="mt-2 text-xs text-slate-500">
             {state === "denied" ? t("الإشعارات محظورة في إعدادات المتصفح لهذا الموقع.") : t("الإشعارات غير مفعّلة")}
           </p>
+          {state === "denied" && <details className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
+            <summary className="min-h-[44px] cursor-pointer font-semibold text-primary-700">{t("كيفية تفعيل الإشعارات")}</summary>
+            <p className="mt-2">{t("على أندرويد: افتح إعدادات المتصفح، ثم إعدادات المواقع، ثم الإشعارات، واختر MedBook واسمح بالإشعارات. تأكد أيضًا من السماح بإشعارات المتصفح في إعدادات الهاتف، ثم عد واضغط المحاولة مرة أخرى.")}</p>
+            <p className="mt-2">{t("على آيفون: أضف MedBook إلى الشاشة الرئيسية وافتحه منها. راجع إعدادات الهاتف، ثم الإشعارات، ثم MedBook. على الحاسوب: افتح إعدادات الموقع بجانب شريط العنوان واسمح بالإشعارات.")}</p>
+          </details>}
           <Button className="mt-3 min-h-[44px] w-full" onClick={enable} loading={busy}>
             {state === "denied" ? t("المحاولة مرة أخرى") : t("تفعيل الإشعارات")}
           </Button>

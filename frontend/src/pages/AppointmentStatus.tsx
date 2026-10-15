@@ -91,7 +91,7 @@ export default function AppointmentStatus() {
     <div className="container-app py-8">
       <div className="mx-auto max-w-md space-y-4">
         <div className="text-center">
-          <h1 className="text-xl font-extrabold text-slate-900">{t("متابعة دورك")}</h1>
+          <h1 className="text-xl font-extrabold text-slate-900">{t(data.isToday ? "متابعة دورك" : "تفاصيل الموعد")}</h1>
           <p className="mt-1 text-sm text-slate-500">
             {doctorName}
           </p>
@@ -166,9 +166,8 @@ export default function AppointmentStatus() {
         ) : (
           <div className="card p-6 text-center">
             <CalendarDays className="mx-auto mb-2 h-9 w-9 text-primary-600" />
-            <p className="text-lg font-extrabold text-slate-900">{dateLabel}</p>
-            <p className="text-2xl font-extrabold text-primary-700">{data.startTime}</p>
-            <p className="mt-2 text-xs text-slate-500">{t("يظهر رقم دورك في هذه الصفحة صباح يوم الموعد. ")}</p>
+            <p className="text-lg font-extrabold text-slate-900">{t("موعدك القادم")}</p>
+            <p className="mt-2 text-xs text-slate-500">{t("تبدأ متابعة الدور صباح يوم موعدك.")}</p>
           </div>
         )}
 

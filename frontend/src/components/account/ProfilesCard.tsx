@@ -15,7 +15,7 @@ const STATUS_LABEL = { PENDING: "طلبك قيد مراجعة الإدارة", V
  * «ملفاتي»: لحساب يملك ملف طبيب، انتقال واضح إلى لوحة الأطباء بالجلسة نفسها (دون كلمة مرور ودون رموز في الرابط)،
  * ولحساب مريض بلا ملف طبيب، طريق تقديم طلب الطبيب من الحساب نفسه. تقديم الطلب لا يعني الاعتماد.
  */
-export function ProfilesCard() {
+export function ProfilesCard({ compact = false }: { compact?: boolean }) {
   useLanguage();
   const { user, prepareSwitchToDoctor } = useAuth();
   const { showToast } = useToast();
@@ -33,6 +33,12 @@ export function ProfilesCard() {
       setBusy(false);
     }
   }
+
+  if (compact) return profiles.doctor ? (
+    <button type="button" onClick={goDoctor} disabled={busy} className="btn-outline flex min-h-[48px] w-full items-center justify-center gap-2">
+      <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />{busy ? t("جارٍ الانتقال…") : t("التبديل إلى حساب الطبيب")}
+    </button>
+  ) : null;
 
   return (
     <section className="glass space-y-3 p-4" aria-labelledby="profiles-title">

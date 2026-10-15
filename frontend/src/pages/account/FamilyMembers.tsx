@@ -158,12 +158,16 @@ export default function FamilyMembers() {
                     <MemberForm initial={toForm(m)} submitting={update.isPending} onSubmit={(v) => update.mutate({ id: m.id, v })} onCancel={() => setEditingId(null)} />
                   </li>
                 ) : (
-                  <li key={m.id} className="glass flex items-center justify-between gap-3 p-4">
+                  <li key={m.id} className="glass flex flex-wrap items-center justify-between gap-3 p-4">
                     <div className="min-w-0">
                       <p className="truncate font-bold text-slate-900">{memberFullName(m)}</p>
                       <p className="text-xs text-slate-500">{t(RELATIONSHIP_LABELS[m.relationship] ?? "")}</p>
                     </div>
-                    <div className="flex shrink-0 gap-1">
+                    <div className="flex items-center gap-2">
+                      <Link to={`/?member=${encodeURIComponent(m.id)}`} className="btn-primary min-h-[48px] text-sm">{t("احجز له")}</Link>
+                      <details className="relative">
+                        <summary className="flex min-h-[48px] cursor-pointer items-center rounded-xl border border-slate-200 px-3 text-sm font-semibold">{t("خيارات")}</summary>
+                        <div className="absolute end-0 z-10 mt-1 flex rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
                       <button type="button" aria-label={t("تعديل")} onClick={() => setEditingId(m.id)} className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100">
                         <Pencil className="h-4 w-4" aria-hidden="true" />
                       </button>
@@ -178,6 +182,8 @@ export default function FamilyMembers() {
                       >
                         <Archive className="h-4 w-4" aria-hidden="true" />
                       </button>
+                        </div>
+                      </details>
                     </div>
                   </li>
                 )

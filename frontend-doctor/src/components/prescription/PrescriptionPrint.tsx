@@ -223,6 +223,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
   const [zoom, setZoom] = useState<number | null>(null); // null = ملاءمة العرض
   const [paperHeight, setPaperHeight] = useState(210 * 96 / 25.4);
   const [useTemplate, setUseTemplate] = useState(true);
+  const [autoMultiPage, setAutoMultiPage] = useState(false);
   const [imageReady, setImageReady] = useState(false);
   const [imageError, setImageError] = useState(false);
   const sourceTemplate = data?.template ?? null;
@@ -249,6 +250,17 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
   }, [open, sourceTemplate, autoBalance, data?.doctor, data?.language]);
   const templateOverflow = Boolean(template && paperHeight > 210 * 96 / 25.4 + 2);
   const scale = zoom ?? fit;
+  useEffect(() => {
+    if (open) { setUseTemplate(true); setAutoMultiPage(false); }
+  }, [open, sourceTemplate?.image]);
+  useEffect(() => {
+    // Read the current paper rather than a previous preview's cached height.
+    // Single-page stationery cannot safely contain an overflowing prescription.
+    if (open && template && !templatePreparing && paperRef.current && paperRef.current.offsetHeight > 210 * 96 / 25.4 + 2) {
+      setUseTemplate(false);
+      setAutoMultiPage(true);
+    }
+  }, [open, template, templatePreparing, paperHeight]);
   // Browser keyboard/menu printing must also preserve every medication when the custom sheet cannot fit.
   useEffect(() => {
     if (!open) return;
@@ -309,7 +321,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
     setImageError(false);
   }, [open, template?.image]);
 
-  useEffect(() => { if (open) setUseTemplate(true); }, [open, sourceTemplate?.image]);
+
 
   if (!open || !data) return null;
 
@@ -352,7 +364,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
         {/* شريط الأدوات خارج الورقة وثابت أعلى المعاينة */}
         <div className="rx-no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:px-5">
           {data.template && <label className="text-sm"><input type="checkbox" checked={useTemplate} onChange={e => setUseTemplate(e.target.checked)} /> {data.language === "fr" ? "Utiliser mon modèle" : "استخدام قالبي المحفوظ"}</label>}
-          {templateOverflow && <p role="alert" className="w-full text-sm text-red-700">{data.language === "fr" ? "Le contenu dépasse la zone du modèle. Désactivez le modèle pour imprimer toutes les pages sans couper le texte." : "المحتوى يتجاوز مساحة القالب. ألغِ استخدام القالب لطباعة الوصفة كاملة على عدة صفحات دون قص النص."}</p>}
+          {autoMultiPage && <p role="status" className="w-full text-sm text-slate-700">{data.language === "fr" ? "Ordonnance longue : mise en page multipage activée automatiquement pour conserver tout le contenu. Votre modèle enregistré reste inchangé." : "الوصفة طويلة؛ استُخدم تلقائيًا تنسيق متعدد الصفحات لطباعة المحتوى كاملًا. قالبك المحفوظ لم يتغيّر."}</p>}
           {templatePreparing && <p role="status" className="text-sm">{data.language === "fr" ? "Préparation de la mise en page…" : "جارٍ تجهيز تنسيق الوصفة…"}</p>}
           {balanceError && <p role="alert" className="text-sm text-amber-800">{balanceError}</p>}
           {(pdfMessage || localFolder.error) && <p role="status" className="w-full text-sm text-slate-700">{pdfMessage || t("تعذّر قراءة إعداد المجلد؛ الطباعة الحالية لن تحفظ نسخة تلقائية.")}</p>}

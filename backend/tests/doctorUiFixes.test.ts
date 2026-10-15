@@ -73,6 +73,12 @@ describe("مرضاي — آخر زيارة مكتملة والموعد القا�
     expect(p.nextAppointment).toBeNull();
   });
 
+  it("المواعيد المكتملة تبقى في التاريخ ولا تصلح مرجعًا لجدولة العودة", () => {
+    const [p] = summarizePatients([row({ id: "done", status: "COMPLETED" })], NOW);
+    expect(p.lastCompletedVisit?.appointmentId).toBe("done");
+    expect(p.lastAppointmentId).toBeNull();
+  });
+
   it("يميّز فرد العائلة عن صاحب الحساب، ولا يدمج الضيوف أو الأسماء المتشابهة", () => {
     const list = summarizePatients(
       desc([

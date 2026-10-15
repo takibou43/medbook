@@ -94,7 +94,7 @@ async function findByIdempotencyKey(doctorId: string, key: string) {
 
 export async function createGuestAppointment(userId: string, input: FollowUpAppointmentInput & { firstName: string; lastName: string; phone: string }) {
   const doctor = await requireBookingDoctor(userId);
-  // الطبيب الذي لديه مساعد فعلي لا يحجز بنفسه (المساعد وحده يسجّل الحجوزات). فحص سريع قبل أي عمل،
+  // المساعد في المناوبة يتولى الحجوزات؛ وخارج مناوبته يستطيع الطبيب الحجز. فحص سريع قبل أي عمل،
   // والفحص الحاسم يتكرّر داخل المعاملة بعد قفل الطابور أدناه فلا يتجاوزه تغيّر متزامن لحالة المساعد.
   await assertDoctorMayCreateAppointments(doctor.id);
   const replay = await findByIdempotencyKey(doctor.id, input.idempotencyKey);
@@ -161,6 +161,7 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
     throw ApiError.badRequest("أكمل اسم المريض ولقبه ورقم هاتفه قبل برمجة المتابعة.");
   if (isGuest && (input.familyMemberId || input.treatmentPlanId || input.treatmentSessionId || input.dentalFollowUpId))
     throw ApiError.badRequest("متابعة الضيف تبقى لنفس المريض دون ربطها بحساب عائلي أو خطة حساب آخر.");
+  if (parent.status === AppointmentStatus.COMPLETED) throw ApiError.badRequest("الموعد المكتمل للعرض فقط، ولا يمكن جدولة موعد عودة انطلاقًا منه.");
   if (parent.status === AppointmentStatus.CANCELLED) throw ApiError.badRequest("لا يمكن برمجة موعد عودة انطلاقًا من موعد ملغى.");
 
   // المستفيد: نفس مستفيد الموعد الأصلي ما لم يُختر غيره صراحةً — وأي فرد يجب أن يكون من عائلة نفس صاحب الحساب.
@@ -217,6 +218,10 @@ export async function createFollowUpAppointment(userId: string, parentAppointmen
         date,
         startTime: input.startTime,
         create: async (tx, slot) => {
+          // قفل الأصل حتى لا ينتهي بالتزامن بين التحقق وإنشاء العودة.
+          const originals = await tx.$queryRaw<{ status: AppointmentStatus }[]>`SELECT status FROM appointments WHERE id = ${parent.id} FOR UPDATE`;
+          if (!originals.length || originals[0].status === AppointmentStatus.COMPLETED || originals[0].status === AppointmentStatus.CANCELLED)
+            throw ApiError.conflict("تغيّرت حالة الموعد الأصلي؛ لا يمكن الجدولة من موعد مكتمل أو ملغى.");
           const row = await tx.appointment.create({
             data: {
               financial,

@@ -158,7 +158,7 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
   it("30 طلب 'لم يحضر' متزامنًا لنفس الموعد → فائز واحد وسجل SMS واحد", async () => {
     const d = await mkDoctor("noshow");
     const a = await db.appointment.create({
-      data: { doctorId: d.id, date: today, startTime: "08:00", endTime: "08:20", status: "CONFIRMED", guestFirstName: "g", guestLastName: "x", guestPhone: "0551234567" },
+      data: { doctorId: d.id, date: new Date(today.getTime() - 86400000), startTime: "08:00", endTime: "08:20", status: "CONFIRMED", guestFirstName: "g", guestLastName: "x", guestPhone: "0551234567" },
     });
     const rs = await Promise.all(Array.from({ length: 30 }, (_, i) => call("PATCH", "/api/appointments/" + a.id, { status: "NO_SHOW" }, d.token, i)));
     expect(rs.some((r) => r.status >= 500)).toBe(false);

@@ -149,9 +149,9 @@ const PLAN_DETAIL_INCLUDE = {
 async function loadOwnedPlan(doctorId: string, planId: string, db: Prisma.TransactionClient = prisma) {
   const plan = await db.dentalTreatmentPlan.findFirst({ where: { id: planId, doctorId }, include: PLAN_DETAIL_INCLUDE });
   if (!plan) throw ApiError.notFound(PLAN_NOT_FOUND);
-  // مرجع «برمجة موعد عودة» من الخطة: آخر موعد غير ملغى لنفس المستفيد عند هذا الطبيب (يثبت العلاقة العلاجية).
+  // مرجع «برمجة موعد عودة» من الخطة: آخر موعد غير ملغى وغير مكتمل لنفس المستفيد عند هذا الطبيب (يثبت العلاقة العلاجية).
   const anchor = await db.appointment.findFirst({
-    where: { doctorId, patientId: plan.patientId, familyMemberId: plan.familyMemberId, status: { not: AppointmentStatus.CANCELLED } },
+    where: { doctorId, patientId: plan.patientId, familyMemberId: plan.familyMemberId, status: { notIn: [AppointmentStatus.CANCELLED, AppointmentStatus.COMPLETED] } },
     orderBy: [{ date: "desc" }, { startTime: "desc" }],
     select: { id: true },
   });

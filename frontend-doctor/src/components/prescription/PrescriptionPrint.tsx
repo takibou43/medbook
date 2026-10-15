@@ -1,3 +1,6 @@
+import { useAuth } from "../../context/AuthContext";
+import { usePrescriptionFolder } from "../../hooks/usePrescriptionFolder";
+import { authorizePrescriptionFolder, prescriptionPdfFilename, writePrescriptionPdf } from "../../lib/prescriptionFolder";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
@@ -205,6 +208,13 @@ const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2];
  */
 export function PrescriptionPreview({ open, data, onClose }: { open: boolean; data: PrescriptionSheetData | null; onClose: () => void }) {
   useLanguage();
+  const { user } = useAuth();
+  const localFolder = usePrescriptionFolder(user?.id ?? "");
+  const [savingPdf, setSavingPdf] = useState(false);
+  const savingPdfRef = useRef(false);
+  const [pdfMessage, setPdfMessage] = useState("");
+  const printContext = useRef({ uid: user?.id, data, open });
+  printContext.current = { uid: user?.id, data, open };
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -303,6 +313,30 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
 
   if (!open || !data) return null;
 
+  async function printAndSave() {
+    if (savingPdfRef.current || !data) return;
+    if (!localFolder.folder) { window.print(); return; }
+    if (!paperRef.current) return;
+    const context = printContext.current;
+    const stillCurrent = () => printContext.current.uid === context.uid && printContext.current.data === context.data && printContext.current.open;
+    savingPdfRef.current = true; setSavingPdf(true); setPdfMessage("");
+    try {
+      // Request permission while this click still carries user activation.
+      await authorizePrescriptionFolder(localFolder.folder);
+      const { createPrescriptionPdf } = await import("../../lib/prescriptionPdf");
+      if (!stillCurrent() || !paperRef.current) return;
+      const pdf = await createPrescriptionPdf(paperRef.current);
+      if (!stillCurrent()) return;
+      await writePrescriptionPdf(localFolder.folder, prescriptionPdfFilename(data.patientName, data.day), pdf);
+      if (stillCurrent()) {
+        setPdfMessage(t("حُفظت نسخة PDF في المجلد المختار."));
+        window.print();
+      }
+    } catch {
+      setPdfMessage(t("لم تُحفظ نسخة PDF. تحقق من إذن المجلد في إعدادات الوصفة ثم أعد المحاولة."));
+    } finally { savingPdfRef.current = false; setSavingPdf(false); }
+  }
+
   const stepZoom = (dir: 1 | -1) => {
     const cur = scale;
     const next = dir > 0 ? ZOOM_STEPS.find((z) => z > cur + 0.01) : [...ZOOM_STEPS].reverse().find((z) => z < cur - 0.01);
@@ -321,10 +355,12 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
           {templateOverflow && <p role="alert" className="w-full text-sm text-red-700">{data.language === "fr" ? "Le contenu dépasse la zone du modèle. Désactivez le modèle pour imprimer toutes les pages sans couper le texte." : "المحتوى يتجاوز مساحة القالب. ألغِ استخدام القالب لطباعة الوصفة كاملة على عدة صفحات دون قص النص."}</p>}
           {templatePreparing && <p role="status" className="text-sm">{data.language === "fr" ? "Préparation de la mise en page…" : "جارٍ تجهيز تنسيق الوصفة…"}</p>}
           {balanceError && <p role="alert" className="text-sm text-amber-800">{balanceError}</p>}
+          {(pdfMessage || localFolder.error) && <p role="status" className="w-full text-sm text-slate-700">{pdfMessage || t("تعذّر قراءة إعداد المجلد؛ الطباعة الحالية لن تحفظ نسخة تلقائية.")}</p>}
+          {localFolder.folder && <p className="w-full text-xs text-slate-600">{t("تُحفظ النسخة عند الضغط على طباعة، حتى إذا ألغيت نافذة الطباعة لاحقًا.")}</p>}
           {imageError && <p role="alert" className="text-red-700">{data.language === "fr" ? "Image illisible. Désactivez le modèle." : "تعذر عرض الصورة. ألغِ استخدام القالب."}</p>}
           <div className="min-w-0 max-sm:sr-only">
             <h2 id={titleId} className="text-base font-bold text-slate-900">{t("معاينة الوصفة")}</h2>
-            <p className="hidden text-xs text-slate-500 sm:block">{t("ورقة A5 كما ستُطبع. الطباعة لا تحفظ الوصفة ولا ترسلها ولا تغيّر الموعد.")}</p>
+            <p className="hidden text-xs text-slate-500 sm:block">{t("ورقة A5 كما ستُطبع. تُحفظ نسخة PDF على جهازك إذا فعّلت المجلد من إعدادات الوصفة.")}</p>
           </div>
           <div className="flex w-full flex-wrap items-center justify-between gap-1.5 sm:w-auto sm:justify-start">
             <div className="flex items-center rounded-xl border border-slate-200" role="group" aria-label={t("التكبير")}>
@@ -342,8 +378,8 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
             <button type="button" onClick={onClose} className="btn-outline whitespace-nowrap px-2 text-xs sm:px-3 sm:text-sm">
               <X className="h-4 w-4" aria-hidden="true" /> {t("رجوع للتعديل")}
             </button>
-            <button type="button" disabled={templatePreparing || templateOverflow || Boolean(template && (!imageReady || imageError))} onClick={() => window.print()} className="btn-primary whitespace-nowrap px-2 text-xs sm:px-3 sm:text-sm">
-              <Printer className="h-4 w-4" aria-hidden="true" /> {t("طباعة")}
+            <button type="button" disabled={savingPdf || localFolder.loading || templatePreparing || templateOverflow || Boolean(template && (!imageReady || imageError))} onClick={printAndSave} className="btn-primary whitespace-nowrap px-2 text-xs sm:px-3 sm:text-sm">
+              <Printer className="h-4 w-4" aria-hidden="true" /> {savingPdf ? t("جارٍ حفظ PDF…") : t("طباعة")}
             </button>
           </div>
           <p className="w-full text-xs leading-5 text-slate-600">{t("عند الطباعة: اختر ورق A5 والحجم الفعلي 100%. إن ظهر في الورقة رابط الموقع أو عنوان الصفحة أو الوقت فهي إضافات المتصفح؛ ألغِ «Headers and footers» من إعدادات الطباعة.")}</p>

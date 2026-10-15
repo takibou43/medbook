@@ -71,10 +71,10 @@ describe.skipIf(!TEST_URL)("منع حجز الطبيب عند وجود مساع�
     ids.doctors.push(d.id);
     return { doctorId: d.id, userId: u.id, token: signAccessToken({ sub: u.id, role: "DOCTOR" }) };
   }
-  async function mkAssistant(doctorId: string, over: { isActive?: boolean; userActive?: boolean } = {}) {
+  async function mkAssistant(doctorId: string, over: { isActive?: boolean; userActive?: boolean; shiftEndsAt?: Date | null } = {}) {
     const n = ++seq;
     const u = await db.user.create({ data: { email: `${tag}-a${n}@test.local`, passwordHash: "x", role: "ASSISTANT", isActive: over.userActive ?? true } });
-    const a = await db.assistant.create({ data: { userId: u.id, doctorId, firstName: "م" + n, lastName: tag, isActive: over.isActive ?? true } });
+    const a = await db.assistant.create({ data: { userId: u.id, doctorId, firstName: "م" + n, lastName: tag, isActive: over.isActive ?? true, shiftEndsAt: over.shiftEndsAt === undefined ? new Date(Date.now() + 3600000) : over.shiftEndsAt } });
     ids.users.push(u.id);
     return { assistantId: a.id, userId: u.id, token: signAccessToken({ sub: u.id, role: "ASSISTANT" }) };
   }
@@ -151,6 +151,21 @@ describe.skipIf(!TEST_URL)("منع حجز الطبيب عند وجود مساع�
     // بقية الوظائف تبقى: عرض المواعيد والطابور.
     expect((await call("GET", "/api/appointments", d.token)).status).toBe(200);
     expect((await call("GET", "/api/appointments/queue", d.token)).status).toBe(200);
+  });
+
+  it("يسمح بحجز الطبيب قبل بدء مناوبة المساعد وبعد انتهائها، ويتغير الزر مع المناوبة", async () => {
+    const d = await mkDoctor();
+    const a = await mkAssistant(d.doctorId, { shiftEndsAt: null });
+    for (const shiftEndsAt of [null, new Date(Date.now() - 1000)]) {
+      await db.assistant.update({ where: { id: a.assistantId }, data: { shiftEndsAt } });
+      expect((await guest(d.token)).status).toBe(201);
+      expect((await call("GET", "/api/doctor/dashboard", d.token)).data.canCreateAppointments).toBe(true);
+    }
+    expect((await call("POST", "/api/shifts", a.token, { active: true })).status).toBe(200);
+    expect((await guest(d.token)).status).toBe(403);
+    expect((await call("GET", "/api/doctor/dashboard", d.token)).data.canCreateAppointments).toBe(false);
+    expect((await call("POST", "/api/shifts", a.token, { endTime: null })).status).toBe(200);
+    expect((await guest(d.token)).status).toBe(201);
   });
 
   it("3) المحاولة نفسها بمفتاح طلب مختلف أو بوقت آخر تبقى 403 (لا التفاف عبر idempotencyKey)", async () => {

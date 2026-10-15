@@ -137,7 +137,7 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
   if (q.isError || !q.data) return <p className="card p-4 text-sm text-red-600" role="alert">{apiErrorMessage(q.error, t("تعذّر تحميل الخطة."))}</p>;
   const p = q.data;
   const active = p.status === "ACTIVE";
-  // مرجع موعد العودة: آخر موعد غير ملغى لنفس المستفيد عندك (يحسبه الخادم).
+  // مرجع موعد العودة: آخر موعد غير ملغى وغير مكتمل لنفس المستفيد عندك (يحسبه الخادم).
   const anchorAppointmentId = p.anchorAppointmentId ?? undefined;
 
   const move = (idx: number, dir: -1 | 1) => {
@@ -242,7 +242,7 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
         )}
         {active && <p className="mt-2 text-xs text-slate-600">{t("إضافة الجلسة لا تحجز موعدًا ولا ترسل إشعارًا. بعد إضافتها، استخدم «برمجة موعد عودة» لاختيار التاريخ والوقت وتأكيد الحجز.")}</p>}
         {!anchorAppointmentId && active && (
-          <p className="mt-2 text-xs text-slate-500">{t("لا يوجد موعد سابق لهذا المستفيد عندك، لذلك لا يمكن برمجة موعد عودة من هنا بعد.")}</p>
+          <p className="mt-2 text-xs text-slate-500">{t("لا يوجد موعد قابل للجدولة لهذا المستفيد. المواعيد المكتملة للعرض فقط.")}</p>
         )}
       </section>
 
@@ -252,7 +252,7 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
           <p className="mb-3 text-xs text-slate-600">{t("حدّد التاريخ والساعة والدقيقة وسبب المتابعة. يجوز اختيار وقت محجوز: لا يتغير موعد أي مريض، وتأخذ المتابعة أولوية عند تساوي الوقت.")}</p>
           <Button variant="outline" disabled={!anchorAppointmentId || run.isPending} onClick={() => setFollowUpCtx({ parentAppointmentId: anchorAppointmentId!, beneficiaryName: p.beneficiary.name, familyMemberId: p.familyMemberId ?? null, treatmentPlanId: p.id })}>
             <CalendarPlus className="h-4 w-4" />{t(" تحديد موعد المتابعة ")}</Button>
-          {!anchorAppointmentId && <p className="mt-2 text-xs text-slate-500">{t("لا يوجد موعد سابق لهذا المستفيد عندك، لذلك لا يمكن تحديد موعد متابعة من هنا بعد.")}</p>}
+          {!anchorAppointmentId && <p className="mt-2 text-xs text-slate-500">{t("لا يوجد موعد قابل للجدولة لهذا المستفيد. المواعيد المكتملة للعرض فقط.")}</p>}
         </section>
       )}
 

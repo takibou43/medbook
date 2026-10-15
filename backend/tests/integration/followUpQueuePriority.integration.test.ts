@@ -73,7 +73,7 @@ describe.skipIf(!TEST_URL)("أولوية موعد العودة في الطابو
     let assistantToken = "";
     if (withAssistant) {
       const au = await db.user.create({ data: { email: `${tag}-a${n}@test.local`, passwordHash: "x", role: "ASSISTANT" } });
-      await db.assistant.create({ data: { userId: au.id, doctorId: d.id, firstName: "م" + n, lastName: tag, isActive: true } });
+      await db.assistant.create({ data: { userId: au.id, doctorId: d.id, firstName: "م" + n, lastName: tag, isActive: true, shiftEndsAt: new Date(Date.now() + 8 * 3600000) } });
       ids.users.push(au.id);
       assistantToken = signAccessToken({ sub: au.id, role: "ASSISTANT" });
     }
@@ -150,7 +150,7 @@ describe.skipIf(!TEST_URL)("أولوية موعد العودة في الطابو
   it("1) الترحيل يعلّم مواعيد العودة المثبتة فقط، ولا يغيّر وقتًا ولا حالة، ويعاد بلا أثر", async () => {
     const { backfillFollowUpFlag } = await import("../../src/lib/backfillFollowUpFlag");
     const d = await mkDoctor();
-    const parent = await mkToday(d.doctorId, "أصل", { status: "COMPLETED" });
+    const parent = await mkToday(d.doctorId, "أصل", { status: "PENDING" });
     const mk = (name: string, o: Record<string, unknown>) =>
       db.appointment.create({
         data: {
@@ -180,7 +180,7 @@ describe.skipIf(!TEST_URL)("أولوية موعد العودة في الطابو
   // ---------------- الإنشاء والتعارض ----------------
   it("2) إنشاء موعد عودة عبر الـAPI يضبط isFollowUp والوقت HH:mm، ولا يمس الموعد الأصلي", async () => {
     const d = await mkDoctor();
-    const parent = await mkToday(d.doctorId, "أصل", { status: "COMPLETED" });
+    const parent = await mkToday(d.doctorId, "أصل", { status: "PENDING" });
     const r = await call("POST", `/api/doctor/appointments/${parent.id}/follow-up`, d.token, { date: dayStr(2), startTime: "10:00", idempotencyKey: randomUUID() });
     expect(r.status).toBe(201);
     expect(r.data.startTime).toMatch(HHMM);
@@ -190,13 +190,13 @@ describe.skipIf(!TEST_URL)("أولوية موعد العودة في الطابو
     expect(row.parentAppointmentId).toBe(parent.id);
     expect(row.startTime).toMatch(HHMM);
     const parentAfter = await db.appointment.findUniqueOrThrow({ where: { id: parent.id } });
-    expect(parentAfter.status).toBe("COMPLETED");
+    expect(parentAfter.status).toBe("PENDING");
     expect(parentAfter.isFollowUp).toBe(false);
   });
 
   it("3) تعارض الوقت: موعد العودة يأخذ أقرب وقت شاغر ولا يُحذف الحجز السابق ولا يُعدَّل ولا يُلغى", async () => {
     const d = await mkDoctor();
-    const parent = await mkToday(d.doctorId, "أصل", { status: "COMPLETED" });
+    const parent = await mkToday(d.doctorId, "أصل", { status: "PENDING" });
     const booked = await db.appointment.create({
       data: { doctorId: d.doctorId, date: new Date(`${dayStr(3)}T00:00:00Z`), startTime: "10:00", endTime: "10:15", status: "CONFIRMED", guestFirstName: "سابق", guestLastName: tag, guestPhone: "0551234567" },
     });
@@ -336,7 +336,7 @@ describe.skipIf(!TEST_URL)("أولوية موعد العودة في الطابو
   // ---------------- الصلاحيات ----------------
   it("12) المساعد لا ينشئ موعد عودة (403)، والطبيب ينشئه حتى مع وجود مساعد، والحجز العادي للطبيب يبقى ممنوعًا", async () => {
     const d = await mkDoctor(true);
-    const parent = await mkToday(d.doctorId, "أصل", { status: "COMPLETED" });
+    const parent = await mkToday(d.doctorId, "أصل", { status: "PENDING" });
     const body = () => ({ date: dayStr(4), startTime: "09:00", idempotencyKey: randomUUID() });
     const asAssistant = await call("POST", `/api/doctor/appointments/${parent.id}/follow-up`, d.assistantToken, body());
     expect(asAssistant.status).toBe(403);
@@ -350,7 +350,7 @@ describe.skipIf(!TEST_URL)("أولوية موعد العودة في الطابو
   // ---------------- التزامن ----------------
   it("13) حجوزات المرضى وجدولة العودة معًا لنفس الوقت ⇒ الكل ينجح بأوقات مختلفة بلا تكرار ولا 5xx", async () => {
     const d = await mkDoctor();
-    const parent = await mkToday(d.doctorId, "أصل", { status: "COMPLETED" });
+    const parent = await mkToday(d.doctorId, "أصل", { status: "PENDING" });
     const date = dayStr(5);
     const patientTokens: string[] = [];
     for (let i = 0; i < 6; i++) {
@@ -378,7 +378,7 @@ describe.skipIf(!TEST_URL)("أولوية موعد العودة في الطابو
 
   it("14) إعادة إرسال نفس طلب موعد العودة (نفس المفتاح) لا ينشئ موعدين", async () => {
     const d = await mkDoctor();
-    const parent = await mkToday(d.doctorId, "أصل", { status: "COMPLETED" });
+    const parent = await mkToday(d.doctorId, "أصل", { status: "PENDING" });
     const key = randomUUID();
     const [a, b] = await Promise.all([1, 2].map(() => call("POST", `/api/doctor/appointments/${parent.id}/follow-up`, d.token, { date: dayStr(6), startTime: "09:00", idempotencyKey: key })));
     expect([a.status, b.status].every((s) => s === 200 || s === 201)).toBe(true);

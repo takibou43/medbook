@@ -17,7 +17,6 @@ import { DayTimePicker, DayTimeChoice } from "../components/booking/DayTimePicke
 import { PatientForm, PatientStep } from "../components/booking/PatientStep";
 import { ConfirmStep } from "../components/booking/ConfirmStep";
 import { ConfirmedBooking, SuccessModal } from "../components/booking/SuccessModal";
-import { DoctorSearchModal } from "../components/booking/DoctorSearchModal";
 import { InlineError } from "../components/booking/StepParts";
 import { useAuth } from "../context/AuthContext";
 import { ReminderCard } from "../components/account/ReminderCard";
@@ -48,7 +47,6 @@ export default function BookAppointment() {
   const [step, setStep] = useState<StepId>("specialty");
   const [specialtyId, setSpecialtyId] = useState<string | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [confirmed, setConfirmed] = useState<ConfirmedBooking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // اختيار اختياري لليوم/الوقت. null = السلوك الحالي تمامًا (أول دور متاح يعيّنه الخادم).
@@ -365,7 +363,7 @@ export default function BookAppointment() {
                   setSpecialtyId(id);
                   setStep("doctor");
                 }}
-                onOpenSearch={() => setSearchOpen(true)}
+                onDoctorSelect={chooseDoctorDirectly}
               />
             )}
 
@@ -468,15 +466,7 @@ export default function BookAppointment() {
         />
       )}
 
-      {searchOpen && (
-        <DoctorSearchModal
-          onClose={() => setSearchOpen(false)}
-          onSelect={(d) => {
-            setSearchOpen(false);
-            chooseDoctorDirectly(d);
-          }}
-        />
-      )}
+
     </div>
   );
 }

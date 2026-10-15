@@ -1989,5 +1989,10 @@
   "تبدأ متابعة الدور صباح يوم موعدك.": "Le suivi de la file commence le matin de votre rendez-vous.",
   "احجز له": "Prendre rendez-vous",
   "خيارات": "Options",
-  "هذا الفرد غير متاح للحجز. اختر المستفيد من الموعد.": "Ce membre n’est pas disponible pour la réservation. Choisissez le bénéficiaire du rendez-vous."
+  "هذا الفرد غير متاح للحجز. اختر المستفيد من الموعد.": "Ce membre n’est pas disponible pour la réservation. Choisissez le bénéficiaire du rendez-vous.",
+  "اكتب اسم الطبيب أو لقبه…": "Saisissez le prénom ou le nom du médecin…",
+  "اكتب حرفين على الأقل من الاسم أو اللقب.": "Saisissez au moins deux lettres du prénom ou du nom.",
+  "تحديد المنطقة — اختياري": "Choisir une région — facultatif",
+  "فلتر المنطقة مفعّل": "Filtre de région actif",
+  "اختيار الموعد": "Choisir un rendez-vous"
 }

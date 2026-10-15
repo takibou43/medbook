@@ -1,9 +1,9 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, catalogName } from "../../i18n/locale.ts";
 import { forwardRef } from "react";
-import { Search } from "lucide-react";
+import { DoctorNameSearch } from "./DoctorNameSearch";
 import { EmptyState } from "../ui/States";
-import { Specialty } from "../../types";
+import { Doctor, Specialty } from "../../types";
 import { doctorsCountLabel } from "../../lib/booking";
 import { SpecialtyIcon } from "../../lib/specialtyIcons";
 import { StepHeading, InlineError } from "./StepParts";
@@ -22,13 +22,14 @@ interface Props {
   errorMessage?: string;
   onRetry: () => void;
   onSelect: (specialtyId: string) => void;
-  onOpenSearch: () => void;
+  onDoctorSelect: (doctor: Doctor) => void;
 }
 
 // الخطوة 1: "اختر التخصص". التخصصات وأعدادها مشتقّة من الأطباء الموثّقين الفعليين المعروضين للمريض
 // (لا قائمة ثابتة ولا تخصصات وهمية) — فلا يظهر تخصص إلا إذا كان فيه طبيب حقيقي يستطيع المريض حجزه.
-export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, loading, error, errorMessage, onRetry, onSelect, onOpenSearch }, ref) => { useLanguage(); return (
+export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, loading, error, errorMessage, onRetry, onSelect, onDoctorSelect }, ref) => { useLanguage(); return (
   <section aria-labelledby="step-specialty-title">
+    <DoctorNameSearch onSelect={onDoctorSelect} />
     <StepHeading ref={ref} id="step-specialty-title" hint={t("اختر التخصص الذي تحتاجه، ثم الطبيب المناسب.")}>{t("اختر التخصص ")}</StepHeading>
 
     {loading ? (
@@ -59,17 +60,6 @@ export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, l
       </ul>
     )}
 
-    {/* البحث بالاسم خيار ثانوي — المسار الأساسي هو التخصص ثم الطبيب. */}
-    {!loading && !error && (
-      <div className="mt-5 text-center">
-        <button
-          type="button"
-          onClick={onOpenSearch}
-          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-slate-600 underline-offset-4 transition hover:text-primary-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-        >
-          <Search className="h-4 w-4" aria-hidden="true" />{t("تبحث عن طبيب معين؟ ")}</button>
-      </div>
-    )}
   </section>
 ); });
 SpecialtyStep.displayName = "SpecialtyStep";

@@ -1,3 +1,4 @@
+import { PrescriptionFolderSettings } from "./PrescriptionFolderSettings";
 import { useEffect, useId, useState } from "react";
 import { FileText } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
@@ -133,6 +134,8 @@ export function PrescriptionSettingsSection() {
               <h3 className="mb-1 text-sm font-bold text-slate-800">{t("إعدادات الطباعة")}</h3>
               <p>{t("ورقة A5 عمودية ثابتة (148 × 210 مم) بهوامش 10 مم وخط واضح، واتجاه النص حسب لغة الوصفة. عند الطباعة اختر ورق A5 والحجم الفعلي 100% وألغِ الرؤوس والتذييلات.")}</p>
             </div>
+
+            <PrescriptionFolderSettings uid={uid} />
 
             <PrescriptionTemplateEditor key={uid} value={setup.template} onChange={setup.setTemplate} doctor={user?.doctor} names={{ ar: form.professional.ar?.doctorName, fr: form.professional.fr?.doctorName }} />
           </div>

@@ -1952,5 +1952,22 @@
   "تحديد موعد المتابعة": "Définir le rendez-vous de suivi",
   "لا يوجد موعد سابق لهذا المستفيد عندك، لذلك لا يمكن تحديد موعد متابعة من هنا بعد.": "Aucun rendez-vous antérieur pour ce bénéficiaire chez vous : impossible de définir un suivi d’ici pour l’instant.",
   "عمر المريض (اختياري)": "Âge du patient (facultatif)",
-  "اكتب عمرًا صحيحًا للمريض أو اتركه فارغًا.": "Saisissez un âge valide ou laissez le champ vide."
+  "اكتب عمرًا صحيحًا للمريض أو اتركه فارغًا.": "Saisissez un âge valide ou laissez le champ vide.",
+  "حفظ نسخة PDF عند الطباعة": "Enregistrer une copie PDF à l’impression",
+  "اختر مجلدًا مرة واحدة على هذا الجهاز. عند الضغط على طباعة تُحفظ نسخة PDF كاملة ثم تُفتح نافذة الطباعة، حتى إذا ألغيت الطباعة الورقية.": "Choisissez un dossier sur cet appareil. Le bouton Imprimer enregistre une copie PDF complète avant d’ouvrir l’impression, même si vous annulez ensuite.",
+  "الإعداد خاص بحسابك وهذا المتصفح، وقد يطلب المتصفح تجديد إذن الكتابة. يمكن تغيير المجلد أو إيقاف الحفظ هنا.": "Ce réglage concerne votre compte et ce navigateur. Une nouvelle autorisation peut être demandée. Vous pouvez changer de dossier ou désactiver l’enregistrement ici.",
+  "المجلد المختار:": "Dossier sélectionné :",
+  "هذا المتصفح لا يدعم اختيار مجلد للحفظ التلقائي. يمكن حفظ PDF يدويًا من نافذة الطباعة.": "Ce navigateur ne permet pas de choisir un dossier pour l’enregistrement automatique. Vous pouvez enregistrer un PDF depuis la fenêtre d’impression.",
+  "تغيير المجلد": "Changer de dossier",
+  "اختيار مجلد وتفعيل الحفظ": "Choisir un dossier et activer l’enregistrement",
+  "إيقاف الحفظ التلقائي": "Désactiver l’enregistrement automatique",
+  "تعذّر اختيار المجلد أو حفظ الإذن. حاول مجددًا.": "Impossible de choisir le dossier ou d’enregistrer l’autorisation. Réessayez.",
+  "تعذّر تغيير إعداد الحفظ.": "Impossible de modifier le réglage d’enregistrement.",
+  "تعذّر قراءة إعداد المجلد على هذا الجهاز.": "Impossible de lire le réglage du dossier sur cet appareil.",
+  "حُفظت نسخة PDF في المجلد المختار.": "Une copie PDF a été enregistrée dans le dossier choisi.",
+  "لم تُحفظ نسخة PDF. تحقق من إذن المجلد في إعدادات الوصفة ثم أعد المحاولة.": "Le PDF n’a pas été enregistré. Vérifiez l’autorisation du dossier dans les paramètres, puis réessayez.",
+  "ورقة A5 كما ستُطبع. تُحفظ نسخة PDF على جهازك إذا فعّلت المجلد من إعدادات الوصفة.": "Feuille A5 telle qu’elle sera imprimée. Un PDF est enregistré sur votre appareil si vous activez un dossier dans les paramètres.",
+  "جارٍ حفظ PDF…": "Enregistrement du PDF…",
+  "تعذّر قراءة إعداد المجلد؛ الطباعة الحالية لن تحفظ نسخة تلقائية.": "Impossible de lire le réglage du dossier ; cette impression n’enregistrera pas de copie automatique.",
+  "تُحفظ النسخة عند الضغط على طباعة، حتى إذا ألغيت نافذة الطباعة لاحقًا.": "La copie est enregistrée au clic sur Imprimer, même si vous annulez ensuite l’impression."
 }

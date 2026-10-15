@@ -8,12 +8,12 @@ type Db = Prisma.TransactionClient | typeof prisma;
 export const DOCTOR_HAS_ASSISTANT_MESSAGE = "لا يمكنك إنشاء موعد أثناء وجود مساعد مسؤول عن الحجوزات.";
 
 /**
- * مصدر واحد للإجابة عن: «هل لدى هذا الطبيب مساعد فعلي الآن؟».
+ * هل لدى الطبيب مساعد فعّال داخل المناوبة الآن ويتولى حجوزاته؟
  *
- * المساعد الفعلي = سجل Assistant بـ isActive=true وحساب مستخدمه فعّال، وهو إما:
+ * المساعد المسؤول = سجل Assistant وحساب مستخدمه فعّالان، ومناوبته لم تنتهِ، وهو إما:
  *  - مساعد مستقل (clinicId فارغ) مرتبط بهذا الطبيب مباشرة، أو
  *  - مساعد عيادة يغطّي هذا الطبيب (allDoctors أو ضمن allowedDoctorIds) وطبيبنا ما زال في العيادة نفسها.
- * الدعوات المعلّقة أو الملغاة أو المنتهية، والمساعد المعطّل، والسجل المحذوف: لا تُحتسب.
+ * المناوبة غير المبدوءة أو المنتهية والمساعد المعطّل والدعوات لا تمنع الطبيب من الحجز.
  * نفس منطق assistantDoctorWhere/resolveActingDoctorId حتى لا يختلف تعريف «المساعد» بين الحجز والصلاحيات.
  */
 export async function doctorHasActiveAssistant(doctorId: string, db: Db = prisma): Promise<boolean> {
@@ -24,15 +24,15 @@ export async function doctorHasActiveAssistant(doctorId: string, db: Db = prisma
     scope.push({ clinicId: doctor.clinicId, OR: [{ allDoctors: true }, { allowedDoctorIds: { has: doctorId } }] });
   }
   const row = await db.assistant.findFirst({
-    where: { isActive: true, user: { isActive: true }, OR: scope },
+    where: { isActive: true, user: { isActive: true }, shiftEndsAt: { gt: new Date() }, OR: scope },
     select: { id: true },
   });
   return row !== null;
 }
 
 /**
- * يرفض (403) إنشاء موعد من حساب الطبيب إن كان لديه مساعد فعلي. يُستدعى داخل معاملة الحجز بعد
- * lockDoctorQueue، وعمليات تفعيل المساعد/قبول الدعوة تأخذ القفل نفسه، فلا يمرّ طلب بين قراءة الحالة والكتابة.
+ * يرفض (403) إنشاء موعد من حساب الطبيب حين يوجد مساعد في المناوبة ضمن نطاقه.
+ * يُستدعى بعد lockDoctorQueue؛ بدء/إنهاء المناوبة وتغيير المساعدين تأخذ القفل نفسه.
  */
 export async function assertDoctorMayCreateAppointments(doctorId: string, db: Db = prisma): Promise<void> {
   if (await doctorHasActiveAssistant(doctorId, db)) throw ApiError.forbidden(DOCTOR_HAS_ASSISTANT_MESSAGE);

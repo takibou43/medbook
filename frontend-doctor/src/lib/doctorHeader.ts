@@ -138,7 +138,7 @@ export interface QuickAction {
 
 /**
  * الإجراءات السريعة حسب الصلاحيات الفعلية. «حجز موعد» لا يظهر إلا للطبيب الموثّق باشتراك فعّال
- * وبلا مساعد فعلي (canCreateAppointments من الخادم). غير ذلك يُخفى، والخادم يرفضه بـ403 مهما فعلت الواجهة.
+ * وبلا مساعد في المناوبة (canCreateAppointments من الخادم). غير ذلك يُخفى، والخادم يرفضه بـ403 مهما فعلت الواجهة.
  */
 export function quickActions(input: {
   role: "DOCTOR" | "ASSISTANT" | string | undefined;

@@ -42,7 +42,7 @@ export function usesStandaloneFollowUp(s: { nameAr?: string | null; nameFr?: str
 
 /** A registered beneficiary or a guest with complete identity may receive follow-up. */
 export function canScheduleFollowUp(a: Pick<Appointment, "patientId" | "status" | "guestFirstName" | "guestLastName" | "guestPhone">): boolean {
-  return a.status !== "CANCELLED" && Boolean(a.patientId || (a.guestFirstName?.trim() && a.guestLastName?.trim() && a.guestPhone?.trim()));
+  return a.status !== "CANCELLED" && a.status !== "COMPLETED" && Boolean(a.patientId || (a.guestFirstName?.trim() && a.guestLastName?.trim() && a.guestPhone?.trim()));
 }
 
 export const REFERRAL_STATUS_LABELS: Record<DoctorReferralStatus, string> = {

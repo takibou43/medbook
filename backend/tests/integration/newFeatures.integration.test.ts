@@ -369,7 +369,7 @@ describe.skipIf(!TEST_URL)("الميزات الجديدة (PostgreSQL حقيقي
     const followDate = () => dayStr(3);
 
     beforeAll(async () => {
-      const p = await mkAppt(dentist.doctorId, owner.patientId, { status: "COMPLETED" });
+      const p = await mkAppt(dentist.doctorId, owner.patientId, { status: "PENDING" });
       parent = { id: p.id, updatedAt: p.updatedAt, status: p.status };
     });
 
@@ -395,6 +395,17 @@ describe.skipIf(!TEST_URL)("الميزات الجديدة (PostgreSQL حقيقي
       expect(await db.smsLog.count()).toBe(smsBefore);
       const audit = await db.auditLog.findFirst({ where: { action: "FOLLOW_UP_APPOINTMENT_CREATED", entityId: r.data.id } });
       expect(audit).toBeTruthy();
+    });
+
+    it("الموعد المكتمل للعرض فقط: لا تغيير حالة ولا إعادة جدولة ولا متابعة جديدة", async () => {
+      const completed = await mkAppt(dentist.doctorId, owner.patientId, { status: "COMPLETED" });
+      const before = await db.appointment.count({ where: { doctorId: dentist.doctorId } });
+      const r = await call("POST", `/api/doctor/appointments/${completed.id}/follow-up`, { date: followDate(), startTime: "09:00", idempotencyKey: randomUUID() }, dentist.token);
+      expect(r.status).toBe(400);
+      expect((await call("PATCH", `/api/appointments/${completed.id}`, { status: "CANCELLED" }, dentist.token)).status).toBe(400);
+      expect((await call("POST", `/api/doctor/appointments/${completed.id}/reschedule`, { date: followDate(), startTime: "09:00" }, dentist.token)).status).toBe(400);
+      expect(await db.appointment.count({ where: { doctorId: dentist.doctorId } })).toBe(before);
+      expect((await db.appointment.findUniqueOrThrow({ where: { id: completed.id } })).status).toBe("COMPLETED");
     });
 
     it("طبيب بلا علاقة بالمريض لا يستطيع (موعد طبيب آخر → 404)", async () => {

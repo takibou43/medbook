@@ -320,9 +320,8 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
   const preset = activePreset(from, to);
   const hasFilters = filter !== "ALL" || Boolean(from || to || query);
   const [noShowTarget, setNoShowTarget] = useState<NoShowTarget | null>(null);
-  // «برمجة موعد عودة»: النافذة + اقتراح بعد تسجيل «اكتمل الموعد» مباشرة.
+  // جدولة العودة متاحة قبل اكتمال الموعد فقط.
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
-  const [justCompleted, setJustCompleted] = useState<any | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const openFollowUp = (a: any) =>
     setFollowUpCtx({
@@ -365,13 +364,12 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
     [isTodayView, appointments]
   );
 
-  async function changeStatus(id: string, status: AppointmentStatus, appointment?: any) {
+  async function changeStatus(id: string, status: AppointmentStatus) {
     if (updateStatus.isPending) return; // منع الإرسال المتكرر
     setPendingId(id);
     try {
       await updateStatus.mutateAsync({ id, status });
       showToast(status === "COMPLETED" ? t("سُجّل الموعد مكتملًا.") : t("تم تحديث حالة الموعد."), "success");
-      if (status === "COMPLETED" && appointment && canScheduleFollowUp(appointment) && standaloneFollowUp) setJustCompleted(appointment);
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
     } finally {
@@ -505,17 +503,6 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
         </div>
       )}
 
-      {justCompleted && (
-        <div className="card flex flex-col gap-2 border-primary-200 bg-primary-50 p-3 text-sm sm:flex-row sm:items-center sm:justify-between" role="status">
-          <span>{t("اكتمل موعد ")}<b>{patientFullName(justCompleted)}</b>{t(". هل تريد برمجة موعد عودة؟ ")}</span>
-          <div className="flex gap-2">
-            <Button onClick={() => { openFollowUp(justCompleted); setJustCompleted(null); }}>
-              <CalendarPlus className="h-4 w-4" />{t(" برمجة موعد عودة ")}</Button>
-            <Button variant="ghost" onClick={() => setJustCompleted(null)}>{t("لاحقًا")}</Button>
-          </div>
-        </div>
-      )}
-
       <FollowUpModal open={Boolean(followUpCtx)} ctx={followUpCtx} onClose={() => setFollowUpCtx(null)} />
 
       {isLoading && !appointments ? (
@@ -531,7 +518,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
               canManageAttendance={canManageAttendance}
               turn={a.status === "CANCELLED" ? undefined : turns?.get(a.id)}
           role={user?.role === "ASSISTANT" ? "ASSISTANT" : "DOCTOR"}
-              onComplete={() => changeStatus(a.id, "COMPLETED", a)}
+              onComplete={() => changeStatus(a.id, "COMPLETED")}
               onNoShow={() => openNoShow(a)}
               onArrivedLate={() => markArrivedLate(a.id)}
               busy={updateStatus.isPending}

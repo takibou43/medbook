@@ -84,7 +84,7 @@ describe.skipIf(!TEST_URL)("موعد المتابعة الطبية من خطط �
     apptSeq += 1;
     const t = `${String(13 + Math.floor(apptSeq / 6)).padStart(2, "0")}:${String((apptSeq % 6) * 10).padStart(2, "0")}`;
     return db.appointment.create({
-      data: { doctorId, patientId, date: new Date(algeriaToday().getTime() - 5 * DAY), startTime: t, endTime: t, status: "COMPLETED", activeSlot: true, guestFirstName: "م", guestLastName: tag, createdBy: "PATIENT" },
+      data: { doctorId, patientId, date: new Date(algeriaToday().getTime() - 5 * DAY), startTime: t, endTime: t, status: "PENDING", activeSlot: true, guestFirstName: "م", guestLastName: tag, createdBy: "PATIENT" },
     });
   }
   /** حجز عادي مباشر (slotSeq=0) يشغل الوقت. */

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  db: { doctor: { findUnique: vi.fn() }, assistant: { findFirst: vi.fn(async () => null) }, appointment: { findUnique: vi.fn(), create: vi.fn() }, familyMember: { findFirst: vi.fn() } },
+  db: { $queryRaw: vi.fn(async () => [{ status: "IN_PROGRESS" }]), doctor: { findUnique: vi.fn() }, assistant: { findFirst: vi.fn(async () => null) }, appointment: { findUnique: vi.fn(), create: vi.fn() }, familyMember: { findFirst: vi.fn() } },
   reserve: vi.fn(), notify: vi.fn(),
 }));
 vi.mock("../src/lib/prisma", () => ({ prisma: mocks.db }));
@@ -22,7 +22,7 @@ vi.mock("../src/lib/audit", () => ({ writeAudit: vi.fn() }));
 vi.mock("../src/modules/notifications/notifications.service", () => ({ createNotification: mocks.notify }));
 import { createFollowUpAppointment, createGuestAppointment } from "../src/modules/treatment/followUpAppointment.service";
 import { algeriaTodayUTCMidnight } from "../src/lib/slots";
-const parent = () => ({ id: "parent", doctorId: "d", patientId: null, patient: null, familyMemberId: null, status: "COMPLETED", guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: "0550000000" });
+const parent = () => ({ id: "parent", doctorId: "d", patientId: null, patient: null, familyMemberId: null, status: "IN_PROGRESS", guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: "0550000000" });
 const input = () => ({ date: new Date(algeriaTodayUTCMidnight().getTime() + 86400000).toISOString().slice(0,10), startTime: "09:00", idempotencyKey: "request-1" });
 describe("guest follow-up appointments", () => {
   beforeEach(() => {
@@ -36,6 +36,18 @@ describe("guest follow-up appointments", () => {
     const result = await createFollowUpAppointment("doctor", "parent", input());
     expect(result.appointment).toMatchObject({ patientId: null, parentAppointmentId: "parent", status: "CONFIRMED" });
     expect(mocks.db.appointment.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ guestFirstName: "Ahmed", guestLastName: "Test", guestPhone: "0550000000", familyMemberId: null }) }));
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+  it("rejects scheduling from a completed appointment without reserving or notifying", async () => {
+    mocks.db.appointment.findUnique.mockImplementation(async ({ where }) => where.id ? { ...parent(), status: "COMPLETED" } : null);
+    await expect(createFollowUpAppointment("doctor", "parent", input())).rejects.toThrow(/الموعد المكتمل/);
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.notify).not.toHaveBeenCalled();
+  });
+  it("rejects completion racing with follow-up creation under the original row lock", async () => {
+    mocks.db.$queryRaw.mockResolvedValueOnce([{ status: "COMPLETED" }]);
+    await expect(createFollowUpAppointment("doctor", "parent", input())).rejects.toThrow(/تغيّرت حالة الموعد/);
+    expect(mocks.db.appointment.create).not.toHaveBeenCalled();
     expect(mocks.notify).not.toHaveBeenCalled();
   });
   it("books a named guest without an earlier appointment or account", async () => {

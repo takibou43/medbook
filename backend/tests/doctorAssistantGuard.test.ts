@@ -35,6 +35,7 @@ describe("doctorHasActiveAssistant", () => {
     const where = mocks.db.assistant.findFirst.mock.calls[0][0].where;
     expect(where.isActive).toBe(true);
     expect(where.user).toEqual({ isActive: true });
+    expect(where.shiftEndsAt).toEqual({ gt: expect.any(Date) });
     expect(where.OR).toEqual([{ clinicId: null, doctorId: "d1" }]);
   });
 

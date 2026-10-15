@@ -2,7 +2,7 @@ import { useLanguage } from "../i18n/LanguageRoot";
 import { t } from "../i18n/locale.ts";
 import { useId, useRef, useState } from "react";
 import clsx from "clsx";
-import { CheckCircle2, UserPlus } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import { apiErrorMessage, classifyApiError } from "../lib/api";
 import { useToast } from "./ui/Toast";
 import { Button } from "./ui/Button";
@@ -44,7 +44,6 @@ export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
   const keyRef = useRef<string>(newIdempotencyKey());
   // حارس متزامن: نقرتان في نفس اللحظة قبل إعادة الرسم لا تُرسلان طلبين.
   const inFlight = useRef(false);
-  const firstNameRef = useRef<HTMLInputElement>(null);
 
   const set = <K extends keyof WalkInForm>(k: K, v: WalkInForm[K]) => {
     const next = { ...form, [k]: v };
@@ -85,7 +84,7 @@ export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
       setForm(EMPTY_WALK_IN);
       setTimeMode("auto");
       keyRef.current = newIdempotencyKey();
-      setTimeout(() => firstNameRef.current?.focus(), 0);
+      setOpen(false);
     } catch (err) {
       const { status } = classifyApiError(err);
       const code = (err as any)?.response?.data?.details?.code as string | undefined;
@@ -117,16 +116,6 @@ export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
         <UserPlus className="h-5 w-5 text-primary-600" aria-hidden="true" />{t(" تسجيل مريض حضر ")}</h2>
       <p className="mt-1 text-sm text-slate-600">{t("يُسجَّل كضيف بالاسم والهاتف لليوم، ويدخل طابور الطبيب مباشرة. الحقول المعلّمة بـ «مطلوب» إلزامية.")}</p>
 
-      {lastDone && (
-        <p role="status" className="mt-3 flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>{t("سُجّل ")}<strong>{lastDone.guestFirstName} {lastDone.guestLastName}</strong>{t(" عند ")}<strong>{lastDone.doctorName}</strong>{t(" — موعده")}{" "}
-            <strong className="tabular-nums" dir="ltr">{lastDone.startTime}</strong>
-            {lastDone.replayed ? t(" (كان مسجّلًا من قبل بنفس الطلب).") : "."}
-          </span>
-        </p>
-      )}
-
       <form className="mt-4 space-y-4" onSubmit={submit} noValidate aria-busy={register.isPending || undefined}>
         <fieldset disabled={register.isPending} className="space-y-4">
         {doctors.length > 1 ? (
@@ -144,7 +133,7 @@ export function WalkInPanel({ doctors }: { doctors: WalkInDoctor[] }) {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-semibold text-slate-700">{t("الاسم (مطلوب) ")}<input ref={firstNameRef} className={inputCls(errors.firstName)} value={form.firstName} onChange={(e) => set("firstName", e.target.value)} autoComplete="off" aria-invalid={Boolean(errors.firstName)} aria-describedby={errors.firstName ? `${formId}-fn` : undefined} />
+            <label className="block text-sm font-semibold text-slate-700">{t("الاسم (مطلوب) ")}<input className={inputCls(errors.firstName)} value={form.firstName} onChange={(e) => set("firstName", e.target.value)} autoComplete="off" aria-invalid={Boolean(errors.firstName)} aria-describedby={errors.firstName ? `${formId}-fn` : undefined} />
             </label>
             {errors.firstName && <span id={`${formId}-fn`} className="mt-1 block text-xs text-red-700">{errors.firstName}</span>}
           </div>

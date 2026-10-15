@@ -115,7 +115,7 @@ export function summarizePatients(rows: PatientAppointmentRow[], nowMs: number):
     }
     // مرجع «برمجة موعد عودة»: أحدث موعد غير ملغى لمريض صاحب حساب (القاعدة القديمة نفسها؛
     // الصفوف تصل مرتبة تنازليًا بالتاريخ والوقت، فأول صف مؤهل هو الأحدث).
-    if (!row.lastAppointmentId && a.patientId && a.status !== AppointmentStatus.CANCELLED) row.lastAppointmentId = a.id;
+    if (!row.lastAppointmentId && a.patientId && a.status !== AppointmentStatus.CANCELLED && a.status !== AppointmentStatus.COMPLETED) row.lastAppointmentId = a.id;
   }
   return order.map((k) => {
     const r = map.get(k)!;

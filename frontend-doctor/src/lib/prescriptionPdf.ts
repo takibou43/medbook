@@ -20,7 +20,7 @@ export async function createPrescriptionPdf(paper: HTMLElement): Promise<Blob> {
   if (paper.offsetHeight > 20000) throw new Error("PRESCRIPTION_TOO_LONG");
   let blocks: { top: number; bottom: number }[] = [];
   const canvas = await html2canvas(paper, {
-    scale: 3, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: Math.max(1024, window.innerWidth),
+    scale: 3, foreignObjectRendering: true, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: Math.max(1024, window.innerWidth),
     onclone: (doc, element) => {
       doc.body.appendChild(element);
       Object.assign(element.style, { transform: "none", position: "absolute", left: "0", top: "0", width: `${width}px`, margin: "0", boxShadow: "none" });

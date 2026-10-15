@@ -1,3 +1,4 @@
+import { tokenAtTestClock } from "./testClock";
 /**
  * اختبار تزامن حقيقي (Concurrency) للحجز: 10 أطباء × 10 طلبات = 100 طلب POST /api/booking متزامنة.
  *
@@ -258,6 +259,7 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
     const dateStr = day.toISOString().slice(0, 10);
     const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse(`${dateStr}T12:14:30Z`));
     try {
+      patientToken = await tokenAtTestClock(patientToken);
       const doctorId = created.doctorIds[0];
       await db.appointment.deleteMany({ where: { doctorId } });
       const history = await db.appointment.create({ data: {

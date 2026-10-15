@@ -1,3 +1,4 @@
+import { tokenAtTestClock } from "./testClock";
 /**
  * منع «اكتمل الموعد» قبل حلول وقته عبر مسار PATCH العام، على PostgreSQL حقيقي (Express + JWT + المعاملات):
  *  - CONFIRMED اليوم قبل startTime ⇒ 400، ولا يتغير شيء: الحالة، endedAt، durationMinutes، الإشعار، Push، عدّاد المكتملة.
@@ -130,12 +131,14 @@ describe.skipIf(!TEST_URL)("لا «اكتمل الموعد» قبل وقته (Po
     await prisma.$disconnect();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     h.sendNotification.mockClear();
     // Pin only Date; HTTP, PostgreSQL and timers stay real. Every scenario needs
     // both earlier and later appointment times on the same clinic day.
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(today.getTime() + 11 * 60 * 60 * 1000)); // noon in Algeria
+    doctorToken = await tokenAtTestClock(doctorToken);
+    assistantToken = await tokenAtTestClock(assistantToken);
   });
   afterEach(() => vi.useRealTimers());
 

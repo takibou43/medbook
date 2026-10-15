@@ -73,7 +73,7 @@ describe.skipIf(!TEST_URL)("أولوية موعد العودة في الطابو
     let assistantToken = "";
     if (withAssistant) {
       const au = await db.user.create({ data: { email: `${tag}-a${n}@test.local`, passwordHash: "x", role: "ASSISTANT" } });
-      await db.assistant.create({ data: { userId: au.id, doctorId: d.id, firstName: "م" + n, lastName: tag, isActive: true } });
+      await db.assistant.create({ data: { userId: au.id, doctorId: d.id, firstName: "م" + n, lastName: tag, isActive: true, shiftEndsAt: new Date(Date.now() + 8 * 3600000) } });
       ids.users.push(au.id);
       assistantToken = signAccessToken({ sub: au.id, role: "ASSISTANT" });
     }

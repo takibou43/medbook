@@ -1,3 +1,4 @@
+import { tokenAtTestClock } from "./testClock";
 /**
  * «مريض حضر بدون موعد» — POST /api/appointments/walk-in على PostgreSQL حقيقي (Express + JWT + المعاملات والأقفال):
  *  - المساعد ينشئ: 201، CONFIRMED، arrivedAt الآن، اليوم، أول وقت شاغر لم يمضِ، patientId = null، بلا بيانات مالية.
@@ -144,12 +145,13 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد (PostgreSQL حقي
     await prisma.$disconnect();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     h.sendNotification.mockClear();
     h.sendSms.mockClear();
     // نثبّت Date فقط على 10:00 بتوقيت الجزائر؛ HTTP وPostgreSQL والمؤقّتات حقيقية.
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(today.getTime() + 9 * HOUR));
+    for (const key of Object.keys(tokens) as (keyof typeof tokens)[]) tokens[key] = await tokenAtTestClock(tokens[key]);
   });
   afterEach(() => vi.useRealTimers());
 

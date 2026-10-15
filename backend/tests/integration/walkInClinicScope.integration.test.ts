@@ -1,3 +1,4 @@
+import { tokenAtTestClock } from "./testClock";
 /**
  * «مريض حضر بدون موعد» مع صلاحيات طاقم العيادة (PostgreSQL حقيقي):
  *  - مساعد عيادة لعدة أطباء محددين: يسجّل للطبيب المختار فقط (الترويسة)، والموعد عند ذلك الطبيب.
@@ -123,9 +124,10 @@ describe.skipIf(!TEST_URL)("مريض حضر بدون موعد — نطاق مس�
     await prisma.$disconnect();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(today.getTime() + 9 * HOUR));
+    for (const key of Object.keys(tokens) as (keyof typeof tokens)[]) tokens[key] = await tokenAtTestClock(tokens[key]);
   });
   afterEach(() => vi.useRealTimers());
 

@@ -30,4 +30,7 @@ test("A5 pagination keeps medication blocks together without losing the continua
   assert.deepEqual(pdfPageEnds(210, 210, []), [210]);
   assert.deepEqual(pdfPageEnds(450, 210, [{ top: 190, bottom: 230 }]), [190, 400, 450]);
   assert.deepEqual(pdfPageEnds(450, 210, [{ top: 0, bottom: 450 }]), [210, 420, 450]);
+  // Adjacent rounded rectangles overlap by one pixel; that must not cascade back to the first item.
+  const adjacent = Array.from({ length: 30 }, (_, i) => ({ top: i * 70, bottom: i * 70 + 71 }));
+  assert.ok(pdfPageEnds(2100, 794, adjacent).length <= 3);
 });

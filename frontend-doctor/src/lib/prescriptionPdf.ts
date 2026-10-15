@@ -5,9 +5,10 @@ export function pdfPageEnds(height: number, capacity: number, blocks: { top: num
   while (offset < height) {
     let end = Math.min(height, offset + capacity);
     // Keep medication/request blocks together whenever a block fits on one page.
-    for (const block of [...blocks].sort((a, b) => b.top - a.top)) {
-      if (block.top > offset && block.top < end && block.bottom > end && block.bottom - block.top <= capacity) end = block.top;
-    }
+    // Pick the block crossing the proposed boundary once. Rounding can overlap
+    // adjacent boxes by one pixel; walking backwards would otherwise create a page per item.
+    const crossing = blocks.find(block => block.top > offset && block.top < end - 2 && block.bottom > end + 2 && block.bottom - block.top <= capacity);
+    if (crossing) end = Math.floor(crossing.top);
     if (end <= offset) end = Math.min(height, offset + capacity);
     ends.push(end); offset = end;
   }

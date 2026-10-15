@@ -7,7 +7,7 @@
  *  - سلامة المخطط: القيد الفريد الجديد (بالاسم القديم) وCHECK موجودان، والصفوف القديمة slotSeq=0.
  * تُرفض أي قاعدة غير محلية أو بلا "test" في اسمها.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import http from "http";
 import type { AddressInfo } from "net";
 import { randomUUID } from "crypto";
@@ -306,17 +306,18 @@ describe.skipIf(!TEST_URL)("موعد المتابعة الطبية من خطط �
 
   // ---------------------------------------------------------------------------------------------
   describe("11 + 13) الطابور والأولوية والحالات", () => {
-    // وقت لاحق اليوم (بتوقيت الجزائر) بعد ساعة على الأقل؛ نتخطى الاختبار قرب منتصف الليل.
-    const nowAlg = new Date(Date.now() + 3600e3);
-    const mins = nowAlg.getUTCHours() * 60 + nowAlg.getUTCMinutes();
-    const slotMin = Math.ceil((mins + 60) / 20) * 20;
-    const canRun = slotMin < 23 * 60;
-    const hhmm = `${String(Math.floor(slotMin / 60)).padStart(2, "0")}:${String(slotMin % 60).padStart(2, "0")}`;
+    // Freeze Date only: HTTP/Prisma timers remain real and the queue cases run at any CI hour.
     const today = dayStr(0);
+    const hhmm = "11:00";
+    beforeAll(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(today + "T09:00:00Z"));
+    });
+    afterAll(() => { vi.useRealTimers(); });
     let qDoc: Doc;
     const queueIds = async () => (await call("GET", "/api/appointments/queue", undefined, qDoc.token)).data;
 
-    it.skipIf(!canRun)("الترتيب مصدره queuePriority (#48) لا slotSeq: متابعة تشارك دقيقة حجز عادي — تسبقه إن حضرت أولًا ولا تتجاوزه إن كان هو التالي المحمي", async () => {
+    it("الترتيب مصدره queuePriority (#48) لا slotSeq: متابعة تشارك دقيقة حجز عادي — تسبقه إن حضرت أولًا ولا تتجاوزه إن كان هو التالي المحمي", async () => {
       // طبيب مخصص بدوام طوال اليوم كي يصلح أي وقت لاحق اليوم.
       const u = await db.user.create({ data: { email: `${tag}-q@test.local`, passwordHash: "x", role: "DOCTOR" } });
       const d = await db.doctor.create({
@@ -354,7 +355,7 @@ describe.skipIf(!TEST_URL)("موعد المتابعة الطبية من خطط �
       expect(order.indexOf(f.data.id)).toBeLessThan(order.indexOf(r1.id));
     });
 
-    it.skipIf(!canRun)("المناداة: يُنادى صاحب الأولوية أولًا ولا تتأثر حالة كشف قائم (IN_PROGRESS)", async () => {
+    it("المناداة: يُنادى صاحب الأولوية أولًا ولا تتأثر حالة كشف قائم (IN_PROGRESS)", async () => {
       const inside = await mkRegular(qDoc.doctorId, null, today, "00:20", { status: "IN_PROGRESS", arrivedAt: new Date(), calledAt: new Date() });
       const pB = await mkPatient("QB");
       const parentB = await mkParent(qDoc.doctorId, pB.patientId);

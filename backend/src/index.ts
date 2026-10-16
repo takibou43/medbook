@@ -78,7 +78,7 @@ async function bootstrapAdminUser() {
 // احتياطيًا لإيقاظه إن نام فعلًا (فالنائم لا يستطيع طرق نفسه). RENDER_EXTERNAL_URL تضبطها منصة الاستضافة تلقائيًا.
 const SELF_PING_INTERVAL_MS = 10 * 60 * 1000;
 
-// يتوقف الإبقاء التلقائي مستيقظًا عند 18:00 بتوقيت الجزائر.
+// يتوقف الإبقاء التلقائي مستيقظًا عند 16:00 بتوقيت الجزائر.
 // زيارة المستخدم بعد ذلك تظل قادرة على إيقاظ الخادم.
 function startSelfPing() {
   const baseUrl = process.env.RENDER_EXTERNAL_URL;
@@ -91,7 +91,7 @@ function startSelfPing() {
   }, SELF_PING_INTERVAL_MS);
 
   console.log(
-    "⏰ الطرق الذاتي مفعّل: 07:30–18:00 يوميًا (توقيت الجزائر)."
+    "⏰ الطرق الذاتي مفعّل: 08:00–16:00 يوميًا (توقيت الجزائر)."
   );
 }
 

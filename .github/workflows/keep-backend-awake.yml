@@ -19,9 +19,8 @@ on:
   schedule:
     # التوقيت هنا بـUTC، والجزائر UTC+1. نوافق نافذة الخادم حتى لا توقظه هذه المهمة ليلًا
     # فتستهلك ساعات التشغيل المجانية دون فائدة.
-    # يوميًا: من 07:30 إلى 18:00 بتوقيت الجزائر (06:30–17:00 UTC)، قبل فتح العيادات بساعة للتذكير.
-    - cron: "30,40,50 6 * * *"
-    - cron: "*/10 7-16 * * *"
+    # يوميًا: من 08:00 إلى 16:00 بتوقيت الجزائر (07:00–15:00 UTC)، لمدة ثماني ساعات.
+    - cron: "*/10 7-14 * * *"
   workflow_dispatch:
 
 jobs:
@@ -37,7 +36,7 @@ jobs:
             utc_hour=${utc_clock%:*}
             utc_minute=${utc_clock#*:}
             utc_minutes=$((10#$utc_hour * 60 + 10#$utc_minute))
-            if [ "$utc_minutes" -lt 390 ] || [ "$utc_minutes" -ge 1020 ]; then
+            if [ "$utc_minutes" -lt 420 ] || [ "$utc_minutes" -ge 900 ]; then
               echo "Outside keep-awake hours (Algeria); skipping ping."
               exit 0
             fi

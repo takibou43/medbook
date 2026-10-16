@@ -82,3 +82,14 @@ test('prescription date names the actual doctor municipality without substitutin
   assert.equal(prescriptionNumericDate('2026-10-14'), '14/10/2026');
   assert.equal(prescriptionNumericDate('2026-02-30'), '');
 });
+
+test('French municipality uses the recorded matching name without Arabic fallback or wilaya substitution', () => {
+  const wilaya = { nameAr: 'ميلة', nameFr: 'Mila' };
+  assert.equal(prescriptionPlace({nameAr: 'ميلة'}, 'fr', wilaya), 'Mila');
+  assert.equal(prescriptionPlace({nameAr: 'ميلة'}, 'ar', wilaya), 'ميلة');
+  assert.equal(prescriptionPlace({nameAr: 'وادي العثمانية'}, 'fr', wilaya), '');
+  assert.equal(prescriptionPlace({nameAr: 'ميلة',nameFr:'ميلة'}, 'fr', wilaya), 'Mila');
+  assert.equal(prescriptionPlace({nameAr: 'ميلة'}, 'fr'), '');
+  assert.equal(prescriptionPlace({nameAr: 'Mila'}, 'fr'), 'Mila');
+  assert.equal(prescriptionPlace(null, 'fr', wilaya), '');
+});

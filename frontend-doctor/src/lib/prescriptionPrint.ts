@@ -62,8 +62,19 @@ export function clinicHeaderName(manual: string | undefined, original: string | 
   return ARABIC_SCRIPT.test(base) === (side === "ar") ? base : "";
 }
 
-export function prescriptionPlace(item: { nameAr?: string | null; nameFr?: string | null } | null | undefined, language: PrescriptionLanguage): string {
-  return (language === 'fr' ? item?.nameFr?.trim() || item?.nameAr?.trim() : item?.nameAr?.trim() || item?.nameFr?.trim()) || '';
+type PlaceName = { nameAr?: string | null; nameFr?: string | null };
+export function prescriptionPlace(item: PlaceName | null | undefined, language: PrescriptionLanguage, wilaya?: PlaceName | null): string {
+  const original = item?.nameAr?.trim() || "";
+  if (language === "ar") return original || item?.nameFr?.trim() || "";
+  const french = item?.nameFr?.trim();
+  if (french && !ARABIC_SCRIPT.test(french)) return french;
+  // Existing City records have only nameAr. Reuse the recorded French name only
+  // when the actual municipality has exactly the same Arabic name as its wilaya.
+  if (original && original === wilaya?.nameAr?.trim()) {
+    const matchingFrench = wilaya.nameFr?.trim();
+    if (matchingFrench && !ARABIC_SCRIPT.test(matchingFrench)) return matchingFrench;
+  }
+  return original && !ARABIC_SCRIPT.test(original) ? original : "";
 }
 export function prescriptionNumericDate(day: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return '';

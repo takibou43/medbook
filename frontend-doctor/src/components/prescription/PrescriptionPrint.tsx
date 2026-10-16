@@ -61,7 +61,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const ageUnit = (lang === "fr" ? { years: "ans", months: "mois", days: "jours" } : { years: "سنة", months: "شهر", days: "يوم" })[data.patientAgeUnit ?? "years"];
   const text = prescriptionLabels(lang);
   const d = data.doctor;
-  const municipality = prescriptionPlace(d?.city, lang);
+  const municipality = prescriptionPlace(d?.city, lang, d?.wilaya);
   const bookingUrl = doctorBookingUrl(d?.id, import.meta.env?.VITE_MAIN_SITE_URL || undefined);
   const bookingQr = useMemo(() => bookingUrl && !data.template ? bookingQrImage(bookingUrl) : null, [bookingUrl, data.template]);
   const clinic = d?.clinic ?? null;

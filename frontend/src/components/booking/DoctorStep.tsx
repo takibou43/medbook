@@ -171,7 +171,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
                     {d.bio && <p className="mt-2 whitespace-pre-line break-words text-slate-600">{d.bio}</p>}
                     {d.yearsExperience > 0 && <p className="mt-2">{t("الخبرة: ")}{d.yearsExperience}{t(" سنوات")}</p>}
                     {d.languages?.length > 0 && <p className="mt-2">{t("اللغات: ")}{d.languages.join(t("، "))}</p>}
-                    {d.consultationFee != null && Number.isFinite(d.consultationFee) && <p className="mt-2">{t("سعر الاستشارة المسجّل: ")}{d.consultationFee.toLocaleString(getLocale())}{t(" دج")}</p>}
+                    {d.consultationFee != null && Number.isFinite(d.consultationFee) && <p className="mt-2">{t("سعر الاستشارة المسجّل: ")}<bdi dir="ltr">{d.consultationFee.toLocaleString(getLocale())}</bdi>{t(" دج")}</p>}
                   </details>}
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(d.clinic?.phone || d.phone) && <a className="btn-outline" href={`tel:${d.clinic?.phone || d.phone}`}>{t("اتصل بالعيادة")}</a>}

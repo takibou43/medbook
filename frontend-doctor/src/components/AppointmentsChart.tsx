@@ -85,7 +85,7 @@ export function AppointmentsChart() {
         </div>
       </div>
 
-      {data && <p className="text-sm text-slate-600">{t("الفترة: ")}{data.from}{t(" إلى ")}{data.to}{t(" · المجموع: ")}{data.total.toLocaleString(getLocale())}</p>}
+      {data && <p className="text-sm text-slate-600">{t("الفترة: ")}{data.from}{t(" إلى ")}{data.to}{t(" · المجموع: ")}<bdi dir="ltr">{data.total.toLocaleString(getLocale())}</bdi></p>}
       {isLoading ? (
         <Spinner />
       ) : isError ? (

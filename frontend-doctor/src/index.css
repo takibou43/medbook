@@ -289,9 +289,12 @@ body {
 }
 
 /* Isolate numeric values from the surrounding Arabic text. */
-input:is([type="tel"], [type="number"], [type="date"], [type="time"], [type="datetime-local"], [inputmode="numeric"], [inputmode="decimal"], [inputmode="tel"]):not([dir]),
+input:is([type="tel"], [type="number"], [type="date"], [type="time"], [type="datetime-local"], [type="month"], [type="week"], [inputmode="numeric"], [inputmode="decimal"], [inputmode="tel"]):not([dir]),
 .numeric-value {
   direction: ltr;
   unicode-bidi: isolate;
   font-variant-numeric: tabular-nums;
 }
+
+/* Explicit LTR inline spans also need isolation from surrounding RTL text. */
+span[dir="ltr"] { unicode-bidi: isolate; }

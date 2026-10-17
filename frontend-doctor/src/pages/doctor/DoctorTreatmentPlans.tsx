@@ -2,7 +2,7 @@ import { PlanSessionSummary } from "../../components/PlanSessionSummary";
 import { plansForBeneficiary } from "../../lib/treatmentWorkflow";
 import { Modal } from "../../components/ui/Modal";
 import { useLanguage } from "../../i18n/LanguageRoot";
-import { t } from "../../i18n/locale.ts";
+import { t, getLocale } from "../../i18n/locale.ts";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -166,7 +166,7 @@ function PlanDetail({ planId, onBack, onSaved, onBusyChange }: { planId: string;
         {p.description && <p className="mt-2 whitespace-pre-line break-words text-sm text-slate-600">{p.description}</p>}
         <p className="mt-2 text-xs text-slate-500">{t("بدأت ")}{day(p.startedAt)}
           {p.estimatedSessions ? t(" · {0} جلسات تقديرًا", { "0": p.estimatedSessions }) : ""}
-          {p.estimatedTotalCost != null ? t(" · {0} دج", { "0": p.estimatedTotalCost.toLocaleString("ar-DZ") }) : ""}
+          {p.estimatedTotalCost != null ? t(" · {0} دج", { "0": `\u2066${p.estimatedTotalCost.toLocaleString(getLocale())}\u2069` }) : ""}
         </p>
         <div className="mt-3"><PlanSessionSummary estimated={p.estimatedSessions} added={p.sessions.length} completed={p.sessions.filter(s => s.status === "COMPLETED").length} /></div>
         {active && (

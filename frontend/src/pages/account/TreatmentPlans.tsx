@@ -81,7 +81,7 @@ export default function TreatmentPlans() {
                   </div>
 
                   <p className="mt-2 text-xs text-slate-500">{t("الجلسات: ")}{done}{t(" من ")}{p.sessions.length || p.estimatedSessions || 0}
-                    {p.estimatedTotalCost != null && <>{t(" · التكلفة التقديرية: ")}{p.estimatedTotalCost.toLocaleString(getLocale())}{t(" دج")}</>}
+                    {p.estimatedTotalCost != null && <>{t(" · التكلفة التقديرية: ")}<bdi dir="ltr">{p.estimatedTotalCost.toLocaleString(getLocale())}</bdi>{t(" دج")}</>}
                   </p>
                   <details className="mt-3 rounded-xl border border-slate-200 bg-white/80 p-3">
                     <summary className="min-h-[48px] cursor-pointer text-sm font-semibold text-primary-700">{t("تفاصيل الخطة والجلسات")}</summary>

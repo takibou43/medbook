@@ -240,7 +240,10 @@ export function appointmentsCountAr(n: number): string {
 
 /** مبلغ بالدينار بأرقام مقروءة: "4 000 دج". */
 export function formatDzd(value: number | null | undefined): string {
-  return t("{0} دج", { "0": Math.round(value ?? 0).toLocaleString("fr-DZ").replace(/ | /g, " ") });
+  // Isolate the complete numeric run: ordinary grouping spaces otherwise reorder
+  // thousands groups in an RTL paragraph (180 000 becomes 000 180).
+  const amount = Math.round(value ?? 0).toLocaleString("fr-DZ").replace(/ | /g, " ");
+  return t("{0} دج", { "0": `\u2066${amount}\u2069` });
 }
 
 // ---------------- سعر الموعد ونسبة الطبيب في العيادة ----------------

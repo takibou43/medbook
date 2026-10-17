@@ -46,7 +46,7 @@ function qrUrlFor(bookingUrl: string, format: "png" | "svg", size: number, margi
 
 /** نفس تنسيق العملة المستعمل في بقية اللوحة. */
 function formatDzd(value: number): string {
-  return t("{0} دج", { "0": (value ?? 0).toLocaleString("ar-DZ") });
+  return fmtDzd(value);
 }
 
 /**

@@ -500,7 +500,13 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
     await db.doctor.updateMany({where:{id:{in:docs.map(d=>d.doctorId)}},data:{clinicId:clinic.id}});
     const sharedToken = await mkAssistant(docs[0].doctorId,'shared-qr');
     await db.assistant.updateMany({where:{doctorId:docs[0].doctorId},data:{clinicId:clinic.id,allDoctors:true,shiftEndsAt:new Date(Date.now()+300000)}});
-    const patient = await mkPatient(); const other = await mkPatient();
+    // Queue behavior needs authenticated fixtures, without exhausting the real registration limiter.
+    const fixturePatient = async (label: string) => {
+      const user = await db.user.create({data:{email:`${tag}-${label}@test.local`,passwordHash:'x',role:'PATIENT',patient:{create:{firstName:'مريض',lastName:label}}},include:{patient:true}});
+      ids.users.push(user.id);
+      return {patientId:user.patient!.id,token:sign({sub:user.id,role:'PATIENT'})};
+    };
+    const patient = await fixturePatient('clinic-qr'); const other = await fixturePatient('clinic-qr-other');
     const appointments = [];
     for (let i=0;i<4;i++) appointments.push(await mkAppt(i===2?patient.patientId:other.patientId,0,'CONFIRMED',docs[i].doctorId));
     const code = 'medbook-arrival:v1:clinic:'+clinic.id;

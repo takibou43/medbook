@@ -1,13 +1,14 @@
-import { arrivalQrUrl } from "../lib/doctorBooking";
+import { arrivalQrUrl, bookingQrImage } from "../lib/doctorBooking";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import qrcode from "qrcode-generator";
 import { api } from "../lib/api";
 
-export function ArrivalPoster() {
+export function ArrivalPoster({ clinic }: { clinic?: { id: string; nameAr: string } } = {}) {
   const [open, setOpen] = useState(false);
-  const { data, isPending, isError } = useQuery({ queryKey: ['arrival-poster'], enabled: open,
+  const { data: fetchedData, isPending, isError } = useQuery({ queryKey: ['arrival-poster'], enabled: open && !clinic,
     queryFn: async () => (await api.get('/appointments/arrival-poster')).data.data as { code: string; doctorId: string; name: string } });
+  const data = clinic ? { code: 'medbook-arrival:v1:clinic:' + clinic.id, name: clinic.nameAr } : fetchedData;
   function print() {
     if (!data) return;
     const qr = qrcode(0, 'M'); qr.addData(arrivalQrUrl(data.code)); qr.make();
@@ -20,6 +21,10 @@ export function ArrivalPoster() {
   }
   return <div className="rounded-xl border bg-white p-3" dir="rtl">
     <button onClick={() => setOpen(!open)} className="font-semibold">كود العيادة للحضور والحجز</button>
-    {open && <div className="mt-2">{isPending ? 'جارٍ التحميل…' : isError ? 'تعذر تحميل الكود. أعد المحاولة.' : <button onClick={print} className="rounded-lg bg-teal-700 px-3 py-2 text-white">طباعة QR — {data?.name}</button>}</div>}
+    {open && <div className="mt-2 space-y-3">{!clinic && isPending ? 'جارٍ التحميل…' : !clinic && isError ? 'تعذر تحميل الكود. أعد المحاولة.' : data && <>
+      <p>امسح الكود عند الوصول: إذا كان لديك موعد اليوم يُسجل حضورك لدى طبيبك، وإلا تظهر أطباء العيادة للحجز. المستخدم الجديد يسجل أولًا.</p>
+      <img src={bookingQrImage(arrivalQrUrl(data.code))} width={192} height={192} alt="كود العيادة للحضور والحجز" />
+      <button onClick={print} className="rounded-lg bg-teal-700 px-3 py-2 text-white">طباعة QR — {data.name}</button>
+    </>}</div>}
   </div>;
 }

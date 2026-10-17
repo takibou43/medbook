@@ -12,6 +12,7 @@ import ClinicDoctorTerms, { DoctorTerms } from "./ClinicDoctorTerms";
 import ClinicFinanceReport from "./ClinicFinanceReport";
 import { doctorsCountAr, formatDayAr, formatDzd, parseTermsForm } from "../../lib/doctorUi";
 import ClinicStaff, { ClinicStaffAssistant, ClinicStaffDoctor } from "./ClinicStaff";
+import { ArrivalPoster } from "../../components/ArrivalPoster";
 interface ManagedClinic extends ClinicProfile {
   ownerId: string | null; isOwner: boolean; permissions: string[]; assistants: ClinicStaffAssistant[];
   id: string; referralDiscountUntil: string | null; pendingReferralDays: number; verificationStatus: string; subscriptionStatus: string; subscriptionExpiresAt: string | null;
@@ -70,6 +71,7 @@ export default function ClinicManagement() {
       {editing && <button type="button" className="ms-3" onClick={() => setEditing(false)}>{t("إلغاء")}</button>}
     </form>}
     {clinic && <>
+      <ArrivalPoster clinic={clinic} />
       <details className="card space-y-3 p-5">
         <summary className="cursor-pointer text-lg font-bold">{t("بيانات العيادة والاشتراك — ")}{doctorsCountAr(clinic.billing.doctorCount)}</summary>
         <div className="flex flex-wrap justify-between gap-3"><h2 className="text-lg font-bold">{t("اشتراك العيادة")}</h2>{clinic.permissions.includes("EDIT_PROFILE") && <Button variant="outline" onClick={() => setEditing(!editing)}>{t("تعديل بيانات العيادة")}</Button>}</div>

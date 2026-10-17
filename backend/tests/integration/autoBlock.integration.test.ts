@@ -520,10 +520,12 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
     expect(ambiguous.data.choices.map((a:any)=>a.id).sort()).toEqual([first,appointments[2]].sort());
     expect((await db.appointment.findUniqueOrThrow({where:{id:first}})).arrivedAt).toBeNull();
     expect((await call('POST','/api/appointments/scan-arrival',{code,appointmentId:first},patient.token)).status).toBe(200);
+    expect((await call('POST','/api/appointments/scan-arrival',{code,appointmentId:appointments[0]},other.token)).status).toBe(200);
     await db.doctor.updateMany({where:{id:{in:[docs[0].doctorId,docs[2].doctorId]}},data:{dutyEndsAt:new Date(Date.now()+300000),queueRequestedAt:new Date()}});
     expect((await call('POST','/api/appointments/'+appointments[2]+'/call',undefined,sharedToken,{'X-Assistant-Doctor-Id':docs[2].doctorId})).status).toBe(200);
     expect((await call('POST','/api/appointments/'+appointments[2]+'/late',undefined,sharedToken,{'X-Assistant-Doctor-Id':docs[2].doctorId})).status).toBe(403);
-    expect((await call('POST','/api/appointments/'+first+'/call',undefined,sharedToken,{'X-Assistant-Doctor-Id':docs[0].doctorId})).status).toBe(200);
-    expect(await db.appointment.count({where:{doctorId:{in:docs.map(d=>d.doctorId)},status:'IN_PROGRESS'}})).toBe(2);
+    expect((await call('POST','/api/appointments/'+appointments[0]+'/call',undefined,sharedToken,{'X-Assistant-Doctor-Id':docs[0].doctorId})).status).toBe(200);
+    const active=await db.appointment.findMany({where:{doctorId:{in:docs.map(d=>d.doctorId)},status:'IN_PROGRESS'},select:{patientId:true}});
+    expect(active).toHaveLength(2); expect(new Set(active.map(a=>a.patientId)).size).toBe(2);
   });
 });

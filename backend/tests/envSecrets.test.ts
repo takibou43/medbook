@@ -47,8 +47,8 @@ describe("أسرار JWT — فشل الإقلاع عند غيابها", () => {
     const path = await import("node:path");
     const src = fs.readFileSync(path.resolve(__dirname, "../src/config/env.ts"), "utf8");
     expect(src).not.toMatch(/dev_secret|change_me/i);
-    expect(src).toMatch(/jwtSecret:\s*required\("JWT_SECRET"\)/);
-    expect(src).toMatch(/jwtRefreshSecret:\s*required\("JWT_REFRESH_SECRET"\)/);
+    expect(src).toMatch(/jwtSecret:\s*required(?:Secret)?\("JWT_SECRET"\)/);
+    expect(src).toMatch(/jwtRefreshSecret:\s*required(?:Secret)?\("JWT_REFRESH_SECRET"\)/);
   });
 
   it("رسالة الخطأ لا تحتوي على أي قيمة سرية", async () => {

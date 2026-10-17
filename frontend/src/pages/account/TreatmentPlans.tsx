@@ -103,7 +103,7 @@ export default function TreatmentPlans() {
                       <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />{t("متابعة ")}{t(FOLLOW_UP_LABEL[nextFollowUp.status])}:{" "}
                       {nextFollowUp.appointment ? (
                         <Link to={`/account?appointment=${nextFollowUp.appointment.id}`} className="font-semibold underline">
-                          {fmtDate(nextFollowUp.appointment.date)}{t(" الساعة ")}{nextFollowUp.appointment.startTime}
+                          {fmtDate(nextFollowUp.appointment.date)}{t(" الساعة ")}<bdi dir="ltr">{nextFollowUp.appointment.startTime}</bdi>
                         </Link>
                       ) : (
                         <span className="font-semibold">{t("حوالي ")}{fmtDate(nextFollowUp.dueDate)}</span>

@@ -42,7 +42,7 @@ export function SuccessModal({ booking, onClose, extra }: { booking: ConfirmedBo
           <p className="font-semibold text-slate-700">{t("الدكتور: ")}{booking.doctorName}</p>
           <p className="text-slate-600">{t("التاريخ: ")}{arabicDate(booking.date)}
           </p>
-          <p className="text-slate-600">{t("الساعة: ")}{booking.startTime}</p>
+          <p className="text-slate-600">{t("الساعة: ")}<bdi dir="ltr">{booking.startTime}</bdi></p>
         </div>
         {booking.address && (
           <p className="mt-2 flex items-center justify-center gap-1.5 text-sm text-slate-500">

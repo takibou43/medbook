@@ -258,7 +258,7 @@ export function PrescriptionCard({
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <UserRound className="h-4 w-4 text-slate-500" aria-hidden="true" />
               {draftIsCurrent ? <span className="badge bg-sky-100 text-sky-700">{t("الاستشارة الحالية")}</span> : <span className="badge bg-slate-200 text-slate-700">{t("موعد مختار")}</span>}
-              <span>{t("موعد")} <span className="tabular-nums">{draft.patient.appointmentDate.slice(0, 10)} — {draft.patient.startTime}</span></span>
+              <span>{t("موعد")} <bdi dir="ltr" className="tabular-nums">{draft.patient.appointmentDate.slice(0, 10)} — {draft.patient.startTime}</bdi></span>
               {draft.patient.relationship && (
                 <span className="badge border border-primary-200 bg-primary-50 text-primary-800">
                   {t(draft.patient.relationship)}{draft.patient.accountHolderName ? ` — ${t("حساب {name}", { name: draft.patient.accountHolderName })}` : ""}

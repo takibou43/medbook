@@ -287,3 +287,11 @@ body {
   body.rx-printing:has(.rx-custom-paper) { margin: 0 !important; }
   .rx-paper.rx-custom-paper { width: 148mm !important; min-height: 210mm !important; }
 }
+
+/* Isolate numeric values from the surrounding Arabic text. */
+input:is([type="tel"], [type="number"], [type="date"], [type="time"], [type="datetime-local"], [inputmode="numeric"], [inputmode="decimal"], [inputmode="tel"]):not([dir]),
+.numeric-value {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}

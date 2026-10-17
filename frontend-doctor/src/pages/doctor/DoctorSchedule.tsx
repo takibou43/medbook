@@ -188,7 +188,7 @@ export default function DoctorSchedule() {
             {exceptions.map((ex: any) => (
               <div key={ex.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-2 text-sm">
                 <span>
-                  {formatDayAr(ex.exceptionDate.slice(0, 10))} — {ex.isOff ? t("عطلة") : `${ex.startTime} - ${ex.endTime}`}
+                  {formatDayAr(ex.exceptionDate.slice(0, 10))} — {ex.isOff ? t("عطلة") : <bdi dir="ltr">{ex.startTime} - {ex.endTime}</bdi>}
                 </span>
                 <button
                   onClick={async () => {

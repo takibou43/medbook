@@ -179,7 +179,7 @@ export default function AppointmentStatus() {
         <div className="card space-y-2 p-4 text-sm">
           <p className="flex items-center gap-2 text-slate-700">
             <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
-            {dateLabel} — {data.startTime}
+            {dateLabel} — <bdi dir="ltr">{data.startTime}</bdi>
           </p>
           {data.doctor.specialty && (
             <p className="text-slate-600">{doctorName} · {data.doctor.specialty}</p>
@@ -197,7 +197,7 @@ export default function AppointmentStatus() {
               className="flex min-h-[48px] items-center gap-2 font-semibold text-primary-600"
             >
               <Phone className="h-4 w-4 shrink-0" />
-              {data.doctor.phone}
+              <bdi dir="ltr">{data.doctor.phone}</bdi>
             </a>
           )}
         </div>

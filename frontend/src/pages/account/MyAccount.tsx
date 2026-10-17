@@ -331,6 +331,7 @@ export default function MyAccount() {
       <div className="patient-account mx-auto max-w-xl space-y-5">
         <div className="glass flex items-start justify-between gap-3 p-5">
           <div className="min-w-0">
+            <Link to="/account/arrival" className="inline-block rounded-xl bg-teal-700 px-4 py-2 text-white">📷 تسجيل الوصول بالمسح</Link>
             <h1 className="text-xl font-extrabold text-slate-900">{fullName || t("حسابي")}</h1>
             <p className="truncate text-sm text-slate-600" dir="ltr">
               {user.email}

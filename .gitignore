@@ -15,3 +15,6 @@ docs/admin-phase1/baseline/
 docs/admin-phase1/baseline.zip
 
 docs/localization/*.local.*
+
+# Local dependency cache
+.npm-cache/

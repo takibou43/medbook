@@ -106,3 +106,9 @@ test("Arabic singular/dual/plural for doctors", () => {
   assert.equal(doctorsCountAr(5), "5 أطباء");
   assert.equal(doctorsCountAr(12), "12 طبيبًا");
 });
+
+test("assistant cannot change an appointment already with the doctor", () => {
+ const a = appointmentActions({ status: "IN_PROGRESS", date: iso("2026-10-02"), startTime: "09:00" }, "ASSISTANT", NOW);
+ assert.equal(a.complete.visible, false);
+ assert.equal(a.noShow.visible, false);
+});

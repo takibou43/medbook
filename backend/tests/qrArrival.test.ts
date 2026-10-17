@@ -1,0 +1,21 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+const db = vi.hoisted(() => ({ patient: { findUnique: vi.fn() }, appointment: { findMany: vi.fn(), findFirst: vi.fn() }, $transaction: vi.fn() }));
+vi.mock('../src/lib/prisma', () => ({ prisma: db }));
+vi.mock('../src/lib/doctorLock', () => ({ lockDoctorCalls: vi.fn() }));
+vi.mock('../src/lib/recordArrival', () => ({ recordArrival: vi.fn(async () => new Date('2026-10-17T08:00:00Z')) }));
+vi.mock('../src/lib/actingDoctor', () => ({ resolveActingDoctorId: vi.fn() }));
+import { arrivalInput, scanArrival } from '../src/modules/appointments/arrival.service';
+import { recordArrival } from '../src/lib/recordArrival';
+const id = '11111111-1111-4111-8111-111111111111';
+const input = { code: 'medbook-arrival:v1:clinic:' + id };
+const row = { id, doctorId: 'd', familyMemberId: null };
+describe('authenticated QR arrival (mock database)', () => {
+ beforeEach(() => { vi.clearAllMocks(); db.patient.findUnique.mockResolvedValue({ id: 'p' }); db.appointment.findMany.mockResolvedValue([row]); db.appointment.findFirst.mockResolvedValue({ ...row, status: 'CONFIRMED', arrivedAt: null }); db.$transaction.mockImplementation(fn => fn(db)); });
+ it('rejects arbitrary QR payloads and unknown fields', () => { expect(arrivalInput.safeParse({ code: 'https://example.com' }).success).toBe(false); expect(arrivalInput.safeParse({ ...input, patientId: 'someone' }).success).toBe(false); });
+ it('automatically records the sole self appointment', async () => { expect(await scanArrival('u', input)).toMatchObject({ appointmentId: id, alreadyArrived: false }); expect(recordArrival).toHaveBeenCalledOnce(); expect(db.appointment.findMany.mock.calls[0][0].where).toMatchObject({ patientId: 'p', doctor: { clinicId: id } }); });
+ it('requires selection for a family appointment even if alone', async () => { db.appointment.findMany.mockResolvedValue([{ ...row, familyMemberId: 'family' }]); expect(await scanArrival('u', input)).toHaveProperty('choices'); expect(recordArrival).not.toHaveBeenCalled(); });
+ it('does not register several appointments together', async () => { db.appointment.findMany.mockResolvedValue([row, { ...row, id: 'other' }]); expect(await scanArrival('u', input)).toHaveProperty('choices'); expect(recordArrival).not.toHaveBeenCalled(); });
+ it('rejects another beneficiary appointment', async () => { await expect(scanArrival('u', { ...input, appointmentId: 'other' })).rejects.toThrow(); expect(recordArrival).not.toHaveBeenCalled(); });
+ it('preserves the first arrival timestamp on repeated scans', async () => { db.appointment.findFirst.mockResolvedValue({ ...row, arrivedAt: new Date(), status: 'CONFIRMED' }); expect(await scanArrival('u', input)).toMatchObject({ alreadyArrived: true }); expect(recordArrival).not.toHaveBeenCalled(); });
+ it('rejects a booking cancelled while scanning', async () => { db.appointment.findFirst.mockResolvedValue(null); await expect(scanArrival('u', input)).rejects.toThrow(); expect(recordArrival).not.toHaveBeenCalled(); });
+});

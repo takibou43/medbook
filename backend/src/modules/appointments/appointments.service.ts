@@ -1,7 +1,7 @@
+import { recordArrival } from "../../lib/recordArrival";
 import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
 import { firstPresent, presentQueueOrder } from "../../lib/presentQueue";
 import { withNearTurnFlags } from "../../lib/queueNotified";
-import { followUpAnchorFor } from "../../lib/queuePriority";
 import { assertReception, hasOnDutyAssistant } from "../shifts/shifts.service";
 import { algeriaDayStart } from "../../lib/doctorQueue";
 import { assertNotOwnDoctor } from "../../lib/accountProfiles";
@@ -363,7 +363,7 @@ export const ALLOWED_TRANSITIONS: Record<Role, Partial<Record<AppointmentStatus,
   ASSISTANT: {
     PENDING: ["CONFIRMED", "CANCELLED"],
     CONFIRMED: ["IN_PROGRESS", "LATE", "CANCELLED", "NO_SHOW"],
-    IN_PROGRESS: ["LATE", "CANCELLED", "NO_SHOW"],
+    IN_PROGRESS: [],
     LATE: ["IN_PROGRESS", "CANCELLED", "NO_SHOW"],
     NO_SHOW: ["IN_PROGRESS"],
     RESCHEDULE_REQUIRED: ["CANCELLED"],
@@ -738,6 +738,9 @@ export async function markAsLate(doctorUserId: string, appointmentId: string, ro
   if (!appointment) throw ApiError.notFound("الموعد غير موجود.");
   if (appointment.doctorId !== doctor.id) throw ApiError.forbidden();
 
+  if (role === Role.ASSISTANT && appointment.status === AppointmentStatus.IN_PROGRESS)
+    throw ApiError.forbidden("المريض عند الطبيب. انتظر حتى ينهي الطبيب الكشف.");
+
   const allowed: AppointmentStatus[] = [AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS, AppointmentStatus.LATE];
   if (!allowed.includes(appointment.status)) {
     throw ApiError.badRequest("لا يمكن تسجيل هذا الموعد كمتأخر في حالته الحالية.");
@@ -848,15 +851,7 @@ export async function markPatientArrived(doctorUserId: string, appointmentId: st
     if (!appointment || appointment.doctorId !== doctor.id) throw ApiError.notFound("الموعد غير موجود.");
     if (appointment.date.toISOString().slice(0,10) !== algeriaTodayUTCMidnight().toISOString().slice(0,10)) throw ApiError.badRequest("الحضور لمواعيد اليوم فقط.");
     if (![AppointmentStatus.CONFIRMED, AppointmentStatus.LATE].includes(appointment.status as any)) throw ApiError.badRequest("لا يمكن تسجيل الحضور في هذه الحالة.");
-    // موعد عودة يحضر الآن: نحفظ مرساة الحماية (آخر مريض محمي حاضر لحظة حضوره) تحت قفل المناداة نفسه، فلا يتراجع
-    // لاحقًا خطوة مع كل مناداة ولا يتجاوز المنبَّه أو التالي مباشرة أو الطوارئ المعتمدة (lib/queuePriority.ts).
-    let followUpAnchorId: string | undefined;
-    if (appointment.isFollowUp && !appointment.arrivedAt && appointment.status === AppointmentStatus.CONFIRMED) {
-      const waiting = await tx.appointment.findMany({ where: { doctorId: doctor.id, date: todayRangeUTC(), status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.LATE] } } });
-      followUpAnchorId = followUpAnchorFor(await withNearTurnFlags(tx, waiting), appointmentId);
-    }
-    const updated = await tx.appointment.update({ where: { id: appointmentId }, data: { arrivedAt: appointment.arrivedAt ?? new Date(), skipCredits: 0, ...(followUpAnchorId ? { followUpAnchorId } : {}) }, include: QUEUE_INCLUDE });
-    if (!appointment.arrivedAt) await writeAudit({ userId: doctorUserId, action: "PATIENT_ARRIVED", entity: "Appointment", entityId: appointmentId }, tx);
-    return updated;
+    await recordArrival(tx, appointment, doctorUserId);
+    return loadQueueAppointment(appointmentId, tx);
   });
 }

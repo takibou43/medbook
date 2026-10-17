@@ -193,6 +193,7 @@ export function appointmentActions(
   role: Role | undefined,
   now = Date.now()
 ): AppointmentActions {
+  if (role === "ASSISTANT" && a.status === "IN_PROGRESS") return { complete: HIDDEN, noShow: HIDDEN };
   const actionable = a.status === "CONFIRMED" || a.status === "IN_PROGRESS" || a.status === "LATE";
   if (!actionable) return { complete: HIDDEN, noShow: HIDDEN };
 

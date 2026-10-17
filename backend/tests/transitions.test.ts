@@ -25,12 +25,14 @@ describe("canTransition — حالات الموعد (Appointment Status)", () =>
     expect(canTransition("DOCTOR", "CONFIRMED", "NO_SHOW")).toBe(true);
   });
 
-  it("إنهاء الموعد للطبيب وحده — المساعد لا يستطيع إنهاءه لكنه يبقى قادرًا على المناداة والتأخير", () => {
+  it("إنهاء الموعد للطبيب وحده — المساعد لا يستطيع إنهاءه ولا يستطيع تغيير حالة الكشف الجاري", () => {
     expect(canTransition("ASSISTANT", "IN_PROGRESS", "COMPLETED")).toBe(false);
     expect(canTransition("ASSISTANT", "CONFIRMED", "COMPLETED")).toBe(false);
     expect(canTransition("ASSISTANT", "LATE", "COMPLETED")).toBe(false);
     expect(canTransition("DOCTOR", "IN_PROGRESS", "COMPLETED")).toBe(true);
-    expect(canTransition("ASSISTANT", "IN_PROGRESS", "LATE")).toBe(true);
+    expect(canTransition("ASSISTANT", "IN_PROGRESS", "LATE")).toBe(false);
+    expect(canTransition("ASSISTANT", "IN_PROGRESS", "CANCELLED")).toBe(false);
+    expect(canTransition("ASSISTANT", "IN_PROGRESS", "NO_SHOW")).toBe(false);
     expect(canTransition("ASSISTANT", "LATE", "IN_PROGRESS")).toBe(true);
   });
 

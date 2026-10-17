@@ -1,3 +1,4 @@
+import { ArrivalPoster } from "../../components/ArrivalPoster";
 import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
@@ -11,7 +12,6 @@ import { livePollInterval } from "../../lib/livePolling";
 import { useToast } from "../../components/ui/Toast";
 import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/States";
-import { Modal } from "../../components/ui/Modal";
 import { Appointment, AppointmentStatus } from "../../types";
 import { ASSISTANT_QUEUE_POLL_MS, QueueState } from "../../hooks/useQueue";
 import { callSignatures, newlyCalled } from "../../lib/assistantCalls";
@@ -21,7 +21,6 @@ import { appointmentActions } from "../../lib/doctorUi";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { WalkInPanel, WALK_IN_NOTE } from "../../components/WalkInPanel";
 import { canSendAttendanceMessage, canMarkLate, canMarkUnanswered, callAge, callTime, filterReception, orderReception, receptionConnection, receptionLabel, receptionTime, RECEPTION_STATUSES } from "../../lib/assistantReception";
-import { advanceAfterMissedCall } from "../../lib/assistantAdvance";
 
 type DoctorQueue = { doctor: { id: string; firstName: string; lastName: string }; queue: QueueState };
 type BoardAppointment = Appointment & { doctor: DoctorQueue["doctor"] };
@@ -77,9 +76,6 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     };
   }, []);
   const [dialog, setDialog] = useState<{ appointment: Appointment; target: NoShowTarget; mode: "call" | "final" } | null>(null);
-  const [missedCall, setMissedCall] = useState<Appointment | null>(null);
-  const [advanceRetries, setAdvanceRetries] = useState<Record<string, Appointment>>({});
-  const advancing = useRef(false);
   const audio = useRef<AudioContext | null>(null);
   const previous = useRef<Map<string, string | null>>(new Map());
   const queues = useQuery({ queryKey: ["assistant-queues", user?.id], queryFn: async () => (await api.get<{ data: DoctorQueue[] }>("/assistant/queues")).data.data, retry: false, refetchInterval: livePollInterval(live, ASSISTANT_QUEUE_POLL_MS), refetchIntervalInBackground: false, refetchOnWindowFocus: true });
@@ -115,41 +111,12 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     onError: error => showToast(apiErrorMessage(error), "error"),
   });
   function update(appointment: Appointment, kind: "arrived" | "late" | "call" | "urgency" | AppointmentStatus) {
-    if (advancing.current || action.isPending) return;
+    if (action.isPending) return;
     if ((kind === "CANCELLED" || kind === "NO_SHOW") && !window.confirm(kind === "CANCELLED" ? t("هل تريد إلغاء هذا الموعد؟") : t("هل تريد تسجيل عدم حضور هذا المريض؟"))) return;
     action.mutate({ appointment, kind });
   }
-  const advance = useMutation({
-    mutationFn: async ({ appointment, retry = false }: { appointment: Appointment; retry?: boolean }) => {
-      const config = { headers: { "X-Assistant-Doctor-Id": appointment.doctorId } };
-      return advanceAfterMissedCall(appointment.id, {
-        defer: () => api.post(`/appointments/${appointment.id}/late`, {}, config),
-        queue: async () => (await api.get<{ data: QueueState }>("/appointments/queue", config)).data.data,
-        call: async id => (await api.post<{ data: Appointment }>(`/appointments/${id}/call`, {}, config)).data.data,
-      }, retry);
-    },
-    onSuccess: (result, { appointment }) => {
-      setMissedCall(null);
-      setAdvanceRetries(previous => {
-        const next = { ...previous };
-        if (result.kind === "retry") next[appointment.doctorId] = appointment;
-        else delete next[appointment.doctorId];
-        return next;
-      });
-      if (result.kind === "retry") showToast(t("أُجّل الموعد دون حذفه، لكن تعذّر نداء التالي: {0}", { "0": apiErrorMessage(result.error) }), "error");
-      else if (result.kind === "empty") showToast(t("أُجّل الموعد دون حذفه. لا يوجد مريض آخر في الطابور."), "info");
-      else showToast(t("{0} {1}. الموعد السابق باقٍ دون حذف.", { "0": result.kind === "called" ? t("نودي على") : t("يوجد نداء حالي لـ"), "1": patientName(result.appointment) }), "success");
-    },
-    onError: error => showToast(apiErrorMessage(error, t("تعذّر تأجيل الموعد؛ لم يتم نداء التالي.")), "error"),
-    onSettled: () => { void qc.invalidateQueries({ queryKey: ["assistant-queues"] }); void qc.invalidateQueries({ queryKey: ["assistant-appointments"] }); },
-  });
-  async function deferAndAdvance(appointment: Appointment, retry = false) {
-    if (advancing.current || action.isPending) return;
-    advancing.current = true;
-    try { await advance.mutateAsync({ appointment, retry }); } catch { /* mutation displays the error */ }
-    finally { advancing.current = false; }
-  }
   function actions(a: Appointment) {
+    if (a.status === "IN_PROGRESS") return <p className="text-sm text-green-800">{t("المريض عند الطبيب — انتظر انتهاء الكشف")}</p>;
     const rules = appointmentActions(a, "ASSISTANT");
     const today = new Date(Date.now() + 3600000).toISOString().slice(0, 10);
     const openDialog = (mode: "call" | "final") => {
@@ -157,17 +124,16 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       setDialog({ appointment: a, mode, target: { id: a.id, patientName: patientName(a), doctorName: d ? `${d.firstName} ${d.lastName}` : undefined, phone: a.patient?.user?.phone ?? a.guestPhone, date: a.date, startTime: a.startTime, alreadyNoShow: a.status === "NO_SHOW" } });
     };
     return <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
-      {a.status === "PENDING" && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CONFIRMED")}>{t("تأكيد")}</Button>}
-      {(a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt && a.date.slice(0, 10) === today && <Button variant="outline" disabled={action.isPending || advance.isPending || !canManageAttendance} onClick={() => update(a, "arrived")}>{t("وصل المريض")}</Button>}
+      {a.status === "PENDING" && <Button variant="outline" disabled={action.isPending} onClick={() => update(a, "CONFIRMED")}>{t("تأكيد")}</Button>}
+      {(a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt && a.date.slice(0, 10) === today && <Button variant="outline" disabled={action.isPending || !canManageAttendance} onClick={() => update(a, "arrived")}>{t("وصل المريض")}</Button>}
       {a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && queues.data?.some(row => row.doctor.id === a.doctorId && row.queue.awaitingAssistant && !row.queue.current) && <Button disabled={action.isPending || !canManageAttendance} onClick={() => update(a, "call")}>{t("تأكيد الإدخال")}</Button>}
       {a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && (!a.urgencyStatus || a.urgencyStatus === "NONE") && <Button variant="outline" disabled={!canManageAttendance || action.isPending} onClick={() => update(a, "urgency")}>{t("طلب تقديم حالة مستعجلة")}</Button>}
       {a.urgencyStatus === "REQUESTED" && <span className="text-xs text-amber-700">{t("بانتظار قرار الطبيب")}</span>}
       {a.urgencyStatus === "APPROVED" && <span className="text-xs text-red-700">{t("حالة مستعجلة معتمدة")}</span>}
-      {canMarkUnanswered(a) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => setMissedCall(a)}>{t("تأجيل ونداء التالي")}</Button>}
-      {canMarkLate(a, today) && <Button variant="outline" disabled={action.isPending || advance.isPending} onClick={() => update(a, "late")}>{t("متأخر")}</Button>}
-      {canSendAttendanceMessage(a) && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => openDialog("call")}>{t("إرسال رسالة")}</Button>}
+      {canMarkLate(a, today) && <Button variant="outline" disabled={action.isPending} onClick={() => update(a, "late")}>{t("متأخر")}</Button>}
+      {canSendAttendanceMessage(a) && <Button variant="ghost" disabled={action.isPending} onClick={() => openDialog("call")}>{t("إرسال رسالة")}</Button>}
       {rules.note && <p className="text-xs text-slate-600">{rules.note}</p>}
-      {(a.status === "PENDING" || a.status === "CONFIRMED") && <Button variant="ghost" disabled={action.isPending || advance.isPending} onClick={() => update(a, "CANCELLED")}>{t("إلغاء الموعد")}</Button>}
+      {(a.status === "PENDING" || a.status === "CONFIRMED") && <Button variant="ghost" disabled={action.isPending} onClick={() => update(a, "CANCELLED")}>{t("إلغاء الموعد")}</Button>}
     </div>;
   }
   if (queues.isPending) return <Spinner />;
@@ -192,11 +158,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     </li>)}
   </ol>;
   return <div className="space-y-5">
-    <Modal open={Boolean(missedCall)} onClose={() => { if (!advancing.current) setMissedCall(null); }} title={t("تجاوز النداء دون حذف الموعد")} footer={<Button loading={advance.isPending} onClick={() => { if (missedCall) void deferAndAdvance(missedCall); }}>{t("تأجيل المريض ونداء التالي")}</Button>}>
-      <p className="text-slate-800">{missedCall && patientName(missedCall)}{t(" لم يستجب للنداء. يبقى موعده في قائمة المتأخرين وفق ترتيب الطابور الحالي، ويُنادى المريض التالي لدى الطبيب نفسه.")}</p>
-      <p className="mt-3 text-sm text-slate-700">{t("استخدم هذا الإجراء فقط إن لم يبدأ المريض الكشف. لن يُسجَّل غياب نهائي ولن تُفتح الرسائل.")}</p>
-    </Modal>
-    {Object.values(advanceRetries).map(appointment => <div key={appointment.doctorId} role="alert" className="card p-4 text-slate-800"><p>{t("تم تأجيل ")}{patientName(appointment)}{t(" دون حذف موعده، لكن نداء التالي لم يتأكد.")}</p><Button className="mt-2 min-h-11" loading={advance.isPending} onClick={() => void deferAndAdvance(appointment, true)}>{t("إعادة محاولة نداء التالي")}</Button></div>)}
+    <ArrivalPoster />
     <NoShowSmsDialog target={dialog?.target ?? null} mode={dialog?.mode} onClose={() => setDialog(null)} />
     {doctorQueues.filter(row => row.queue.awaitingAssistant && !row.queue.current).map(row => <p key={row.doctor.id} role="status" className="rounded-xl bg-amber-50 p-3">{row.doctor.firstName} {row.doctor.lastName}: {t("في انتظار تأكيد المساعد")}</p>)}
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -225,7 +187,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     </section>}
     <section aria-label={t("قائمة المواعيد الموحدة")} className="space-y-3">
       <h2 className="text-lg font-bold">{appointmentsView ? t("المواعيد") : t("مواعيد اليوم والطابور")}</h2>
-      <p className="text-sm text-slate-700">{t("مرتبة وفق طابور كل طبيب. النداء لا يؤكد بدء الكشف.")}</p>
+      <p className="text-sm text-slate-700">{t("مرتبة وفق طابور كل طبيب. المريض الذي تم إدخاله يبقى عند الطبيب حتى انتهاء الكشف.")}</p>
       {appointments.isPending ? <Spinner /> : <>
         {!list.length ? <p className="card p-5">{t("لا توجد مواعيد تطابق المرشحات في هذا اليوم.")}</p> : <>
           {visible.length > 0 && rows(visible)}

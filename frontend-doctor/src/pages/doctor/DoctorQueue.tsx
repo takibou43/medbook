@@ -14,6 +14,7 @@ import { ASSISTANT_QUEUE_POLL_MS, QUEUE_POLL_MS, useCallNext, useCallPatient, us
 import { useAuth } from "../../context/AuthContext";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { Appointment } from "../../types";
+import { ArrivalPoster } from "../../components/ArrivalPoster";
 import { RELATIONSHIP_LABELS } from "../../lib/features";
 
 // المريض قد يكون صاحب حساب أو ضيفًا حجز باسمه فقط — نعرض الاسم المتوفر أيًّا كان مصدره.
@@ -235,7 +236,7 @@ export default function DoctorQueue() {
           <div className="min-w-0 flex-1">
             <p className="text-xs font-bold text-amber-700">{t("الطبيب نادى الآن على")}</p>
             <p className="truncate text-xl font-extrabold text-slate-900">{callBanner.name}</p>
-            <p className="text-xs text-slate-600">{t("موعده ")}{callBanner.time}{t(" · إن لم يكن موجودًا اضغط «متأخر» للانتقال إلى التالي")}</p>
+            <p className="text-xs text-slate-600">{t("موعده ")}{callBanner.time}{t(" · المريض عند الطبيب، انتظر انتهاء الكشف")}</p>
           </div>
           <button
             type="button"
@@ -249,6 +250,7 @@ export default function DoctorQueue() {
       )}
 
       {/* المريض الجالس الآن أمام الطبيب */}
+      <ArrivalPoster />
       {current ? (
         <Card className="border-primary-200 bg-primary-50">
           <p className="text-xs font-semibold text-primary-700">{t("المريض الحالي")}</p>
@@ -267,7 +269,7 @@ export default function DoctorQueue() {
               >
                 <CheckCircle2 className="me-1.5 h-4 w-4" />{t(" أنهى الموعد ")}</Button>
             )}
-            {canManageAttendance && <Button
+            {canManageAttendance && !isAssistant && <Button
               variant="outline"
               className={isAssistant ? "col-span-2" : undefined}
               loading={markLate.isPending || callNext.isPending}
@@ -308,7 +310,7 @@ export default function DoctorQueue() {
               <Clock3 className="me-1.5 h-4 w-4" />{t(" متأخر ")}</Button>}
             {/* نودي عليه فلم يحضر: رسالة جاهزة من هاتف المساعد + بقاؤه في المتابعة.
                 لا تسجيل غياب نهائي هنا — ذلك يحدث وحده عند انتهاء دوام الطبيب. */}
-            {canManageAttendance && canSendAttendanceMessage(current) && <Button
+            {canManageAttendance && !isAssistant && canSendAttendanceMessage(current) && <Button
               variant="outline"
               className="col-span-2 border-red-200 text-red-600 hover:bg-red-50"
               disabled={busy}

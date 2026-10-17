@@ -1,3 +1,4 @@
+import { arrivalInput, arrivalPoster, scanArrival } from "./arrival.service";
 import { z } from "zod";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { requestUrgency, decideUrgency } from "./urgency.service";
@@ -10,6 +11,12 @@ import * as controller from "./appointments.controller";
 
 const router = Router();
 router.use(authenticate);
+router.get('/arrival-poster', authorize(Role.DOCTOR, Role.ASSISTANT), asyncHandler(async (req, res) => {
+  res.json({ success: true, data: await arrivalPoster(req.user!.id, req.user!.role) });
+}));
+router.post('/scan-arrival', authorize(Role.PATIENT), validate({ body: arrivalInput }), asyncHandler(async (req, res) => {
+  res.json({ success: true, data: await scanArrival(req.user!.id, req.body) });
+}));
 
 // POST /api/appointments — المريض فقط يحجز
 router.post("/", authorize(Role.PATIENT), validate({ body: createAppointmentSchema }), controller.create);

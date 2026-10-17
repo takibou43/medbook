@@ -39,7 +39,7 @@ export default function Clinics() {
       <div className="card mb-6 space-y-3 p-5">{clinic.photoUrl && <img src={clinic.photoUrl} alt="" className="max-h-64 rounded-xl object-cover" />}<p>{clinic.description}</p><p>{clinic.address} · {clinic.city.nameAr}{t("، ")}{catalogName(clinic.wilaya)}</p>{clinic.phone && <a className="btn-outline" href={`tel:${clinic.phone}`}>{t("هاتف العيادة: ")}<span dir="ltr">{clinic.phone}</span></a>}{directionsUrl(clinic.address, clinic.city.nameAr, catalogName(clinic.wilaya)) && <a className="btn-outline ms-2" href={directionsUrl(clinic.address, clinic.city.nameAr, catalogName(clinic.wilaya))!} target="_blank" rel="noopener noreferrer">{t("الاتجاهات")}</a>}</div>
       <h2 className="mb-4 text-xl font-bold">{t("اختر طبيبك")}</h2>
       {clinic.doctors?.length === 0 && <p>{t("لا يوجد أطباء متاحون للحجز حاليًا.")}</p>}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{clinic.doctors?.map(d => <article key={d.id} className="card space-y-3 p-5"><h3 className="font-bold">{t("د. ")}{d.firstName} {d.lastName}</h3><p>{catalogName(d.specialty)}</p><p>{clinic.nameAr}</p><Link to={`/?doctor=${encodeURIComponent(d.id)}`} className="btn-primary">{t("حجز مع هذا الطبيب")}</Link></article>)}</div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{clinic.doctors?.map(d => <article key={d.id} className="card space-y-3 p-5"><h3 className="font-bold">{t("د. ")}{d.firstName} {d.lastName}</h3><p>{catalogName(d.specialty)}</p><p>{clinic.nameAr}</p><Link to={`/?doctor=${encodeURIComponent(d.id)}&intent=booking`} className="btn-primary">{t("حجز مع هذا الطبيب")}</Link></article>)}</div>
     </>}
   </section>;
 }

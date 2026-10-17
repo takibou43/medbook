@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const db = vi.hoisted(() => ({ patient: { findUnique: vi.fn() }, appointment: { findMany: vi.fn(), findFirst: vi.fn() }, $transaction: vi.fn() }));
+const db = vi.hoisted(() => ({ patient: { findUnique: vi.fn() }, doctor: { findUniqueOrThrow: vi.fn() }, appointment: { findMany: vi.fn(), findFirst: vi.fn() }, $transaction: vi.fn() }));
 vi.mock('../src/lib/prisma', () => ({ prisma: db }));
 vi.mock('../src/lib/doctorLock', () => ({ lockDoctorCalls: vi.fn() }));
 vi.mock('../src/lib/recordArrival', () => ({ recordArrival: vi.fn(async () => new Date('2026-10-17T08:00:00Z')) }));
-vi.mock('../src/lib/actingDoctor', () => ({ resolveActingDoctorId: vi.fn() }));
-import { arrivalInput, scanArrival } from '../src/modules/appointments/arrival.service';
+vi.mock('../src/lib/actingDoctor', () => ({ resolveActingDoctorId: vi.fn(async () => '11111111-1111-4111-8111-111111111111') }));
+import { arrivalInput, arrivalPoster, scanArrival } from '../src/modules/appointments/arrival.service';
 import { recordArrival } from '../src/lib/recordArrival';
 const id = '11111111-1111-4111-8111-111111111111';
 const input = { code: 'medbook-arrival:v1:clinic:' + id };
@@ -18,4 +18,9 @@ describe('authenticated QR arrival (mock database)', () => {
  it('rejects another beneficiary appointment', async () => { await expect(scanArrival('u', { ...input, appointmentId: 'other' })).rejects.toThrow(); expect(recordArrival).not.toHaveBeenCalled(); });
  it('preserves the first arrival timestamp on repeated scans', async () => { db.appointment.findFirst.mockResolvedValue({ ...row, arrivedAt: new Date(), status: 'CONFIRMED' }); expect(await scanArrival('u', input)).toMatchObject({ alreadyArrived: true }); expect(recordArrival).not.toHaveBeenCalled(); });
  it('rejects a booking cancelled while scanning', async () => { db.appointment.findFirst.mockResolvedValue(null); await expect(scanArrival('u', input)).rejects.toThrow(); expect(recordArrival).not.toHaveBeenCalled(); });
+ it('opens clinic booking when there is no appointment today, without writing attendance', async () => { db.appointment.findMany.mockResolvedValue([]); expect(await scanArrival('u', input)).toEqual({bookingRequired:true,bookingPath:'/clinics/'+id}); expect(recordArrival).not.toHaveBeenCalled(); });
+ it('opens the same doctor booking when scanning a doctor code without a visit today', async () => { db.appointment.findMany.mockResolvedValue([]); expect(await scanArrival('u',{code:'medbook-arrival:v1:doctor:'+id})).toEqual({bookingRequired:true,bookingPath:'/?doctor='+id+'&intent=booking'}); expect(recordArrival).not.toHaveBeenCalled(); });
+ it('never converts a stale beneficiary selection into a booking', async () => { db.appointment.findMany.mockResolvedValue([]); await expect(scanArrival('u',{...input,appointmentId:id})).rejects.toThrow(); expect(recordArrival).not.toHaveBeenCalled(); });
+ it('prints one shared clinic code when the doctor belongs to a clinic', async () => { db.doctor.findUniqueOrThrow.mockResolvedValue({id,firstName:'طبيب',lastName:'اختبار',clinicId:id,clinic:{nameAr:'عيادة الاختبار'}}); expect(await arrivalPoster('u','ASSISTANT')).toEqual({doctorId:id,code:'medbook-arrival:v1:clinic:'+id,name:'عيادة الاختبار'}); });
+ it('preserves an independent doctor code', async () => { db.doctor.findUniqueOrThrow.mockResolvedValue({id,firstName:'طبيب',lastName:'اختبار',clinicId:null,clinic:null}); expect(await arrivalPoster('u','ASSISTANT')).toEqual({doctorId:id,code:'medbook-arrival:v1:doctor:'+id,name:'طبيب اختبار'}); });
 });

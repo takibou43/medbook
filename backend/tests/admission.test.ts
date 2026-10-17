@@ -66,7 +66,7 @@ describe("admission handshake (mocked transaction)", () => {
   it("repeated arrival preserves its first timestamp", async () => {
     const arrivedAt = new Date(Date.now() - 60000);
     db.appointment.findUnique.mockResolvedValue({ id: "a", doctorId: "doctor-1", date: algeriaTodayUTCMidnight(), status: "CONFIRMED", arrivedAt });
-    await markPatientArrived("assistant-user", "a", Role.ASSISTANT);
-    expect(db.appointment.update).toHaveBeenCalledWith(expect.objectContaining({ data: { arrivedAt, skipCredits: 0 } }));
+    expect(await markPatientArrived("assistant-user", "a", Role.ASSISTANT)).toMatchObject({ arrivedAt });
+    expect(db.appointment.update).not.toHaveBeenCalled();
   });
 });

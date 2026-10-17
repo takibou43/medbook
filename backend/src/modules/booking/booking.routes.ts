@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { validate } from "../../middleware/validate";
 import { bookingLookupLimiter } from "../../middleware/rateLimiter";
+import { bookingCreateBurstLimiter, bookingCreateDailyLimiter } from "../../middleware/bookingLimiters";
 import {
   guestBookingSchema,
   guestSlotsQuerySchema,
@@ -36,7 +37,7 @@ router.get("/status/:id", validate({ params: bookingIdParamsSchema }), controlle
 
 // إنشاء حجز يتطلب حساب مريض مسجّل الدخول (توكن صالح + دور PATIENT). بلا توكن أو بتوكن منتهٍ → 401،
 // وبدور آخر (طبيب/مساعد/إدارة) → 403. صاحب الموعد يُحدَّد من الجلسة فقط، لا من جسم الطلب.
-router.post("/", authenticate, authorize(Role.PATIENT), validate({ body: guestBookingSchema }), controller.createGuestBooking);
+router.post("/", authenticate, authorize(Role.PATIENT), bookingCreateBurstLimiter, bookingCreateDailyLimiter, validate({ body: guestBookingSchema }), controller.createGuestBooking);
 
 router.patch(
   "/:id/cancel",

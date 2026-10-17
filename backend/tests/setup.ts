@@ -10,3 +10,18 @@ process.env.DATABASE_URL =
   process.env.DATABASE_URL ?? process.env.TEST_DATABASE_URL ?? "postgresql://medbook:medbook@localhost:5432/medbook_test?schema=public";
 process.env.JWT_SECRET = process.env.JWT_SECRET ?? "test_only_access_secret_do_not_use_in_production";
 process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? "test_only_refresh_secret_do_not_use_in_production";
+
+// حماية إغراق جدول المواعيد (حدود معدل الحجز + سقوف المواعيد لكل مريض) تُعطَّل هنا للاختبارات القديمة فقط،
+// لأنها تحجز عشرات المواعيد بحساب واحد وطبيب واحد. لا مفتاح في كود الإنتاج: التعطيل محاكاة داخل الاختبارات،
+// والمنطق الحقيقي مُختبَر مباشرة في tests/bookingQuota.test.ts (عبر vi.importActual).
+import { vi } from "vitest";
+
+vi.mock("../src/lib/bookingQuota", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/lib/bookingQuota")>()),
+  assertBookingQuota: async () => undefined,
+}));
+
+vi.mock("../src/middleware/bookingLimiters", () => {
+  const pass = (_req: unknown, _res: unknown, next: () => void) => next();
+  return { bookingCreateBurstLimiter: pass, bookingCreateDailyLimiter: pass };
+});

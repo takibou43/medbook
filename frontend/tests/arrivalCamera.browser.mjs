@@ -15,7 +15,7 @@ console.log('Preview ready',base);
 const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe',args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
 console.log('Browser ready');
 try {
- const context=await browser.newContext({serviceWorkers:'block'});
+ const context=await browser.newContext({serviceWorkers:'block',viewport:{width:320,height:740}});
  await context.addInitScript(()=>{
   localStorage.setItem('medbook_access_token','synthetic-camera-test');
   const original=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
@@ -40,6 +40,7 @@ try {
  page.on("pageerror", error=>console.log("BROWSER ERROR", error.message));
  await page.goto(base,{waitUntil:'domcontentloaded'});
  console.log('Home ready');
+ assert.equal(await page.evaluate(()=>document.querySelector('header').scrollWidth<=window.innerWidth),true,'home header fits a 320px screen');
  await page.getByRole('link',{name:'تسجيل الوصول بالمسح',exact:true}).click();
  console.log('Scanner opened');
  try {await page.waitForFunction(()=>{const video=document.querySelector('video');return Boolean(video?.srcObject?.active)&&video.readyState>=2;},null,{timeout:30000});} catch(error) {console.log(await page.locator('body').innerText()); console.log(await page.evaluate(()=>({tracks:window.testTracks?.map(t=>({state:t.readyState})),policy:document.featurePolicy.allowsFeature('camera'),video:[...document.querySelectorAll('video')].map(v=>({active:v.srcObject?.active,ready:v.readyState,paused:v.paused,width:v.videoWidth,connected:v.isConnected})),allVideos:document.querySelectorAll('video').length})));throw error;}

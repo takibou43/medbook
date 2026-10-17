@@ -27,10 +27,11 @@ export function Header() {
         {!loading && (
           <Link
             to={user ? "/account" : "/account/login"}
-            className="flex min-h-[44px] items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-primary-700 hover:bg-white/70"
+            aria-label={user ? t("حسابي") : t("تسجيل الدخول")}
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-primary-700 hover:bg-white/70"
           >
             <UserRound className="h-4 w-4" aria-hidden="true" />
-            {user ? t("حسابي") : t("تسجيل الدخول")}
+            <span className="hidden min-[360px]:inline">{user ? t("حسابي") : t("تسجيل الدخول")}</span>
           </Link>
         )}
       </div>

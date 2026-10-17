@@ -15,9 +15,8 @@ export const arrivalInput = z.object({
 
 export async function arrivalPoster(userId: string, role: Role) {
   const id = await resolveActingDoctorId(userId, role);
-  const doctor = await prisma.doctor.findUniqueOrThrow({ where: { id }, include: { clinic: true } });
-  return { code: doctor.clinicId ? 'medbook-arrival:v1:clinic:' + doctor.clinicId : 'medbook-arrival:v1:doctor:' + doctor.id,
-    name: doctor.clinic?.nameAr ?? doctor.firstName + ' ' + doctor.lastName };
+  const doctor = await prisma.doctor.findUniqueOrThrow({ where: { id }, select: { id: true, firstName: true, lastName: true, clinicId: true, clinic: { select: { nameAr: true } } } });
+  return { doctorId: doctor.id, code: doctor.clinicId ? 'medbook-arrival:v1:clinic:' + doctor.clinicId : 'medbook-arrival:v1:doctor:' + doctor.id, name: doctor.clinic?.nameAr ?? doctor.firstName + ' ' + doctor.lastName };
 }
 
 export async function scanArrival(userId: string, input: z.infer<typeof arrivalInput>) {
@@ -32,7 +31,10 @@ export async function scanArrival(userId: string, input: z.infer<typeof arrivalI
   const candidates = await prisma.appointment.findMany({ where, orderBy: [{ startTime: 'asc' }, { id: 'asc' }],
     select: { id: true, doctorId: true, startTime: true, familyMemberId: true, familyMember: { select: { firstName: true, lastName: true } },
       doctor: { select: { firstName: true, lastName: true } } } });
-  if (!candidates.length) throw ApiError.badRequest('لا يوجد موعد لك في هذه العيادة اليوم. راجع الاستقبال.');
+  if (!candidates.length) {
+    if (input.appointmentId) throw ApiError.notFound('الموعد غير موجود.');
+    return { bookingRequired: true, bookingPath: kind === 'doctor' ? '/?doctor=' + encodeURIComponent(id) + '&intent=booking' : '/clinics/' + encodeURIComponent(id) };
+  }
   if (!input.appointmentId && (candidates.length > 1 || candidates[0].familyMemberId)) return { choices: candidates };
   const chosen = candidates.find(a => a.id === (input.appointmentId ?? candidates[0].id));
   if (!chosen) throw ApiError.notFound('الموعد غير موجود.');

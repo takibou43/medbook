@@ -27,7 +27,7 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
   let sign: (p: { sub: string; role: any }) => string;
   let today: Date;
   const tag = `ab${Date.now().toString(36)}`;
-  const ids = { wilaya: "", city: "", specialty: "", users: [] as string[], doctors: [] as string[] };
+  const ids = { wilaya: "", city: "", specialty: "", users: [] as string[], doctors: [] as string[], clinics: [] as string[] };
   let adminToken = "";
   let adminUserId = "";
   let doctorToken = "";
@@ -37,10 +37,10 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
   let slotSeq = 0;
   let patientSeq = 0;
 
-  const call = async (method: string, url: string, body?: unknown, token?: string) => {
+  const call = async (method: string, url: string, body?: unknown, token?: string, extraHeaders: Record<string, string> = {}) => {
     const r = await fetch(base + url, {
       method,
-      headers: { "content-type": "application/json", ...(token ? { authorization: "Bearer " + token } : {}) },
+      headers: { "content-type": "application/json", ...(token ? { authorization: "Bearer " + token } : {}), ...extraHeaders },
       body: body ? JSON.stringify(body) : undefined,
     });
     const j: any = await r.json().catch(() => ({}));
@@ -156,6 +156,7 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
     await db.assistant.deleteMany({ where: { doctorId: { in: ids.doctors } } });
     await db.doctorSchedule.deleteMany({ where: { doctorId: { in: ids.doctors } } });
     await db.doctor.deleteMany({ where: { id: { in: ids.doctors } } });
+    await db.clinic.deleteMany({ where: { id: { in: ids.clinics } } });
     await db.refreshToken.deleteMany({ where: { userId: { in: ids.users } } });
     await db.user.deleteMany({ where: { id: { in: ids.users } } });
     await db.specialty.deleteMany({ where: { id: ids.specialty } });
@@ -463,10 +464,18 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
     const p = await mkPatient();
     const d = await mkDoctor('qr');
     const appointmentId = await mkAppt(p.patientId, 0, 'CONFIRMED', d.doctorId);
+    const qrAssistantToken = await mkAssistant(d.doctorId, 'qr');
+    const initialRevision = (await call('GET', '/api/live/changes', undefined, qrAssistantToken)).data.revision;
     const code = 'medbook-arrival:v1:doctor:' + d.doctorId;
     const results = await Promise.all([1, 2].map(() => call('POST', '/api/appointments/scan-arrival', { code }, p.token)));
     expect(results.map(r => r.status)).toEqual([200, 200]);
     expect(results.filter(r => r.data.alreadyArrived === false)).toHaveLength(1);
+    const liveChange = await call('GET', '/api/live/changes?since=' + initialRevision, undefined, qrAssistantToken);
+    expect(liveChange.data.revision).not.toBe(initialRevision);
+    const assistantQueues = await call('GET', '/api/assistant/queues', undefined, qrAssistantToken);
+    expect(assistantQueues.status).toBe(200);
+    const waiting = assistantQueues.data.find((r: any) => r.doctor.id === d.doctorId).queue.waiting;
+    expect(waiting.find((a: any) => a.id === appointmentId)).toMatchObject({ arrivedAt: expect.any(String), patientId: p.patientId });
     const row = await db.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
     expect(row.arrivedAt).not.toBeNull();
     expect(row.status).toBe('CONFIRMED');
@@ -475,8 +484,54 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
     expect(await db.auditLog.count({ where: { entityId: appointmentId, action: 'PATIENT_ARRIVED' } })).toBe(1);
     expect((await call('POST', '/api/appointments/scan-arrival', { code, appointmentId }, doctorToken)).status).toBe(403);
     const stranger = await mkPatient();
-    expect((await call('POST', '/api/appointments/scan-arrival', { code, appointmentId }, stranger.token)).status).toBe(400);
+    expect((await call('POST', '/api/appointments/scan-arrival', { code, appointmentId }, stranger.token)).status).toBe(404);
     await db.appointment.update({ where: { id: appointmentId }, data: { date: day(-1), arrivedAt: null } });
-    expect((await call('POST', '/api/appointments/scan-arrival', { code }, p.token)).status).toBe(400);
+    const noTodayVisit = await call('POST', '/api/appointments/scan-arrival', { code }, p.token);
+    expect(noTodayVisit.status).toBe(200);
+    expect(noTodayVisit.data).toEqual({ bookingRequired: true, bookingPath: '/?doctor=' + d.doctorId + '&intent=booking' });
+    expect((await db.appointment.findUniqueOrThrow({ where: { id: appointmentId } })).arrivedAt).toBeNull();
+  });
+
+  it('one clinic QR resolves the right doctor among four with one shared assistant and independent admission locks', async () => {
+    const docs = [];
+    for (let i=0;i<4;i++) docs.push(await mkDoctor('shared-qr-'+i));
+    const clinic = await db.clinic.create({data:{nameAr:'عيادة QR '+tag,address:'اختبار محلي',wilayaId:ids.wilaya,cityId:ids.city}});
+    ids.clinics.push(clinic.id);
+    await db.doctor.updateMany({where:{id:{in:docs.map(d=>d.doctorId)}},data:{clinicId:clinic.id}});
+    const sharedToken = await mkAssistant(docs[0].doctorId,'shared-qr');
+    await db.assistant.updateMany({where:{doctorId:docs[0].doctorId},data:{clinicId:clinic.id,allDoctors:true,shiftEndsAt:new Date(Date.now()+300000)}});
+    // Queue behavior needs authenticated fixtures, without exhausting the real registration limiter.
+    const fixturePatient = async (label: string) => {
+      const user = await db.user.create({data:{email:`${tag}-${label}@test.local`,passwordHash:'x',role:'PATIENT',patient:{create:{firstName:'مريض',lastName:label}}},include:{patient:true}});
+      ids.users.push(user.id);
+      return {patientId:user.patient!.id,token:sign({sub:user.id,role:'PATIENT'})};
+    };
+    const patient = await fixturePatient('clinic-qr'); const other = await fixturePatient('clinic-qr-other');
+    const appointments = [];
+    for (let i=0;i<4;i++) appointments.push(await mkAppt(i===2?patient.patientId:other.patientId,0,'CONFIRMED',docs[i].doctorId));
+    const code = 'medbook-arrival:v1:clinic:'+clinic.id;
+    const before = (await call('GET','/api/live/changes',undefined,sharedToken)).data.revision;
+    expect((await call('POST','/api/appointments/scan-arrival',{code},patient.token)).data).toMatchObject({appointmentId:appointments[2],alreadyArrived:false});
+    expect((await call('GET','/api/live/changes?since='+before,undefined,sharedToken)).data.revision).not.toBe(before);
+    const board = await call('GET','/api/assistant/queues',undefined,sharedToken);
+    expect(board.status).toBe(200); expect(board.data).toHaveLength(4);
+    for(let i=0;i<4;i++) {
+      const row=board.data.find((r:any)=>r.doctor.id===docs[i].doctorId).queue.waiting.find((a:any)=>a.id===appointments[i]);
+      if(i===2) expect(row.arrivedAt).toEqual(expect.any(String)); else expect(row.arrivedAt).toBeNull();
+    }
+    const poster=await call('GET','/api/appointments/arrival-poster',undefined,sharedToken,{'X-Assistant-Doctor-Id':docs[2].doctorId});
+    expect(poster.data.code).toBe(code);
+    const first=await mkAppt(patient.patientId,0,'CONFIRMED',docs[0].doctorId);
+    const ambiguous=await call('POST','/api/appointments/scan-arrival',{code},patient.token);
+    expect(ambiguous.data.choices.map((a:any)=>a.id).sort()).toEqual([first,appointments[2]].sort());
+    expect((await db.appointment.findUniqueOrThrow({where:{id:first}})).arrivedAt).toBeNull();
+    expect((await call('POST','/api/appointments/scan-arrival',{code,appointmentId:first},patient.token)).status).toBe(200);
+    expect((await call('POST','/api/appointments/scan-arrival',{code,appointmentId:appointments[0]},other.token)).status).toBe(200);
+    await db.doctor.updateMany({where:{id:{in:[docs[0].doctorId,docs[2].doctorId]}},data:{dutyEndsAt:new Date(Date.now()+300000),queueRequestedAt:new Date()}});
+    expect((await call('POST','/api/appointments/'+appointments[2]+'/call',undefined,sharedToken,{'X-Assistant-Doctor-Id':docs[2].doctorId})).status).toBe(200);
+    expect((await call('POST','/api/appointments/'+appointments[2]+'/late',undefined,sharedToken,{'X-Assistant-Doctor-Id':docs[2].doctorId})).status).toBe(403);
+    expect((await call('POST','/api/appointments/'+appointments[0]+'/call',undefined,sharedToken,{'X-Assistant-Doctor-Id':docs[0].doctorId})).status).toBe(200);
+    const active=await db.appointment.findMany({where:{doctorId:{in:docs.map(d=>d.doctorId)},status:'IN_PROGRESS'},select:{patientId:true}});
+    expect(active).toHaveLength(2); expect(new Set(active.map(a=>a.patientId)).size).toBe(2);
   });
 });

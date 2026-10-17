@@ -10,7 +10,7 @@
 //
 // عند أي تغيير في بنية هذا الملف: ارفع رقم VERSION ليُنظَّف الكاش القديم.
 
-const VERSION = "v7";
+const VERSION = "v8";
 const SHELL_CACHE = "medbook-shell-" + VERSION;
 const ASSET_CACHE = "medbook-assets-" + VERSION;
 // Cache Storage مخصص حصريًا لغلاف التطبيق والأصول العامة؛ لا تُحفظ فيه معرّفات مواعيد أو ردود API.

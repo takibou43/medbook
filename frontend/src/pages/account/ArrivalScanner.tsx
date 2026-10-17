@@ -1,3 +1,4 @@
+import { cameraErrorMessage } from "../../lib/arrivalCamera";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import type { IScannerControls } from "@zxing/browser";
@@ -10,6 +11,7 @@ export default function ArrivalScanner() {
   const video = useRef<HTMLVideoElement>(null);
   const controls = useRef<IScannerControls>();
   const pending = useRef(false);
+  const autoStarted = useRef(false);
   const cameraGeneration = useRef(0);
   const mounted = useRef(true);
   const [code, setCode] = useState('');
@@ -45,10 +47,11 @@ export default function ArrivalScanner() {
         void submit(value);
       });
       if (!mounted.current || generation !== cameraGeneration.current) session.stop(); else controls.current = session;
-    } catch { if (mounted.current) { setScanning(false); setMessage('تعذر فتح الكاميرا. اسمح بالوصول إليها أو اطلب من المساعد تسجيل حضورك.'); } }
+    } catch (error) { if (mounted.current && generation === cameraGeneration.current) { setScanning(false); setMessage(cameraErrorMessage(error)); } }
   }
+  useEffect(() => { if (user && !loading && !autoStarted.current) { autoStarted.current = true; void start(); } }, [user, loading]);
   if (loading) return <p>جارٍ تحميل الحساب…</p>;
-  if (!user) return <Navigate to="/account/login" replace />;
+  if (!user) return <Navigate to="/account/login?redirect=%2Faccount%2Farrival" replace />;
   return <section dir="rtl" className="mx-auto max-w-lg space-y-4 p-4">
     <h1 className="text-xl font-bold">تسجيل الوصول إلى العيادة</h1>
     <p>افتح الكاميرا ووجّهها نحو QR المطبوع في العيادة. يُسجل حضورك تلقائيًا عند قراءته.</p>

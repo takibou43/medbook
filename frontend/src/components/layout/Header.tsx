@@ -1,7 +1,7 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import { Link } from "react-router-dom";
-import { UserRound } from "lucide-react";
+import { Camera, UserRound } from "lucide-react";
 import { Logo } from "../ui/Logo";
 import { useAuth } from "../../context/AuthContext";
 
@@ -21,6 +21,9 @@ export function Header() {
             GET /api/booking/lookup (معرّف الموعد + الهاتف) فقط. */}
         {/* حساب المريض (مطلوب لإتمام الحجز): رابط واحد صغير لا يزاحم خطوات الحجز. */}
         <Link to="/clinics" className="flex min-h-[48px] items-center rounded-xl px-2 text-sm font-semibold text-primary-700 hover:bg-white/70">{t("العيادات")}</Link>
+        <Link to="/account/arrival" aria-label="تسجيل الوصول بالمسح" title="تسجيل الوصول بالمسح" className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-primary-700 hover:bg-white/70">
+          <Camera className="h-6 w-6" aria-hidden="true" />
+        </Link>
         {!loading && (
           <Link
             to={user ? "/account" : "/account/login"}

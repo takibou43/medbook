@@ -239,7 +239,10 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
     await db.doctor.update({where:{id:docA},data:{dutyEndsAt:new Date(Date.now()+60000),queueRequestedAt:new Date()}});
     await db.appointment.update({where:{id:late2},data:{arrivedAt:new Date()}});
     expect((await call("POST", `/api/appointments/${late2}/call`, undefined, assistantToken)).status).toBe(200);
-    expect((await call("POST", `/api/appointments/${late2}/late`, undefined, assistantToken)).status).toBe(200);
+    expect((await call("POST", `/api/appointments/${late2}/late`, undefined, assistantToken)).status).toBe(403);
+    expect(await db.appointment.findUnique({ where: { id: late2 } })).toMatchObject({ status: "IN_PROGRESS", deferredCount: 1 });
+    await db.assistant.updateMany({where:{doctorId:docA},data:{shiftEndsAt:null}});
+    expect((await call("POST", `/api/appointments/${late2}/late`, undefined, doctorToken)).status).toBe(200);
     expect(await db.appointment.findUnique({ where: { id: late2 } })).toMatchObject({ status: "LATE", deferredCount: 2, skipCredits: 4 });
     expect((await db.appointment.findUnique({ where: { id: late2 } }))!.status).toBe("LATE");
     await db.assistant.updateMany({where:{doctorId:docA},data:{shiftEndsAt:null}});
@@ -454,5 +457,26 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
     await expect(
       createGuestAppointment({ firstName: "ضيف", lastName: "x", phone: guestPhone, wilayaId: ids.wilaya, specialtyId: ids.specialty, doctorId: docA } as any, null)
     ).rejects.toThrow(/تقييد الحجز كضيف/);
+  });
+
+  it("QR arrival is owned, same-day and idempotent under simultaneous scans", async () => {
+    const p = await mkPatient();
+    const d = await mkDoctor('qr');
+    const appointmentId = await mkAppt(p.patientId, 0, 'CONFIRMED', d.doctorId);
+    const code = 'medbook-arrival:v1:doctor:' + d.doctorId;
+    const results = await Promise.all([1, 2].map(() => call('POST', '/api/appointments/scan-arrival', { code }, p.token)));
+    expect(results.map(r => r.status)).toEqual([200, 200]);
+    expect(results.filter(r => r.data.alreadyArrived === false)).toHaveLength(1);
+    const row = await db.appointment.findUniqueOrThrow({ where: { id: appointmentId } });
+    expect(row.arrivedAt).not.toBeNull();
+    expect(row.status).toBe('CONFIRMED');
+    expect(row.patientId).toBe(p.patientId);
+    expect(row.familyMemberId).toBeNull();
+    expect(await db.auditLog.count({ where: { entityId: appointmentId, action: 'PATIENT_ARRIVED' } })).toBe(1);
+    expect((await call('POST', '/api/appointments/scan-arrival', { code, appointmentId }, doctorToken)).status).toBe(403);
+    const stranger = await mkPatient();
+    expect((await call('POST', '/api/appointments/scan-arrival', { code, appointmentId }, stranger.token)).status).toBe(400);
+    await db.appointment.update({ where: { id: appointmentId }, data: { date: day(-1), arrivedAt: null } });
+    expect((await call('POST', '/api/appointments/scan-arrival', { code }, p.token)).status).toBe(400);
   });
 });

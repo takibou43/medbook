@@ -261,7 +261,9 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
     expect((await db.appointment.findUnique({ where: { id: m.A } }))!.status).toBe("IN_PROGRESS");
     await db.assistant.updateMany({where:{doctorId:docA.id},data:{shiftEndsAt:new Date(Date.now()+60000)}});
     const byAssistant = await late(m.A, assistantToken);
-    expect(byAssistant.data).toMatchObject({ status: "LATE", skipCredits: 2 });
+    expect(byAssistant.status).toBe(403);
+    expect(await db.appointment.findUnique({ where: { id: m.A } })).toMatchObject({ status: "IN_PROGRESS", deferredCount: 0 });
+    expect((await late(m.B, assistantToken)).status).toBe(200);
     await db.assistant.updateMany({where:{doctorId:docA.id},data:{shiftEndsAt:null}});
   });
 

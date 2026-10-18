@@ -35,7 +35,7 @@ export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, l
   <section aria-labelledby="step-specialty-title">
     <div className="flex items-start justify-between gap-3">
       <StepHeading ref={ref} id="step-specialty-title" hint={t("اختر التخصص الذي تحتاجه، ثم الطبيب المناسب.")}>{t("اختر التخصص ")}</StepHeading>
-      <button type="button" aria-label={t("ابحث عن طبيب بالاسم")} title={t("ابحث عن طبيب بالاسم")} aria-haspopup="dialog" aria-expanded={searchOpen} onClick={() => setSearchOpen(true)} className="flex h-11 w-11 items-center justify-center rounded-full border border-primary-200 bg-white text-primary-700 shadow-sm transition hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
+      <button type="button" aria-label={t("ابحث عن طبيب بالاسم")} title={t("ابحث عن طبيب بالاسم")} aria-haspopup="dialog" aria-expanded={searchOpen} onClick={() => setSearchOpen(true)} className="glass-control flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary-200 bg-white text-primary-700 shadow-sm transition hover:bg-white/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
         <Search className="h-5 w-5" aria-hidden="true" />
       </button>
     </div>
@@ -55,7 +55,7 @@ export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, l
               <button
                 type="button"
                 onClick={() => onSelect(specialty.id)}
-                className="flex min-h-[8rem] w-full flex-col items-center justify-center gap-2 glass p-4 text-center transition-colors hover:border-primary-400 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 active:bg-primary-100"
+                className="flex min-h-[8rem] w-full flex-col items-center justify-center gap-2 glass p-4 text-center transition-colors hover:border-primary-400 hover:bg-white/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 active:bg-primary-100"
               >
                 <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-50 text-primary-600">
                   <SpecialtyIcon specialty={specialty} />

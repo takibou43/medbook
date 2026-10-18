@@ -20,7 +20,7 @@ export function BookingSteps({ current }: { current: StepId }) {
   const currentIndex = BOOKING_STEPS.findIndex((s) => s.id === current);
 
   return (
-    <nav aria-label={t("مراحل الحجز")} className="mb-6 rounded-2xl border border-slate-200 bg-white px-3 py-4 sm:px-5">
+    <nav aria-label={t("مراحل الحجز")} className="glass mb-6 px-3 py-4 sm:px-5">
       <p className="mb-4 flex items-center justify-between gap-3 text-sm">
         <span className="font-semibold text-slate-900">{t(BOOKING_STEPS[currentIndex].label)}</span>
         <span className="text-slate-600">{t("الخطوة {0} من {1}", { "0": currentIndex + 1, "1": BOOKING_STEPS.length })}</span>

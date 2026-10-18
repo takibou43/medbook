@@ -10,7 +10,7 @@ const MEDBOOK_PHONE = "+213552530669";
 export function Footer() {
   useLanguage();
   return (
-    <footer className="mt-16 border-t border-white/60 bg-white/50 backdrop-blur-md">
+    <footer className="mt-16 border-t glass-chrome border-white/60">
       <div className="container-app grid gap-8 py-10 md:grid-cols-2">
         <div>
           <div className="mb-2 flex items-center gap-2 text-primary-700">

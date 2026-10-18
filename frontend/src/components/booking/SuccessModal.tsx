@@ -33,7 +33,7 @@ export function SuccessModal({ booking, onClose, extra }: { booking: ConfirmedBo
         role="dialog"
         aria-modal="true"
         aria-labelledby="booking-success-title"
-        className="w-full max-w-xs rounded-2xl bg-white p-6 text-center shadow-xl"
+        className="w-full max-w-xs glass-dialog rounded-2xl p-6 text-center shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-emerald-500" aria-hidden="true" />

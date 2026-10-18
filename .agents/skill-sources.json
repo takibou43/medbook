@@ -1,0 +1,26 @@
+[
+  {
+    "skill": "emil-design-eng",
+    "repository": "https://github.com/emilkowalski/skills.git",
+    "commit": "2d228630ba1446365f614a108cb8252f1feda202",
+    "path": "skills/emil-design-eng"
+  },
+  {
+    "skill": "impeccable",
+    "repository": "https://github.com/pbakaus/impeccable.git",
+    "commit": "2f46b7a8b059af00d20dd13b64dbe165e7c6a742",
+    "path": "plugin/skills/impeccable"
+  },
+  {
+    "skill": "design-taste-frontend",
+    "repository": "https://github.com/Leonxlnx/taste-skill.git",
+    "commit": "f624f37a8c650b9cc550253104925efe4c8de246",
+    "path": "skills/taste-skill"
+  },
+  {
+    "skill": "redesign-existing-projects",
+    "repository": "https://github.com/Leonxlnx/taste-skill.git",
+    "commit": "f624f37a8c650b9cc550253104925efe4c8de246",
+    "path": "skills/redesign-skill"
+  }
+]

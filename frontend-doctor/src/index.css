@@ -4,6 +4,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-block-start: 5rem;
 }
 
 body {
@@ -12,6 +13,7 @@ body {
   line-height: 1.65;
   background-color: #f7faf9;
   color: #0f2523;
+  accent-color: #187f77;
 }
 
 * {
@@ -53,7 +55,7 @@ summary::-webkit-details-marker {
 }
 
 .input {
-  @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100;
+  @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none transition-[border-color,box-shadow] duration-150 focus:border-primary-500 focus:ring-2 focus:ring-primary-100;
 }
 
 .label {
@@ -61,7 +63,7 @@ summary::-webkit-details-marker {
 }
 
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .btn-primary {
@@ -305,3 +307,43 @@ input:is([type="tel"], [type="number"], [type="date"], [type="time"], [type="dat
 
 /* Explicit LTR inline spans also need isolation from surrounding RTL text. */
 span[dir="ltr"] { unicode-bidi: isolate; }
+
+/* Shared interaction rhythm: immediate feedback, no layout animation. */
+.btn {
+  transition: background-color 150ms ease, border-color 150ms ease,
+    color 150ms ease, box-shadow 150ms ease, transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.btn:active:not(:disabled) { transform: scale(0.98); }
+.btn:focus-visible { outline: 2px solid #187f77; outline-offset: 3px; }
+.input::placeholder { color: #64748b; opacity: 1; }
+input, textarea { caret-color: #187f77; }
+::selection { background: #d3f4ee; color: #154442; }
+.skip-link {
+  position: fixed;
+  inset-block-start: 0.5rem;
+  inset-inline-start: 1rem;
+  z-index: 100;
+  transform: translateY(-160%);
+  border-radius: 0.75rem;
+  background: #fff;
+  color: #16514e;
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+}
+.skip-link:focus { transform: translateY(0); outline: 2px solid #187f77; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .btn:active:not(:disabled) { transform: none; }
+}
+
+/* Keep the existing glass sidebar, with a quieter content canvas. */
+.app-glass-bg { min-height: 100dvh; }
+.dashboard-sidebar { height: calc(100dvh - 1.5rem); }
+.sidebar-group { font-size: 0.75rem; letter-spacing: normal; line-height: 1.7; }
+html[lang="fr"] body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }

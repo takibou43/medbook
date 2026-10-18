@@ -24,7 +24,7 @@ export function BackButton({ onClick, children }: { onClick: () => void; childre
       onClick={onClick}
       className="mb-3 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
     >
-      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+      <ArrowRight className="h-4 w-4 ltr:rotate-180" aria-hidden="true" />
       {children}
     </button>
   );

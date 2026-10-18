@@ -15,8 +15,8 @@ export function DoctorSearchModal({ onClose, onSelect }: { onClose: () => void; 
     return () => { document.body.style.overflow = overflow; };
   }, []);
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-3 pt-6 sm:p-6 sm:pt-16" onClick={onClose}>
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="doctor-search-title" className="max-h-[90svh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl" onClick={event => event.stopPropagation()}>
+    <div className="motion-fade fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-3 pt-6 sm:p-6 sm:pt-16" onClick={onClose}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="doctor-search-title" className="motion-pop max-h-[90svh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-pop" onClick={event => event.stopPropagation()}>
         <div className="flex justify-end px-3 pt-2">
           <button type="button" onClick={onClose} aria-label={t("إغلاق")} className="flex h-11 w-11 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">
             <X className="h-5 w-5" aria-hidden="true" />

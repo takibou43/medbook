@@ -10,7 +10,7 @@ export function Header() {
   const { user, loading } = useAuth();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95">
+    <header className="sticky top-0 z-40 border-b glass-chrome border-white/70">
       <div className="container-app flex min-h-16 items-center justify-between gap-1">
         <Link to="/" className="flex min-h-[48px] items-center gap-2 text-primary-700">
           <Logo className="h-8 w-8" />

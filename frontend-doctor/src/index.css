@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* MedBook glass: the same teal/navy material in both portals. */
+:root {
+  --mb-glass-fill: rgba(255, 255, 255, 0.56);
+  --mb-glass-chrome: rgba(244, 255, 253, 0.60);
+  --mb-glass-dialog: rgba(246, 255, 253, 0.90);
+  --mb-glass-line: rgba(255, 255, 255, 0.78);
+  --mb-glass-shadow: 0 14px 36px -26px rgba(15, 61, 92, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  --mb-glass-filter: blur(14px) saturate(135%);
+  --mb-brand-canvas: radial-gradient(ellipse at 12% 8%, rgba(63, 185, 172, 0.30), transparent 55%),
+    radial-gradient(ellipse at 95% 85%, rgba(15, 61, 92, 0.18), transparent 55%),
+    linear-gradient(145deg, #e5f7f3, #e6f0f8);
+}
+
+
 html {
   scroll-behavior: smooth;
   scroll-padding-block-start: 5rem;
@@ -11,7 +26,9 @@ body {
   font-family: "Cairo", Tahoma, system-ui, sans-serif;
   /* سطر أعلى قليلًا: الحروف العربية بنقاطها وتشكيلها تحتاج مسافة أكبر من اللاتينية. */
   line-height: 1.65;
-  background-color: #f7faf9;
+  background-color: #e6f3f3;
+  background-image: var(--mb-brand-canvas);
+  background-attachment: fixed;
   color: #0f2523;
   accent-color: #187f77;
 }
@@ -51,7 +68,7 @@ summary::-webkit-details-marker {
 }
 
 .card {
-  @apply rounded-2xl border border-slate-200 bg-white shadow-card;
+  @apply rounded-2xl border;
 }
 
 .input {
@@ -121,17 +138,9 @@ body {
    زجاج مصنفر فاتح بلمسة فيروزية متناسقة مع ألوان مادبوك؛ خلف الصفحة تدرّجات ثابتة هادئة
    حتى يظهر أثر التمويه (لا حركة مستمرة). بديل ثابت عند غياب دعم backdrop-filter. */
 .app-glass-bg {
-  background-color: #f3f8f8;
-  /* تدرّجات ثابتة خلف القائمة فقط (يمين في RTL، يسار في LTR) حتى تظهر شفافية الزجاج. */
-  background-image:
-    radial-gradient(26rem 34rem at 100% 8%, rgba(33, 158, 146, 0.55), transparent 65%),
-    radial-gradient(24rem 30rem at 100% 92%, rgba(15, 61, 92, 0.45), transparent 65%);
+  background-color: #e6f3f3;
+  background-image: var(--mb-brand-canvas);
   background-attachment: fixed;
-}
-[dir="ltr"] .app-glass-bg {
-  background-image:
-    radial-gradient(26rem 34rem at 0% 8%, rgba(33, 158, 146, 0.55), transparent 65%),
-    radial-gradient(24rem 30rem at 0% 92%, rgba(15, 61, 92, 0.45), transparent 65%);
 }
 .glass-sidebar {
   /* زجاج داكن شفاف بألوان مادبوك (فيروزي عميق ← كحلي الشعار) مع لمعة علوية وحد أبيض رقيق. */
@@ -347,3 +356,73 @@ input, textarea { caret-color: #187f77; }
 .dashboard-sidebar { height: calc(100dvh - 1.5rem); }
 .sidebar-group { font-size: 0.75rem; letter-spacing: normal; line-height: 1.7; }
 html[lang="fr"] body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+
+
+/* Borders and inner reflections define the transparent panel edges. */
+.card, .glass {
+  border-color: var(--mb-glass-line);
+  background: var(--mb-glass-fill);
+  box-shadow: var(--mb-glass-shadow);
+  -webkit-backdrop-filter: var(--mb-glass-filter);
+  backdrop-filter: var(--mb-glass-filter);
+}
+.glass-chrome {
+  border-color: var(--mb-glass-line);
+  background: var(--mb-glass-chrome);
+  box-shadow: 0 5px 24px -20px rgba(15, 61, 92, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  -webkit-backdrop-filter: var(--mb-glass-filter);
+  backdrop-filter: var(--mb-glass-filter);
+}
+.glass-dialog {
+  background: var(--mb-glass-dialog);
+  border: 1px solid var(--mb-glass-line);
+  -webkit-backdrop-filter: var(--mb-glass-filter);
+  backdrop-filter: var(--mb-glass-filter);
+}
+.input {
+  border-color: rgba(24, 127, 119, 0.24);
+  background-color: rgba(255, 255, 255, 0.74);
+}
+.input:focus { background-color: rgba(255, 255, 255, 0.94); }
+.btn-primary {
+  background-color: #187f77;
+  background-image: linear-gradient(135deg, #187f77, #0f3d5c);
+  box-shadow: 0 8px 20px -13px rgba(15, 61, 92, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.btn-outline, .glass-control {
+  border-color: rgba(24, 127, 119, 0.22);
+  background-color: rgba(255, 255, 255, 0.48);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover:not(:disabled) { background-image: linear-gradient(135deg, #166661, #0c344e); }
+  .btn-outline:hover:not(:disabled), .glass-control:hover:not(:disabled) { background-color: rgba(238, 251, 249, 0.88); }
+}
+@media (max-width: 767px) {
+  :root { --mb-glass-filter: blur(10px) saturate(125%); }
+}
+/* Keep secondary copy legible where the medical image is darkest. */
+.card :where(.text-slate-500, .text-slate-600),
+.glass :where(.text-slate-500, .text-slate-600),
+.glass.text-slate-500, .glass.text-slate-600 { color: #334155; }
+.glass.text-red-600 { color: #991b1b; }
+
+/* An opaque fallback keeps the same readable palette on older browsers. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card, .glass, .glass-chrome, .glass-dialog { background: #f0faf8; }
+}
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .card, .glass, .glass-chrome, .glass-dialog {
+    background: Canvas;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+@media print {
+  .card, .glass, .glass-chrome, .glass-dialog {
+    background: #fff;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

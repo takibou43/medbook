@@ -121,7 +121,7 @@ function AppointmentItem({
         </div>
       )}
       {details && onCancel && CANCELLABLE.has(a.status) && (
-        <div id={`actions-${a.id}`} className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+        <div id={`actions-${a.id}`} className="mt-3 rounded-xl glass-control border border-slate-200 p-3">
           <p className="mb-2 text-sm text-slate-600">{t("يمكنك إلغاء هذا الموعد بعد مراجعة تفاصيله.")}</p>
           <button type="button" onClick={onCancel} disabled={cancelling} className="btn-outline min-h-[48px] text-red-700 disabled:opacity-50">{t("إلغاء الموعد")}</button>
         </div>
@@ -337,11 +337,11 @@ export default function MyAccount() {
             </p>
           </div>
           <div className="flex shrink-0 gap-1">
-            <button type="button" aria-label={t("الإشعارات") + (unreadCount ? ` (${unreadCount})` : "")} aria-pressed={panel === "notifications"} onClick={() => setPanel(p => p === "notifications" ? "appointments" : "notifications")} className="relative flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-primary-700">
+            <button type="button" aria-label={t("الإشعارات") + (unreadCount ? ` (${unreadCount})` : "")} aria-pressed={panel === "notifications"} onClick={() => setPanel(p => p === "notifications" ? "appointments" : "notifications")} className="relative flex h-12 w-12 items-center justify-center glass-control rounded-xl border border-slate-200 text-primary-700">
               <Bell className="h-5 w-5" aria-hidden="true" />
               {unreadCount > 0 && <span className="absolute -end-1 -top-1 rounded-full bg-red-600 px-1.5 text-xs font-bold text-white">{unreadCount}</span>}
             </button>
-            <button type="button" aria-label={t("الإعدادات")} aria-pressed={panel === "settings"} onClick={() => setPanel(p => p === "settings" ? "appointments" : "settings")} className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-primary-700"><Settings className="h-5 w-5" aria-hidden="true" /></button>
+            <button type="button" aria-label={t("الإعدادات")} aria-pressed={panel === "settings"} onClick={() => setPanel(p => p === "settings" ? "appointments" : "settings")} className="flex h-12 w-12 items-center justify-center glass-control rounded-xl border border-slate-200 text-primary-700"><Settings className="h-5 w-5" aria-hidden="true" /></button>
           </div>
         </div>
 
@@ -490,7 +490,7 @@ export default function MyAccount() {
         </section>
 
         <ReminderCard />
-        {!isOffline && <details className="rounded-xl border border-slate-200 bg-white p-3">
+        {!isOffline && <details className="rounded-xl glass-control border border-slate-200 p-3">
           <summary className="min-h-[48px] cursor-pointer font-semibold">{t("استرجاع مواعيدي القديمة")}</summary>
           <GuestIdentity userId={user.id} />
         </details>}

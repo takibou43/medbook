@@ -286,7 +286,7 @@ export function DashboardLayout({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* ===== الهاتف: شريط علوي + قائمة منزلقة ===== */}
-        <header className="sticky top-0 z-30 flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 md:hidden">
+        <header className="sticky top-0 z-30 flex min-h-16 shrink-0 items-center justify-between gap-3 border-b glass-chrome border-white/70 px-4 md:hidden">
           <div className="flex min-w-0 items-center gap-2 text-primary-700">
             <Logo className="h-8 w-8 shrink-0" />
             <div className="min-w-0 py-2">
@@ -358,7 +358,7 @@ export function DashboardLayout({
           <Outlet />
         </main>
         {dailyNavigation && (
-          <nav aria-label={t("التنقل اليومي")} className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
+          <nav aria-label={t("التنقل اليومي")} className="fixed inset-x-0 bottom-0 z-30 flex glass-chrome border-t border-white/70 pb-[env(safe-area-inset-bottom)] md:hidden">
             {items.slice(0, settingsStart ?? 2).map((item) => (
               <NavLink
                 key={item.to}

@@ -90,6 +90,7 @@ test("المخزن المؤقت: لا يُعرض لحساب آخر ويُمسح 
 
  test("name alone is blocked with field errors; content is untouched", () => {
   const d = emptyDraft("u1", prescriptionPatientFrom(selfAppt));
+  d.medications[0].directionsMode = "structured"; // Existing structured prescriptions retain validation.
   d.medications[0].name = "دواء تجريبي";
   const before = JSON.stringify(d);
   const result = validateDraft(d);

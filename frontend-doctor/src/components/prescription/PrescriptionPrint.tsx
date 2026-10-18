@@ -140,6 +140,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
                 <p className="rx-med-title">
                   <Typed className="rx-med-name">{p.name}</Typed>
                   {p.detail && <> <Typed className="rx-med-detail">{glueNumberUnit(p.detail)}</Typed></>}
+                  {m.quantity?.trim() && <> <Typed className="rx-med-quantity">{glueNumberUnit(m.quantity.trim())}</Typed></>}
                 </p>
                 {/* السطر 2: الجرعة، التكرار، التوقيت، المدة — كل رقم ملصوق بوحدته؛ الفاصل ملصوق بما قبله فلا يبدأ سطر به */}
                 {p.facts.length > 0 && (

@@ -124,7 +124,7 @@ export function PrescriptionCard({
   function removeMed(id: string) {
     if (!draft) return;
     const rest = draft.medications.filter((m) => m.id !== id);
-    patch({ medications: rest.length ? rest : [newMedication()] });
+    patch({ medications: rest.length ? rest : [newMedication("freeText")] });
   }
 
   function openPreview() {
@@ -298,13 +298,14 @@ export function PrescriptionCard({
             <MedicationList
               key={`${draft.patient.appointmentId}-${listKey}`}
               medications={draft.medications}
+              ownerUserId={uid}
               lang={lang}
               errors={validation?.medicationErrors ?? {}}
               formId={formId}
               onUpdate={(id, p) => draft && patch({ medications: draft.medications.map((m) => (m.id === id ? { ...m, ...p } : m)) })}
               onRemove={removeMed}
               onRestore={(med, index) => draft && patch({ medications: restoreMedication(draft.medications, med, index) })}
-              onAdd={() => patch({ medications: [...draft.medications, newMedication()] })}
+              onAdd={() => patch({ medications: [...draft.medications, newMedication("freeText")] })}
             />
           </fieldset>
 

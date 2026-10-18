@@ -2,8 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
-  scroll-behavior: smooth;
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
 body {
@@ -53,7 +55,8 @@ summary::-webkit-details-marker {
 }
 
 .input {
-  @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100;
+  @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none hover:border-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500;
+  transition: border-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out), background-color 150ms var(--ease-out);
 }
 
 .label {
@@ -61,7 +64,9 @@ summary::-webkit-details-marker {
 }
 
 .btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50;
+  transition: background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), color 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out), opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
 }
 
 .btn-primary {
@@ -169,6 +174,7 @@ body {
   overflow-wrap: anywhere;
 }
 .rx-sheet p { margin: 0; }
+.rx-sheet :is(h1, h2, h3) { text-wrap: wrap; }
 .rx-sheet[lang="fr"] { font-family: Arial, Tahoma, sans-serif; }
 .rx-head, .rx-meta { break-inside: avoid; page-break-inside: avoid; }
 .rx-med-name { break-after: avoid; page-break-after: avoid; }
@@ -305,3 +311,57 @@ input:is([type="tel"], [type="number"], [type="date"], [type="time"], [type="dat
 
 /* Explicit LTR inline spans also need isolation from surrounding RTL text. */
 span[dir="ltr"] { unicode-bidi: isolate; }
+
+/* ===== لمسات التفاصيل: حركة هادئة وحالات تفاعل واضحة =====
+   منحنى خروج قوي بدل المنحنيات الافتراضية الضعيفة؛ الحركة تخدم الحالة ولا تزيّن. */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  accent-color: #187f77;
+  caret-color: #187f77;
+}
+* { scrollbar-color: #94a3b8 transparent; }
+::selection { background: #a7e8dd; color: #062725; }
+
+/* الضغط على أي زر يُحسّ فورًا (لا يعمل على الأزرار المعطّلة). */
+:is(.btn, .btn-primary, .btn-outline, .btn-ghost, .btn-danger):not(:disabled):active {
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.btn, .btn-primary, .btn-outline, .btn-ghost, .btn-danger):not(:disabled):active { transform: none; }
+}
+
+/* نص الحقل البديل بتباين مقروء (≥ 4.5:1) على الخلفية البيضاء. */
+input::placeholder, textarea::placeholder { color: #64748b; opacity: 1; }
+
+/* عناوين متوازنة الأسطر، فلا تبقى كلمة يتيمة في آخر سطر. */
+h1, h2, h3 { text-wrap: balance; }
+
+/* مؤشر التحميل أسرع قليلًا فيبدو التحميل أقصر بالإحساس نفسه. */
+.animate-spin { animation-duration: 0.7s; }
+
+/* دخول النوافذ والإشعارات: يظهر من حالة مرئية جزئيًا (لا من العدم) ثم يستقر خلال 200ms تقريبًا.
+   الخروج فوري عمدًا. @starting-style غير المدعوم يعني ظهورًا مباشرًا دون أي عطل. */
+.motion-fade { transition: opacity 160ms var(--ease-out); }
+.motion-pop { transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+.motion-toast { transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out); }
+@starting-style {
+  .motion-fade { opacity: 0; }
+  .motion-pop { opacity: 0; transform: scale(0.96) translateY(6px); }
+  .motion-toast { opacity: 0; transform: translateY(10px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-pop, .motion-toast { transition-property: opacity; }
+  @starting-style {
+    .motion-pop, .motion-toast { transform: none; }
+  }
+}
+
+/* عنصر قابل للضغط (بطاقة/شريحة اختيار): استجابة فورية للمس دون تحريك التخطيط. */
+.press {
+  transition: transform 160ms var(--ease-out), background-color 160ms var(--ease-out), border-color 160ms var(--ease-out),
+    color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), opacity 160ms var(--ease-out);
+}
+.press:not(:disabled):active { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) {
+  .press:not(:disabled):active { transform: none; }
+}

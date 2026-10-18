@@ -119,7 +119,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
               onClick={sortByNearest}
               disabled={locating}
               aria-pressed={Boolean(pos)}
-              className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-60 ${
+              className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 text-sm font-semibold press focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-60 ${
                 pos ? "border-primary-600 bg-primary-50 text-primary-700" : "border-slate-300 bg-white text-slate-700 hover:border-primary-400"
               }`}
             >

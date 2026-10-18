@@ -290,7 +290,7 @@ export function DashboardLayout({
             aria-controls={menuId}
             aria-expanded={mobileMenuOpen}
             onClick={() => (mobileMenuOpen ? closeMobileMenu() : openMobileMenu())}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100"
+            className="press flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100"
             aria-label={mobileMenuOpen ? t("إغلاق القائمة") : t("فتح القائمة")}
           >
             <Menu className="h-5 w-5" aria-hidden />
@@ -356,7 +356,7 @@ export function DashboardLayout({
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  clsx("relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-3 text-[11px]", isItemActive(item, isActive) ? "bg-primary-50 text-primary-700" : "text-slate-600")
+                  clsx("relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-3 text-[11px] transition-colors duration-150 motion-reduce:transition-none active:bg-slate-100", isItemActive(item, isActive) ? "bg-primary-50 text-primary-700" : "text-slate-600")
                 }
               >
                 <item.icon className="h-5 w-5" aria-hidden />
@@ -369,7 +369,7 @@ export function DashboardLayout({
               aria-controls={menuId}
               aria-expanded={mobileMenuOpen}
               onClick={() => (mobileMenuOpen ? closeMobileMenu() : openMobileMenu())}
-              className="flex flex-1 flex-col items-center gap-1 py-3 text-[11px] text-slate-600"
+              className="flex flex-1 flex-col items-center gap-1 py-3 text-[11px] text-slate-600 transition-colors duration-150 motion-reduce:transition-none active:bg-slate-100"
             >
               <Menu className="h-5 w-5" aria-hidden />{t("المزيد ")}</button>
           </nav>

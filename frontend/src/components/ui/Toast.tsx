@@ -43,12 +43,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed bottom-4 end-4 z-[100] flex w-full max-w-sm flex-col gap-2">
+      <div className="fixed bottom-4 end-4 z-[100] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2">
         {toasts.map((toast) => (
-          <div key={toast.id} className={`flex items-start gap-2 rounded-xl border p-3 shadow-card ${STYLES[toast.kind]}`}>
+          <div key={toast.id} role={toast.kind === "error" ? "alert" : "status"} className={`motion-toast flex items-start gap-2 rounded-xl border p-3 shadow-card ${STYLES[toast.kind]}`}>
             {ICONS[toast.kind]}
             <p className="flex-1 text-sm text-slate-700">{toast.message}</p>
-            <button onClick={() => dismiss(toast.id)} className="text-slate-400 hover:text-slate-600">
+            <button type="button" aria-label={t("إغلاق الإشعار")} title={t("إغلاق الإشعار")} onClick={() => dismiss(toast.id)} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-600 hover:text-slate-800">
               <X className="h-4 w-4" />
             </button>
           </div>

@@ -21,6 +21,9 @@ test('all A5 presets preserve bilingual identity, logo, print mode and custom el
     assert.ok(current.writingArea!.top <= 75);
   }
   assert.deepEqual(original, snapshot, 'selection must not mutate the saved template');
+  const traditional = applyPrescriptionPreset(original, 'traditional');
+  assert.equal(traditional.emblem, 'medical');
+  assert.equal(traditional.logo, 'personal-logo', 'choosing a medical emblem must preserve the personal logo');
   const extra = { ...initialDesignElements(base)[0], id: 'custom-note', y: 190, height: 8 };
   const custom = applyPrescriptionPreset({ ...original, elements: [...original.elements!, extra] }, 'centered');
   assert.deepEqual(custom.elements!.find(e => e.id === extra.id), extra);

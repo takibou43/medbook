@@ -6,6 +6,13 @@ const valid = { image, top: 40, bottom: 30, side: 12 };
 const logo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aY9sAAAAASUVORK5CYII=";
 const design = { version: 1, language: "ar", doctorName: "اسم تجريبي", specialty: "", clinicName: "", address: "", phone: "", footer: "", color: "#187f77", layout: "split", logo, logoPosition: "left", headerSize: 18 };
 describe("editable blank prescription design", () => {
+  it("round-trips every ready-made A5 preset and rejects unknown presets", () => {
+    for (const preset of ["classic", "bilingual", "centered", "specialty"]) {
+      const next = { ...valid, design: { ...design, preset } };
+      expect(prescriptionTemplateSchema.parse(next)).toEqual(next);
+    }
+    expect(prescriptionDesignSchema.safeParse({ ...design, preset: "remote-template" }).success).toBe(false);
+  });
   it("round-trips both print modes for uploaded and generated templates without allowing patient metadata", () => {
     for (const printMode of ["blank", "preprinted"]) for (const source of ["image", "generated"]) {
       const next = { ...valid, design: { ...design, printMode, source } };

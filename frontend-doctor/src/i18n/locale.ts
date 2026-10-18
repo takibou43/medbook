@@ -12,6 +12,9 @@ export function getLocale(): string { return language === "fr" ? "fr-DZ" : "ar-D
 export function subscribeLanguage(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
 function applyLanguage() {
   if (typeof document === "undefined") return;
+  // Use the app dictionary; a second translation pass can rewrite React text nodes.
+  document.documentElement.translate = false;
+  document.documentElement.classList.add("notranslate");
   document.documentElement.lang = language;
   document.documentElement.dir = language === "fr" ? "ltr" : "rtl";
 }

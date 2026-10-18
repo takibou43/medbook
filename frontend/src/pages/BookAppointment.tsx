@@ -323,11 +323,11 @@ export default function BookAppointment() {
   if (qrDoctorId && !authLoading && !user) return <Navigate to={"/account/login?mode=register&redirect=" + encodeURIComponent('/?doctor=' + qrDoctorId + '&intent=booking')} replace />;
 
   return (
-    <div className="container-app py-8">
+    <div className="container-app py-6 sm:py-8">
       <div className="mx-auto max-w-xl">
-        <div className="mb-6 text-center">
+        <div className="mb-6 text-start">
           <h1 className="text-2xl font-extrabold text-slate-900">{t("احجز موعدك بسهولة")}</h1>
-          <p className="mt-1 text-slate-600">
+          <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
             {user
               ? t("اختر التخصص ثم الطبيب، والموقع يمنحك أول دور متاح — ويُضاف الموعد إلى حسابك.")
               : t("اختر التخصص ثم الطبيب، ثم أنشئ حسابك أو سجّل الدخول لتأكيد الحجز.")}

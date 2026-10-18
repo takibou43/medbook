@@ -131,24 +131,29 @@ export function DashboardLayout({
   }
 
   const { main, footer } = splitNavItems(items);
+  const currentItem = items.find((item) =>
+    pathname === item.to ||
+    (!item.end && item.to !== "/" && pathname.startsWith(item.to + "/")) ||
+    (item.activeFor ?? []).some((p) => pathname === p || pathname.startsWith(p + "/"))
+  );
   const name = accountDisplayName(user).replace(/^د\.\s*/, t("د. "));
   const account = { name, initials: initialsOf(name.replace(/^د\.\s*/, "")), role: t(roleLabel(user?.role)) };
 
   const renderNav = (compact: boolean, onNavigate?: () => void) => (
     <>
-      {!compact && !main[0]?.group && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{t("القائمة")}</p>}
+      {!compact && !main[0]?.group && <p className="px-3 pb-1.5 sidebar-group font-semibold text-white/80">{t("القائمة")}</p>}
       <ul className="space-y-1" role="list">
         {main.map((item, index) => (
           <li key={item.to}>
             {item.group && item.group !== main[index - 1]?.group && (
               compact
                 ? <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
-                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{t(item.group ?? "")}</p></>
+                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 sidebar-group font-semibold text-white/80">{t(item.group ?? "")}</p></>
             )}
             {index === settingsStart && settingsStart < main.length && (
               compact
                 ? <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
-                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{t("الإدارة والإعدادات")}</p></>
+                : <><div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden /><p className="px-3 pb-1.5 sidebar-group font-semibold text-white/80">{t("الإدارة والإعدادات")}</p></>
             )}
             <SidebarLink item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
           </li>
@@ -160,7 +165,7 @@ export function DashboardLayout({
   const renderFooter = (compact: boolean, onNavigate?: () => void) => (
     <div className="space-y-1">
       <div className="my-3 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" aria-hidden />
-      {!compact && <p className="px-3 pb-1.5 text-[10px] font-bold tracking-[0.18em] text-white/75">{t("عام")}</p>}
+      {!compact && <p className="px-3 pb-1.5 sidebar-group font-semibold text-white/80">{t("عام")}</p>}
       {footer.map((item) => (
         <SidebarLink key={item.to} item={item} compact={compact} active={(a) => isItemActive(item, a)} onNavigate={onNavigate} />
       ))}
@@ -237,12 +242,13 @@ export function DashboardLayout({
   );
 
   return (
-    <div className="app-glass-bg flex min-h-screen">
+    <div className="app-glass-bg flex min-h-[100dvh]">
+      <a href="#main-content" className="skip-link">{t("الانتقال إلى المحتوى")}</a>
       {/* ===== الحاسوب: لوحة زجاجية عائمة ===== */}
       <aside
         aria-label={t("القائمة الجانبية")}
         className={clsx(
-          "glass-sidebar sticky top-3 z-30 m-3 hidden h-[calc(100vh-1.5rem)] shrink-0 flex-col rounded-3xl text-slate-100 [text-shadow:0_1px_2px_rgba(2,6,23,0.35)] md:flex",
+          "glass-sidebar dashboard-sidebar sticky top-3 z-30 m-3 hidden shrink-0 flex-col rounded-3xl text-slate-100 [text-shadow:0_1px_2px_rgba(2,6,23,0.35)] md:flex",
           "transition-[width] duration-200 ease-out motion-reduce:transition-none",
           collapsed ? "w-[76px]" : "w-[264px]"
         )}
@@ -280,10 +286,13 @@ export function DashboardLayout({
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* ===== الهاتف: شريط علوي + قائمة منزلقة ===== */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/70 bg-white/70 px-4 backdrop-blur-md md:hidden">
+        <header className="sticky top-0 z-30 flex min-h-16 shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 md:hidden">
           <div className="flex min-w-0 items-center gap-2 text-primary-700">
             <Logo className="h-8 w-8 shrink-0" />
-            <span className="truncate text-lg font-extrabold">MedBook</span>
+            <div className="min-w-0 py-2">
+              <p className="truncate text-sm font-extrabold">MedBook</p>
+              <p className="truncate text-xs font-medium text-slate-600">{t(currentItem?.label ?? title)}</p>
+            </div>
           </div>
           <button
             type="button"
@@ -342,21 +351,21 @@ export function DashboardLayout({
         </div>
 
         {/* min-w-0 + overflow-x-hidden: خط دفاع أخير حتى لا يُخرج أي عنصر عريض الصفحة عن عرض الشاشة. */}
-        <main className={clsx("min-w-0 flex-1 overflow-x-hidden p-4 md:p-8 md:ps-5", contentClassName, dailyNavigation && "pb-24 md:pb-8")}>
+        <main id="main-content" tabIndex={-1} className={clsx("min-w-0 flex-1 overflow-x-hidden p-4 outline-none md:p-8 md:ps-5", contentClassName, dailyNavigation && "pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8")}>
           <ShiftControl />
           {(user?.role === "DOCTOR" || user?.role === "ASSISTANT") && <GuestClaimReview />}
           {user?.role === "DOCTOR" && <UrgencyRequests />}
           <Outlet />
         </main>
         {dailyNavigation && (
-          <nav aria-label={t("التنقل اليومي")} className="fixed inset-x-0 bottom-0 z-30 flex border-t bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
+          <nav aria-label={t("التنقل اليومي")} className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
             {items.slice(0, settingsStart ?? 2).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  clsx("relative flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-3 text-[11px]", isItemActive(item, isActive) ? "bg-primary-50 text-primary-700" : "text-slate-600")
+                  clsx("relative flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-xs", isItemActive(item, isActive) ? "bg-primary-50 font-bold text-primary-700" : "font-medium text-slate-600")
                 }
               >
                 <item.icon className="h-5 w-5" aria-hidden />
@@ -369,7 +378,7 @@ export function DashboardLayout({
               aria-controls={menuId}
               aria-expanded={mobileMenuOpen}
               onClick={() => (mobileMenuOpen ? closeMobileMenu() : openMobileMenu())}
-              className="flex flex-1 flex-col items-center gap-1 py-3 text-[11px] text-slate-600"
+              className="flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-medium text-slate-600"
             >
               <Menu className="h-5 w-5" aria-hidden />{t("المزيد ")}</button>
           </nav>
@@ -417,7 +426,8 @@ function SidebarLink({
         to={item.to}
         end={item.end}
         onClick={onNavigate}
-        aria-label={compact ? (badge ? t("{0} ({1} غير مقروءة)", { "0": item.label, "1": badge }) : item.label) : undefined}
+        aria-current={active(false) ? "page" : undefined}
+        aria-label={compact ? (badge ? t("{0} ({1} غير مقروءة)", { "0": t(item.label), "1": badge }) : t(item.label)) : undefined}
         className={({ isActive }) =>
           clsx(
             itemBase,

@@ -1,6 +1,6 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
-import { Link } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { Camera, UserRound } from "lucide-react";
 import { Logo } from "../ui/Logo";
 import { useAuth } from "../../context/AuthContext";
@@ -10,8 +10,8 @@ export function Header() {
   const { user, loading } = useAuth();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/60 bg-white/50 backdrop-blur-md">
-      <div className="container-app flex h-16 items-center justify-between">
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95">
+      <div className="container-app flex min-h-16 items-center justify-between gap-1">
         <Link to="/" className="flex min-h-[48px] items-center gap-2 text-primary-700">
           <Logo className="h-8 w-8" />
           <span className="text-lg font-extrabold">MedBook</span>
@@ -20,10 +20,10 @@ export function Header() {
             الآن فيتابع المريض مواعيده من «حسابي». حجوزات الضيوف القديمة تبقى قابلة للاستعلام عبر
             GET /api/booking/lookup (معرّف الموعد + الهاتف) فقط. */}
         {/* حساب المريض (مطلوب لإتمام الحجز): رابط واحد صغير لا يزاحم خطوات الحجز. */}
-        <Link to="/clinics" className="flex min-h-[48px] items-center rounded-xl px-2 text-sm font-semibold text-primary-700 hover:bg-white/70">{t("العيادات")}</Link>
-        <Link to="/account/arrival" aria-label="تسجيل الوصول بالمسح" title="تسجيل الوصول بالمسح" className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-primary-700 hover:bg-white/70">
+        <NavLink to="/clinics" className={({ isActive }) => `flex min-h-[48px] items-center rounded-xl px-2 text-sm font-semibold text-primary-700 hover:bg-primary-50 ${isActive ? "bg-primary-50" : ""}`}>{t("العيادات")}</NavLink>
+        <NavLink to="/account/arrival" aria-label={t("تسجيل الوصول بالمسح")} title={t("تسجيل الوصول بالمسح")} className={({ isActive }) => `flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl text-primary-700 hover:bg-primary-50 ${isActive ? "bg-primary-50" : ""}`}>
           <Camera className="h-6 w-6" aria-hidden="true" />
-        </Link>
+        </NavLink>
         {!loading && (
           <Link
             to={user ? "/account" : "/account/login"}

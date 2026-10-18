@@ -5,7 +5,7 @@ import { structuredErrors } from "./prescriptionMedication.ts";
 /**
  * منطق «كتابة وصفة» (نقي، يُختبر بـnode --test).
  * - الوصفة مرتبطة دائمًا بموعد واحد (appointmentId) والمستفيد الفعلي منه (familyMemberId يُحفظ كما هو).
- * - لا اقتراحات دوائية ولا جرعات تلقائية: كل الحقول يكتبها الطبيب.
+ * - اقتراح أسماء سبق للطبيب إدخالها فقط؛ الجرعات يكتبها الطبيب.
  * - لا حفظ دائم حاليًا (لا يوجد جدول وصفات في قاعدة البيانات): المسودة في ذاكرة الصفحة فقط،
  *   تبقى عند التنقل داخل اللوحة وتُمسح عند تسجيل الخروج أو تغيير الحساب، ويُنبَّه قبل فقدانها.
  */
@@ -17,6 +17,8 @@ export interface PrescriptionMedication {
   frequency: string;
   duration: string;
   instructions: string;
+  /** الكمية المصروفة كما كتبها الطبيب، مستقلة عن الجرعة. */
+  quantity?: string;
   directionsMode?: "structured" | "freeText";
   /** حقول اختيارية جديدة: التركيز والشكل، والجرعة/التكرار/التوقيت/المدة المنظمة (القيم النصية القديمة تبقى كما كُتبت). */
   strength?: string;
@@ -80,9 +82,9 @@ export interface PrescriptionDraft {
 }
 
 let seq = 0;
-export function newMedication(): PrescriptionMedication {
+export function newMedication(directionsMode?: PrescriptionMedication["directionsMode"]): PrescriptionMedication {
   seq += 1;
-  return { id: `med-${Date.now().toString(36)}-${seq}`, name: "", dose: "", frequency: "", duration: "", instructions: "" };
+  return { id: `med-${Date.now().toString(36)}-${seq}`, name: "", dose: "", frequency: "", duration: "", instructions: "", ...(directionsMode ? { directionsMode } : {}) };
 }
 
 const RELATIONSHIP_AR: Record<string, string> = {
@@ -117,7 +119,7 @@ export function prescriptionPatientFrom(a: Appointment): PrescriptionPatient {
 }
 
 export function emptyDraft(ownerUserId: string, patient: PrescriptionPatient, source: "current" | "manual" = "manual"): PrescriptionDraft {
-  return { ownerUserId, patient, patientName: patient.bookedName, patientAge: "", patientAgeUnit: "years", medications: [newMedication()], notes: "", source };
+  return { ownerUserId, patient, patientName: patient.bookedName, patientAge: "", patientAgeUnit: "years", medications: [newMedication("freeText")], notes: "", source };
 }
 
 /**
@@ -131,7 +133,7 @@ export function shouldAutoRebind(d: PrescriptionDraft | null, currentAppointment
   return d.source === "current" && !draftHasContent(d);
 }
 
-export const filled = (m: PrescriptionMedication) => [m.name, m.dose, m.frequency, m.duration, m.instructions, m.strength, m.form, m.doseQty, m.doseUnit, m.doseCustom, m.freqKey, m.freqCustom, m.timingKey, m.durQty, m.durUnit, m.durCustom].some((v) => (v ?? "").trim() !== "");
+export const filled = (m: PrescriptionMedication) => [m.name, m.quantity, m.dose, m.frequency, m.duration, m.instructions, m.strength, m.form, m.doseQty, m.doseUnit, m.doseCustom, m.freqKey, m.freqCustom, m.timingKey, m.durQty, m.durUnit, m.durCustom].some((v) => (v ?? "").trim() !== "");
 
 /** يعيد دواءً محذوفًا بكل قيمه وفي ترتيبه الأصلي؛ إن كانت القائمة الحالية صفًا فارغًا واحدًا (بعد حذف الأخير) يحلّ محله. */
 export function restoreMedication(list: PrescriptionMedication[], med: PrescriptionMedication, index: number): PrescriptionMedication[] {

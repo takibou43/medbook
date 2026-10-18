@@ -6,6 +6,7 @@ import type { PrescriptionLanguage } from "../../lib/prescriptionPrint";
 import { CUSTOM, DOSE_UNITS, DURATION_UNITS, FREQUENCIES, TIMINGS, editableValues, medicationComplete, medicationHasStructuredValues, medicationSummary } from "../../lib/prescriptionMedication";
 import { Button } from "../ui/Button";
 import { t } from "../../i18n/locale.ts";
+import { readMedicationNames, rememberMedicationName } from "../../lib/medicationNames";
 
 type Errors = Partial<Record<"name" | "dose" | "frequency" | "duration" | "instructions", string>>;
 const focus = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1";
@@ -13,9 +14,10 @@ const labelCls = "mb-0.5 block text-xs font-semibold text-slate-700";
 
 const lbl = (o: { ar: string; fr: string }, lang: PrescriptionLanguage) => o[lang];
 
-/** قائمة الأدوية: حقول منظمة، طيّ للمكتمل، حذف مع تراجع. لا اقتراحات دوائية ولا قيم تلقائية. */
-export function MedicationList({ medications, lang, errors, formId, onUpdate, onRemove, onRestore, onAdd }: {
+/** New rows use compact free text; existing structured rows retain their original fields. */
+export function MedicationList({ medications, ownerUserId, lang, errors, formId, onUpdate, onRemove, onRestore, onAdd }: {
   medications: PrescriptionMedication[];
+  ownerUserId: string;
   lang: PrescriptionLanguage;
   errors: Record<string, Errors | undefined>;
   formId: string;
@@ -27,6 +29,7 @@ export function MedicationList({ medications, lang, errors, formId, onUpdate, on
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [instrOpen, setInstrOpen] = useState<Set<string>>(new Set());
   const [removed, setRemoved] = useState<{ med: PrescriptionMedication; index: number } | null>(null);
+  const [names, setNames] = useState(() => readMedicationNames(ownerUserId));
   const toggle = (set: Set<string>, id: string, on: boolean) => { const n = new Set(set); if (on) n.add(id); else n.delete(id); return n; };
 
   function remove(m: PrescriptionMedication, index: number) {
@@ -41,6 +44,10 @@ export function MedicationList({ medications, lang, errors, formId, onUpdate, on
 
   return (
     <div>
+      <p className="mb-2 text-xs text-slate-600">{t("اقتراحات الأسماء من إدخالاتك السابقة على هذا الجهاز. يمكنك كتابة أي دواء يدويًا.")}</p>
+      <datalist id={`${formId}-medication-names`}>
+        {names.map(name => <option key={name} value={name} />)}
+      </datalist>
       <ol className="divide-y divide-slate-200 rounded-xl border border-slate-200">
         {medications.map((m, i) => {
           const err = errors[m.id];
@@ -64,6 +71,31 @@ export function MedicationList({ medications, lang, errors, formId, onUpdate, on
               <Trash2 className="h-4 w-4" aria-hidden="true" /> <span className="max-sm:sr-only">{t("حذف")}</span>
             </button>
           );
+
+          if (isFree) {
+            return (
+              <li key={m.id} className="p-2.5 sm:p-3" role="group" aria-label={t("الدواء رقم {n}", { n: i + 1 })}>
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] items-start gap-2 sm:grid-cols-[minmax(0,5fr)_minmax(0,2fr)_minmax(0,5fr)_44px]">
+                  <label className="col-span-3 min-w-0 sm:col-span-1">
+                    <span className={labelCls}>{t("اسم الدواء")}</span>
+                    <input id={fieldId("name")} list={`${formId}-medication-names`} className="input py-2 font-semibold" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="name" value={m.name} onChange={setText("name")} onBlur={() => setNames(rememberMedicationName(ownerUserId, m.name))} aria-invalid={Boolean(err?.name)} aria-describedby={describe("name")} />
+                    {(m.strength || m.form) && <span className="block text-xs text-slate-600" dir="auto" translate="no">{[m.strength, m.form].filter(Boolean).join(" ")}</span>}
+                    {errorText("name")}
+                  </label>
+                  <label className="min-w-0">
+                    <span className={labelCls}>{t("الكمية المصروفة")}</span>
+                    <input id={fieldId("quantity")} className="input py-2" dir="auto" translate="no" autoComplete="off" value={m.quantity ?? ""} onChange={setText("quantity")} />
+                  </label>
+                  <label className="min-w-0">
+                    <span className={labelCls}>{t("الجرعة وطريقة الاستعمال")}</span>
+                    <input id={fieldId("instructions")} className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
+                    {errorText("instructions")}
+                  </label>
+                  <button type="button" onClick={() => remove(m, i)} className={clsx("mt-4 flex h-11 w-11 items-center justify-center rounded-lg text-red-700 hover:bg-red-50", focus)} aria-label={t("حذف الدواء رقم {n}", { n: i + 1 })}><X className="h-4 w-4" aria-hidden="true" /></button>
+                </div>
+              </li>
+            );
+          }
 
           if (isCollapsed) {
             return (

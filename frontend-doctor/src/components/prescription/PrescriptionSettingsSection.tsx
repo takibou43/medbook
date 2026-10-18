@@ -137,7 +137,7 @@ export function PrescriptionSettingsSection() {
 
             <PrescriptionFolderSettings uid={uid} />
 
-            <PrescriptionTemplateEditor key={uid} value={setup.template} onChange={setup.setTemplate} doctor={user?.doctor} names={{ ar: form.professional.ar?.doctorName, fr: form.professional.fr?.doctorName }} />
+            <PrescriptionTemplateEditor language={form.language} key={uid} value={setup.template} onChange={setup.setTemplate} doctor={user?.doctor} names={{ ar: form.professional.ar?.doctorName, fr: form.professional.fr?.doctorName }} />
           </div>
 
           <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3">

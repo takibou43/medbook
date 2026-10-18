@@ -8,7 +8,7 @@ import { Modal } from "../ui/Modal";
 import { PrescriptionPreview } from "./PrescriptionPrint";
 import type { PrescriptionDesign } from "../../lib/prescriptionDesign";
 
-export function PrescriptionTemplateEditor({ value, onChange, doctor, names }: { value: PrescriptionTemplate | null; onChange: (value: PrescriptionTemplate | null) => void; doctor?: Doctor | null; names?: { ar?: string; fr?: string } }) {
+export function PrescriptionTemplateEditor({ value, onChange, doctor, names, language }: { language: "ar" | "fr"; value: PrescriptionTemplate | null; onChange: (value: PrescriptionTemplate | null) => void; doctor?: Doctor | null; names?: { ar?: string; fr?: string } }) {
   const fr = useLanguage() === "fr";
   const [editing, setEditing] = useState(false);
   const [designerOpen, setDesignerOpen] = useState(false);
@@ -18,7 +18,7 @@ export function PrescriptionTemplateEditor({ value, onChange, doctor, names }: {
   const [testOpen, setTestOpen] = useState(false);
   const [mode, setMode] = useState<"image" | "design">(value?.design && value.design.source !== "image" ? "design" : "image");
   function imageDesign(): PrescriptionDesign {
-    return draft?.design?.source === "image" ? draft.design : { version: 1, source: "image", language: fr ? "fr" : "ar", doctorName: "قالب مرفوع", specialty: "", clinicName: "", address: "", phone: "", footer: "", color: "#1574ad", layout: "split", logo: null, logoPosition: "center", headerSize: 18 };
+    return draft?.design?.source === "image" ? draft.design : { version: 1, source: "image", language, doctorName: "قالب مرفوع", specialty: "", clinicName: "", address: "", phone: "", footer: "", color: "#1574ad", layout: "split", logo: null, logoPosition: "center", headerSize: 18 };
   }
   function printMode(next: "blank" | "preprinted") {
     if (!draft) return;
@@ -95,9 +95,9 @@ export function PrescriptionTemplateEditor({ value, onChange, doctor, names }: {
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     </div>}
     <Modal wide open={designerOpen} onClose={() => { if (!busy) setDesignerOpen(false); }} title={fr ? "Créer / modifier mon ordonnance" : "إنشاء وتعديل تصميم الوصفة"}>
-      {designerOpen && <PrescriptionDesigner value={value} doctor={doctor} names={names} saving={busy} onSave={next => save(false, next)} onCancel={() => setDesignerOpen(false)} />}
+      {designerOpen && <PrescriptionDesigner value={value} doctor={doctor} names={names} language={language} saving={busy} onSave={next => save(false, next)} onCancel={() => setDesignerOpen(false)} />}
       {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
     </Modal>
-    <PrescriptionPreview open={testOpen} onClose={() => setTestOpen(false)} data={draft ? { template: draft, doctor, language: fr ? "fr" : "ar", patientName: fr ? "Patient test" : "مريض تجريبي", day: "2026-10-14", medications: [], notes: fr ? "Texte de test. Aucune donnée patient." : "نص تجريبي لاختبار موضع الكتابة، دون بيانات مرضى." } : null} />
+    <PrescriptionPreview open={testOpen} onClose={() => setTestOpen(false)} data={draft ? { template: draft, doctor, language, patientName: language === "fr" ? "Patient test" : "مريض تجريبي", day: "2026-10-14", medications: [], notes: language === "fr" ? "Texte de test. Aucune donnée patient." : "نص تجريبي لاختبار موضع الكتابة، دون بيانات مرضى." } : null} />
   </div>;
 }

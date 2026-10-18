@@ -7,17 +7,18 @@ import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 import { PrescriptionPreview, PrescriptionSheet } from "./PrescriptionPrint";
 import { prescriptionBranding } from "./prescriptionBranding";
 
-export function VisualPrescriptionDesigner({ value, doctor, saving, onSave, onCancel, names }: { value: PrescriptionTemplate | null; doctor?: Doctor | null; saving: boolean; onSave: (template: PrescriptionTemplate) => void; onCancel?: () => void; names?: { ar?: string; fr?: string } }) {
+export function VisualPrescriptionDesigner({ value, doctor, saving, onSave, onCancel, names, language }: { language: "ar" | "fr"; value: PrescriptionTemplate | null; doctor?: Doctor | null; saving: boolean; onSave: (template: PrescriptionTemplate) => void; onCancel?: () => void; names?: { ar?: string; fr?: string } }) {
   const fr = useLanguage() === "fr";
   const t = (ar: string, french: string) => fr ? french : ar;
   const branding = useMemo(() => prescriptionBranding(doctor), [doctor]);
   const [design, setDesign] = useState<PrescriptionDesign>(() => {
     if (value?.design && value.design.source !== "image") {
       // Reflow generated stationery in the editor; saving remains an explicit action.
-      return canBalancePrescriptionDesign(value.design)
-        ? arrangeSimpleHeader(value.design, readSimpleHeader(value.design, names)) : value.design;
+      const localized = { ...value.design, language };
+      return canBalancePrescriptionDesign(localized)
+        ? arrangeSimpleHeader(localized, readSimpleHeader(localized, names)) : localized;
     }
-    const base: PrescriptionDesign = { version: 1, source: "generated", preset: "traditional", emblem: "medical", printMode: value?.design?.printMode ?? "blank", language: fr ? "fr" : "ar", doctorName: doctor ? `${doctor.firstName} ${doctor.lastName}` : "", specialty: (fr ? doctor?.specialty?.nameFr : doctor?.specialty?.nameAr) || "", clinicName: doctor?.clinic?.nameAr || "", address: doctor?.clinic?.address || doctor?.address || "", phone: doctor?.clinic?.phone || doctor?.phone || "", footer: "", color: "#1574ad", layout: "split", logo: null, logoPosition: "center", headerSize: 18 };
+    const base: PrescriptionDesign = { version: 1, source: "generated", preset: "traditional", emblem: "medical", printMode: value?.design?.printMode ?? "blank", language, doctorName: doctor ? `${doctor.firstName} ${doctor.lastName}` : "", specialty: (fr ? doctor?.specialty?.nameFr : doctor?.specialty?.nameAr) || "", clinicName: doctor?.clinic?.nameAr || "", address: doctor?.clinic?.address || doctor?.address || "", phone: doctor?.clinic?.phone || doctor?.phone || "", footer: "", color: "#1574ad", layout: "split", logo: null, logoPosition: "center", headerSize: 18 };
     return arrangeSimpleHeader(base, { ...readSimpleHeader(base, names), specialty: doctor?.specialty?.nameAr || "", specialtyFr: doctor?.specialty?.nameFr || "" });
   });
   const [preview, setPreview] = useState<PrescriptionTemplate | null>(value?.design?.source !== "image" ? value : null);
@@ -35,6 +36,7 @@ export function VisualPrescriptionDesigner({ value, doctor, saving, onSave, onCa
     return () => observer.disconnect();
   }, []);
   const simple = readSimpleHeader(design, names);
+  const prescriptionText = (ar: string, french: string) => language === "fr" ? french : ar;
   const disabled = saving || uploading;
   const incomplete = !simple.nameAr.trim() && !simple.nameFr.trim();
   const overlap = Boolean(changed && design.elements?.some(e => overlapsWritingArea(e, design.writingArea ?? { top: 60, bottom: 30, side: 12 })));
@@ -43,14 +45,19 @@ export function VisualPrescriptionDesigner({ value, doctor, saving, onSave, onCa
     setDesign(arrangeSimpleHeader({ ...design, source: "generated", logo }, { ...simple, ...patch }));
   }
   useEffect(() => {
+    if (design.language !== language) {
+      setChanged(true);
+      setDesign(current => ({ ...current, language }));
+      return;
+    }
     if (!changed && value) { setPreview({ ...value, design }); setRendering(false); return; }
     let alive = true; setRendering(true); setError(""); setPreview(null);
     const timer = window.setTimeout(() => {
       renderPrescriptionDesign(design, branding).then(result => { if (alive) setPreview(result); }).catch(e => { if (alive) setError((e as Error).message); }).finally(() => { if (alive) setRendering(false); });
     }, 150);
     return () => { alive = false; window.clearTimeout(timer); };
-  }, [design, changed, value, branding]);
-  const ready = !disabled && !rendering && !!preview && !overlap && !incomplete && !error;
+  }, [design, changed, value, branding, language]);
+  const ready = design.language === language && preview?.design?.language === language && !disabled && !rendering && !!preview && !overlap && !incomplete && !error;
   return <div className="space-y-4">
     <p className="text-sm text-slate-600">{t("أدخل بياناتك؛ نرتب الورقة والشعار تلقائيًا. القالب الحالي لا يتغير إلا عند الحفظ.", "Renseignez vos informations : mise en page automatique. Le modèle actuel reste inchangé jusqu’à l’enregistrement.")}</p>
     <PrescriptionPresetPicker design={design} branding={branding} french={fr} disabled={disabled} onSelect={preset => {
@@ -79,7 +86,7 @@ export function VisualPrescriptionDesigner({ value, doctor, saving, onSave, onCa
         <div ref={previewBox} className="relative mx-auto aspect-[148/210] w-full max-w-sm overflow-hidden border bg-white shadow" aria-label={t("معاينة وصفة توضيحية A5", "Aperçu d’une ordonnance A5 fictive")}>
           {preview && <div className="rx-paper rx-custom-paper" style={{ position: "absolute", top: 0, left: 0, width: 148 * 96 / 25.4, minHeight: 210 * 96 / 25.4, margin: 0, boxSizing: "border-box", transformOrigin: "top left", transform: `scale(${previewWidth / (148 * 96 / 25.4)})`, padding: `${preview.top}mm ${preview.side}mm ${preview.bottom}mm` }}>
             <img className="rx-template-image" src={preview.image} alt="" />
-            <PrescriptionSheet data={{ template: preview, language: design.language, doctor, patientName: t("محمد بن صالح", "Mohamed Ben Salah"), patientAge: "45", day: new Date().toLocaleDateString("sv-SE", { timeZone: "Africa/Algiers" }), medications: [{ id: "example", name: t("اسم الدواء", "Nom du médicament"), dose: "", frequency: "", duration: "", instructions: "", directionsMode: "freeText" }], notes: "" }} />
+            <PrescriptionSheet data={{ template: preview, language, doctor, patientName: prescriptionText("محمد بن صالح", "Mohamed Ben Salah"), patientAge: "45", day: new Date().toLocaleDateString("sv-SE", { timeZone: "Africa/Algiers" }), medications: [{ id: "example", name: prescriptionText("اسم الدواء", "Nom du médicament"), dose: "", frequency: "", duration: "", instructions: "", directionsMode: "freeText" }], notes: "" }} />
           </div>}
         </div>
         <p className="mt-2 text-center text-xs text-slate-600">{t("بيانات توضيحية للمعاينة فقط؛ لا تُحفظ داخل القالب.", "Données fictives d’aperçu, jamais enregistrées dans le modèle.")}</p>
@@ -95,6 +102,6 @@ export function VisualPrescriptionDesigner({ value, doctor, saving, onSave, onCa
       <button type="button" className="btn-primary" disabled={!ready} onClick={() => { if (preview) onSave(preview); }}>{saving ? t("جارٍ الحفظ…", "Enregistrement…") : t("حفظ القالب", "Enregistrer")}</button>
       <button type="button" className="btn-outline" disabled={disabled} onClick={onCancel}>{t("إلغاء", "Annuler")}</button>
     </div>
-    <PrescriptionPreview open={testOpen} onClose={() => setTestOpen(false)} data={preview ? { template: preview, doctor, language: fr ? "fr" : "ar", patientName: t("مريض تجريبي", "Patient test"), day: "2026-10-14", medications: [], notes: t("نص تجريبي للتحقق من موضع الكتابة. لا يحتوي بيانات مرضى.", "Texte de test pour vérifier la position du contenu. Aucune donnée patient.") } : null} />
+    <PrescriptionPreview open={testOpen} onClose={() => setTestOpen(false)} data={preview ? { template: preview, doctor, language, patientName: prescriptionText("مريض تجريبي", "Patient test"), day: "2026-10-14", medications: [], notes: prescriptionText("نص تجريبي للتحقق من موضع الكتابة. لا يحتوي بيانات مرضى.", "Texte de test pour vérifier la position du contenu. Aucune donnée patient.") } : null} />
   </div>;
 }

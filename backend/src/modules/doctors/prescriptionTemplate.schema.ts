@@ -9,7 +9,13 @@ const logoSchema = z.string().max(400000).regex(/^data:image\/png;base64,[A-Za-z
 
 export const prescriptionDesignSchema = z.object({
   version: z.literal(1),
-  preset: z.enum(["classic", "bilingual", "centered", "specialty"]).optional(),
+  preset: z.enum(["traditional", "classic", "bilingual", "centered", "specialty"]).optional(),
+  emblem: z.enum(["medical", "specialty", "none"]).optional(),
+  formFields: z.object({
+    date: z.object({ x: z.number().min(0).max(140), y: z.number().min(0).max(75), width: z.number().min(5).max(148) }).strict().refine(f => f.x + f.width <= 148),
+    patient: z.object({ x: z.number().min(0).max(140), y: z.number().min(0).max(75), width: z.number().min(5).max(148) }).strict().refine(f => f.x + f.width <= 148),
+    age: z.object({ x: z.number().min(0).max(140), y: z.number().min(0).max(75), width: z.number().min(5).max(148) }).strict().refine(f => f.x + f.width <= 148),
+  }).strict().optional(),
   source: z.enum(["image", "generated"]).optional(),
   printMode: z.enum(["blank", "preprinted"]).optional(),
   language: z.enum(["ar", "fr"]),

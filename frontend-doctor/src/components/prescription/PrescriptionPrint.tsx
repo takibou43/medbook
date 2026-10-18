@@ -76,6 +76,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const clinicNameAr = show.clinicName ? clinicHeaderName(data.clinicNames?.ar, clinic?.nameAr, "ar") : "";
   const phone = show.phone ? (clinic?.phone || d?.phone || "").trim() : "";
   const standard = !data.template;
+  const formFields = data.template?.design?.source === "image" ? data.template.design.formFields : undefined;
   const fr = prescriptionLabels("fr");
   const ar = prescriptionLabels("ar");
   const specialtyFr = show.specialty && d?.specialty ? prescriptionCatalogName(d.specialty, "fr") : "";
@@ -107,7 +108,13 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </div>
       </header>}
 
-      <dl className="rx-meta">
+      {formFields && data.template ? <div className="rx-form-fields" dir="ltr">
+        {(["date", "patient", "age"] as const).map(key => {
+          const field = formFields[key];
+          const content = key === "date" ? prescriptionNumericDate(data.day) : key === "patient" ? data.patientName : age === null ? "" : `${age} ${ageUnit}`;
+          return <span key={key} data-form-field={key} dir="auto" style={{ position: "absolute", left: `${field.x - data.template!.side}mm`, top: `${field.y - data.template!.top}mm`, width: `${field.width}mm` }}><Typed>{content}</Typed></span>;
+        })}
+      </div> : <dl className="rx-meta">
         <div className="rx-meta-date">
           <dt>{municipality ? `${municipality}${lang === "fr" ? ", le :" : "، في:"}` : text.date}</dt>
           <dd><bdi dir="ltr">{prescriptionNumericDate(data.day)}</bdi></dd>
@@ -117,9 +124,9 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
           <dd className="rx-patient"><Typed>{data.patientName}</Typed></dd>
         </div>
         {age !== null && <div className="rx-meta-age"><dt>{text.age} :</dt><dd><bdi dir="ltr">{age}</bdi> {ageUnit}</dd></div>}
-      </dl>
+      </dl>}
 
-      <h1 className="rx-title">{text.title}</h1>
+      {!formFields && <h1 className="rx-title">{text.title}</h1>}
 
       {data.medications.length > 0 && <ol className="rx-meds" aria-label={text.medications}>
         {data.medications.map((m, i) => {
@@ -181,7 +188,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
       </footer>}
     </>
   );
-  const articleProps = { className: `rx-sheet${standard ? " rx-standard" : ""}`, dir: lang === "fr" ? "ltr" : "rtl", lang, "aria-label": text.sheet } as const;
+  const articleProps = { className: `rx-sheet${standard ? " rx-standard" : ""}${data.template?.design?.preset === "traditional" ? " rx-traditional" : ""}`, dir: lang === "fr" ? "ltr" : "rtl", lang, "aria-label": text.sheet } as const;
   // الورقة القياسية: جدول إطار بصفّي حشو (أعلى/أسفل) يتكرران في كل صفحة مطبوعة، لأن هامش الصفحة صفر
   // (لا هامش = لا مكان تضيف فيه المتصفحات الرابط والعنوان والوقت). الجدول للتنسيق فقط ولا معنى دلاليًا له.
   if (standard) {

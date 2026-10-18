@@ -7,11 +7,19 @@ const logo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwC
 const design = { version: 1, language: "ar", doctorName: "اسم تجريبي", specialty: "", clinicName: "", address: "", phone: "", footer: "", color: "#187f77", layout: "split", logo, logoPosition: "left", headerSize: 18 };
 describe("editable blank prescription design", () => {
   it("round-trips every ready-made A5 preset and rejects unknown presets", () => {
-    for (const preset of ["classic", "bilingual", "centered", "specialty"]) {
+    for (const preset of ["traditional", "classic", "bilingual", "centered", "specialty"]) {
       const next = { ...valid, design: { ...design, preset } };
       expect(prescriptionTemplateSchema.parse(next)).toEqual(next);
     }
     expect(prescriptionDesignSchema.safeParse({ ...design, preset: "remote-template" }).success).toBe(false);
+  });
+  it("preserves printed-form coordinates and rejects positions outside A5", () => {
+    const fields = { date: { x: 24, y: 53, width: 65 }, patient: { x: 15, y: 65, width: 75 }, age: { x: 106, y: 60, width: 30 } };
+    const next = { ...valid, design: { ...design, source: "image", formFields: fields } };
+    expect(prescriptionTemplateSchema.parse(next)).toEqual(next);
+    for (const patch of [{ x: 140, width: 20 }, { y: 90 }, { width: -2 }]) {
+      expect(prescriptionDesignSchema.safeParse({ ...next.design, formFields: { ...fields, date: { ...fields.date, ...patch } } }).success).toBe(false);
+    }
   });
   it("round-trips both print modes for uploaded and generated templates without allowing patient metadata", () => {
     for (const printMode of ["blank", "preprinted"]) for (const source of ["image", "generated"]) {

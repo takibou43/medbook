@@ -23,6 +23,13 @@ const auth = (id: string) => `Bearer ${signAccessToken({ sub: id, role: h.roles[
 const url = "/api/doctor/prescription-template";
 const value = { image: `data:image/jpeg;base64,${Buffer.concat([Buffer.from([255,216,255]), Buffer.alloc(120), Buffer.from([255,217])]).toString("base64")}`, top: 40, bottom: 30, side: 12 };
 describe("doctor-owned blank prescription templates", () => {
+  it("saves and reloads printed form coordinates without including any patient values", async () => {
+    const design = { version: 1, source: "image", language: "fr", doctorName: "Blank stationery", specialty: "", clinicName: "", address: "", phone: "", footer: "", color: "#1574ad", layout: "split", logo: null, logoPosition: "center", headerSize: 18, formFields: { date: { x: 24, y: 53, width: 65 }, patient: { x: 15, y: 65, width: 75 }, age: { x: 106, y: 60, width: 30 } } };
+    const body = { ...value, top: 75, design };
+    expect((await request(app).put(url).set("Authorization", auth("d1")).send(body)).status).toBe(200);
+    expect((await request(app).get(url).set("Authorization", auth("d1"))).body.data).toEqual(body);
+    expect((await request(app).get(url).set("Authorization", auth("d2"))).body.data).toBeNull();
+  });
   it("reloads design settings for later edits and clears stale settings when replaced with an uploaded sheet", async () => {
     const design = { version: 1, language: "fr", doctorName: "Médecin Démonstration", specialty: "", clinicName: "", address: "", phone: "", footer: "", color: "#187f77", layout: "centered", logo: null, logoPosition: "right", headerSize: 18 };
     expect((await request(app).put(url).set("Authorization", auth("d1")).send({ ...value, design })).status).toBe(200);

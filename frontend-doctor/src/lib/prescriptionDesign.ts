@@ -1,6 +1,10 @@
 import type { PrescriptionTemplate } from "./prescriptionTemplate";
+import type { PrintedFormFields } from "./prescriptionTemplate";
+import { prescriptionImageType } from "./prescriptionTemplate.ts";
+import { medicalSymbolImage } from "./medicalSymbol.ts";
 
 export const PRESCRIPTION_PRESETS = [
+  { id: "traditional", ar: "طبي تقليدي", fr: "Médical traditionnel", color: "#1574ad" },
   { id: "classic", ar: "كلاسيكي اقتصادي", fr: "Classique sobre", color: "#303030" },
   { id: "bilingual", ar: "ثنائي اللغة", fr: "Bilingue", color: "#187f77" },
   { id: "centered", ar: "ترويسة وسطية", fr: "En-tête centré", color: "#24476b" },
@@ -12,7 +16,7 @@ export type PrescriptionPreset = typeof PRESCRIPTION_PRESETS[number]["id"];
 export function applyPrescriptionPreset(design: PrescriptionDesign, preset: PrescriptionPreset, names?: { ar?: string; fr?: string }): PrescriptionDesign {
   const fields = readSimpleHeader(design, names);
   const color = PRESCRIPTION_PRESETS.find(p => p.id === preset)!.color;
-  return arrangeSimpleHeader({ ...design, source: "generated", preset, color }, { ...fields, color });
+  return arrangeSimpleHeader({ ...design, source: "generated", preset, color, emblem: preset === "traditional" ? "medical" : design.emblem }, { ...fields, color });
 }
 
 export interface DesignElement {
@@ -74,6 +78,11 @@ export function arrangeSimpleHeader(design: PrescriptionDesign, fields: SimplePr
     }
     y += offset;
   }
+  if (design.preset === "traditional") {
+    const logo = elements.find(e => e.kind === "logo")!;
+    logo.x = 61; logo.y = 6; logo.width = 26; logo.height = 32;
+    y = Math.max(y, 38);
+  }
   // Contact information belongs below the writing area; leave the central booking QR clear.
   if (fields.addressFr.trim()) elements.push(item("address-fr", fields.addressFr, 92, 192, 48, 12, 4.8, "right"));
   if (fields.address.trim()) elements.push(item("address-ar", fields.address, 92, 192, 48, 12, 4.8, "right"));
@@ -87,6 +96,8 @@ export function arrangeSimpleHeader(design: PrescriptionDesign, fields: SimplePr
 export interface PrescriptionDesign {
   version: 1;
   preset?: PrescriptionPreset;
+  emblem?: "medical" | "specialty" | "none";
+  formFields?: PrintedFormFields;
   source?: "image" | "generated";
   printMode?: "blank" | "preprinted";
   language: "ar" | "fr";
@@ -197,14 +208,17 @@ async function renderFreeDesign(design: PrescriptionDesign, branding: Prescripti
     ctx.save(); ctx.globalAlpha = 0.06;
     ctx.fillRect(8, 5, 132, Math.max(0, (design.writingArea?.top ?? 37) - 8)); ctx.restore();
   }
-  if (design.preset !== "classic") await drawBrandImage(ctx, branding.watermark, 39, 70, 70, 0.12);
+  if (design.preset === "traditional") {
+    ctx.save(); ctx.globalAlpha = 0.055;
+    await drawContainedLogo(ctx, medicalSymbolImage(design.color), 38, 80, 72, 86); ctx.restore();
+  } else if (design.preset !== "classic") await drawBrandImage(ctx, branding.watermark, 39, 70, 70, 0.12);
   if (branding.watermark && design.preset !== "classic") {
-    ctx.save(); ctx.globalAlpha = 0.16; ctx.fillStyle = "#303030";
-    ctx.font = 'bold 5px "Cairo", Arial, sans-serif'; ctx.textAlign = "center";
+    ctx.save(); ctx.globalAlpha = design.preset === "traditional" ? 0.08 : 0.16; ctx.fillStyle = "#303030";
+    ctx.font = design.preset === "traditional" ? '3px "Cairo", Arial, sans-serif' : 'bold 5px "Cairo", Arial, sans-serif'; ctx.textAlign = "center";
     ctx.textBaseline = "top"; ctx.direction = "ltr";
     ctx.fillText("MedBook | مادبوك", 74, 143); ctx.restore();
   }
-  const logo = design.logo || branding.specialtyLogo;
+  const logo = design.logo || (design.emblem === "none" ? undefined : design.emblem === "medical" ? medicalSymbolImage(design.color) : branding.specialtyLogo);
   const automaticFooter = canBalancePrescriptionDesign(design);
   const preferredAddress = design.elements?.find(e => e.id === `address-${design.language}` && e.text.trim());
   const footerAddressId = preferredAddress?.id ?? design.elements?.find(e => e.id.startsWith("address-") && e.text.trim())?.id;
@@ -248,8 +262,9 @@ async function renderFreeDesign(design: PrescriptionDesign, branding: Prescripti
 }
 
 export async function readPrescriptionLogo(file: File): Promise<string> {
-  if (!["image/png", "image/jpeg", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024) throw new Error("اختر صورة PNG أو JPEG أو WebP لا تتجاوز 5 ميغابايت.");
-  const url = URL.createObjectURL(file);
+  if (file.size > 5 * 1024 * 1024) throw new Error("اختر صورة PNG أو JPEG أو WebP لا تتجاوز 5 ميغابايت.");
+  const type = await prescriptionImageType(file);
+  const url = URL.createObjectURL(new Blob([file], { type }));
   try {
     const img = new Image(); img.src = url; await img.decode();
     if (!img.width || !img.height || img.width * img.height > 40000000) throw new Error("أبعاد الشعار غير صالحة.");

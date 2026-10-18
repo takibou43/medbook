@@ -36,7 +36,7 @@ export function PrescriptionTemplateEditor({ value, onChange, doctor, names }: {
     {value && <span className="mx-2 text-sm text-emerald-700">{fr ? "Enregistré dans votre compte" : "محفوظ في حسابك"}</span>}
     {editing && <div className="mt-3 space-y-3">
       <div className="flex flex-wrap gap-2" role="group" aria-label={fr ? "Source du modèle" : "طريقة إنشاء القالب"}>
-        <button type="button" disabled={busy} aria-haspopup="dialog" className="btn-primary" onClick={() => { setMode("design"); setError(""); setDesignerOpen(true); }}>{fr ? "Créer / modifier mon design" : "إنشاء وتعديل تصميمي"}</button>
+        <button type="button" disabled={busy} aria-haspopup="dialog" className="btn-primary" onClick={() => { setMode("design"); setError(""); setDesignerOpen(true); }}>{fr ? "Choisir / personnaliser un modèle" : "اختيار وتخصيص قالب جاهز"}</button>
         <button type="button" disabled={busy} aria-pressed={mode === "image"} className={mode === "image" ? "btn-primary" : "btn-outline"} onClick={() => { setMode("image"); setError(""); }}>{fr ? "Importer une feuille vierge" : "رفع صورة وصفة فارغة"}</button>
       </div>
       {mode === "design" ? <p className="text-sm text-slate-600">{fr ? "Renseignez vos informations. Mise en page automatique." : "أدخل بياناتك والشعار؛ نرتب القالب تلقائيًا."}</p> : <>

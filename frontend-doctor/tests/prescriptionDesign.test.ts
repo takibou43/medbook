@@ -1,8 +1,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canBalancePrescriptionDesign, arrangeSimpleHeader, readSimpleHeader, renderPrescriptionDesign, initialDesignElements, overlapsWritingArea, type PrescriptionDesign } from '../src/lib/prescriptionDesign.ts';
+import { PRESCRIPTION_PRESETS, applyPrescriptionPreset, canBalancePrescriptionDesign, arrangeSimpleHeader, readSimpleHeader, renderPrescriptionDesign, initialDesignElements, overlapsWritingArea, type PrescriptionDesign } from '../src/lib/prescriptionDesign.ts';
 
 const base: PrescriptionDesign = { version: 1, language: 'ar', doctorName: 'طبيب تجريبي', specialty: 'تخصص تجريبي', clinicName: 'عيادة تجريبية', address: 'عنوان تجريبي', phone: '0000000000', footer: 'تذييل تجريبي', color: '#187f77', layout: 'split', logo: null, logoPosition: 'left', headerSize: 18 };
+
+test('all A5 presets preserve bilingual identity, logo, print mode and custom elements when switching', () => {
+  const fields = { ...readSimpleHeader(base), nameFr: 'Dr Test', specialtyFr: 'Spécialité', addressFr: 'Mila' };
+  const original = arrangeSimpleHeader({ ...base, source: 'generated', logo: 'personal-logo', printMode: 'preprinted' }, fields);
+  const snapshot = structuredClone(original);
+  let current = original;
+  for (const preset of PRESCRIPTION_PRESETS) {
+    current = applyPrescriptionPreset(current, preset.id);
+    assert.equal(current.preset, preset.id);
+    assert.equal(current.logo, original.logo);
+    assert.equal(current.printMode, 'preprinted');
+    assert.deepEqual(readSimpleHeader(current), { ...fields, color: preset.color });
+    assert.ok(current.elements!.every(e => !overlapsWritingArea(e, current.writingArea!)));
+    assert.ok(current.elements!.every(e => e.x >= 0 && e.y >= 0 && e.x + e.width <= 148 && e.y + e.height <= 210));
+    assert.ok(Number.isInteger(current.writingArea!.top));
+    assert.ok(current.writingArea!.top <= 75);
+  }
+  assert.deepEqual(original, snapshot, 'selection must not mutate the saved template');
+  const extra = { ...initialDesignElements(base)[0], id: 'custom-note', y: 190, height: 8 };
+  const custom = applyPrescriptionPreset({ ...original, elements: [...original.elements!, extra] }, 'centered');
+  assert.deepEqual(custom.elements!.find(e => e.id === extra.id), extra);
+});
 
 test('simple header keeps explicit names, centers the logo and reserves writing space without dropping custom text', () => {
   const fields = { ...readSimpleHeader(base), nameAr: 'اسم تجريبي', nameFr: 'Test Doctor', color: '#112233' };
@@ -72,6 +94,15 @@ test('blank designs reserve bounded writing space, preserve editable metadata an
       assert.equal(result.design?.logoTop, 15);
     }
     assert.ok(text.includes(base.footer));
+    for (const preset of PRESCRIPTION_PRESETS) {
+      const selected = applyPrescriptionPreset({ ...base, source: 'generated' }, preset.id);
+      text.length = 0;
+      const result = await renderPrescriptionDesign(selected, { watermark: 'brand-fixture', bookingQr: 'booking-fixture' });
+      assert.equal(result.design?.preset, preset.id);
+      assert.equal(text.includes('MedBook | مادبوك'), preset.id !== 'classic');
+      assert.ok(Number.isInteger(result.top));
+      assert.ok(result.design!.elements!.every(e => !overlapsWritingArea(e, result)));
+    }
     const branded = await renderPrescriptionDesign(arrangeSimpleHeader(base, readSimpleHeader(base)), { specialtyLogo: 'specialty-fixture', watermark: 'brand-fixture', bookingQr: 'booking-fixture' });
     assert.equal(branded.design?.logo, null, 'specialty fallback must not become a personal logo');
     assert.deepEqual(images.at(-1), [68, 188, 12, 12]);

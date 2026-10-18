@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Doctor } from "../../types";
 import { useLanguage } from "../../i18n/LanguageRoot";
-import { arrangeSimpleHeader, canBalancePrescriptionDesign, readSimpleHeader, overlapsWritingArea, readPrescriptionLogo, renderPrescriptionDesign, type PrescriptionDesign, type SimplePrescriptionHeader } from "../../lib/prescriptionDesign";
+import { applyPrescriptionPreset, arrangeSimpleHeader, canBalancePrescriptionDesign, readSimpleHeader, overlapsWritingArea, readPrescriptionLogo, renderPrescriptionDesign, type PrescriptionDesign, type SimplePrescriptionHeader } from "../../lib/prescriptionDesign";
+import { PrescriptionPresetPicker } from "./PrescriptionPresetPicker";
 import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 import { PrescriptionPreview } from "./PrescriptionPrint";
 import { prescriptionBranding } from "./prescriptionBranding";
@@ -42,6 +43,10 @@ export function VisualPrescriptionDesigner({ value, doctor, saving, onSave, onCa
   const ready = !disabled && !rendering && !!preview && !overlap && !incomplete && !error;
   return <div className="space-y-4">
     <p className="text-sm text-slate-600">{t("أدخل بياناتك؛ نرتب الورقة والشعار تلقائيًا. القالب الحالي لا يتغير إلا عند الحفظ.", "Renseignez vos informations : mise en page automatique. Le modèle actuel reste inchangé jusqu’à l’enregistrement.")}</p>
+    <PrescriptionPresetPicker selected={design.preset} french={fr} disabled={disabled} onSelect={preset => {
+      setChanged(true);
+      setDesign(current => applyPrescriptionPreset(current, preset, names));
+    }} />
     <div className="grid gap-4 md:grid-cols-2">
       <fieldset disabled={disabled} className="space-y-3">
         <legend className="mb-2 font-bold">{t("بيانات الطبيب والعيادة", "Médecin et cabinet")}</legend>
@@ -53,7 +58,8 @@ export function VisualPrescriptionDesigner({ value, doctor, saving, onSave, onCa
           try { update({}, await readPrescriptionLogo(file)); } catch (err) { setError((err as Error).message); } finally { setUploading(false); }
         }} /></label>
         {design.logo && <button type="button" className="btn-outline" onClick={() => update({}, null)}>{t("إزالة الشعار", "Retirer le logo")}</button>}
-        <label className="block text-sm">{t("الطباعة على", "Imprimer sur")}<select className="input mt-1 w-full" value={design.printMode ?? "blank"} onChange={e => setDesign({ ...design, printMode: e.target.value as "blank" | "preprinted" })}><option value="blank">{t("ورق أبيض — طباعة الترويسة والمحتوى", "Papier blanc — fond et contenu")}</option><option value="preprinted">{t("ورق مطبوع مسبقًا — المحتوى فقط", "Papier préimprimé — contenu seul")}</option></select></label>
+        <label className="block text-sm">{t("لون القالب", "Couleur du modèle")}<input type="color" className="mt-1 block h-11 w-20" value={simple.color} onChange={e => update({ color: e.target.value })} /></label>
+        <label className="block text-sm">{t("الطباعة على", "Imprimer sur")}<select className="input mt-1 w-full" value={design.printMode ?? "blank"} onChange={e => { setChanged(true); setDesign(current => ({ ...current, printMode: e.target.value as "blank" | "preprinted" })); }}><option value="blank">{t("ورق أبيض — طباعة الترويسة والمحتوى", "Papier blanc — fond et contenu")}</option><option value="preprinted">{t("ورق مطبوع مسبقًا — المحتوى فقط", "Papier préimprimé — contenu seul")}</option></select></label>
       </fieldset>
       <div className="min-w-0 rounded-xl bg-slate-100 p-3">
         {preview && <img src={preview.image} alt={t("معاينة القالب A5", "Aperçu du modèle A5")} className="mx-auto w-full max-w-sm border bg-white shadow" />}

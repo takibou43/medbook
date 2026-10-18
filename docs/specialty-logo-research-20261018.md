@@ -1,0 +1,75 @@
+# بحث شعارات تخصصات مادبوك — 2026-10-18
+
+هذه اختيارات تصميمية أولية لجميع التخصصات الـ63 الموجودة في ملف algeria-specialties.json، وليست رموزًا مهنية إلزامية. لم تُستبدل الشعارات الحالية. كل مسار أدناه تحقق وجوده في المستودع الرسمي. التخصصات الدقيقة قد تحتاج شعارًا مركبًا أو رسمًا أصليًا.
+
+المصدر المفضل: [Health Icons](https://healthicons.org/). [ترخيص الأيقونات CC0](https://healthicons.org/about) يسمح بالتعديل والاستعمال التجاري. الشفرة البرمجية للموقع منفصلة بترخيص MIT.
+
+بديل للرسوم التشريحية التفصيلية: [Servier Medical Art](https://smart.servier.com/category/medical-specialties/) بترخيص CC BY 4.0 الذي يشترط الإسناد.
+
+التوجه المقترح: SVG شفاف، لون واحد، تفاصيل مقروءة في 18–24 مم، واختبار بالأبيض والأسود. تنفذ الملفات محليًا داخل التطبيق عند اعتمادها؛ لا اعتماد على روابط خارجية أثناء الطباعة.
+
+| التخصص | الرمز المرشح من المصدر | ملاحظة تصميمية |
+|---|---|---|
+| طب عام — Médecine générale | [devices/stethoscope](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/devices/stethoscope.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| طب الأطفال — Pédiatrie | [specialties/pediatrics](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/pediatrics.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| طب القلب — Cardiologie | [specialties/cardiology](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/cardiology.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| طب العيون — Ophtalmologie | [body/eye](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/eye.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| طب الأسنان — Dentisterie | [body/tooth](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/tooth.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الأمراض الجلدية — Dermatologie | [body/tissue](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/tissue.svg) | رمز نسيج كبداية؛ يفضل رسم طبقات الجلد. |
+| طب النساء والتوليد — Gynécologie | [specialties/gynecology](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/gynecology.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| جراحة عامة — Chirurgie générale | [specialties/general-surgery](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/general-surgery.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| طب الأعصاب — Neurologie | [body/neurology](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/neurology.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الأنف والأذن والحنجرة — ORL | [symbols/ear-nose-throat](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/symbols/ear-nose-throat.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| التخدير والإنعاش — Anesthésie réanimation | [devices/cpap-masks](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/devices/cpap-masks.svg) | قناع تنفس؛ يمكن تخصيصه للتخدير. |
+| التخدير والإنعاش للأطفال — Anesthésie réanimation pédiatrique | [devices/cpap-masks](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/devices/cpap-masks.svg) | يحتاج دمج القناع مع رمز طفل. |
+| الإنعاش الطبي — Réanimation médicale | [specialties/critical-care](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/critical-care.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الطب الباطني — Médecine interne | [body/body](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/body.svg) | رمز عام للجسم؛ يفضّل رمز مركب للطب الباطني. |
+| أمراض الكلى — Néphrologie | [body/kidneys](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/kidneys.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| أمراض الجهاز الهضمي والكبد — Hépato-gastro-entérologie | [specialties/gastroenterology](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/gastroenterology.svg) | يمكن إضافة الكبد إلى رمز الجهاز الهضمي. |
+| أمراض الغدد والسكري والتمثيل الغذائي — Endocrinologie diabétologie et maladies métaboliques | [body/thyroid](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/thyroid.svg) | يمكن إضافة قطرة للسكري. |
+| أمراض الرئة والسل — Pneumo-phtisiologie | [body/lungs](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/lungs.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| أمراض الدم — Hématologie | [body/blood-cells](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/blood-cells.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الأمراض المعدية — Infectiologie | [body/bacteria](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/bacteria.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| أمراض الروماتيزم — Rhumatologie | [body/joints](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/joints.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الطب النفسي — Psychiatrie | [symbols/mental-health](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/symbols/mental-health.svg) | رمز للصحة النفسية؛ لا يدل وحده على تخصص الطبيب النفسي. |
+| الطب النفسي للأطفال والمراهقين — Pédopsychiatrie | [people/child-cognition](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/people/child-cognition.svg) | رمز إدراك الطفل؛ يفضّل تخصيصه للصحة النفسية للأطفال. |
+| طب الأورام — Oncologie médicale | [specialties/oncology](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/oncology.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| العلاج الإشعاعي للأورام — Radiothérapie oncologie | [conditions/ribbon](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/conditions/ribbon.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الأشعة والتصوير الطبي — Imagerie médicale et radiologie | [specialties/radiology](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/radiology.svg) | رمز الأشعة يحتاج التحقق بصريًا من وضوحه بالحجم الصغير. |
+| الطب النووي والتصوير الجزيئي — Médecine nucléaire et imagerie moléculaire | [symbols/hazardous](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/symbols/hazardous.svg) | رمز إشعاع عام؛ يفضّل تخصيصه للطب النووي. |
+| الطب الفيزيائي وإعادة التأهيل — Médecine physique et réadaptation | [specialties/physical-therapy](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/physical-therapy.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الطب الشرعي — Médecine légale droit médical et éthique | [objects/justice](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/objects/justice.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| طب العمل — Médecine du travail | [people/factory-worker](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/people/factory-worker.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| طب الرياضة — Médecine du sport | [exercise/running](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/exercise/running.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| طب الاستعجالات — Médecine d'urgence | [specialties/accident-and_emergency](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/accident-and_emergency.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| علم الأوبئة والطب الوقائي — Épidémiologie et médecine préventive | [symbols/virus-shield](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/symbols/virus-shield.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| جراحة القلب — Chirurgie cardiaque | [body/heart-organ](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/heart-organ.svg) | إضافة أداة جراحية إلى القلب. |
+| جراحة الأعصاب — Chirurgie neurologique | [people/neuro-surgery](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/people/neuro-surgery.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| جراحة العظام والرضوض — Chirurgie orthopédique et traumatologique | [specialties/orthopaedics](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/orthopaedics.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| جراحة الأطفال — Chirurgie pédiatrique | [people/pediatric-surgery](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/people/pediatric-surgery.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| جراحة المسالك البولية — Chirurgie urologique | [specialties/urology](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/urology.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| جراحة الأوعية الدموية — Chirurgie vasculaire | [specialties/vascular-surgery](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/vascular-surgery.svg) | إضافة أداة جراحية إلى الرئتين. |
+| جراحة الصدر — Chirurgie thoracique | [body/lungs](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/lungs.svg) | مرجع للوجه والفكين، وليس شعارًا نهائيًا. |
+| جراحة الوجه والفكين — Chirurgie maxillo-faciale | [body/skull](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/skull.svg) | رأس كمرجع؛ يلزم تصميم مخصص للجراحة التجميلية. |
+| الجراحة التجميلية والترميمية — Chirurgie plastique reconstructrice et esthétique | [body/head](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/head.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| التشريح العام — Anatomie générale | [body/skeleton](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/skeleton.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| التشريح وعلم الخلايا المرضي — Anatomie et cytologie pathologiques | [devices/microscope-with_specimen](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/devices/microscope-with_specimen.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الكيمياء الحيوية الطبية — Biochimie | [specialties/biochemistry-laboratory](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/biochemistry-laboratory.svg) | رمز علوم عام؛ يحتاج تخصيص الفيزياء الحيوية. |
+| الفيزياء الحيوية الطبية — Biophysique médicale | [symbols/life-science](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/symbols/life-science.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| بيولوجيا الدم ونقل الدم — Hémobiologie et transfusion sanguine | [symbols/blood-transfusion](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/symbols/blood-transfusion.svg) | دمج الجنين مع DNA عند إعداد الشعار. |
+| علم الأنسجة والأجنة والوراثة — Histologie embryologie et génétique clinique | [people/fetus](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/people/fetus.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| علم المناعة — Immunologie | [body/antibody](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/antibody.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الأحياء الدقيقة الطبية — Microbiologie | [body/bacteria](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/bacteria.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| علم الطفيليات والفطريات — Parasitologie mycologie | [devices/microscope](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/devices/microscope.svg) | مجهر عام؛ يلزم تخصيص الطفيليات والفطريات. |
+| علم الأدوية السريري — Pharmacologie clinique | [medications/medicines](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/medications/medicines.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الفيزيولوجيا السريرية واستكشاف وظائف الاستقلاب والتغذية — Physiologie clinique et explorations fonctionnelles métaboliques et nutrition | [nutrition/nutrition](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/nutrition/nutrition.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الفيزيولوجيا السريرية واستكشاف وظائف القلب والتنفس والجهد — Physiologie clinique et explorations fonctionnelles cardio-respiratoires et de l'exercice | [symbols/heart-cardiogram](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/symbols/heart-cardiogram.svg) | رمز قلب وتخطيط؛ يمكن إضافة رئتين. |
+| الفيزيولوجيا العصبية السريرية — Neurophysiologie clinique et explorations fonctionnelles du système nerveux | [body/nerve](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/nerve.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| تقويم الأسنان والفكين — Orthopédie dento-faciale | [body/tooth](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/tooth.svg) | مرجع سن؛ يلزم رسم تقويم مخصص. |
+| علاج الأسنان التحفظي وعلاج الجذور — Odontologie conservatrice et endodontie | [body/tooth](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/tooth.svg) | مرجع سن؛ يلزم إبراز الجذور. |
+| أمراض اللثة — Parodontologie | [devices/dental-hygiene](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/devices/dental-hygiene.svg) | مرجع عناية أسنان؛ يلزم إبراز اللثة. |
+| أمراض وجراحة الفم — Pathologie et chirurgie buccales | [body/mouth](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/mouth.svg) | مرجع فم؛ يمكن دمج أداة جراحية. |
+| تركيبات وتعويضات الأسنان — Prothèse dentaire | [devices/odontology-implant](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/devices/odontology-implant.svg) | رمز زرعة؛ التعويضات تحتاج رمز تاج/جسر أكثر تخصيصًا. |
+| الحساسية والمناعة السريرية — Allergologie et immunologie clinique | [conditions/allergies](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/conditions/allergies.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| الوراثة الطبية — Génétique médicale | [body/dna](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/body/dna.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |
+| طب الشيخوخة — Gériatrie | [specialties/geriatrics](https://github.com/resolvetosavelives/healthicons/blob/main/public/icons/svg/outline/specialties/geriatrics.svg) | مرشح أولي؛ يراجع بصريًا قبل الاعتماد. |

@@ -1,5 +1,20 @@
 import type { PrescriptionTemplate } from "./prescriptionTemplate";
 
+export const PRESCRIPTION_PRESETS = [
+  { id: "classic", ar: "كلاسيكي اقتصادي", fr: "Classique sobre", color: "#303030" },
+  { id: "bilingual", ar: "ثنائي اللغة", fr: "Bilingue", color: "#187f77" },
+  { id: "centered", ar: "ترويسة وسطية", fr: "En-tête centré", color: "#24476b" },
+  { id: "specialty", ar: "بلون التخصص", fr: "Accent spécialité", color: "#187f77" },
+] as const;
+export type PrescriptionPreset = typeof PRESCRIPTION_PRESETS[number]["id"];
+
+/** Apply a layout to the doctor's own fields; never import demonstration identities. */
+export function applyPrescriptionPreset(design: PrescriptionDesign, preset: PrescriptionPreset, names?: { ar?: string; fr?: string }): PrescriptionDesign {
+  const fields = readSimpleHeader(design, names);
+  const color = PRESCRIPTION_PRESETS.find(p => p.id === preset)!.color;
+  return arrangeSimpleHeader({ ...design, source: "generated", preset, color }, { ...fields, color });
+}
+
 export interface DesignElement {
   id: string;
   kind: "text" | "logo";
@@ -41,14 +56,23 @@ export function canBalancePrescriptionDesign(design?: PrescriptionDesign | null)
 /** Reflow known header fields; retain any extra elements created in advanced mode. */
 export function arrangeSimpleHeader(design: PrescriptionDesign, fields: SimplePrescriptionHeader, measure?: (text: string, size: number, bold: boolean) => number): PrescriptionDesign {
   const item = (id: string, text: string, x: number, y: number, width: number, height: number, fontSize: number, align: DesignElement["align"] = "center"): DesignElement => ({ id, kind: "text", text, x, y, width, height, fontSize, align, font: /[\u0600-\u06ff]/.test(text) ? "Cairo" : "Arial", color: fields.color, bold: id.startsWith("name-") });
-  const nameHeight = measure ? Math.max(measure(fields.nameAr, 4.8, true), measure(fields.nameFr, 4.8, true)) : 8;
+  const nameHeight = measure ? Math.max(5, measure(fields.nameAr, 4.8, true), measure(fields.nameFr, 4.8, true)) : 8;
   const elements = [item("name-fr", fields.nameFr, 8, 8, 48, nameHeight, 4.8, "left"), item("name-ar", fields.nameAr, 92, 8, 48, nameHeight, 4.8, "right"), { ...item("logo", "", 59, 7, 30, 24, 4), kind: "logo" as const }];
   let y = 8 + nameHeight + 1;
   for (const [id, ar, fr] of [["specialty", fields.specialty, fields.specialtyFr], ["clinic", fields.clinic, fields.clinicFr]] as const) {
     if (!ar.trim() && !fr.trim()) continue;
-    const height = measure ? Math.max(measure(ar, 4.8, false), measure(fr, 4.8, false)) : 6;
+    const height = measure ? Math.max(5, measure(ar, 4.8, false), measure(fr, 4.8, false)) : 6;
     elements.push(item(id + "-fr", fr, 8, y, 48, height, 4.8, "left"), item(id + "-ar", ar, 92, y, 48, height, 4.8, "right"));
     y += height + 1;
+  }
+  if (design.preset === "centered") {
+    // Two language columns remain separate, with the logo above and centred text below.
+    const offset = 21;
+    for (const e of elements) {
+      if (e.kind === "logo") { e.x = 65; e.y = 6; e.width = 18; e.height = 18; }
+      else { e.y += offset; e.align = "center"; e.width = 62; e.x = e.id.endsWith("-ar") ? 78 : 8; }
+    }
+    y += offset;
   }
   // Contact information belongs below the writing area; leave the central booking QR clear.
   if (fields.addressFr.trim()) elements.push(item("address-fr", fields.addressFr, 92, 192, 48, 12, 4.8, "right"));
@@ -57,11 +81,12 @@ export function arrangeSimpleHeader(design: PrescriptionDesign, fields: SimplePr
   if (fields.footer.trim()) elements.push(item("footer", fields.footer, 8, 180, 132, 8, 3.2));
   const managed = SIMPLE_HEADER_IDS;
   const extras = (design.elements ?? []).filter(e => !managed.has(e.id));
-  return { ...design, doctorName: fields.nameAr || fields.nameFr || design.doctorName, specialty: fields.specialty || fields.specialtyFr, clinicName: fields.clinic || fields.clinicFr, address: fields.address || fields.addressFr, phone: fields.phone, footer: fields.footer, color: fields.color, logoPosition: "center", elements: [...elements, ...extras], writingArea: { top: Math.min(75, Math.max(37, y + 5)), bottom: fields.footer.trim() ? 40 : 25, side: 10 } };
+  return { ...design, doctorName: fields.nameAr || fields.nameFr || design.doctorName, specialty: fields.specialty || fields.specialtyFr, clinicName: fields.clinic || fields.clinicFr, address: fields.address || fields.addressFr, phone: fields.phone, footer: fields.footer, color: fields.color, layout: design.preset === "centered" ? "centered" : "split", logoPosition: "center", elements: [...elements, ...extras], writingArea: { top: Math.ceil(Math.min(75, Math.max(37, y + 5))), bottom: fields.footer.trim() ? 40 : 25, side: 10 } };
 }
 
 export interface PrescriptionDesign {
   version: 1;
+  preset?: PrescriptionPreset;
   source?: "image" | "generated";
   printMode?: "blank" | "preprinted";
   language: "ar" | "fr";
@@ -166,8 +191,14 @@ async function renderFreeDesign(design: PrescriptionDesign, branding: Prescripti
     if (headerBottom > 70) throw new Error("اختصر معلومات الترويسة لتبقى مساحة كافية للوصفة.");
   }
   ctx.scale(10, 10); ctx.fillStyle = "white"; ctx.fillRect(0, 0, 148, 210);
-  await drawBrandImage(ctx, branding.watermark, 39, 70, 70, 0.12);
-  if (branding.watermark) {
+  if (design.preset === "specialty") {
+    ctx.fillStyle = design.color;
+    ctx.fillRect(8, 3, 132, 1.5);
+    ctx.save(); ctx.globalAlpha = 0.06;
+    ctx.fillRect(8, 5, 132, Math.max(0, (design.writingArea?.top ?? 37) - 8)); ctx.restore();
+  }
+  if (design.preset !== "classic") await drawBrandImage(ctx, branding.watermark, 39, 70, 70, 0.12);
+  if (branding.watermark && design.preset !== "classic") {
     ctx.save(); ctx.globalAlpha = 0.16; ctx.fillStyle = "#303030";
     ctx.font = 'bold 5px "Cairo", Arial, sans-serif'; ctx.textAlign = "center";
     ctx.textBaseline = "top"; ctx.direction = "ltr";

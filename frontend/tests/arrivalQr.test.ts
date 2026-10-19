@@ -5,7 +5,7 @@ const origin='https://medbook-alpha.vercel.app';
 const id='11111111-1111-4111-8111-111111111111';
 test('accepts signed clinic and doctor attendance codes, never public booking IDs',()=>{
  for (const kind of ['clinic','doctor']) {
-  const code='medbook-arrival:v2:'+kind+':'+id+':'+ 'a'.repeat(64);
+  const code='medbook-arrival:v2:'+kind+':'+id+':'+ 'a'.repeat(32);
   assert.equal(arrivalCodeFromQr(code,origin),code);
   assert.equal(arrivalCodeFromQr(origin+'/account/arrival?code='+encodeURIComponent(code),origin),code);
  }

@@ -1,4 +1,4 @@
-const SIGNED_CODE = /^medbook-arrival:v2:(clinic|doctor):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{64}$/;
+const SIGNED_CODE = /^medbook-arrival:v2:(clinic|doctor):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{32}$/;
 const PATIENT_ORIGINS = new Set(['https://medbook-alpha.vercel.app', 'https://medbook-auto-dz.vercel.app', 'https://medbook-git-main-auto-dz.vercel.app']);
 /** Only signed attendance posters can authorize arrival; public booking QRs cannot. */
 export function arrivalCodeFromQr(raw: string, currentOrigin: string): string | null {

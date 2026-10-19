@@ -12,7 +12,7 @@ export function doctorBookingUrl(doctorId: string | null | undefined, site = "ht
 
 /** Attendance uses a server-signed capability, never the public booking UUID. */
 export function arrivalQrUrl(code: string, site = "https://medbook-alpha.vercel.app"): string {
-  const match = /^medbook-arrival:v2:(clinic|doctor):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):[0-9a-f]{64}$/.exec(code);
+  const match = /^medbook-arrival:v2:(clinic|doctor):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):[0-9a-f]{32}$/.exec(code);
   if (!match) throw new Error("Invalid arrival code");
   const url = new URL(doctorBookingUrl(match[2].toLowerCase(), site)!);
   url.pathname = '/account/arrival'; url.search = '';

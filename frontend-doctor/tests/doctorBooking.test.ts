@@ -20,7 +20,7 @@ test("doctor QR encodes only the public doctor booking route and rejects missing
 test("signed attendance links keep their signature for both doctor and clinic",()=>{
  const id='11111111-1111-4111-8111-111111111111';
  for (const kind of ['doctor','clinic']) {
-  const code='medbook-arrival:v2:'+kind+':'+id+':'+ 'a'.repeat(64);
+  const code='medbook-arrival:v2:'+kind+':'+id+':'+ 'a'.repeat(32);
   const url=new URL(arrivalQrUrl(code));
   assert.equal(url.pathname,'/account/arrival');
   assert.equal(url.searchParams.get('code'),code);

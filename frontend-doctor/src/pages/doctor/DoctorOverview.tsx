@@ -1,48 +1,28 @@
-import { escapeHtml } from "../../lib/html";
+import { ArrivalPoster } from "../../components/ArrivalPoster";
 import { useLanguage } from "../../i18n/LanguageRoot";
-import { t, getLocale, getLanguage } from "../../i18n/locale.ts";
+import { t, getLocale } from "../../i18n/locale.ts";
 import { Link } from "react-router-dom";
 import { useQueue } from "../../hooks/useQueue";
 import { algeriaToday, appointmentsLink, appointmentsCountAr, formatDayAr, formatDzd as fmtDzd, formatPercent } from "../../lib/doctorUi";
-import { useState } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
-import { CalendarClock, CalendarDays, Users, CheckCircle2, XCircle, Star, QrCode, Copy, Download, Printer, AlertTriangle, Wallet } from "lucide-react";
+import { CalendarClock, CalendarDays, Users, CheckCircle2, XCircle, Star, AlertTriangle, Wallet } from "lucide-react";
 import { api } from "../../lib/api";
 import { StatCard } from "../../components/StatCard";
 import { Spinner } from "../../components/ui/States";
 import { VerificationBadge } from "../../components/ui/Badge";
 import { useAuth } from "../../context/AuthContext";
-import { useToast } from "../../components/ui/Toast";
+
 import { ReferralCard } from "../../components/ReferralCard";
 import { useLiveUpdates } from "../../context/LiveUpdatesContext";
 import { livePollInterval } from "../../lib/livePolling";
-
-// رابط موقع الحجز الخاص بالمرضى — يُستخدم لبناء رابط/رمز QR خاص بكل طبيب.
-// TODO: تحويله إلى متغيّر بيئة عند اعتماد نطاق مخصص للموقع مستقبلًا.
-const PATIENT_SITE_URL = "https://medbook-alpha.vercel.app";
 
 // تاريخ اليوم بتوقيت الجزائر (UTC+1) بصيغة YYYY-MM-DD — يُستخدم لبناء رابط بطاقة
 // "مواعيد اليوم" في صفحة المواعيد (نفس منطق الإزاحة الزمنية المستخدم في بقية الموقع).
 function algeriaTodayIso(): string {
   const algeriaNow = new Date(Date.now() + 60 * 60000);
   return algeriaNow.toISOString().slice(0, 10);
-}
-
-/**
- * رابط صورة رمز QR. يُرمَّز داخله رابط الحجز العام للطبيب فقط — لا اسم مريض ولا رقم
- * هاتف ولا أي بيانات طبية ولا رمز دخول. ثابت ما دام معرّف الطبيب العام ثابتًا، فلا
- * يتغيّر عند تعديل اسم الطبيب أو بياناته. نستعمل خدمة التوليد نفسها المستخدمة أصلًا
- * في المشروع (بلا مكتبة جديدة).
- */
-function qrUrlFor(bookingUrl: string, format: "png" | "svg", size: number, margin: number): string {
-  const params = new URLSearchParams({
-    size: `${size}x${size}`,
-    margin: String(margin),
-    format,
-    data: bookingUrl,
-  });
-  return `https://api.qrserver.com/v1/create-qr-code/?${params.toString()}`;
 }
 
 /** نفس تنسيق العملة المستعمل في بقية اللوحة. */
@@ -97,10 +77,6 @@ export default function DoctorOverview() {
   const { user } = useAuth();
   const queue = useQueue();
   const live = useLiveUpdates();
-  const { showToast } = useToast();
-  // الصيغة الجاري تحميلها حاليًا — لمنع النقر المتكرر وإظهار حالة الزر.
-  const [qrDownloading, setQrDownloading] = useState<"png" | "svg" | null>(null);
-
   const { data: stats, isLoading, isError, refetch } = useQuery({
     queryKey: ["doctor-dashboard"],
     queryFn: async () => (await api.get("/doctor/dashboard")).data.data,
@@ -114,85 +90,7 @@ export default function DoctorOverview() {
   if (isError) return <div role="alert">{t("تعذر تحميل ملخص اليوم. ")}<button onClick={() => void refetch()}>{t("إعادة المحاولة")}</button></div>;
 
   const isAssistant = user?.role === "ASSISTANT";
-  // الطبيب: بياناته في user.doctor مباشرة. المساعد: نفس البيانات (نسخة مختصرة آمنة، بلا
-  // consultationFee ولا subscriptionStatus) تصل عبر user.assistant.doctor — انظر
-  // ASSISTANT_SAFE_SELECT في الخادم. هذا هو "الطبيب الفعّال" المستخدم لرابط/رمز QR والطباعة.
   const effectiveDoctor = user?.doctor ?? user?.assistant?.doctor;
-  const doctorId = effectiveDoctor?.id;
-  const bookingUrl = doctorId ? `${PATIENT_SITE_URL}/?doctor=${doctorId}` : null;
-  const qrImageUrl = bookingUrl ? qrUrlFor(bookingUrl, "png", 320, 8) : null;
-
-  async function copyBookingLink() {
-    if (!bookingUrl) return;
-    try {
-      await navigator.clipboard.writeText(bookingUrl);
-      showToast(t("تم نسخ رابط الحجز."), "success");
-    } catch {
-      showToast(t("تعذّر نسخ الرابط."), "error");
-    }
-  }
-
-  /**
-   * تحميل الرمز كملف قابل للطباعة. الصورة تُجلب كـ blob لأن السمة download لا تعمل على
-   * رابط من نطاق آخر — والخدمة تُرسل Access-Control-Allow-Origin: * فينجح الجلب.
-   * PNG بدقة 1024 للطباعة، وSVG متجهي لا يفقد الحدّة في أي مقاس.
-   */
-  async function downloadQr(format: "png" | "svg") {
-    if (!bookingUrl || !doctorId || qrDownloading) return;
-    setQrDownloading(format);
-    try {
-      const res = await fetch(qrUrlFor(bookingUrl, format, format === "png" ? 1024 : 512, 16));
-      if (!res.ok) throw new Error(String(res.status));
-      const blob = await res.blob();
-      const href = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = href;
-      link.download = `madbook-qr-${doctorId}.${format}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(href);
-      showToast(t("تم تحميل الرمز بصيغة {0}.", { "0": format.toUpperCase() }), "success");
-    } catch {
-      showToast(t("تعذّر تحميل الرمز. تحقّق من اتصالك بالإنترنت وأعد المحاولة."), "error");
-    } finally {
-      setQrDownloading(null);
-    }
-  }
-
-  function printQrCode() {
-    if (!qrImageUrl) return;
-    const doctorName = effectiveDoctor ? t("د. ") + effectiveDoctor.firstName + " " + effectiveDoctor.lastName : "";
-    const printWindow = window.open("", "_blank", "width=480,height=640");
-    if (!printWindow) {
-      showToast(t("يرجى السماح بالنوافذ المنبثقة للطباعة."), "error");
-      return;
-    }
-    const html =
-      "<!DOCTYPE html><html dir='" + (getLanguage() === "fr" ? "ltr" : "rtl") + "' lang='" + getLanguage() + "'><head><meta charset='utf-8' />" +
-      "<title>" + t("رمز QR للحجز") + "</title><style>" +
-      "*{box-sizing:border-box;}" +
-      "body{font-family:Tahoma,Arial,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:32px;text-align:center;}" +
-      "h1{font-size:20px;margin:0 0 4px;}" +
-      "p.sub{color:#555;margin:0 0 24px;font-size:14px;}" +
-      "img{width:320px;height:320px;border:1px solid #e2e8f0;border-radius:16px;padding:12px;}" +
-      "p.instructions{margin-top:24px;font-size:14px;color:#333;max-width:320px;line-height:1.6;}" +
-      ".brand{margin-top:32px;font-size:12px;color:#999;}" +
-      "@media print{body{padding:0;}}" +
-      "</style></head><body>" +
-      "<h1>MedBook" + (doctorName ? " — " + escapeHtml(doctorName) : "") + "</h1>" +
-      "<p class='sub'>" + t("امسح الرمز لحجز موعد") + "</p>" +
-      "<img src='" + qrImageUrl + "' alt='QR' />" +
-      "<p class='instructions'>" + t("لحجز موعد، امسح الرمز بكاميرا هاتفك.") + "</p>" +
-      "<p class='brand' dir='ltr'>" + bookingUrl + "</p>" +
-      "</body></html>";
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.focus();
-      printWindow.print();
-    };
-  }
 
   // عدّ الأيام المتبقية من الاشتراك (أو التجربة المجانية). نعرض التنبيه طوال المدة لا في
   // آخر أيامها فقط، حتى يعرف الطبيب منذ اليوم الأول أن المدة محدودة ولا يُفاجأ بتوقف ظهوره.
@@ -320,71 +218,7 @@ export default function DoctorOverview() {
       )}
       </details>
       <details open={!isAssistant} className="space-y-4"><summary className="cursor-pointer font-bold">{t("رمز الحجز ودعوة زميل")}</summary>
-      {qrImageUrl && bookingUrl && (
-        <section className="card p-4 sm:p-6" aria-label={t("رمز الحجز QR")}>
-          <h2 className="flex items-center gap-1.5 font-bold text-slate-800">
-            <QrCode className="h-4 w-4 shrink-0" />{t(" رمز الحجز QR ")}</h2>
-
-          <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:gap-6">
-            <figure className="shrink-0 text-center">
-              <img
-                src={qrImageUrl}
-                alt={t("رمز QR لصفحة الحجز")}
-                className="h-44 w-44 rounded-xl border border-slate-200 bg-white p-3 sm:h-48 sm:w-48"
-              />
-              <figcaption className="mt-1.5 text-[11px] text-slate-500">{t("امسح الرمز لفتح صفحة الحجز")}</figcaption>
-            </figure>
-
-            {/* w-full ضروري: الحاوية على الهاتف flex-col مع items-center، فبدونه يأخذ هذا
-                العمود عرض محتواه (رابط الحجز الطويل) فيتجاوز عرض الشاشة ويُحدث تمريرًا
-                أفقيًا للصفحة كاملة. */}
-            <div className="w-full min-w-0 flex-1 space-y-3 text-center sm:w-auto sm:text-start">
-              <p className="text-sm leading-relaxed text-slate-600">{t("اطبع هذا الرمز وضعه في بوابة العيادة، ليتمكن المرضى من تصويره وفتح صفحة الحجز مباشرة. ")}</p>
-
-              <p
-                dir="ltr"
-                className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-xl bg-slate-50 px-3 py-2 text-left text-xs text-slate-500"
-                title={bookingUrl}
-              >
-                {bookingUrl}
-              </p>
-
-              <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
-                <button
-                  type="button"
-                  onClick={() => downloadQr("png")}
-                  disabled={qrDownloading !== null}
-                  className="flex items-center gap-1.5 rounded-xl bg-primary-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-primary-700 disabled:opacity-60"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {qrDownloading === "png" ? t("جارٍ التحميل...") : t("تحميل رمز QR (PNG)")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => downloadQr("svg")}
-                  disabled={qrDownloading !== null}
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-primary-300 disabled:opacity-60"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {qrDownloading === "svg" ? t("جارٍ التحميل...") : "SVG"}
-                </button>
-                <button
-                  type="button"
-                  onClick={copyBookingLink}
-                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-primary-300"
-                >
-                  <Copy className="h-3.5 w-3.5" />{t(" نسخ الرابط ")}</button>
-                <button
-                  type="button"
-                  onClick={printQrCode}
-                  className="flex items-center gap-1.5 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 text-xs font-semibold text-primary-700 transition hover:border-primary-300"
-                >
-                  <Printer className="h-3.5 w-3.5" />{t(" طباعة الرمز ")}</button>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
+      <ArrivalPoster />
 
       {/* «ادعُ طبيبًا» — للطبيب وحده (المساعد لا يرى الإحالات ولا الاشتراك). */}
       {!isAssistant && <ReferralCard />}

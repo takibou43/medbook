@@ -1,9 +1,11 @@
 import type { PrescriptionLanguage, PrescriptionProfessional } from "./prescriptionPrint.ts";
 
 /** إعدادات الوصفة المحفوظة في حساب الطبيب (تُطبَّق تلقائيًا على كل وصفة جديدة). */
+export type PrescriptionHeaderLanguage = "ar" | "fr" | "both";
 export interface PrescriptionShow { clinicName: boolean; address: boolean; phone: boolean; specialty: boolean }
 export interface PrescriptionSettings {
   language: PrescriptionLanguage;
+  headerLanguage?: PrescriptionHeaderLanguage;
   professional: Partial<Record<PrescriptionLanguage, PrescriptionProfessional>>;
   show: PrescriptionShow;
 }
@@ -24,6 +26,7 @@ export function normalizeSettings(raw: unknown): PrescriptionSettings {
   });
   return {
     language: r.language === "fr" ? "fr" : "ar",
+    ...(r.headerLanguage === "ar" || r.headerLanguage === "fr" || r.headerLanguage === "both" ? { headerLanguage: r.headerLanguage } : {}),
     professional: { ar: clean(r.professional?.ar), fr: clean(r.professional?.fr) },
     show: { ...DEFAULT_PRESCRIPTION_SETTINGS.show, ...Object.fromEntries(Object.entries(r.show ?? {}).filter(([, v]) => typeof v === "boolean")) },
   };
@@ -32,7 +35,7 @@ export function normalizeSettings(raw: unknown): PrescriptionSettings {
 /** الحمولة التي تُرسل للخادم: نصوص مقصوصة وفارغها يُحذف، والأعلام كما هي. */
 export function settingsPayload(s: PrescriptionSettings) {
   const pro = (p: PrescriptionProfessional | undefined) => Object.fromEntries(Object.entries(p ?? {}).map(([k, v]) => [k, (v ?? "").trim()]).filter(([, v]) => v));
-  return { language: s.language, professional: { ar: pro(s.professional.ar), fr: pro(s.professional.fr) }, show: s.show };
+  return { language: s.language, ...(s.headerLanguage ? { headerLanguage: s.headerLanguage } : {}), professional: { ar: pro(s.professional.ar), fr: pro(s.professional.fr) }, show: s.show };
 }
 
 export function sameSettings(a: PrescriptionSettings, b: PrescriptionSettings): boolean {

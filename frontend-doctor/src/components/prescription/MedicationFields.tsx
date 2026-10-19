@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import clsx from "clsx";
 import { ChevronDown, Pencil, Plus, Trash2, Undo2, X } from "lucide-react";
 import type { PrescriptionMedication } from "../../lib/prescription";
@@ -26,6 +26,25 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
   onRestore: (med: PrescriptionMedication, index: number) => void;
   onAdd: () => void;
 }) {
+  const pendingFocus = useRef(false);
+  const choosingSuggestion = useRef(false);
+  useEffect(() => {
+    if (!pendingFocus.current) return;
+    pendingFocus.current = false;
+    const last = medications[medications.length - 1];
+    if (last) document.getElementById(`${formId}-${last.id}-name`)?.focus();
+  }, [medications, formId]);
+  function addAndFocus() {
+    const last = medications[medications.length - 1];
+    if (last && !last.name.trim()) { document.getElementById(`${formId}-${last.id}-name`)?.focus(); return; }
+    pendingFocus.current = true;
+    onAdd();
+  }
+  function nextOnEnter(event: KeyboardEvent<HTMLInputElement>, next?: string) {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+    event.preventDefault();
+    if (next) document.getElementById(next)?.focus(); else addAndFocus();
+  }
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [instrOpen, setInstrOpen] = useState<Set<string>>(new Set());
   const [removed, setRemoved] = useState<{ med: PrescriptionMedication; index: number } | null>(null);
@@ -44,6 +63,7 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
 
   return (
     <div>
+      <p className="mb-2 text-xs text-slate-600">{t("Enter: الاسم ثم الكمية ثم طريقة الاستعمال؛ بعد التعليمات يُضاف دواء جديد. يعمل Tab كالمعتاد.")}</p>
       <p className="mb-2 text-xs text-slate-600">{t("اقتراحات الأسماء من إدخالاتك السابقة على هذا الجهاز. يمكنك كتابة أي دواء يدويًا.")}</p>
       <datalist id={`${formId}-medication-names`}>
         {names.map(name => <option key={name} value={name} />)}
@@ -78,17 +98,22 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
                 <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] items-start gap-2 sm:grid-cols-[minmax(0,5fr)_minmax(0,2fr)_minmax(0,5fr)_44px]">
                   <label className="col-span-3 min-w-0 sm:col-span-1">
                     <span className={labelCls}>{t("اسم الدواء")}</span>
-                    <input id={fieldId("name")} list={`${formId}-medication-names`} className="input py-2 font-semibold" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="name" value={m.name} onChange={setText("name")} onBlur={() => setNames(rememberMedicationName(ownerUserId, m.name))} aria-invalid={Boolean(err?.name)} aria-describedby={describe("name")} />
+                    <input id={fieldId("name")} list={`${formId}-medication-names`} onKeyDown={e => {
+                      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && names.length) { choosingSuggestion.current = true; return; }
+                      if (e.key === "Escape") { choosingSuggestion.current = false; return; }
+                      if (e.key === "Enter" && choosingSuggestion.current) { choosingSuggestion.current = false; return; }
+                      nextOnEnter(e, fieldId("quantity"));
+                    }} enterKeyHint="next" className="input py-2 font-semibold" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="name" value={m.name} onChange={setText("name")} onBlur={() => { choosingSuggestion.current = false; setNames(rememberMedicationName(ownerUserId, m.name)); }} aria-invalid={Boolean(err?.name)} aria-describedby={describe("name")} />
                     {(m.strength || m.form) && <span className="block text-xs text-slate-600" dir="auto" translate="no">{[m.strength, m.form].filter(Boolean).join(" ")}</span>}
                     {errorText("name")}
                   </label>
                   <label className="min-w-0">
                     <span className={labelCls}>{t("الكمية المصروفة")}</span>
-                    <input id={fieldId("quantity")} className="input py-2" dir="auto" translate="no" autoComplete="off" value={m.quantity ?? ""} onChange={setText("quantity")} />
+                    <input id={fieldId("quantity")} onKeyDown={e => nextOnEnter(e, fieldId("instructions"))} enterKeyHint="next" className="input py-2" dir="auto" translate="no" autoComplete="off" value={m.quantity ?? ""} onChange={setText("quantity")} />
                   </label>
                   <label className="min-w-0">
                     <span className={labelCls}>{t("الجرعة وطريقة الاستعمال")}</span>
-                    <input id={fieldId("instructions")} className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
+                    <input id={fieldId("instructions")} onKeyDown={e => nextOnEnter(e)} enterKeyHint="next" className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
                     {errorText("instructions")}
                   </label>
                   <button type="button" onClick={() => remove(m, i)} className={clsx("mt-4 flex h-11 w-11 items-center justify-center rounded-lg text-red-700 hover:bg-red-50", focus)} aria-label={t("حذف الدواء رقم {n}", { n: i + 1 })}><X className="h-4 w-4" aria-hidden="true" /></button>
@@ -235,7 +260,7 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
         </div>
       )}
 
-      <Button type="button" variant="outline" className="mt-2" onClick={onAdd}>
+      <Button type="button" variant="outline" className="mt-2" onClick={addAndFocus}>
         <Plus className="h-4 w-4" aria-hidden="true" /> {t("إضافة دواء")}
       </Button>
     </div>

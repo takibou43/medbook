@@ -6,7 +6,7 @@ import { createPortal, flushSync } from "react-dom";
 import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
 import { prescriptionAgeValue, type PrescriptionAgeUnit, type PrescriptionMedication, type PrescriptionRequestItem } from "../../lib/prescription";
-import { DEFAULT_PRESCRIPTION_SETTINGS, type PrescriptionShow } from "../../lib/prescriptionSettings";
+import { DEFAULT_PRESCRIPTION_SETTINGS, type PrescriptionShow, type PrescriptionHeaderLanguage } from "../../lib/prescriptionSettings";
 import { prescriptionLabels, prescriptionNumericDate, prescriptionPlace, prescriptionCatalogName, doctorHeaderName, clinicHeaderName, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
@@ -14,13 +14,14 @@ import type { PrescriptionTemplate } from "../../lib/prescriptionTemplate";
 import { Logo } from "../ui/Logo";
 import { SpecialtyIcon } from "../../lib/specialtyIcons";
 import { bookingQrImage, doctorBookingUrl } from "../../lib/doctorBooking";
-import { arrangeSimpleHeader, canBalancePrescriptionDesign, readSimpleHeader, renderPrescriptionDesign } from "../../lib/prescriptionDesign";
+import { arrangeSimpleHeader, headerFieldsForLanguage, canBalancePrescriptionDesign, readSimpleHeader, renderPrescriptionDesign } from "../../lib/prescriptionDesign";
 import { prescriptionBranding } from "./prescriptionBranding";
 import { medicationParts, glueNumberUnit } from "../../lib/prescriptionMedication";
 
 export interface PrescriptionSheetData {
   template?: PrescriptionTemplate | null;
   language: PrescriptionLanguage;
+  headerLanguage?: PrescriptionHeaderLanguage;
   professional?: PrescriptionProfessional;
   /** اسم الطبيب كما كتبه بنفسه لكل جهة: ar يمين الترويسة، fr يسارها. */
   doctorNames?: { ar?: string; fr?: string };
@@ -95,13 +96,13 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         </div>
       )}
       {standard && <header className="rx-head rx-head-std">
-        <div className="rx-side rx-side-fr" lang="fr" dir="ltr">
+        <div className="rx-side rx-side-fr" lang="fr" dir="ltr" hidden={data.headerLanguage === "ar"}>
           {doctorNameFr && <p className="rx-doctor"><bdi dir="ltr">{fr.doctor}</bdi> <Typed>{doctorNameFr}</Typed></p>}
           {specialtyFr && <p className="rx-specialty">{specialtyFr}</p>}
           {clinicNameFr && <p className="rx-clinic"><Typed>{clinicNameFr}</Typed></p>}
         </div>
         <div className="rx-logo-slot">{data.logo ? <img src={data.logo} alt="" /> : <SpecialtyIcon specialty={d?.specialty ?? {}} className="rx-specialty-logo" />}</div>
-        <div className="rx-side rx-side-ar" lang="ar" dir="rtl">
+        <div className="rx-side rx-side-ar" lang="ar" dir="rtl" hidden={data.headerLanguage === "fr"}>
           {doctorNameAr && <p className="rx-doctor"><bdi dir="rtl">{ar.doctor}</bdi> <Typed>{doctorNameAr}</Typed></p>}
           {specialtyAr && <p className="rx-specialty">{specialtyAr}</p>}
           {clinicNameAr && <p className="rx-clinic"><Typed>{clinicNameAr}</Typed></p>}
@@ -221,6 +222,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
   const [savingPdf, setSavingPdf] = useState(false);
   const savingPdfRef = useRef(false);
   const [pdfMessage, setPdfMessage] = useState("");
+  const [pdfFailed, setPdfFailed] = useState(false);
   const printContext = useRef({ uid: user?.id, data, open });
   printContext.current = { uid: user?.id, data, open };
   const titleId = useId();
@@ -236,30 +238,32 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
   const [imageError, setImageError] = useState(false);
   const sourceTemplate = data?.template ?? null;
   const autoBalance = canBalancePrescriptionDesign(sourceTemplate?.design);
-  const [balanced, setBalanced] = useState<{ source: PrescriptionTemplate; value: PrescriptionTemplate } | null>(null);
+  const renderPreference = `${data?.language ?? "ar"}:${data?.headerLanguage ?? "both"}`;
+  const [balanced, setBalanced] = useState<{ source: PrescriptionTemplate; preference: string; value: PrescriptionTemplate } | null>(null);
+  const balancedReady = balanced?.source === sourceTemplate && balanced?.preference === renderPreference;
   const [balanceError, setBalanceError] = useState("");
-  const templatePreparing = Boolean(open && useTemplate && autoBalance && balanced?.source !== sourceTemplate);
-  const template = useTemplate ? (balanced?.source === sourceTemplate ? balanced?.value : sourceTemplate) : null;
+  const templatePreparing = Boolean(open && useTemplate && autoBalance && !balancedReady);
+  const template = useTemplate ? (balancedReady ? balanced!.value : sourceTemplate) : null;
   useEffect(() => {
     if (!open || !sourceTemplate || !autoBalance || !sourceTemplate.design) return;
     let alive = true;
     setBalanceError("");
-    const design = arrangeSimpleHeader({ ...sourceTemplate.design, language: data?.language ?? sourceTemplate.design.language }, readSimpleHeader(sourceTemplate.design));
+    const design = arrangeSimpleHeader({ ...sourceTemplate.design, language: data?.language ?? sourceTemplate.design.language }, headerFieldsForLanguage(readSimpleHeader(sourceTemplate.design), data?.headerLanguage));
     renderPrescriptionDesign(design, prescriptionBranding(data?.doctor)).then(value => {
-      if (alive) setBalanced({ source: sourceTemplate, value });
+      if (alive) setBalanced({ source: sourceTemplate, preference: renderPreference, value });
     }).catch(() => {
       // Keep the saved image available if local rendering fails, without changing server data.
       if (alive) {
-        setBalanced({ source: sourceTemplate, value: sourceTemplate });
+        setBalanced({ source: sourceTemplate, preference: renderPreference, value: sourceTemplate });
         setBalanceError(data?.language === "fr" ? "Le modèle enregistré est conservé : la nouvelle mise en page n’a pas pu être préparée." : "تعذر تجهيز التنسيق الجديد؛ تم الاحتفاظ بالقالب المحفوظ.");
       }
     });
     return () => { alive = false; };
-  }, [open, sourceTemplate, autoBalance, data?.doctor, data?.language]);
+  }, [open, sourceTemplate, autoBalance, data?.doctor, data?.language, data?.headerLanguage, renderPreference]);
   const templateOverflow = Boolean(template && paperHeight > 210 * 96 / 25.4 + 2);
   const scale = zoom ?? fit;
   useEffect(() => {
-    if (open) { setUseTemplate(true); setAutoMultiPage(false); }
+    if (open) { setUseTemplate(true); setAutoMultiPage(false); setPdfMessage(""); }
   }, [open, sourceTemplate?.image]);
   useEffect(() => {
     // Read the current paper rather than a previous preview's cached height.
@@ -335,7 +339,8 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
 
   async function printAndSave() {
     if (savingPdfRef.current || !data) return;
-    if (!localFolder.folder) { window.print(); return; }
+    setPdfFailed(false);
+    if (!localFolder.folder) { setPdfMessage(t("الحفظ التلقائي غير مفعّل. يمكنك اختيار حفظ PDF من نافذة الطباعة.")); window.print(); return; }
     if (!paperRef.current) return;
     const context = printContext.current;
     const stillCurrent = () => printContext.current.uid === context.uid && printContext.current.data === context.data && printContext.current.open;
@@ -347,13 +352,14 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
       if (!stillCurrent() || !paperRef.current) return;
       const pdf = await createPrescriptionPdf(paperRef.current);
       if (!stillCurrent()) return;
-      await writePrescriptionPdf(localFolder.folder, prescriptionPdfFilename(data.patientName, data.day), pdf);
+      const filename = prescriptionPdfFilename(data.patientName, data.day);
+      await writePrescriptionPdf(localFolder.folder, filename, pdf);
       if (stillCurrent()) {
-        setPdfMessage(t("حُفظت نسخة PDF في المجلد المختار."));
+        setPdfMessage(t("تم حفظ PDF: {filename} في المجلد {folder}.", { filename, folder: localFolder.folder.directory.name }));
         window.print();
       }
     } catch {
-      setPdfMessage(t("لم تُحفظ نسخة PDF. تحقق من إذن المجلد في إعدادات الوصفة ثم أعد المحاولة."));
+      if (stillCurrent()) { setPdfFailed(true); setPdfMessage(t("لم تُحفظ نسخة PDF. تحقق من إذن المجلد في إعدادات الوصفة ثم أعد المحاولة.")); }
     } finally { savingPdfRef.current = false; setSavingPdf(false); }
   }
 
@@ -375,7 +381,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
           {autoMultiPage && <p role="status" className="w-full text-sm text-slate-700">{data.language === "fr" ? "Ordonnance longue : mise en page multipage activée automatiquement pour conserver tout le contenu. Votre modèle enregistré reste inchangé." : "الوصفة طويلة؛ استُخدم تلقائيًا تنسيق متعدد الصفحات لطباعة المحتوى كاملًا. قالبك المحفوظ لم يتغيّر."}</p>}
           {templatePreparing && <p role="status" className="text-sm">{data.language === "fr" ? "Préparation de la mise en page…" : "جارٍ تجهيز تنسيق الوصفة…"}</p>}
           {balanceError && <p role="alert" className="text-sm text-amber-800">{balanceError}</p>}
-          {(pdfMessage || localFolder.error) && <p role="status" className="w-full text-sm text-slate-700">{pdfMessage || t("تعذّر قراءة إعداد المجلد؛ الطباعة الحالية لن تحفظ نسخة تلقائية.")}</p>}
+          {(pdfMessage || localFolder.error) && <p role={pdfFailed || localFolder.error ? "alert" : "status"} className={`w-full text-sm ${pdfFailed || localFolder.error ? "text-red-700" : "text-emerald-800"}`}>{pdfMessage || t("تعذّر قراءة إعداد المجلد؛ الطباعة الحالية لن تحفظ نسخة تلقائية.")}</p>}
           {localFolder.folder && <p className="w-full text-xs text-slate-600">{t("تُحفظ النسخة عند الضغط على طباعة، حتى إذا ألغيت نافذة الطباعة لاحقًا.")}</p>}
           {imageError && <p role="alert" className="text-red-700">{data.language === "fr" ? "Image illisible. Désactivez le modèle." : "تعذر عرض الصورة. ألغِ استخدام القالب."}</p>}
           <div className="min-w-0 max-sm:sr-only">

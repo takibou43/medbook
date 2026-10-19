@@ -445,6 +445,8 @@ export default function BookAppointment() {
                 patientPhone={form.getValues("phone").trim()}
                 submitting={bookMutation.isPending}
                 errorMessage={submitError}
+                onEditDoctor={() => setStep("doctor")}
+                onEditSlot={() => setStep("slot")}
                 onConfirm={confirmBooking}
                 onBack={() => setStep("patient")}
               />

@@ -84,13 +84,15 @@ const defaultPrescriptionSettings = { language: "ar" as const, professional: {},
 router.get("/prescription-settings", asyncHandler(async (req, res) => {
   const doctorId = await templateOwner(req.user!.id);
   const row = await prisma.prescriptionSettings.findUnique({ where: { doctorId }, select: { language: true, professional: true, show: true } });
-  const parsed = row ? prescriptionSettingsSchema.safeParse({ language: row.language, professional: row.professional ?? undefined, show: row.show ?? undefined }) : null;
+  // The additional preference lives in existing JSON; no production schema migration.
+  const { headerLanguage, ...professional } = (row?.professional && typeof row.professional === "object" && !Array.isArray(row.professional) ? row.professional : {}) as Record<string, unknown>;
+  const parsed = row ? prescriptionSettingsSchema.safeParse({ language: row.language, ...(headerLanguage ? { headerLanguage } : {}), professional, show: row.show ?? undefined }) : null;
   res.json({ success: true, data: parsed?.success ? { ...defaultPrescriptionSettings, ...parsed.data } : defaultPrescriptionSettings });
 }));
 router.put("/prescription-settings", validate({ body: prescriptionSettingsSchema }), asyncHandler(async (req, res) => {
   const doctorId = await templateOwner(req.user!.id);
   const value = prescriptionSettingsSchema.parse(req.body);
-  const saved = { language: value.language, professional: value.professional ?? Prisma.JsonNull, show: value.show ?? Prisma.JsonNull };
+  const saved = { language: value.language, professional: value.headerLanguage ? { ...value.professional, headerLanguage: value.headerLanguage } : value.professional ?? Prisma.JsonNull, show: value.show ?? Prisma.JsonNull };
   await prisma.prescriptionSettings.upsert({ where: { doctorId }, create: { doctorId, ...saved }, update: saved });
   res.json({ success: true, data: { ...defaultPrescriptionSettings, ...value } });
 }));

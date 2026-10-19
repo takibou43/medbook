@@ -106,6 +106,13 @@ describe("security audit regression", () => {
     const r = await getAppointmentQueueStatus("a");
     expect(r.doctor).toMatchObject({ address: "حي المكي", city: "ميلة", wilaya: "ميلة", latitude: 36.45, longitude: 6.26 });
   });
+  it.each([null, new Date("2000-01-01"), new Date("2099-01-01")])("reports duty using the actual expiry: %s", async dutyEndsAt => {
+    h.db.appointment.findUnique.mockResolvedValueOnce({id:"a",date:new Date("2099-01-01"),startTime:"08:00",status:"CONFIRMED",doctor:{slotDurationMin:20,dutyEndsAt}} as any);
+    const r = await getAppointmentQueueStatus("a");
+    expect(r.doctorOnDuty).toBe(Boolean(dutyEndsAt && dutyEndsAt > new Date()));
+    expect(Number.isFinite(Date.parse(r.updatedAt))).toBe(true);
+    expect(r).not.toHaveProperty("patientName");
+  });
   it("does not log request bodies from parser errors", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {

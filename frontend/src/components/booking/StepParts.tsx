@@ -16,12 +16,13 @@ export const StepHeading = forwardRef<HTMLHeadingElement, { children: ReactNode;
 StepHeading.displayName = "StepHeading";
 
 // زر الرجوع — السهم يشير لليمين لأن الواجهة RTL (الرجوع = اتجاه بداية القراءة).
-export function BackButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+export function BackButton({ onClick, children, disabled }: { onClick: () => void; children: ReactNode; disabled?: boolean }) {
   useLanguage();
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className="mb-3 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
     >
       <ArrowRight className="h-4 w-4 ltr:rotate-180" aria-hidden="true" />

@@ -19,6 +19,13 @@ export function applyPrescriptionPreset(design: PrescriptionDesign, preset: Pres
   return arrangeSimpleHeader({ ...design, source: "generated", preset, color, emblem: preset === "traditional" ? "medical" : design.emblem }, { ...fields, color });
 }
 
+export function headerFieldsForLanguage(fields: SimplePrescriptionHeader, language: "ar" | "fr" | "both" = "both"): SimplePrescriptionHeader {
+  return { ...fields,
+    ...(language === "fr" ? { nameAr: "", specialty: "", clinic: "", address: "" } : {}),
+    ...(language === "ar" ? { nameFr: "", specialtyFr: "", clinicFr: "", addressFr: "" } : {}),
+  };
+}
+
 export interface DesignElement {
   id: string;
   kind: "text" | "logo";
@@ -210,10 +217,10 @@ async function renderFreeDesign(design: PrescriptionDesign, branding: Prescripti
   }
   if (design.preset === "traditional") {
     ctx.save(); ctx.globalAlpha = 0.055;
-    await drawContainedLogo(ctx, medicalSymbolImage(design.color), 38, 80, 72, 86); ctx.restore();
-  } else if (design.preset !== "classic") await drawBrandImage(ctx, branding.watermark, 39, 70, 70, 0.12);
+    await drawContainedLogo(ctx, medicalSymbolImage(design.color), 49, 85, 50, 60); ctx.restore();
+  } else if (design.preset !== "classic") await drawBrandImage(ctx, branding.watermark, 49, 85, 50, 0.055);
   if (branding.watermark && design.preset !== "classic") {
-    ctx.save(); ctx.globalAlpha = design.preset === "traditional" ? 0.08 : 0.16; ctx.fillStyle = "#303030";
+    ctx.save(); ctx.globalAlpha = 0.07; ctx.fillStyle = "#303030";
     ctx.font = design.preset === "traditional" ? '3px "Cairo", Arial, sans-serif' : 'bold 5px "Cairo", Arial, sans-serif'; ctx.textAlign = "center";
     ctx.textBaseline = "top"; ctx.direction = "ltr";
     ctx.fillText("MedBook | مادبوك", 74, 143); ctx.restore();
@@ -289,9 +296,9 @@ export async function renderPrescriptionDesign(design: PrescriptionDesign, brand
   const context = canvas.getContext("2d"); if (!context) throw new Error("تعذر إنشاء القالب.");
   const ctx = context;
   ctx.scale(10, 10); ctx.fillStyle = "white"; ctx.fillRect(0, 0, 148, 210);
-  await drawBrandImage(ctx, branding.watermark, 39, 70, 70, 0.12);
+  await drawBrandImage(ctx, branding.watermark, 49, 85, 50, 0.055);
   if (branding.watermark) {
-    ctx.save(); ctx.globalAlpha = 0.16; ctx.fillStyle = "#303030";
+    ctx.save(); ctx.globalAlpha = 0.07; ctx.fillStyle = "#303030";
     ctx.font = 'bold 5px "Cairo", Arial, sans-serif'; ctx.textAlign = "center";
     ctx.textBaseline = "top"; ctx.direction = "ltr";
     ctx.fillText("MedBook | مادبوك", 74, 143); ctx.restore();

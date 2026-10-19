@@ -1,5 +1,5 @@
 import { useLanguage } from "../i18n/LanguageRoot";
-import { t } from "../i18n/locale.ts";
+import { getLocale, t } from "../i18n/locale.ts";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Clock, MapPin, Phone, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
@@ -28,6 +28,8 @@ interface QueueStatus {
   aheadOfYou: number | null;
   estimatedWaitMinutes: number | null;
   someoneInside: boolean;
+  updatedAt?: string;
+  doctorOnDuty?: boolean;
   doctor: {
     firstName: string;
     lastName: string;
@@ -60,7 +62,7 @@ export default function AppointmentStatus() {
     enabled: Boolean(user && id), retry: false, gcTime: 0,
   });
 
-  const { data, isLoading, isError, isFetching, refetch } = useQuery({
+  const { data, isLoading, isError, isFetching, dataUpdatedAt, refetch } = useQuery({
     queryKey: ["appointment-status", id],
     queryFn: async () => (await api.get<{ data: QueueStatus }>("/booking/status/" + id)).data.data,
     enabled: Boolean(id),
@@ -72,7 +74,7 @@ export default function AppointmentStatus() {
 
   if (isLoading) return <Spinner label={t("جارٍ تحميل حالة دورك...")} />;
 
-  if (isError || !data) {
+  if (!data) {
     return (
       <div className="container-app py-10">
         <EmptyState
@@ -107,6 +109,10 @@ export default function AppointmentStatus() {
             {identity.data.type === "FOLLOW_UP" && identity.data.createdBy === "DOCTOR" && <p className="mt-2 text-sm text-amber-800">{t("موعد عودة برمجه الطبيب")}</p>}
           </> : <p className="text-sm text-slate-600">{user ? identity.isPending ? t("جارٍ تحميل اسم المستفيد…") : t("تعذّر عرض اسم المستفيد لهذا الحساب.") : t("سجّل الدخول إلى حساب الموعد لعرض اسم المستفيد.")} <Link className="btn-outline mt-2" to={user ? "/account" : `/account/login?redirect=${encodeURIComponent(`/status/${id}`)}`}>{t("فتح حساب المريض")}</Link></p>}
         </div>
+        {data.isToday && !finished && typeof data.doctorOnDuty === "boolean" && <div className="card p-4" role="status">
+          <p className={data.doctorOnDuty ? "font-semibold text-emerald-800" : "font-semibold text-amber-800"}>{t(data.doctorOnDuty ? "بدأ الطبيب المداومة" : "لم يبدأ الطبيب المداومة بعد")}</p>
+          {!data.doctorOnDuty && <p className="mt-1 text-sm text-slate-600">{t("يبقى ترتيبك ظاهرًا؛ وقت الانتظار يُقدّر بعد بدء المداومة.")}</p>}
+        </div>}
         {/* البطاقة الرئيسية */}
         {finished ? (
           <div className="card p-6 text-center">
@@ -158,12 +164,12 @@ export default function AppointmentStatus() {
             <p className="text-sm text-slate-500">{t("رقم دورك اليوم")}</p>
             <p className="my-1 text-6xl font-extrabold text-primary-700">{data.position}</p>
             <p className="text-sm font-semibold text-slate-700">
-              {data.aheadOfYou === 0
+              {data.aheadOfYou == null ? t("جارٍ تحديد ترتيبك") : data.aheadOfYou === 0
                 ? t("أنت التالي")
                 : t("يسبقك ") + data.aheadOfYou + (data.aheadOfYou === 1 ? t(" مريض") : t(" مرضى"))}
             </p>
             <p className="mt-2 text-sm text-slate-500">
-              {formatWait(data.estimatedWaitMinutes ?? 0)}
+              {data.doctorOnDuty === false ? t("بانتظار بدء المداومة") : data.estimatedWaitMinutes == null ? t("وقت الانتظار غير متاح حاليًا") : formatWait(data.estimatedWaitMinutes)}
             </p>
             <p className="mt-3 text-xs text-slate-400">{t("الوقت تقديري ويتغيّر حسب سير العيادة. أبقِ هذه الصفحة مفتوحة — تتحدّث تلقائيًا. ")}</p>
           </div>
@@ -202,6 +208,10 @@ export default function AppointmentStatus() {
           )}
         </div>
 
+        <p className="text-center text-xs text-slate-600" role="status">
+          {t("آخر تحديث:")} <bdi>{dataUpdatedAt ? new Intl.DateTimeFormat(getLocale(), { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Algiers" }).format(dataUpdatedAt) : "—"}</bdi>
+          {isError && <span className="block text-amber-800">{t("تعذّر التحديث؛ هذه آخر بيانات متاحة.")}</span>}
+        </p>
         <button
           type="button"
           onClick={() => refetch()}

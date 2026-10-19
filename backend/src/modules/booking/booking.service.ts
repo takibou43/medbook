@@ -660,6 +660,8 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
     deferredCount: appointment.deferredCount,
     skipCredits: appointment.skipCredits,
     priceDzd: await patientPriceFor(appointment.id, doctor.id),
+    updatedAt: new Date().toISOString(),
+    doctorOnDuty: Boolean(doctor.dutyEndsAt && doctor.dutyEndsAt.getTime() > Date.now()),
     doctor: {
       firstName: doctor.firstName,
       lastName: doctor.lastName,

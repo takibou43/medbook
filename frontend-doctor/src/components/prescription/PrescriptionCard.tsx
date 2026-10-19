@@ -17,6 +17,8 @@ import { t } from "../../i18n/locale.ts";
 import { Link } from "react-router-dom";
 import { usePrescriptionSetup } from "../../hooks/usePrescriptionSetup";
 import { RequestItems } from "./RequestItems";
+import { readPatientLatinName, rememberPatientLatinName, forgetPatientLatinName, validLatinPatientName } from "../../lib/prescriptionPatientNames";
+import { useToast } from "../ui/Toast";
 import { MedicationList } from "./MedicationFields";
 
 
@@ -43,6 +45,7 @@ export function PrescriptionCard({
   const { user } = useAuth();
   const uid = user?.id ?? "";
   const formId = useId();
+  const { showToast } = useToast();
   const [draft, setDraftState] = useState<PrescriptionDraft | null>(() => getStoredDraft(uid));
   const [picking, setPicking] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -59,6 +62,7 @@ export function PrescriptionCard({
     setErrors([]);
     setValidation(null);
   };
+  const withLatinName = (d: PrescriptionDraft): PrescriptionDraft => ({ ...d, patientNameFr: readPatientLatinName(uid, d.patient) });
   const patch = (p: Partial<PrescriptionDraft>) => draft && setDraft({ ...draft, ...p });
 
   // حساب آخر على نفس الجهاز: لا تُعرض مسودته.
@@ -70,7 +74,7 @@ export function PrescriptionCard({
   // الربط التلقائي بالاستشارة الحالية (فقط حين لا يضيع شيء ولا يُلغى اختيار يدوي).
   useEffect(() => {
     if (!uid || picking || !current) return;
-    if (shouldAutoRebind(draft, current.id)) setDraft(emptyDraft(uid, prescriptionPatientFrom(current), "current"));
+    if (shouldAutoRebind(draft, current.id)) setDraft(withLatinName(emptyDraft(uid, prescriptionPatientFrom(current), "current")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id, uid, picking]);
 
@@ -105,14 +109,14 @@ export function PrescriptionCard({
   function choose(appointmentId: string) {
     const a = choices.find((c) => c.id === appointmentId);
     if (!a) return;
-    setDraft(emptyDraft(uid, prescriptionPatientFrom(a), current?.id === a.id ? "current" : "manual"));
+    setDraft(withLatinName(emptyDraft(uid, prescriptionPatientFrom(a), current?.id === a.id ? "current" : "manual")));
     setPicking(false);
   }
 
   function startForCurrent() {
     if (!current || !confirmDiscard()) return;
     setPicking(false);
-    setDraft(emptyDraft(uid, prescriptionPatientFrom(current), "current"));
+    setDraft(withLatinName(emptyDraft(uid, prescriptionPatientFrom(current), "current")));
   }
 
   function clearAll() {
@@ -129,6 +133,7 @@ export function PrescriptionCard({
 
   function openPreview() {
     if (!draft || setup.loading || !setup.settings) return;
+    if (lang === "fr" && draft.patientNameFr?.trim() && !validLatinPatientName(draft.patientNameFr)) { setErrors([t("راجع اسم المريض بالفرنسية: استعمل الحروف اللاتينية فقط.")]); return; }
     const v = validateDraft(draft);
     setValidation(v);
     if (!v.ok) {
@@ -140,6 +145,7 @@ export function PrescriptionCard({
       template: setup.template,
       doctor: user?.doctor,
       language: setup.settings.language,
+      headerLanguage: setup.settings.headerLanguage,
       professional: setup.settings.professional[setup.settings.language],
       doctorNames: { ar: setup.settings.professional.ar?.doctorName, fr: setup.settings.professional.fr?.doctorName },
       addresses: { ar: setup.settings.professional.ar?.address, fr: setup.settings.professional.fr?.address },
@@ -147,7 +153,7 @@ export function PrescriptionCard({
       show: setup.settings.show,
       labs: v.labs,
       imaging: v.imaging,
-      patientName: draft.patientName.trim(),
+      patientName: lang === "fr" && draft.patientNameFr?.trim() ? draft.patientNameFr.trim() : draft.patientName.trim(),
       patientAge: draft.patientAge,
       patientAgeUnit: draft.patientAgeUnit,
       day: algeriaToday(),
@@ -279,6 +285,15 @@ export function PrescriptionCard({
               />
               {errors.length > 0 && !draft.patientName.trim() && <span id={formId + '-patient-error'} className="block text-sm text-red-700">{t("اكتب اسم المريض.")}</span>}
             </label>
+            <label className="mt-2 block">
+              <span className="mb-1 block text-xs font-medium text-slate-600">{t("اسم المريض بالفرنسية (اختياري)")}</span>
+              <input className="input py-2" dir="ltr" lang="fr" translate="no" autoComplete="off" maxLength={160} value={draft.patientNameFr ?? ""} onChange={e => patch({ patientNameFr: e.target.value })} />
+              <span className="mt-1 block text-xs text-slate-600">{t("يُستخدم في الوصفة الفرنسية بعد مراجعتك؛ الاسم الأصلي والحجز لا يتغيّران.")}</span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" disabled={!validLatinPatientName(draft.patientNameFr ?? "")} className="btn-outline min-h-11 text-xs" onClick={() => { const ok = rememberPatientLatinName(uid, draft.patient, draft.patientNameFr ?? ""); showToast(ok ? t("حُفظ الاسم لهذا المريض على هذا الجهاز لمدة 90 يومًا.") : t("تعذّر حفظ الاسم على هذا الجهاز."), ok ? "success" : "error"); }}>{t("تذكّر الاسم على هذا الجهاز")}</button>
+              <button type="button" className="btn-outline min-h-11 text-xs" onClick={() => { const ok = forgetPatientLatinName(uid, draft.patient); if (ok) patch({ patientNameFr: "" }); showToast(ok ? t("أُلغي تذكّر الاسم على هذا الجهاز.") : t("تعذّر حفظ التغيير."), ok ? "info" : "error"); }}>{t("إلغاء تذكّر الاسم")}</button>
+            </div>
             <label className="mt-2 block max-w-40">
               <span className="mb-1 block text-xs font-medium text-slate-600">{t("عمر المريض (اختياري)")}</span>
               <input className="input py-2" type="number" min="0" step="1" max="150" placeholder="23" value={draft.patientAge ?? ""} onChange={e => patch({ patientAge: e.target.value, patientAgeUnit: "years" })} autoComplete="off" />

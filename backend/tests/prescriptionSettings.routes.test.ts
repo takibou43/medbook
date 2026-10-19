@@ -36,6 +36,13 @@ describe("doctor-owned prescription settings", () => {
     expect((await request(app).get(url).set("Authorization", auth("d1"))).body.data.language).toBe("ar");
     expect(h.rows.has("doctor-d2")).toBe(false);
   });
+  it("round-trips the independent header preference inside existing JSON without losing professional names", async () => {
+    const next = { ...value, headerLanguage: "ar" };
+    expect((await request(app).put(url).set("Authorization", auth("d1")).send(next)).status).toBe(200);
+    expect((await request(app).get(url).set("Authorization", auth("d1"))).body.data).toEqual(next);
+    expect(h.rows.get("doctor-d1").professional.headerLanguage).toBe("ar");
+    expect((await request(app).put(url).set("Authorization", auth("d1")).send({ ...next, headerLanguage: "de" })).status).toBe(400);
+  });
   it.each(["assistant", "patient", "owner", "admin"])("rejects settings operations from %s", async id => {
     for (const method of ["get", "put"] as const) expect((await request(app)[method](url).set("Authorization", auth(id)).send(method === "put" ? value : undefined)).status).toBe(403);
     expect(h.rows.size).toBe(0);

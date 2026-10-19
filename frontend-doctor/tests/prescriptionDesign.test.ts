@@ -109,7 +109,7 @@ test('blank designs reserve bounded writing space, preserve editable metadata an
     const branded = await renderPrescriptionDesign(arrangeSimpleHeader(base, readSimpleHeader(base)), { specialtyLogo: 'specialty-fixture', watermark: 'brand-fixture', bookingQr: 'booking-fixture' });
     assert.equal(branded.design?.logo, null, 'specialty fallback must not become a personal logo');
     assert.deepEqual(images.at(-1), [68, 188, 12, 12]);
-    assert.ok(images.some(bounds => bounds.join(',') === '39,70,70,70'));
+    assert.ok(images.some(bounds => bounds.join(',') === '49,85,50,50'));
     text.length = 0;
     const footerFields = { ...readSimpleHeader(base), address: 'عنوان عربي للتذييل', addressFr: 'Adresse footer' };
     await renderPrescriptionDesign(arrangeSimpleHeader({ ...base, source: 'generated', language: 'fr' }, footerFields), { bookingQr: 'booking-fixture' });
@@ -146,4 +146,15 @@ test('A5 contact fields share one bottom row and preserve both saved address lan
   assert.equal(readSimpleHeader(design).address, fields.address);
   assert.equal(readSimpleHeader(design).addressFr, fields.addressFr);
   assert.ok(contact.every(e => e.y + e.height <= 205));
+});
+
+test('French header selection hides Arabic automatic fields without altering saved bilingual stationery', async () => {
+ const {headerFieldsForLanguage} = await import('../src/lib/prescriptionDesign.ts');
+ const fields = {nameAr:'اسم الطبيب',nameFr:'Doctor Name',specialty:'تخصص',specialtyFr:'Specialty',clinic:'عيادة',clinicFr:'Clinic',address:'عنوان',addressFr:'Address',phone:'123',footer:'Footer',color:'#187f77'};
+ const selected = headerFieldsForLanguage(fields,'fr');
+ assert.equal(selected.nameAr,''); assert.equal(selected.nameFr,'Doctor Name');
+ assert.equal(selected.specialty,''); assert.equal(selected.clinic,''); assert.equal(selected.address,'');
+ assert.equal(selected.phone,'123'); assert.equal(fields.nameAr,'اسم الطبيب');
+ assert.deepEqual(headerFieldsForLanguage(fields),fields);
+ assert.equal(headerFieldsForLanguage(fields,'ar').nameFr,'');
 });

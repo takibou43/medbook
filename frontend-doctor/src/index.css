@@ -194,8 +194,9 @@ body {
 .rx-pad { height: 0; } /* على الشاشة الحشو في .rx-paper؛ في الطباعة يصير 10mm ويتكرر في كل صفحة */
 .rx-inner { position: relative; display: flex; flex-direction: column; min-height: 194mm; }
 .rx-inner > * { position: relative; z-index: 1; }
-.rx-inner > .rx-watermark { position: absolute; z-index: 0; inset-inline: 0; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 3mm; opacity: 0.12; pointer-events: none; }
-.rx-watermark-mark { width: 70mm; height: 70mm; }
+.rx-inner > .rx-watermark { position: absolute; z-index: 0; inset-inline: 0; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: center; gap: 3mm; opacity: 0.055; pointer-events: none; }
+.rx-side[hidden] { display: none; }
+.rx-watermark-mark { width: 50mm; height: 50mm; }
 .rx-watermark-name { font-size: 14pt; font-weight: 800; color: var(--rx-blue); white-space: nowrap; }
 .rx-head-std { display: grid; grid-template-columns: 1fr 30mm 1fr; align-items: start; gap: 3mm; border-bottom: 0.25mm solid var(--rx-blue); }
 .rx-side { min-width: 0; display: flex; flex-direction: column; gap: 0.6mm; }
@@ -230,7 +231,7 @@ body {
 .rx-meta dd { margin: 0; font-size: 14pt; font-weight: 600; min-width: 0; }
 .rx-meta-date { grid-column: 1 / -1; justify-self: end; }
 .rx-meta-age { justify-self: end; white-space: nowrap; }
-.rx-patient { font-size: 14pt; font-weight: 800 !important; }
+.rx-patient { font-size: 15pt; font-weight: 800 !important; }
 .rx-meds { list-style: none; margin: 0; padding: 0; }
 .rx-med { display: grid; grid-template-columns: 6mm minmax(0, 1fr); column-gap: 3mm; align-items: start; padding: 2.4mm 0; border-bottom: 0.2mm solid #e5e7eb; break-inside: avoid; page-break-inside: avoid; }
 .rx-med:last-child { border-bottom: 0; }
@@ -240,7 +241,7 @@ body {
 .rx-med-quantity { float: inline-end; margin-inline-start: 3mm; font-size: 10pt; font-weight: 600; overflow-wrap: anywhere; }
 .rx-med-title { font-size: 12.5pt; line-height: 1.45; break-after: avoid; page-break-after: avoid; }
 .rx-med-facts { margin-top: 0.8mm !important; font-size: 11pt; line-height: 1.6; color: #1f2937; break-after: avoid; page-break-after: avoid; }
-.rx-med-instr { margin-top: 0.8mm !important; font-size: 11pt; line-height: 1.6; font-weight: 600; color: #000; orphans: 2; widows: 2; }
+.rx-med-instr { margin-top: 0.8mm !important; font-size: 12pt; line-height: 1.6; font-weight: 600; color: #000; orphans: 2; widows: 2; }
 .rx-med-detail { font-weight: 600; color: #111827; }
 .rx-sep { color: #4b5563; }
 .rx-facts { display: flex; flex-wrap: wrap; gap: 1mm 6mm; margin-top: 1mm !important; font-size: 10.5pt; }

@@ -73,6 +73,7 @@ export interface PrescriptionDraft {
   patient: PrescriptionPatient;
   /** الاسم المطبوع على الوصفة: يبدأ باسم المستفيد ويمكن للطبيب تعديله (للوصفة فقط، لا يغيّر بيانات المريض). */
   patientName: string;
+  patientNameFr?: string;
   patientAge?: string;
   patientAgeUnit?: PrescriptionAgeUnit;
   medications: PrescriptionMedication[];
@@ -147,7 +148,7 @@ export function restoreMedication(list: PrescriptionMedication[], med: Prescript
 /** هل كتب الطبيب شيئًا يُفقد؟ (تعديل الاسم وحده لا يُعدّ محتوى طبيًا لكنه يُحتسب كتعديل). */
 export function draftHasContent(d: PrescriptionDraft | null | undefined): boolean {
   if (!d) return false;
-  return d.medications.some(filled) || (d.labs ?? []).some(requestFilled) || (d.imaging ?? []).some(requestFilled) || d.notes.trim() !== "" || (d.patientAge ?? "").trim() !== "" || d.patientName.trim() !== d.patient.bookedName.trim()
+  return d.medications.some(filled) || (d.labs ?? []).some(requestFilled) || (d.imaging ?? []).some(requestFilled) || d.notes.trim() !== "" || (d.patientNameFr ?? "").trim() !== "" || (d.patientAge ?? "").trim() !== "" || d.patientName.trim() !== d.patient.bookedName.trim()
     || Object.values(d.professional ?? {}).some(fields => Object.values(fields).some(value => Boolean(value?.trim())));
 }
 

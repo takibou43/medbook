@@ -42,3 +42,11 @@ test("request items count as draft content so they are never silently lost", () 
   const withMed = validateDraft({ ...d, medications: [{ ...newMedication(), name: "Médicament test", directionsMode: "freeText", instructions: "selon indication" }], labs: [{ ...newRequestItem(), name: "CRP" }] });
   assert.equal(withMed.ok, true);
 });
+
+test('header language is independent of content language and preserved through normalization', () => {
+ const saved = normalizeSettings({language:'fr',headerLanguage:'both',professional:{ar:{doctorName:'اسم'},fr:{doctorName:'Name'}}});
+ assert.equal(settingsPayload(saved).headerLanguage,'both');
+ assert.equal(saved.language,'fr');
+ assert.equal(sameSettings(saved,{...saved,headerLanguage:'fr'}),false);
+ assert.equal(normalizeSettings({headerLanguage:'invalid'}).headerLanguage,undefined);
+});

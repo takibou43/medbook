@@ -27,7 +27,9 @@ import { signArrivalCode, verifyArrivalCode } from '../src/lib/arrivalCode';
 import { arrivalInput, scanArrival } from '../src/modules/appointments/arrival.service';
 import { createPatientAppointment } from '../src/lib/patientBooking';
 import favoriteRouter from '../src/modules/favorites/favorites.routes';
-import { signAccessToken } from '../src/utils/jwt';
+import { signAccessToken, signRefreshToken } from '../src/utils/jwt';
+import jwt from 'jsonwebtoken';
+import { env } from '../src/config/env';
 import { errorHandler } from '../src/middleware/errorHandler';
 
 beforeEach(() => { vi.clearAllMocks(); h.rows.length = 0; h.db.appointment.count.mockResolvedValue(0); });
@@ -35,15 +37,24 @@ beforeEach(() => { vi.clearAllMocks(); h.rows.length = 0; h.db.appointment.count
 describe('security release regression', () => {
   it.each([logout, logoutPatient])('stale cookies cannot revoke current sessions', async fn => {
     for (const stale of [{ revoked: true, expiresAt: new Date('2099-01-01') }, { revoked: false, expiresAt: new Date(0) }]) {
-      h.rows.splice(0, h.rows.length, { id: 'old', userId: 'victim', tokenHash: hashToken('old'), ...stale }, { id: 'new', userId: 'victim', tokenHash: hashToken('new'), revoked: false, expiresAt: new Date('2099-01-01') });
-      await fn('old', true);
+      const cookie = signRefreshToken({ sub: 'victim' });
+      h.rows.splice(0, h.rows.length, { id: 'old', userId: 'victim', tokenHash: hashToken(cookie), ...stale }, { id: 'new', userId: 'victim', tokenHash: hashToken('new'), revoked: false, expiresAt: new Date('2099-01-01') });
+      await fn(cookie, true);
       expect(h.rows[1].revoked).toBe(false);
     }
   });
   it.each([logout, logoutPatient])('current cookie revokes only its own account sessions', async fn => {
-    h.rows.push({ id: 's', userId: 'victim', tokenHash: hashToken('current'), revoked: false, expiresAt: new Date('2099-01-01') }, { id: 's2', userId: 'victim', tokenHash: hashToken('other'), revoked: false, expiresAt: new Date('2099-01-01') }, { id: 'foreign', userId: 'someone-else', revoked: false, expiresAt: new Date('2099-01-01') });
-    await fn('current', true);
+    const cookie = signRefreshToken({ sub: 'victim' });
+    h.rows.push({ id: 's', userId: 'victim', tokenHash: hashToken(cookie), revoked: false, expiresAt: new Date('2099-01-01') }, { id: 's2', userId: 'victim', tokenHash: hashToken('other'), revoked: false, expiresAt: new Date('2099-01-01') }, { id: 'foreign', userId: 'someone-else', revoked: false, expiresAt: new Date('2099-01-01') });
+    await fn(cookie, true);
     expect(h.rows.map(s => s.revoked)).toEqual([true, true, false]);
+  });
+  it('JWT expiration is enforced even if the stored refresh lifetime is longer', async () => {
+    const cookie = jwt.sign({ sub: 'victim', exp: 1 }, env.jwtRefreshSecret);
+    h.rows.push({ id: 's', userId: 'victim', tokenHash: hashToken(cookie), revoked: false, expiresAt: new Date('2099-01-01') });
+    await logoutPatient(cookie, true);
+    expect(h.rows[0].revoked).toBe(false);
+    expect(h.db.$transaction).not.toHaveBeenCalled();
   });
   it('patient favorites HTTP cannot expose current or future internal fields', async () => {
     const app = express(); app.use('/favorites', favoriteRouter); app.use(errorHandler);

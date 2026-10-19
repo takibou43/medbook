@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import { hashToken } from './tokens';
+import { verifyRefreshToken } from '../utils/jwt';
 
 /** A stale cookie is never authority to revoke newer sessions. */
 export async function revokeSession(refreshToken: string | undefined, allSessions = false) {
@@ -9,9 +10,11 @@ export async function revokeSession(refreshToken: string | undefined, allSession
     await prisma.refreshToken.updateMany({ where: { tokenHash }, data: { revoked: true } });
     return;
   }
+  let subject: string;
+  try { subject = verifyRefreshToken(refreshToken).sub; } catch { return; }
   await prisma.$transaction(async tx => {
     const row = await tx.refreshToken.findFirst({
-      where: { tokenHash, revoked: false, expiresAt: { gt: new Date() } },
+      where: { tokenHash, userId: subject, revoked: false, expiresAt: { gt: new Date() } },
       select: { id: true, userId: true },
     });
     if (!row) return;

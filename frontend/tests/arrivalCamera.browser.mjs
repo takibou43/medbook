@@ -6,16 +6,16 @@ import {fileURLToPath} from 'node:url';
 import {preview} from 'vite';
 const require=createRequire(import.meta.url);
 const qrcode=require('../../frontend-doctor/node_modules/qrcode-generator');
-const scanCode='medbook-arrival:v1:doctor:11111111-1111-4111-8111-111111111111';
+const scanCode='medbook-arrival:v2:doctor:7cc56412-1136-4f7c-a957-a63908efc8bc:'+ '5fe26c57cd8ec5b0a38504ca7901094d';
 function qrMatrix(value){const qr=qrcode(0,'M');qr.addData(value);qr.make();return Array.from({length:qr.getModuleCount()},(_,y)=>Array.from({length:qr.getModuleCount()},(_,x)=>qr.isDark(y,x)));}
 const matrix=qrMatrix(scanCode);
-const bookingMatrix=qrMatrix('https://medbook-alpha.vercel.app/?doctor=11111111-1111-4111-8111-111111111111');
+const bookingMatrix=qrMatrix('https://medbook-alpha.vercel.app/?doctor=7cc56412-1136-4f7c-a957-a63908efc8bc');
 const scanRequests=[];
 let noAppointment=false;
 let bookingWrites=0;
-const doctorId='11111111-1111-4111-8111-111111111111';
+const doctorId='7cc56412-1136-4f7c-a957-a63908efc8bc';
 const clinicId='44444444-4444-4444-8444-444444444444';
-const clinicCode='medbook-arrival:v1:clinic:'+clinicId;
+const clinicCode='medbook-arrival:v2:clinic:'+clinicId+':'+ '86285bbaf6ec32605e2bec0030567109';
 const wilayaId='22222222-2222-4222-8222-222222222222';
 const city={id:'33333333-3333-4333-8333-333333333333',wilayaId,nameAr:'مدينة اختبار'};
 const wilaya={id:wilayaId,nameAr:'ولاية اختبار',cities:[city]};
@@ -58,8 +58,8 @@ try {
   navigator.mediaDevices.getUserMedia=async constraints=>{
    const permitted=await original(constraints); permitted.getTracks().forEach(t=>t.stop());
    // A deterministic canvas video avoids platform-specific fake-device frame delivery.
-   const canvas=document.createElement('canvas'); canvas.width=320;canvas.height=240;
-   const draw=()=>{const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,320,240);if(window.testQR){ctx.fillStyle='black';const cell=Math.min(4,Math.floor(208/window.testQR.length));const left=Math.floor((320-cell*window.testQR.length)/2),top=Math.floor((240-cell*window.testQR.length)/2);window.testQR.forEach((row,y)=>row.forEach((dark,x)=>{if(dark)ctx.fillRect(left+x*cell,top+y*cell,cell,cell);}));}};draw();
+   const canvas=document.createElement('canvas'); canvas.width=640;canvas.height=480;
+   const draw=()=>{const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,640,480);if(window.testQR){ctx.fillStyle='black';const cell=Math.min(8,Math.floor(400/window.testQR.length));const left=Math.floor((640-cell*window.testQR.length)/2),top=Math.floor((480-cell*window.testQR.length)/2);window.testQR.forEach((row,y)=>row.forEach((dark,x)=>{if(dark)ctx.fillRect(left+x*cell,top+y*cell,cell,cell);}));}};draw();
    const stream=canvas.captureStream(15);const timer=setInterval(draw,50);
    for(const track of stream.getTracks()){const stop=track.stop.bind(track);track.stop=()=>{clearInterval(timer);stop();};}
    window.testTracks.push(...stream.getTracks());return stream;
@@ -85,12 +85,11 @@ try {
  console.log('PASS real QR decoding sends exactly one arrival request and shows server-confirmed success');
  await page.evaluate(matrix=>{window.testQR=matrix;},bookingMatrix);
  await page.getByRole('button',{name:'📷 فتح كاميرا المسح',exact:true}).click();
- await page.getByRole('status').filter({hasText:'جارٍ تسجيل وصولك'}).waitFor({timeout:30000});
- await page.getByRole('status').filter({hasText:'تم تسجيل وصولك بنجاح'}).waitFor({timeout:30000});
- assert.deepEqual(scanRequests,[{code:scanCode},{code:scanCode}]);
- console.log('PASS legacy doctor booking QR records arrival and displays pending then confirmed status');
+ await page.getByRole('status').filter({hasText:'كود الحجز لا يسجّل الحضور'}).waitFor({timeout:30000});
+ assert.deepEqual(scanRequests,[{code:scanCode}]);
+ console.log('PASS legacy public booking QR cannot record attendance');
  noAppointment=true;
- await page.evaluate(matrix=>{window.testQR=matrix;},bookingMatrix);
+ await page.evaluate(matrix=>{window.testQR=matrix;},matrix);
  await page.getByRole('button',{name:'📷 فتح كاميرا المسح',exact:true}).click();
  await page.waitForURL(url=>url.searchParams.get('doctor')===doctorId&&url.searchParams.get('intent')==='booking');
  await page.getByRole('button',{name:/أفضّل اختيار يوم أو وقت آخر/}).waitFor();

@@ -214,18 +214,7 @@ export async function refresh(refreshToken: string) {
  * allSessions: إبطال كل جلسات التجديد للحساب (واجهة المرضى والأطباء معًا) — يُستعمل لحساب الملفين
  * حتى لا تبقى جلسة الواجهة الأخرى مفتوحة بعد الخروج. لا يُنفَّذ إلا إن طابق الكوكي المُرسَل جلسة قائمة فعلًا.
  */
-export async function logout(refreshToken: string | undefined, allSessions = false) {
-  if (!refreshToken) return;
-  const tokenHash = hashToken(refreshToken);
-  if (allSessions) {
-    const row = await prisma.refreshToken.findFirst({ where: { tokenHash }, select: { userId: true } });
-    if (row) {
-      await prisma.refreshToken.updateMany({ where: { userId: row.userId, revoked: false }, data: { revoked: true } });
-      return;
-    }
-  }
-  await prisma.refreshToken.updateMany({ where: { tokenHash }, data: { revoked: true } });
-}
+export { revokeSession as logout } from "../../lib/logoutSession";
 
 export async function getMe(userId: string, context?: Role) {
   const user = await prisma.user.findUnique({

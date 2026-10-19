@@ -1,3 +1,4 @@
+import { signArrivalCode } from '../../src/lib/arrivalCode';
 /**
  * الحظر التلقائي بعد تكرار الغياب (3 × NO_SHOW خلال 7 أيام) على PostgreSQL حقيقي عبر HTTP:
  * العدّ داخل النافذة فقط، الحالات التي لا تُحتسب (LATE/CANCELLED/COMPLETED)، سجل حظر واحد،
@@ -460,13 +461,41 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
     ).rejects.toThrow(/تقييد الحجز كضيف/);
   });
 
+  it('patient quota is atomic at three per beneficiary and excludes doctor follow-ups', async () => {
+    const { createPatientAppointment } = await import('../../src/lib/patientBooking');
+    const d = await mkDoctor('quota');
+    const user = await db.user.create({ data: { email: `${tag}-quota@test.local`, passwordHash: 'synthetic', role: 'PATIENT', patient: { create: { firstName: 'مريض', lastName: 'اختبار' } } }, include: { patient: true } });
+    ids.users.push(user.id);
+    const member = await db.familyMember.create({ data: { ownerPatientId: user.patient!.id, firstName: 'فرد', lastName: 'اختبار', relationship: 'CHILD' } });
+    const date = day(2);
+    const book = (n: number, familyMemberId: string | null = null, createdBy: 'PATIENT' | 'DOCTOR' = 'PATIENT') => db.$transaction(tx => createPatientAppointment(tx, { data: {
+      patientId: user.patient!.id, familyMemberId, doctorId: d.doctorId, date,
+      startTime: `${String(8 + n).padStart(2, '0')}:00`, endTime: `${String(8 + n).padStart(2, '0')}:20`, status: 'CONFIRMED', createdBy,
+    } }));
+    try {
+      const results = await Promise.allSettled([0,1,2,3].map(n => book(n)));
+      expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(3);
+      expect(results.filter(r => r.status === 'rejected')).toHaveLength(1);
+      const rejected = results.find(r => r.status === 'rejected') as PromiseRejectedResult;
+      expect(rejected.reason).toMatchObject({ statusCode: 409 });
+      expect(await book(4, member.id)).toHaveProperty('familyMemberId', member.id);
+      expect(await book(5, null, 'DOCTOR')).toHaveProperty('createdBy', 'DOCTOR');
+      const first = await db.appointment.findFirstOrThrow({ where: { patientId: user.patient!.id, familyMemberId: null, createdBy: 'PATIENT' } });
+      await db.appointment.update({ where: { id: first.id }, data: { status: 'CANCELLED', activeSlot: null } });
+      expect(await book(6)).toHaveProperty('patientId', user.patient!.id);
+    } finally {
+      await db.appointment.deleteMany({ where: { doctorId: d.doctorId } });
+      await db.familyMember.delete({ where: { id: member.id } });
+    }
+  });
+
   it("QR arrival is owned, same-day and idempotent under simultaneous scans", async () => {
     const p = await mkPatient();
     const d = await mkDoctor('qr');
     const appointmentId = await mkAppt(p.patientId, 0, 'CONFIRMED', d.doctorId);
     const qrAssistantToken = await mkAssistant(d.doctorId, 'qr');
     const initialRevision = (await call('GET', '/api/live/changes', undefined, qrAssistantToken)).data.revision;
-    const code = 'medbook-arrival:v1:doctor:' + d.doctorId;
+    const code = signArrivalCode('doctor', d.doctorId);
     const results = await Promise.all([1, 2].map(() => call('POST', '/api/appointments/scan-arrival', { code }, p.token)));
     expect(results.map(r => r.status)).toEqual([200, 200]);
     expect(results.filter(r => r.data.alreadyArrived === false)).toHaveLength(1);
@@ -509,7 +538,7 @@ describe.skipIf(!TEST_URL)("الحظر التلقائي بعد تكرار الغ
     const patient = await fixturePatient('clinic-qr'); const other = await fixturePatient('clinic-qr-other');
     const appointments = [];
     for (let i=0;i<4;i++) appointments.push(await mkAppt(i===2?patient.patientId:other.patientId,0,'CONFIRMED',docs[i].doctorId));
-    const code = 'medbook-arrival:v1:clinic:'+clinic.id;
+    const code = signArrivalCode('clinic', clinic.id);
     const before = (await call('GET','/api/live/changes',undefined,sharedToken)).data.revision;
     expect((await call('POST','/api/appointments/scan-arrival',{code},patient.token)).data).toMatchObject({appointmentId:appointments[2],alreadyArrived:false});
     expect((await call('GET','/api/live/changes?since='+before,undefined,sharedToken)).data.revision).not.toBe(before);

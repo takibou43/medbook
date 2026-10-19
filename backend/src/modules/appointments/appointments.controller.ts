@@ -3,12 +3,12 @@ import { AppointmentStatus } from "@prisma/client";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as service from "./appointments.service";
 import { createWalkIn } from "./walkIn.service";
-import { redactDoctorSecrets } from "../../lib/redact";
+import { redactForRole } from "../../lib/redact";
 import { ApiError } from "../../utils/ApiError";
 
 export const create = asyncHandler(async (req: Request, res: Response) => {
   const appointment = await service.createAppointment(req.user!.id, req.body);
-  res.status(201).json({ success: true, data: redactDoctorSecrets(appointment) });
+  res.status(201).json({ success: true, data: redactForRole(appointment, req.user!.role) });
 });
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -30,17 +30,17 @@ export const listMine = asyncHandler(async (req: Request, res: Response) => {
           to: dayParam(req.query.to, "to"),
         })
       : await service.listForPatient(req.user!.id, status);
-  res.json({ success: true, data: redactDoctorSecrets(data) });
+  res.json({ success: true, data: redactForRole(data, req.user!.role) });
 });
 
 export const updateStatus = asyncHandler(async (req: Request, res: Response) => {
   const updated = await service.updateStatus(req.user!.id, req.user!.role, req.params.id, req.body.status);
-  res.json({ success: true, data: redactDoctorSecrets(updated) });
+  res.json({ success: true, data: redactForRole(updated, req.user!.role) });
 });
 
 export const cancel = asyncHandler(async (req: Request, res: Response) => {
   const updated = await service.cancelByPatient(req.user!.id, req.params.id);
-  res.json({ success: true, data: redactDoctorSecrets(updated) });
+  res.json({ success: true, data: redactForRole(updated, req.user!.role) });
 });
 
 // ---- طابور العيادة اليومي (للطبيب فقط) ----

@@ -1,4 +1,4 @@
-import { PUBLIC_TERMS_SELECT, withPublicFee } from "../../lib/clinicFinance";
+import { withPublicFee } from "../../lib/clinicFinance";
 import { Prisma, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -32,34 +32,8 @@ export interface DoctorSearchFilters {
  * اختيار صريح بدل إعادة كائن قاعدة البيانات كاملًا: لا userId ولا حقول الاشتراك ولا الطوابع الداخلية.
  * أي حقل جديد في جدول الأطباء لا يظهر للعامة إلا إذا أُضيف هنا عمدًا.
  */
-export const PUBLIC_DOCTOR_SELECT = {
-  id: true,
-  dutyEndsAt: true,
-  firstName: true,
-  lastName: true,
-  specialtyId: true,
-  specialty: { select: { id: true, nameAr: true, nameFr: true, icon: true, description: true } },
-  clinic: { select: { id: true, nameAr: true, address: true, phone: true } },
-  wilayaId: true,
-  wilaya: { select: { id: true, code: true, nameAr: true, nameFr: true } },
-  cityId: true,
-  city: { select: { id: true, nameAr: true, wilayaId: true } },
-  bio: true,
-  yearsExperience: true,
-  languages: true,
-  gender: true,
-  phone: true,
-  address: true,
-  consultationFee: true,
-  // سعر العيادة فقط (لا النسبة) — يُدمج في consultationFee ثم يُحذف قبل الاستجابة (withPublicFee).
-  clinicTerms: PUBLIC_TERMS_SELECT,
-  photoUrl: true,
-  latitude: true,
-  longitude: true,
-  verificationStatus: true,
-  avgRating: true,
-  reviewsCount: true,
-} satisfies Prisma.DoctorSelect;
+export { PUBLIC_DOCTOR_SELECT } from "../../lib/publicDoctorSelect";
+import { PUBLIC_DOCTOR_SELECT } from "../../lib/publicDoctorSelect";
 
 const HAS_GEO_CAP = 500; // حد أعلى أمان عند الفرز بالمسافة يدويًا بدل SQL — يكفي بمراحل للحجم الحالي.
 

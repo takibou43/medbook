@@ -7,20 +7,23 @@ import { lockDoctorCalls } from "../../lib/doctorLock";
 import { resolveActingDoctorId } from "../../lib/actingDoctor";
 import { liveUpdates } from "../../lib/liveUpdates";
 import { z } from "zod";
+import { signArrivalCode, verifyArrivalCode } from '../../lib/arrivalCode';
 
 export const arrivalInput = z.object({
-  code: z.string().regex(/^medbook-arrival:v1:(clinic|doctor):[0-9a-f-]{36}$/i),
+  code: z.string().max(160).refine(code => verifyArrivalCode(code) !== null, 'كود الحضور قديم أو غير صالح. اطلب مسح الملصق الجديد من العيادة.'),
   appointmentId: z.string().uuid().optional(),
 }).strict();
 
 export async function arrivalPoster(userId: string, role: Role) {
   const id = await resolveActingDoctorId(userId, role);
   const doctor = await prisma.doctor.findUniqueOrThrow({ where: { id }, select: { id: true, firstName: true, lastName: true, clinicId: true, clinic: { select: { nameAr: true } } } });
-  return { doctorId: doctor.id, code: doctor.clinicId ? 'medbook-arrival:v1:clinic:' + doctor.clinicId : 'medbook-arrival:v1:doctor:' + doctor.id, name: doctor.clinic?.nameAr ?? doctor.firstName + ' ' + doctor.lastName };
+  return { doctorId: doctor.id, code: signArrivalCode(doctor.clinicId ? 'clinic' : 'doctor', doctor.clinicId ?? doctor.id), name: doctor.clinic?.nameAr ?? doctor.firstName + ' ' + doctor.lastName };
 }
 
 export async function scanArrival(userId: string, input: z.infer<typeof arrivalInput>) {
-  const [, , kind, id] = input.code.split(':');
+  const verified = verifyArrivalCode(input.code);
+  if (!verified) throw ApiError.badRequest('كود الحضور قديم أو غير صالح. اطلب الملصق الجديد من العيادة.');
+  const { kind, id } = verified;
   const patient = await prisma.patient.findUnique({ where: { userId }, select: { id: true } });
   if (!patient) throw ApiError.forbidden();
   const where: Prisma.AppointmentWhereInput = {

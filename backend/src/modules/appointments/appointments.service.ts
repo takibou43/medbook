@@ -1,3 +1,4 @@
+import { createPatientAppointment } from "../../lib/patientBooking";
 import { recordArrival } from "../../lib/recordArrival";
 import { isDoctorSubscriptionActive } from "../../lib/clinicBilling";
 import { firstPresent, presentQueueOrder } from "../../lib/presentQueue";
@@ -86,7 +87,7 @@ export async function createAppointment(patientUserId: string, input: CreateAppo
       date,
       requestedStart: input.startTime,
       create: (tx, slot) =>
-        tx.appointment.create({
+        createPatientAppointment(tx, {
           data: {
             patientId: patient.id,
             doctorId: doctor.id,

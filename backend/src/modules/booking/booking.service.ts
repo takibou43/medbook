@@ -1,3 +1,4 @@
+import { createPatientAppointment } from "../../lib/patientBooking";
 import { AppointmentStatus, Prisma, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { nearestBookingSlot } from "../../lib/nearestBookingSlot";
@@ -290,7 +291,7 @@ async function createAutoAssignedAppointment(
       async (tx) => {
         await lockDoctorQueue(tx, doctorId);
         const slot = await scanForNextSlot(doctor, 60, tx);
-        const created = await tx.appointment.create({
+        const created = await createPatientAppointment(tx, {
           data: {
             patientId,
             guestFirstName: input.firstName,
@@ -350,7 +351,7 @@ async function createChosenDayAppointment(
   if (!withinHorizon(date)) throw ApiError.conflict(DAY_UNAVAILABLE_MESSAGE, { code: "DAY_UNAVAILABLE" });
 
   const create = (tx: Prisma.TransactionClient, slot: { startTime: string; endTime: string }) =>
-    tx.appointment.create({
+    createPatientAppointment(tx, {
       data: {
         patientId,
         guestFirstName: input.firstName,
@@ -454,7 +455,7 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
         date,
         requestedStart: input.startTime,
         create: (tx, slot) =>
-          tx.appointment.create({
+          createPatientAppointment(tx, {
             data: {
               patientId,
               guestFirstName: input.firstName,
@@ -503,7 +504,7 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
 
     try {
       const financial = await loadFinancialCreate(doctor.id);
-      const appointment = await prisma.appointment.create({
+      const appointment = await prisma.$transaction(tx => createPatientAppointment(tx, {
         data: {
           financial,
           patientId,
@@ -512,14 +513,14 @@ export async function createGuestAppointment(input: GuestBookingInput, patientId
           guestPhone: input.phone || null,
           doctorId: doctor.id,
           date,
-          startTime: input.startTime,
+          startTime: input.startTime!,
           endTime,
           status: AppointmentStatus.CONFIRMED,
           notes: input.notes,
           ...bookingOriginData(patientId, meta),
         },
         include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
-      });
+      }));
 
       return applyAppointmentPrice(appointment, financial.create.priceDzd);
     } catch (err) {

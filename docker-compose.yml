@@ -33,8 +33,8 @@ services:
       PORT: 4000
       NODE_ENV: production
       CLIENT_URL: "http://localhost:5173"
-      JWT_SECRET: ${JWT_SECRET:-dev_secret_change_me}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev_refresh_secret_change_me}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
       JWT_ACCESS_EXPIRES: "15m"
       JWT_REFRESH_EXPIRES: "7d"
       AI_PROVIDER: ${AI_PROVIDER:-mock}

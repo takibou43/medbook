@@ -1,3 +1,4 @@
+import { PUBLIC_DOCTOR_SELECT } from "../../lib/publicDoctorSelect";
 import { Router } from "express";
 import { z } from "zod";
 import { authenticate, authorize } from "../../middleware/auth";
@@ -6,7 +7,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
-import { redactDoctorSecrets } from "../../lib/redact";
+import { redactPatientResponse } from "../../lib/redact";
 
 const router = Router();
 router.use(authenticate, authorize(Role.PATIENT));
@@ -16,10 +17,10 @@ router.get(
   asyncHandler(async (req, res) => {
     const favorites = await prisma.favorite.findMany({
       where: { userId: req.user!.id },
-      include: { doctor: { include: { specialty: true, wilaya: true, city: true } } },
+      include: { doctor: { select: PUBLIC_DOCTOR_SELECT } },
       orderBy: { createdAt: "desc" },
     });
-    res.json({ success: true, data: redactDoctorSecrets(favorites) });
+    res.json({ success: true, data: redactPatientResponse(favorites) });
   })
 );
 

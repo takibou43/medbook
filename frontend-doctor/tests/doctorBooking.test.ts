@@ -17,11 +17,15 @@ test("doctor QR encodes only the public doctor booking route and rejects missing
   assert.doesNotMatch(qr, /https?:\/\/.*(?:qrserver|google)/);
 });
 
-test("one clinic QR opens authentication and resolves doctor later; existing doctor QR stays identical",()=>{
+test("signed attendance links keep their signature for both doctor and clinic",()=>{
  const id='11111111-1111-4111-8111-111111111111';
- assert.equal(arrivalQrUrl('medbook-arrival:v1:doctor:'+id),doctorBookingUrl(id));
- const url=new URL(arrivalQrUrl('medbook-arrival:v1:clinic:'+id));
- assert.equal(url.pathname,'/account/arrival');assert.equal(url.searchParams.get('code'),'medbook-arrival:v1:clinic:'+id);
- assert.equal([...url.searchParams].length,1);
+ for (const kind of ['doctor','clinic']) {
+  const code='medbook-arrival:v2:'+kind+':'+id+':'+ 'a'.repeat(32);
+  const url=new URL(arrivalQrUrl(code));
+  assert.equal(url.pathname,'/account/arrival');
+  assert.equal(url.searchParams.get('code'),code);
+  assert.equal([...url.searchParams].length,1);
+ }
+ assert.throws(()=>arrivalQrUrl('medbook-arrival:v1:doctor:'+id));
  assert.throws(()=>arrivalQrUrl('invalid'));
 });

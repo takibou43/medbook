@@ -55,6 +55,16 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
     return { status: r.status, data: j?.data, message: j?.message };
   };
 
+  async function bookingPatients(prefix: string, count: number) {
+    const tokens: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const user = await db.user.create({ data: { email: `${tag}-${prefix}-${i}@test.local`, passwordHash: 'synthetic', role: 'PATIENT', patient: { create: { firstName: 'مريض', lastName: `اختبار${i}` } } } });
+      created.userIds.push(user.id);
+      tokens.push(signAccessToken({ sub: user.id, role: 'PATIENT' }));
+    }
+    return tokens;
+  }
+
   beforeAll(async () => {
     assertSafeTestDb(TEST_URL!);
     const sep = TEST_URL!.includes("?") ? "&" : "?";
@@ -120,13 +130,14 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
 
   it("50 طلب لنفس الطبيب/التاريخ/الوقت → كل الأوقات المتبقية في اليوم بلا تكرار، والباقي 409 (اليوم ممتلئ)", async () => {
     const d = await mkDoctor("slot");
+    const bookingTokens = await bookingPatients("slot", 50);
     const date = new Date(today.getTime() + 2 * 86400000).toISOString().slice(0, 10);
     const rs = await Promise.all(
       Array.from({ length: 50 }, (_, i) =>
         call("POST", "/api/booking", {
           firstName: "مريض", lastName: "سباق" + i, phone: "05" + String(20000000 + i),
           wilayaId: created.wilayaId, specialtyId: created.specialtyId, doctorId: d.id, date, startTime: "09:00",
-        }, patientToken, i)
+        }, bookingTokens[i], i)
       )
     );
     // دوام 08:00-18:00 بجلسات 20 دقيقة: من 09:00 يوجد 27 وقتًا فقط (09:00 … 17:40) — يُحجز كلها بلا تكرار،
@@ -169,12 +180,13 @@ describe.skipIf(!TEST_URL)("Races (تزامن حقيقي)", () => {
 
   it("150 حجز تلقائي لطبيب واحد بمجمّع من 5 اتصالات → بلا 500 ولا تكرار ولا فقدان", async () => {
     const d = await mkDoctor("hot");
+    const bookingTokens = await bookingPatients("hot", 150);
     const rs = await Promise.all(
       Array.from({ length: 150 }, (_, i) =>
         call("POST", "/api/booking", {
           firstName: "مريض", lastName: "ساخن" + i, phone: "05" + String(60000000 + i),
           wilayaId: created.wilayaId, specialtyId: created.specialtyId, doctorId: d.id,
-        }, patientToken, i)
+        }, bookingTokens[i], i)
       )
     );
     expect(rs.filter((r) => r.status >= 500)).toHaveLength(0);

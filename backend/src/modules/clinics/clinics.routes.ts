@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { signArrivalCode } from '../../lib/arrivalCode';
 import { z } from "zod";
 import { Role, SubscriptionStatus, VerificationStatus } from "@prisma/client";
 import { authenticate, authorize } from "../../middleware/auth";
@@ -11,6 +12,10 @@ import { clinicProfileSchema, clinicIdParams, clinicSearchSchema, emailInviteSch
 const router = Router();
 const owner = [authenticate, authorize(Role.CLINIC_OWNER, Role.DOCTOR)];
 const send = (res: import("express").Response, data: unknown) => res.json({ success: true, data });
+router.get('/mine/arrival-poster', ...owner, asyncHandler(async (req, res) => {
+  const clinic = await service.ownedClinic(req.user!.id);
+  send(res, { code: signArrivalCode('clinic', clinic.id), name: clinic.nameAr });
+}));
 router.get("/", validate({ query: clinicSearchSchema }), asyncHandler(async (req, res) => send(res, await service.searchClinics(req.query as unknown as z.infer<typeof clinicSearchSchema>))));
 router.get("/invites/:token", authLimiter, validate({ params: tokenSchema }), asyncHandler(async (req, res) => send(res, await service.previewInvite(req.params.token))));
 router.post("/invites/accept", authenticate, authorize(Role.DOCTOR), validate({ body: tokenSchema }), asyncHandler(async (req, res) => send(res, await service.acceptExistingDoctor(req.user!.id, req.body.token))));

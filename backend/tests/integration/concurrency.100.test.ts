@@ -38,6 +38,7 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
   let db: PrismaClient;
   const created = { userIds: [] as string[], doctorIds: [] as string[], wilayaId: "", cityId: "", specialtyId: "" };
   const tag = `conc${Date.now().toString(36)}`;
+  const bookingTokens: string[] = [];
   let patientUserId = "";
   let patientToken = ""; // الحجز يتطلب حساب مريض مسجّل الدخول
 
@@ -82,6 +83,13 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
     patientUserId = pu.id;
     const { signAccessToken } = await import("../../src/utils/jwt");
     patientToken = signAccessToken({ sub: pu.id, role: "PATIENT" });
+    // Capacity tests model distinct patients; a single beneficiary is deliberately capped at three.
+    for (let n = 0; n < TOTAL; n++) {
+      const user = await db.user.create({ data: { email: `${tag}-booking-${n}@test.local`, passwordHash: 'synthetic', role: 'PATIENT', patient: { create: { firstName: 'مريض', lastName: `اختبار${n}` } } } });
+      created.userIds.push(user.id);
+      bookingTokens.push(signAccessToken({ sub: user.id, role: 'PATIENT' }));
+    }
+
 
     const { createApp } = await import("../../src/app");
     server = http.createServer(createApp());
@@ -136,7 +144,7 @@ describe.skipIf(!TEST_URL)("Concurrency: 10 أطباء × 10 حجوزات متز
         try {
           const res = await fetch(`${base}/api/booking`, {
             method: "POST",
-            headers: { "content-type": "application/json", authorization: `Bearer ${patientToken}` },
+            headers: { "content-type": "application/json", authorization: `Bearer ${bookingTokens[r.n]}` },
             body: JSON.stringify(r.body),
           });
           const json: any = await res.json().catch(() => ({}));

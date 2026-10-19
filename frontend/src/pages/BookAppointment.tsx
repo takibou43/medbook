@@ -1,4 +1,3 @@
-import { arrivalCodeFromQr } from "../lib/arrivalQr";
 import { useLanguage } from "../i18n/LanguageRoot";
 import { t, getLanguage } from "../i18n/locale.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -318,8 +317,6 @@ export default function BookAppointment() {
 
   const openingDirectLink = Boolean(qrDoctorId) && loadingQr && !qrApplied.current;
 
-  const directScanCode = qrDoctorId ? arrivalCodeFromQr('medbook-arrival:v1:doctor:' + qrDoctorId, window.location.origin) : null;
-  if (directScanCode && searchParams.get('intent') !== 'booking') return <Navigate to={'/account/arrival?code=' + encodeURIComponent(directScanCode)} replace />;
   if (qrDoctorId && !authLoading && !user) return <Navigate to={"/account/login?mode=register&redirect=" + encodeURIComponent('/?doctor=' + qrDoctorId + '&intent=booking')} replace />;
 
   return (

@@ -10,6 +10,7 @@ import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
 import { PHONE_REGEX } from "../../lib/booking";
+import { safeRedirect } from '../../lib/safeRedirect';
 import { useWilayas } from "../../hooks/useCatalog";
 
 type Mode = "login" | "register";
@@ -28,9 +29,6 @@ interface RegisterValues extends LoginValues {
 const EMAIL_RULE = { required: "البريد الإلكتروني مطلوب", pattern: { value: /^\S+@\S+\.\S+$/, message: "بريد إلكتروني غير صالح" } };
 
 // الوجهة بعد الدخول: مسار داخلي فقط (يبدأ بـ"/" ولا يبدأ بـ"//") — لا إعادة توجيه لمواقع خارجية.
-function safeRedirect(raw: string | null): string {
-  return raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/account";
-}
 
 export default function AccountAuth() {
   useLanguage();

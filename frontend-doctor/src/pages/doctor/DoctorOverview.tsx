@@ -1,3 +1,4 @@
+import { escapeHtml } from "../../lib/html";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, getLocale, getLanguage } from "../../i18n/locale.ts";
 import { Link } from "react-router-dom";
@@ -179,7 +180,7 @@ export default function DoctorOverview() {
       ".brand{margin-top:32px;font-size:12px;color:#999;}" +
       "@media print{body{padding:0;}}" +
       "</style></head><body>" +
-      "<h1>MedBook" + (doctorName ? " — " + doctorName : "") + "</h1>" +
+      "<h1>MedBook" + (doctorName ? " — " + escapeHtml(doctorName) : "") + "</h1>" +
       "<p class='sub'>" + t("امسح الرمز لحجز موعد") + "</p>" +
       "<img src='" + qrImageUrl + "' alt='QR' />" +
       "<p class='instructions'>" + t("لحجز موعد، امسح الرمز بكاميرا هاتفك.") + "</p>" +

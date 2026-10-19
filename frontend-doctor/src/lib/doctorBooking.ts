@@ -10,14 +10,13 @@ export function doctorBookingUrl(doctorId: string | null | undefined, site = "ht
   return url.toString();
 }
 
-/** One public clinic link resolves the patient's doctor after authentication; doctor QRs stay unchanged. */
+/** Attendance uses a server-signed capability, never the public booking UUID. */
 export function arrivalQrUrl(code: string, site = "https://medbook-alpha.vercel.app"): string {
-  const match = /^medbook-arrival:v1:(clinic|doctor):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(code);
+  const match = /^medbook-arrival:v2:(clinic|doctor):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):[0-9a-f]{64}$/.exec(code);
   if (!match) throw new Error("Invalid arrival code");
   const url = new URL(doctorBookingUrl(match[2].toLowerCase(), site)!);
-  if (match[1].toLowerCase() === 'doctor') return url.toString();
   url.pathname = '/account/arrival'; url.search = '';
-  url.searchParams.set('code', 'medbook-arrival:v1:clinic:' + match[2].toLowerCase());
+  url.searchParams.set('code', code);
   return url.toString();
 }
 

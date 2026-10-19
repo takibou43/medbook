@@ -1,3 +1,4 @@
+if (process.env.NODE_ENV === "production") throw new Error("Demo seed is disabled in production.");
 /**
  * MedBook — Seed Script
  * يملأ قاعدة البيانات ببيانات جزائرية واقعية للتجربة المحلية.

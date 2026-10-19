@@ -126,19 +126,7 @@ export async function refreshPatientSession(refreshToken: string | undefined) {
   return { user: me, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
 }
 
-export async function logoutPatient(refreshToken: string | undefined, allSessions = false) {
-  if (!refreshToken) return;
-  const tokenHash = hashToken(refreshToken);
-  if (allSessions) {
-    // حساب الملفين: الخروج يُبطل جلسات الواجهتين معًا (لا يُنفَّذ إلا إن طابق الكوكي جلسة قائمة فعلًا).
-    const row = await prisma.refreshToken.findFirst({ where: { tokenHash }, select: { userId: true } });
-    if (row) {
-      await prisma.refreshToken.updateMany({ where: { userId: row.userId, revoked: false }, data: { revoked: true } });
-      return;
-    }
-  }
-  await prisma.refreshToken.updateMany({ where: { tokenHash }, data: { revoked: true } });
-}
+export { revokeSession as logoutPatient } from "../../lib/logoutSession";
 
 export async function getPatientMe(userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { ...PATIENT_ME_SELECT, doctor: PROFILE_PROBE.doctor } });

@@ -42,7 +42,7 @@ export default function ArrivalScanner() {
   }
   async function start() {
     const generation = ++cameraGeneration.current;
-    setFeedback('info'); setMessage('وجّه الكاميرا نحو كود الطبيب أو كود حضور العيادة.'); setChoices([]); setScanning(true);
+    setFeedback('info'); setMessage('وجّه الكاميرا نحو كود الحضور الجديد المطبوع داخل العيادة.'); setChoices([]); setScanning(true);
     try {
       const { BrowserQRCodeReader } = await import("@zxing/browser");
       if (!mounted.current || generation !== cameraGeneration.current) return;
@@ -52,7 +52,7 @@ export default function ArrivalScanner() {
         if (!result || pending.current) return;
         const value = arrivalCodeFromQr(result.getText(), window.location.origin);
         session.stop(); setScanning(false);
-        if (!value) { setFeedback('error'); setMessage('لم يُسجَّل الحضور: هذا الكود غير صالح. امسح كود الطبيب في مادبوك أو كود حضور العيادة.'); return; }
+        if (!value) { setFeedback('error'); setMessage('لم يُسجَّل الحضور: هذا الكود غير صالح. امسح كود الحضور الجديد من العيادة؛ كود الحجز لا يسجّل الحضور.'); return; }
         void submit(value);
       });
       if (!mounted.current || generation !== cameraGeneration.current) session.stop(); else controls.current = session;

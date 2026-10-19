@@ -5,7 +5,7 @@ import { ApiError } from "../../utils/ApiError";
 import { findPatientIdForUser } from "../patientAuth/patientAuth.service";
 import { assertPatientCanBook } from "../patientBlocks/patientBlocks.service";
 import { resolveBookableFamilyMember } from "../family/family.service";
-import { redactDoctorSecrets } from "../../lib/redact";
+import { redactPatientResponse } from "../../lib/redact";
 import { assertNotOwnDoctor } from "../../lib/accountProfiles";
 
 export const getSlots = asyncHandler(async (req: Request, res: Response) => {
@@ -53,7 +53,7 @@ export const createGuestBooking = asyncHandler(async (req: Request, res: Respons
     familyMemberId: familyMemberId ?? null,
     createdByUserId: req.user!.id,
   });
-  res.status(201).json({ success: true, data: redactDoctorSecrets(appointment) });
+  res.status(201).json({ success: true, data: redactPatientResponse(appointment) });
 });
 
 export const lookupBookings = asyncHandler(async (req: Request, res: Response) => {

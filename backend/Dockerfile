@@ -14,4 +14,4 @@ RUN npm run build
 
 EXPOSE 4000
 
-CMD sh -c "npx prisma migrate deploy --schema ../prisma/schema.prisma && npm run db:seed --if-present; node dist/index.js"
+CMD sh -c "npx prisma migrate deploy --schema ../prisma/schema.prisma && exec node dist/index.js"

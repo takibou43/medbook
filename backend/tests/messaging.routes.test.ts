@@ -219,10 +219,22 @@ describe("القراءة وعدّاد غير المقروء", () => {
   });
 
   it("عدّاد الإدارة: إجمالي غير المقروء من الأطباء + آخر رسالة", async () => {
-    db.doctorMessage.groupBy.mockResolvedValue([{ conversationId: "c1" }, { conversationId: "c2" }]);
+    db.doctorMessage.groupBy.mockResolvedValue([{ conversationId: "c1", _count: { _all: 2 } }, { conversationId: "c2", _count: { _all: 1 } }]);
     db.doctorConversation.findFirst.mockResolvedValue({ lastMessageAt: new Date(), lastMessagePreview: "شكراً", lastSenderRole: "DOCTOR", doctor: { id: DOC_A, firstName: "أحمد", lastName: "ب" } });
     const r = await request(app).get("/api/admin/messages/unread-count").set("Authorization", tok("ADMIN"));
     expect(r.body.data).toMatchObject({ unread: 3, conversationsWithUnread: 2, latest: { doctorName: "أحمد ب", preview: "شكراً" } });
+    expect(db.doctorMessage.count).not.toHaveBeenCalled();
+    expect(db.doctorMessage.groupBy).toHaveBeenCalledTimes(1);
+    expect(db.doctorMessage.groupBy).toHaveBeenCalledWith({ by: ["conversationId"], where: { senderRole: "DOCTOR", readAt: null }, _count: { _all: true } });
+  });
+
+  it("returns zero counters when no unread conversations exist", async () => {
+    db.doctorMessage.groupBy.mockResolvedValue([]);
+    db.doctorConversation.findFirst.mockResolvedValue(null);
+    const r = await request(app).get("/api/admin/messages/unread-count").set("Authorization", tok("ADMIN"));
+    expect(r.status).toBe(200);
+    expect(r.body.data).toEqual({ unread: 0, conversationsWithUnread: 0, latest: null });
+    expect(db.doctorMessage.count).not.toHaveBeenCalled();
   });
 
   it("قائمة محادثات الإدارة: استعلام تجميعي واحد لغير المقروء (بلا N+1)", async () => {

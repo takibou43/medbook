@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { medicationParts, medicationSummary, structuredErrors, medicationComplete, editableValues, doseText, durationText } from "../src/lib/prescriptionMedication.ts";
+import { medicationParts, medicationFactItems, medicationSummary, structuredErrors, medicationComplete, editableValues, doseText, durationText } from "../src/lib/prescriptionMedication.ts";
 import { newMedication, restoreMedication, validateDraft, emptyDraft, draftHasContent, type PrescriptionMedication } from "../src/lib/prescription.ts";
 
 const med = (p: Partial<PrescriptionMedication> = {}): PrescriptionMedication => ({ ...newMedication(), id: p.id ?? "m1", ...p });
@@ -45,6 +45,16 @@ test("free-text mode prints only name, strength/form and instructions while keep
   assert.equal(m.doseQty, "2");
   assert.equal(medicationComplete(m), true);
   assert.equal(medicationComplete({ ...m, instructions: "" }), false);
+});
+
+test("print facts retain their source field even when entered values are bare numbers", () => {
+  const m = med({ name: "Example", dose: "2", frequency: "3", duration: "5" });
+  assert.deepEqual(medicationFactItems(m, "fr"), [
+    { key: "dose", value: "2" },
+    { key: "frequency", value: "3" },
+    { key: "duration", value: "5" },
+  ]);
+  assert.deepEqual(medicationFactItems({ ...m, directionsMode: "freeText" }, "fr"), []);
 });
 
 test("validation explains each missing structured field without medical rules", () => {

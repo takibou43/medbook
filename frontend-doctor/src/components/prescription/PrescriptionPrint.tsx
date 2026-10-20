@@ -16,7 +16,7 @@ import { SpecialtyIcon } from "../../lib/specialtyIcons";
 import { bookingQrImage, doctorBookingUrl } from "../../lib/doctorBooking";
 import { arrangeSimpleHeader, headerFieldsForLanguage, canBalancePrescriptionDesign, readSimpleHeader, renderPrescriptionDesign } from "../../lib/prescriptionDesign";
 import { prescriptionBranding } from "./prescriptionBranding";
-import { medicationParts, glueNumberUnit } from "../../lib/prescriptionMedication";
+import { medicationParts, medicationFactItems, glueNumberUnit } from "../../lib/prescriptionMedication";
 
 export interface PrescriptionSheetData {
   template?: PrescriptionTemplate | null;
@@ -133,6 +133,10 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         {data.medications.map((m, i) => {
           // نفس منطق التنسيق للمعاينة والطباعة والملخص: lib/prescriptionMedication.
           const p = medicationParts(m, lang);
+          const factItems = medicationFactItems(m, lang);
+          const factLabels = lang === "fr"
+            ? { dose: "Dose", frequency: "Fréquence", timing: "Moment", duration: "Durée" }
+            : { dose: "الجرعة", frequency: "التكرار", timing: "الوقت", duration: "المدة" };
           return (
             <li key={m.id} className="rx-med">
               <span className="rx-index" aria-hidden="true">{i + 1}</span>
@@ -140,17 +144,17 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
                 {/* السطر 1: الاسم والتركيز بخط بارز */}
                 <p className="rx-med-title">
                   <Typed className="rx-med-name">{p.name}</Typed>
-                  {p.detail && <> <Typed className="rx-med-detail">{glueNumberUnit(p.detail)}</Typed></>}
-                  {m.quantity?.trim() && <> <Typed className="rx-med-quantity">{glueNumberUnit(m.quantity.trim())}</Typed></>}
+                  {p.detail && <Typed className="rx-med-detail">{glueNumberUnit(p.detail)}</Typed>}
+                  {m.quantity?.trim() && <span className="rx-med-quantity">{standard && <span className="rx-fact-label">{lang === "fr" ? "Quantité" : "الكمية"}: </span>}<Typed>{glueNumberUnit(m.quantity.trim())}</Typed></span>}
                 </p>
                 {/* السطر 2: الجرعة، التكرار، التوقيت، المدة — كل رقم ملصوق بوحدته؛ الفاصل ملصوق بما قبله فلا يبدأ سطر به */}
-                {p.facts.length > 0 && (
+                {factItems.length > 0 && (
                   <p className="rx-med-facts">
-                    {p.facts.map((v, k) => (
-                      <Fragment key={k}>
+                    {factItems.map(({ key, value }, k) => (
+                      <Fragment key={key}>
                         {/* عنصر قصير = وحدة لا تنكسر («4 fois par jour»، «10 jours»)؛ النص الطويل المخصص يلتف عادي */}
-                        <span className={v.length <= 28 ? "rx-fact rx-fact-keep" : "rx-fact"}><Typed>{glueNumberUnit(v)}</Typed>{k < p.facts.length - 1 && <span className="rx-sep" aria-hidden="true">{"\u00A0·"}</span>}</span>
-                        {k < p.facts.length - 1 && " "}
+                        <span className={value.length + (standard ? factLabels[key].length + 2 : 0) <= 28 ? "rx-fact rx-fact-keep" : "rx-fact"}>{standard && <span className="rx-fact-label">{factLabels[key]}: </span>}<Typed>{glueNumberUnit(value)}</Typed>{k < factItems.length - 1 && <span className="rx-sep" aria-hidden="true">{"\u00A0·"}</span>}</span>
+                        {k < factItems.length - 1 && " "}
                       </Fragment>
                     ))}
                   </p>
@@ -216,7 +220,7 @@ const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2];
  * ولا تغيّر حالة أي موعد ولا ترسل شيئًا.
  */
 export function PrescriptionPreview({ open, data, onClose }: { open: boolean; data: PrescriptionSheetData | null; onClose: () => void }) {
-  useLanguage();
+  const uiLanguage = useLanguage();
   const { user } = useAuth();
   const localFolder = usePrescriptionFolder(user?.id ?? "");
   const [savingPdf, setSavingPdf] = useState(false);
@@ -377,7 +381,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className="flex min-h-0 flex-1 flex-col outline-none">
         {/* شريط الأدوات خارج الورقة وثابت أعلى المعاينة */}
         <div className="rx-no-print flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 shadow-sm sm:px-5">
-          {data.template && <label className="text-sm"><input type="checkbox" checked={useTemplate} onChange={e => setUseTemplate(e.target.checked)} /> {data.language === "fr" ? "Utiliser mon modèle" : "استخدام قالبي المحفوظ"}</label>}
+          {data.template && <label className="text-sm"><input type="checkbox" checked={useTemplate} onChange={e => setUseTemplate(e.target.checked)} /> {uiLanguage === "fr" ? "Utiliser mon modèle" : "استخدام قالبي المحفوظ"}</label>}
           {autoMultiPage && <p role="status" className="w-full text-sm text-slate-700">{data.language === "fr" ? "Ordonnance longue : mise en page multipage activée automatiquement pour conserver tout le contenu. Votre modèle enregistré reste inchangé." : "الوصفة طويلة؛ استُخدم تلقائيًا تنسيق متعدد الصفحات لطباعة المحتوى كاملًا. قالبك المحفوظ لم يتغيّر."}</p>}
           {templatePreparing && <p role="status" className="text-sm">{data.language === "fr" ? "Préparation de la mise en page…" : "جارٍ تجهيز تنسيق الوصفة…"}</p>}
           {balanceError && <p role="alert" className="text-sm text-amber-800">{balanceError}</p>}
@@ -408,7 +412,10 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
               <Printer className="h-4 w-4" aria-hidden="true" /> {savingPdf ? t("جارٍ حفظ PDF…") : t("طباعة")}
             </button>
           </div>
-          <p className="w-full text-xs leading-5 text-slate-600">{t("عند الطباعة: اختر ورق A5 والحجم الفعلي 100%. إن ظهر في الورقة رابط الموقع أو عنوان الصفحة أو الوقت فهي إضافات المتصفح؛ ألغِ «Headers and footers» من إعدادات الطباعة.")}</p>
+          <details className="w-full text-xs leading-5 text-slate-600">
+            <summary className="w-fit cursor-pointer font-medium">{uiLanguage === "fr" ? "Conseils d’impression · A5 · 100 %" : "إرشادات الطباعة · A5 · 100%"}</summary>
+            <p>{t("عند الطباعة: اختر ورق A5 والحجم الفعلي 100%. إن ظهر في الورقة رابط الموقع أو عنوان الصفحة أو الوقت فهي إضافات المتصفح؛ ألغِ «Headers and footers» من إعدادات الطباعة.")}</p>
+          </details>
         </div>
 
         {/* مساحة المعاينة القابلة للتمرير (أفقيًا أيضًا عند التكبير) — الورقة بأبعاد A5 مصغّرة */}

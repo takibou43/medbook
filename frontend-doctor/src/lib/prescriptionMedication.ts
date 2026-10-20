@@ -104,10 +104,22 @@ export interface MedicationParts {
   instructions: string;
 }
 
+export type MedicationFactKey = "dose" | "frequency" | "timing" | "duration";
+
+/** Keep the entered field attached to its value so the printed sheet can label short numbers. */
+export function medicationFactItems(m: PrescriptionMedication, lang: Lang): { key: MedicationFactKey; value: string }[] {
+  if (m.directionsMode === "freeText") return [];
+  return ([
+    { key: "dose", value: doseText(m, lang) },
+    { key: "frequency", value: frequencyText(m, lang) },
+    { key: "timing", value: timingText(m, lang) },
+    { key: "duration", value: durationText(m, lang) },
+  ] as const).filter(({ value }) => Boolean(value));
+}
+
 /** المصدر الوحيد لما يُعرض في الملخص والمعاينة والطباعة. لا يُنتج عناوين فارغة ولا undefined. */
 export function medicationParts(m: PrescriptionMedication, lang: Lang): MedicationParts {
-  const free = m.directionsMode === "freeText";
-  const facts = free ? [] : [doseText(m, lang), frequencyText(m, lang), timingText(m, lang), durationText(m, lang)].filter(Boolean);
+  const facts = medicationFactItems(m, lang).map(({ value }) => value);
   return { name: clean(m.name), detail: join(m.strength, m.form), facts, instructions: clean(m.instructions) };
 }
 

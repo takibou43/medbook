@@ -162,9 +162,13 @@ export async function markRead(doctorId: string, reader: { id: string; role: Rol
 // ---------------------------------------------------------------- unread summaries
 
 export async function adminUnreadSummary() {
-  const [total, grouped, latest] = await Promise.all([
-    prisma.doctorMessage.count({ where: { senderRole: Role.DOCTOR, readAt: null } }),
-    prisma.doctorMessage.groupBy({ by: ["conversationId"], where: { senderRole: Role.DOCTOR, readAt: null } }),
+  const [grouped, latest] = await Promise.all([
+    // Derive both counters from one database query and the same snapshot.
+    prisma.doctorMessage.groupBy({
+      by: ["conversationId"],
+      where: { senderRole: Role.DOCTOR, readAt: null },
+      _count: { _all: true },
+    }),
     prisma.doctorConversation.findFirst({
       where: { lastMessageAt: { not: null } },
       orderBy: { lastMessageAt: "desc" },
@@ -177,7 +181,7 @@ export async function adminUnreadSummary() {
     }),
   ]);
   return {
-    unread: total,
+    unread: grouped.reduce((total, row) => total + row._count._all, 0),
     conversationsWithUnread: grouped.length,
     latest: latest
       ? {

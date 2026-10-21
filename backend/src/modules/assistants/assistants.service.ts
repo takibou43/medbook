@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { InviteStatus, Role } from "@prisma/client";
+import { InviteStatus, Prisma, Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { ApiError } from "../../utils/ApiError";
 import { hashPassword } from "../../utils/password";
@@ -18,6 +18,24 @@ function inviteExpiryDate(): Date {
   const d = new Date();
   d.setDate(d.getDate() + INVITE_TTL_DAYS);
   return d;
+}
+
+/** Do not let a stale resend/revoke overwrite an invitation already consumed. */
+async function updateInviteSnapshot(
+  invite: { id: string; tokenHash: string; status: InviteStatus },
+  data: Prisma.AssistantInviteUpdateInput
+) {
+  try {
+    return await prisma.assistantInvite.update({
+      where: { id: invite.id, tokenHash: invite.tokenHash, status: invite.status },
+      data,
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      throw ApiError.conflict("تغيّرت الدعوة للتو. حدّث القائمة وأعد المحاولة.");
+    }
+    throw err;
+  }
 }
 
 /** طبيب فقط: إنشاء دعوة مساعد جديدة لبريد إلكتروني محدد. يُرجع الرمز الخام مرة واحدة فقط (لا يُخزَّن أبدًا). */
@@ -53,9 +71,8 @@ export async function resendInvite(doctorUserId: string, inviteId: string) {
   if (invite.status === InviteStatus.ACCEPTED) throw ApiError.badRequest("تم قبول هذه الدعوة بالفعل.");
 
   const rawToken = generateRawToken();
-  const updated = await prisma.assistantInvite.update({
-    where: { id: invite.id },
-    data: { tokenHash: hashToken(rawToken), expiresAt: inviteExpiryDate(), status: InviteStatus.PENDING, revokedAt: null },
+  const updated = await updateInviteSnapshot(invite, {
+    tokenHash: hashToken(rawToken), expiresAt: inviteExpiryDate(), status: InviteStatus.PENDING, revokedAt: null,
   });
 
   return { invite: updated, rawToken };
@@ -71,10 +88,7 @@ export async function revokeInvite(doctorUserId: string, inviteId: string) {
     throw ApiError.badRequest("تم قبول هذه الدعوة بالفعل، لا يمكن إلغاؤها — عطّل وصول المساعد بدل ذلك.");
   }
 
-  return prisma.assistantInvite.update({
-    where: { id: invite.id },
-    data: { status: InviteStatus.REVOKED, revokedAt: new Date() },
-  });
+  return updateInviteSnapshot(invite, { status: InviteStatus.REVOKED, revokedAt: new Date() });
 }
 
 /** طبيب فقط: قائمة مساعديه الحاليين + دعواته المعلّقة/المنتهية معًا. */
@@ -181,9 +195,13 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
     if (existingUser) throw ApiError.conflict("هذا البريد الإلكتروني مسجّل بالفعل بحساب آخر.");
 
     const passwordHash = await hashPassword(data.password);
+    // Share the membership lock with both clinic-transfer acceptance paths. Read
+    // the doctor only after acquiring it so an old invitation cannot inherit a
+    // newly joined clinic while registration is in flight.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"clinic-transfer:" + invite.doctorId}, 0))`;
     const invitingDoctor = await tx.doctor.findUnique({ where: { id: invite.doctorId }, select: { clinicId: true } });
     if (!invitingDoctor) throw ApiError.notFound("الطبيب غير موجود.");
-    if (invite.clinicId && invite.clinicId !== invitingDoctor.clinicId) throw ApiError.forbidden("تغيّر ارتباط الطبيب بالعيادة. اطلب دعوة جديدة من المالك.");
+    if (invite.clinicId !== invitingDoctor.clinicId) throw ApiError.forbidden("تغيّر ارتباط الطبيب بالعيادة. اطلب دعوة جديدة من المالك.");
     if (!invite.allDoctors) {
       if (!invite.clinicId || !invite.allowedDoctorIds.length) throw ApiError.forbidden();
       const count = await tx.doctor.count({ where: { clinicId: invite.clinicId, id: { in: invite.allowedDoctorIds }, user: { isActive: true } } });
@@ -198,6 +216,14 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
           : invite.allowedDoctorIds
         : [invite.doctorId]
     );
+    // Recheck at the write boundary: hashing/lock waits may allow revocation,
+    // expiry, resend or another acceptance after the initial read. Consuming
+    // first is safe: account creation and consumption roll back together.
+    const consumed = await tx.assistantInvite.updateMany({
+      where: { id: invite.id, tokenHash, status: InviteStatus.PENDING, expiresAt: { gt: new Date() } },
+      data: { status: InviteStatus.ACCEPTED, acceptedAt: new Date() },
+    });
+    if (consumed.count !== 1) throw ApiError.conflict("تغيّرت الدعوة أو انتهت صلاحيتها. اطلب رابطًا جديدًا من الطبيب.");
     const user = await tx.user.create({
       data: {
         email: invite.email,
@@ -206,7 +232,7 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
         assistant: {
           create: {
             doctorId: invite.doctorId,
-            clinicId: invitingDoctor.clinicId,
+            clinicId: invite.clinicId,
             allDoctors: invite.allDoctors,
             allowedDoctorIds: invite.allowedDoctorIds,
             firstName: data.firstName,
@@ -218,11 +244,6 @@ export async function acceptInvite(rawToken: string, data: { password: string; f
       // يعود نفس تسرّب consultationFee/subscriptionStatus لكن هذه المرة في استجابة التسجيل
       // نفسها (POST /api/auth/register/assistant) بدل GET /api/auth/me.
       include: { assistant: ASSISTANT_SAFE_SELECT },
-    });
-
-    await tx.assistantInvite.update({
-      where: { id: invite.id },
-      data: { status: InviteStatus.ACCEPTED, acceptedAt: new Date() },
     });
 
     return user;

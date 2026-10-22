@@ -47,7 +47,6 @@ export function PrescriptionCard({
   const formId = useId();
   const { showToast } = useToast();
   const [draft, setDraftState] = useState<PrescriptionDraft | null>(() => getStoredDraft(uid));
-  const [picking, setPicking] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [validation, setValidation] = useState<DraftValidation | null>(null);
   const [preview, setPreview] = useState<PrescriptionSheetData | null>(null);
@@ -73,10 +72,10 @@ export function PrescriptionCard({
 
   // الربط التلقائي بالاستشارة الحالية (فقط حين لا يضيع شيء ولا يُلغى اختيار يدوي).
   useEffect(() => {
-    if (!uid || picking || !current) return;
+    if (!uid || !current) return;
     if (shouldAutoRebind(draft, current.id)) setDraft(withLatinName(emptyDraft(uid, prescriptionPatientFrom(current), "current")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id, uid, picking]);
+  }, [current?.id, uid]);
 
   // تنبيه المتصفح قبل إغلاق/تحديث الصفحة بمسودة مكتوبة (الحفظ غير متاح حاليًا).
   const dirty = draftHasContent(draft);
@@ -100,22 +99,14 @@ export function PrescriptionCard({
     return window.confirm(DISCARD_MSG(draft.patientName || draft.patient.bookedName));
   }
 
-  function changePatient() {
-    if (!confirmDiscard()) return;
-    setDraft(null);
-    setPicking(true);
-  }
-
   function choose(appointmentId: string) {
     const a = choices.find((c) => c.id === appointmentId);
     if (!a) return;
     setDraft(withLatinName(emptyDraft(uid, prescriptionPatientFrom(a), current?.id === a.id ? "current" : "manual")));
-    setPicking(false);
   }
 
   function startForCurrent() {
     if (!current || !confirmDiscard()) return;
-    setPicking(false);
     setDraft(withLatinName(emptyDraft(uid, prescriptionPatientFrom(current), "current")));
   }
 
@@ -181,11 +172,6 @@ export function PrescriptionCard({
             </span>
           )}
         </div>
-        {draft && (
-          <button type="button" onClick={changePatient} className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-primary-700 underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-primary-400">
-            {t("تغيير المريض")}
-          </button>
-        )}
       </div>
 
       <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-slate-600" role={setup.error ? "alert" : "status"}>
@@ -241,11 +227,6 @@ export function PrescriptionCard({
                     ))}
                   </select>
                 </label>
-              )}
-              {picking && current && (
-                <button type="button" onClick={() => choose(current.id)} className="mt-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-primary-700 hover:underline">
-                  {t("الرجوع إلى المريض الحالي")}
-                </button>
               )}
             </>
           )}

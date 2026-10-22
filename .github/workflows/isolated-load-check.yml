@@ -1,0 +1,71 @@
+name: Isolated real workload check
+on:
+  push:
+    branches: [audit/isolated-load-20261022]
+permissions:
+  contents: read
+jobs:
+  real-workload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: medbook_ci
+          POSTGRES_PASSWORD: local_synthetic_only
+          POSTGRES_DB: medbook_security_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U medbook_ci -d medbook_security_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://medbook_ci:local_synthetic_only@127.0.0.1:5432/medbook_security_test
+      TEST_DATABASE_URL: postgresql://medbook_ci:local_synthetic_only@127.0.0.1:5432/medbook_security_test
+      JWT_SECRET: isolated_test_access_secret_20261022
+      JWT_REFRESH_SECRET: isolated_test_refresh_secret_20261022
+      REMINDERS_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --include=dev
+      - run: npx prisma generate --schema ../prisma/schema.prisma
+      - run: bash scripts/ci-prepare-test-db.sh
+      - name: Run real unit and PostgreSQL integration tests
+        run: npx vitest run --reporter=dot --reporter=json --outputFile.json=full-test-report.json
+      - name: Create separate empty workload database
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE medbook_load_test;'
+          DATABASE_URL=postgresql://medbook_ci:local_synthetic_only@127.0.0.1:5432/medbook_load_test npx prisma db push --schema ../prisma/schema.prisma --skip-generate
+          for f in \
+            20260923140000_release_cancelled_slots \
+            20260924170000_add_review_guards \
+            20260930120000_family_treatment_referrals_stats \
+            20261001193000_clinic_referral_discount \
+            20261003180000_clinic_doctor_terms \
+            20261011200000_follow_up_shared_minute; do
+            psql postgresql://medbook_ci:local_synthetic_only@127.0.0.1:5432/medbook_load_test -v ON_ERROR_STOP=1 -q -f "../prisma/migrations/$f/migration.sql"
+          done
+      - name: Execute actual HTTP and database workload
+        env:
+          DATABASE_URL: postgresql://medbook_ci:local_synthetic_only@127.0.0.1:5432/medbook_load_test
+          TEST_DATABASE_URL: postgresql://medbook_ci:local_synthetic_only@127.0.0.1:5432/medbook_load_test
+          RUN_CLINIC_LOAD: '1'
+          CLINIC_LOAD_REPORT: clinic-load-report.json
+        run: npx vitest run tests/integration/clinicDay.load.test.ts --reporter=dot
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: isolated-test-results
+          path: |
+            backend/full-test-report.json
+            backend/clinic-load-report.json
+          retention-days: 7

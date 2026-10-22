@@ -28,3 +28,26 @@ export const bookingLookupLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: "محاولات كثيرة. الرجاء المحاولة بعد قليل." },
 });
+
+// Share one budget across both patient booking APIs. Identity comes only from
+// authenticate, so changing IP, beneficiary, doctor or route cannot reset it.
+export const PATIENT_BOOKING_ATTEMPT_LIMIT = 20;
+export const patientBookingLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: PATIENT_BOOKING_ATTEMPT_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => `patient-booking:${req.user!.id}`,
+  message: { success: false, message: "محاولات حجز كثيرة خلال وقت قصير. انتظر قليلًا ثم أعد المحاولة." },
+});
+
+// Public discovery can fan out into many DB queries. Leave tracking and staff
+// polling outside this burst limit; retain the existing general IP budget.
+export const PUBLIC_DISCOVERY_LIMIT = 120;
+export const publicDiscoveryLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: PUBLIC_DISCOVERY_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "طلبات بحث كثيرة خلال وقت قصير. انتظر قليلًا ثم أعد المحاولة." },
+});

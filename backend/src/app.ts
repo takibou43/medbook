@@ -62,6 +62,8 @@ export function createApp() {
       credentials: true,
     })
   );
+  // Reject exhausted IPs before buffering/decompressing JSON bodies.
+  app.use("/api", apiLimiter);
   app.use(express.json({ limit: "2mb" }));
   app.use(cookieParser());
   // Compress large clinical list responses, excluding credential/invitation routes.
@@ -69,7 +71,6 @@ export function createApp() {
   app.use("/api", liveInvalidation);
   // Paths/queries can contain invite tokens, patient identifiers or phone numbers.
   if (!env.isProd) app.use(morgan(":method :status :response-time ms - :res[content-length]"));
-  app.use("/api", apiLimiter);
   app.use("/api/live", liveRoutes);
 
   app.get("/health", (_req, res) => res.json({ success: true, message: "MedBook API يعمل بنجاح 🩺" }));

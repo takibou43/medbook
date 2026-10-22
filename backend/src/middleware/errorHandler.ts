@@ -9,6 +9,19 @@ export function notFoundHandler(req: Request, res: Response) {
 }
 
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+  // Body-parser errors can contain the complete submitted body. Return fixed
+  // messages and never log/echo those objects or trust arbitrary error statuses.
+  if (err && typeof err === "object" && "type" in err && "status" in err) {
+    if (err.type === "entity.too.large" && err.status === 413) {
+      return res.status(413).json({ success: false, message: "حجم الطلب أكبر من الحد المسموح." });
+    }
+    if (err.type === "entity.parse.failed" && err.status === 400) {
+      return res.status(400).json({ success: false, message: "محتوى الطلب غير صالح." });
+    }
+    if ((err.type === "encoding.unsupported" || err.type === "charset.unsupported") && err.status === 415) {
+      return res.status(415).json({ success: false, message: "ترميز الطلب غير مدعوم." });
+    }
+  }
   // Zod validation errors
   if (err instanceof ZodError) {
     return res.status(400).json({

@@ -1,4 +1,5 @@
-export const LIVE_SAFETY_POLL_MS = 60_000;
+// Live changes invalidate these queries immediately; this only recovers missed events.
+export const LIVE_SAFETY_POLL_MS = 5 * 60_000;
 
 export function livePollInterval(connected: boolean, fallback: number) {
   return connected ? LIVE_SAFETY_POLL_MS : fallback;

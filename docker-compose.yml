@@ -1,3 +1,4 @@
+# ملف تطوير محلي فقط — لا يُستعمل كما هو في الإنتاج (أسرار افتراضية وتركيب مجلدات المصدر).
 version: "3.9"
 
 services:
@@ -7,10 +8,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: medbook
-      POSTGRES_PASSWORD: medbook
+      # للتطوير المحلي فقط. يمكن تجاوزها بمتغير POSTGRES_PASSWORD في .env (وتغييرها أيضًا في DATABASE_URL أدناه).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medbook}
       POSTGRES_DB: medbook
     ports:
-      - "5432:5432"
+      # مربوط بالواجهة المحلية فقط: لا يصل أي جهاز آخر على الشبكة إلى قاعدة البيانات.
+      - "127.0.0.1:5432:5432"
     volumes:
       - medbook_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -29,7 +32,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: "postgresql://medbook:medbook@postgres:5432/medbook?schema=public"
+      DATABASE_URL: "postgresql://medbook:${POSTGRES_PASSWORD:-medbook}@postgres:5432/medbook?schema=public"
       PORT: 4000
       NODE_ENV: production
       CLIENT_URL: "http://localhost:5173"

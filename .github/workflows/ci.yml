@@ -90,6 +90,22 @@ jobs:
           '
       - name: Fail if any integration file was skipped
         run: node scripts/assert-integration-ran.mjs vitest-report.json
+      - name: Prepare separate empty workload database
+        env:
+          PGPASSWORD: medbook_ci_only
+          TEST_DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_load_test?schema=public
+          DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_load_test?schema=public
+        run: |
+          psql -h 127.0.0.1 -U medbook_ci -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE medbook_load_test'
+          bash scripts/ci-prepare-test-db.sh
+      - name: Verify actual concurrent booking and admission workload
+        env:
+          TEST_DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_load_test?schema=public
+          DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_load_test?schema=public
+          RUN_CLINIC_LOAD: "1"
+          JWT_SECRET: ci_only_workload_access_secret_2026
+          JWT_REFRESH_SECRET: ci_only_workload_refresh_secret_2026
+        run: npx vitest run tests/integration/clinicDay.load.test.ts
       - name: Build with production dependencies (Render parity)
         run: |
           npm prune --omit=dev

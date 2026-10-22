@@ -9,8 +9,8 @@ set -euo pipefail
 
 host="$(node -e 'const u=new URL(process.env.TEST_DATABASE_URL);process.stdout.write(u.hostname)')"
 db_name="$(node -e 'const u=new URL(process.env.TEST_DATABASE_URL);process.stdout.write(u.pathname.slice(1))')"
-if [[ "$db_name" != "medbook_security_test" ]]; then
-  echo "رفض: هذا السكربت مخصص لقاعدة medbook_security_test المعزولة فقط." >&2
+if [[ "$db_name" != "medbook_security_test" && "$db_name" != "medbook_load_test" ]]; then
+  echo "رفض: هذا السكربت مخصص لقاعدتي medbook_security_test وmedbook_load_test المعزولتين فقط." >&2
   exit 1
 fi
 

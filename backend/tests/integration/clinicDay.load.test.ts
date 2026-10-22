@@ -144,12 +144,21 @@ describe.skipIf(!enabled)("Clinic day: 1000 patients + 15 doctors + 15 assistant
       // Queue fixtures are separately identified and excluded from 1000 bookings.
       // Keep today's fixture open regardless of wall clock time.
       await db.doctorSchedule.createMany({data:doctors.map(d=>({doctorId:d.doctorId!,dayOfWeek:today.getUTCDay(),isException:true,exceptionDate:today,startTime:'00:00',endTime:'23:59'}))});
-      await db.appointment.createMany({data:doctors.flatMap((d,i)=>Array.from({length:3},(_,n)=>({doctorId:d.doctorId!,patientId:patients[i*3+n].patientId,date:today,startTime:`0${n+1}:00`,endTime:`0${n+1}:05`,status:'CONFIRMED' as const})))});
+      await db.appointment.createMany({data:doctors.flatMap((d,i)=>Array.from({length:3},(_,n)=>({doctorId:d.doctorId!,patientId:patients[i*3+n].patientId,date:today,startTime:`0${n+1}:00`,endTime:`0${n+1}:05`,status:'CONFIRMED' as const,arrivedAt:new Date()})))});
+      // Start real duty before racing two requests from the authorized doctor.
+      // An off-duty assistant is not allowed to admit patients.
+      for (const d of doctors) {
+        const shift = await call(d,'doctor.startDuty','/api/shifts','POST',{active:true});
+        expect(shift.status).toBe(200);
+      }
       const raceResults=await Promise.all(doctors.map(async(d,i)=>{
-        const pair=await Promise.all([d,assistants[i]].map(a=>call(a,'queue.race','/api/appointments/queue/next','POST',{},[200,400])));
+        const denied=await call(assistants[i],'assistant.callDenied','/api/appointments/queue/next','POST',{},[403]);
+        expect(denied.status).toBe(403);
+        const pair=await Promise.all([d,d].map(a=>call(a,'queue.race','/api/appointments/queue/next','POST',{},[200,409])));
         const active=await db.appointment.findMany({where:{doctorId:d.doctorId,date:today,status:'IN_PROGRESS'}});
-        if(pair.filter(r=>r.status===200).length!==1 || active.length!==1) violations.push('Double call in one clinic');
-        const foreign=await call(assistants[(i+1)%15],'assistant.foreign',`/api/appointments/${active[0]?.id}`,'PATCH',{status:'COMPLETED'},[403]);
+        if(pair.filter(r=>r.status===200).length!==1 || active.length!==1) violations.push('Queue admission did not produce exactly one active patient');
+        expect(active).toHaveLength(1);
+        const foreign=await call(assistants[(i+1)%15],'assistant.foreign',`/api/appointments/${active[0].id}`,'PATCH',{status:'COMPLETED'},[403]);
         if(active.length) await call(assistants[i],'assistant.completeDenied',`/api/appointments/${active[0].id}`,'PATCH',{status:'COMPLETED'},[400]);
         const done=active.length?await call(d,'doctor.complete',`/api/appointments/${active[0].id}`,'PATCH',{status:'COMPLETED'}):null;
         return {doctor:i+1,statuses:pair.map(r=>r.status),active:active.length,foreign:foreign.status,completed:done?.status};
@@ -159,7 +168,13 @@ describe.skipIf(!enabled)("Clinic day: 1000 patients + 15 doctors + 15 assistant
       // It must share the same one-patient-inside guard as queue/next.
       report.patchRaces=await Promise.all(doctors.map(async(d,i)=>{
         const waiting=await db.appointment.findMany({where:{doctorId:d.doctorId,date:today,status:'CONFIRMED'},orderBy:{startTime:'asc'}});
-        const pair=await Promise.all([d,assistants[i]].map((a,n)=>call(a,'queue.patchRace',`/api/appointments/${waiting[n].id}`,'PATCH',{status:'IN_PROGRESS'},[200,400,409])));
+        // With the assistant on duty, the doctor requests reception; duplicate
+        // assistant submissions must still admit exactly one present patient.
+        const shift=await call(assistants[i],'assistant.startShift','/api/shifts','POST',{active:true});
+        expect(shift.status).toBe(200);
+        const request=await call(d,'doctor.requestNext','/api/appointments/queue/next','POST',{});
+        expect(request.data?.awaitingAssistant).toBe(true);
+        const pair=await Promise.all([0,1].map(()=>call(assistants[i],'queue.patchRace',`/api/appointments/${waiting[0].id}`,'PATCH',{status:'IN_PROGRESS'},[200,400,409])));
         const active=await db.appointment.count({where:{doctorId:d.doctorId,date:today,status:'IN_PROGRESS'}});
         if(pair.filter(r=>r.status===200).length!==1 || active!==1) violations.push('PATCH allows multiple patients inside one clinic');
         return {doctor:i+1,statuses:pair.map(r=>r.status),active};

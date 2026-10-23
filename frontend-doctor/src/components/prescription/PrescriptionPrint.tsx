@@ -22,6 +22,8 @@ export interface PrescriptionSheetData {
   template?: PrescriptionTemplate | null;
   language: PrescriptionLanguage;
   headerLanguage?: PrescriptionHeaderLanguage;
+  /** رقم التسجيل في عمادة الأطباء (N° d'ordre). */
+  orderNumber?: string;
   professional?: PrescriptionProfessional;
   /** اسم الطبيب كما كتبه بنفسه لكل جهة: ar يمين الترويسة، fr يسارها. */
   doctorNames?: { ar?: string; fr?: string };
@@ -61,6 +63,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const lang = data.language;
   const age = prescriptionAgeValue(data.patientAge, data.patientAgeUnit);
   const weight = prescriptionWeightValue(data.patientWeight);
+  const orderNumber = (data.orderNumber ?? "").trim();
   const ageUnit = (lang === "fr" ? { years: "ans", months: "mois", days: "jours" } : { years: "سنة", months: "شهر", days: "يوم" })[data.patientAgeUnit ?? "years"];
   const text = prescriptionLabels(lang);
   const d = data.doctor;
@@ -101,12 +104,14 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         <div className="rx-side rx-side-fr" lang="fr" dir="ltr" hidden={data.headerLanguage === "ar"}>
           {doctorNameFr && <p className="rx-doctor"><bdi dir="ltr">{fr.doctor}</bdi> <Typed>{doctorNameFr}</Typed></p>}
           {specialtyFr && <p className="rx-specialty">{specialtyFr}</p>}
+          {orderNumber && <p className="rx-order">N° d'ordre : <bdi dir="ltr" translate="no">{orderNumber}</bdi></p>}
           {clinicNameFr && <p className="rx-clinic"><Typed>{clinicNameFr}</Typed></p>}
         </div>
         <div className="rx-logo-slot">{data.logo ? <img src={data.logo} alt="" /> : <SpecialtyIcon specialty={d?.specialty ?? {}} className="rx-specialty-logo" />}</div>
         <div className="rx-side rx-side-ar" lang="ar" dir="rtl" hidden={data.headerLanguage === "fr"}>
           {doctorNameAr && <p className="rx-doctor"><bdi dir="rtl">{ar.doctor}</bdi> <Typed>{doctorNameAr}</Typed></p>}
           {specialtyAr && <p className="rx-specialty">{specialtyAr}</p>}
+          {orderNumber && <p className="rx-order">رقم التسجيل: <bdi dir="ltr" translate="no">{orderNumber}</bdi></p>}
           {clinicNameAr && <p className="rx-clinic"><Typed>{clinicNameAr}</Typed></p>}
         </div>
       </header>}
@@ -151,7 +156,9 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
                 <p className="rx-med-title">
                   <Typed className="rx-med-name">{p.name}</Typed>
                   {p.detail && <Typed className="rx-med-detail">{glueNumberUnit(p.detail)}</Typed>}
-                  {m.quantity?.trim() && <span className="rx-med-quantity">{standard && <span className="rx-fact-label">{lang === "fr" ? "Quantité" : "الكمية"}: </span>}<Typed>{glueNumberUnit(m.quantity.trim())}</Typed></span>}
+                  {/* خط متقطّع يربط الاسم بالكمية كما في الوصفات المعتادة */}
+                  {m.quantity?.trim() && standard && <span className="rx-leader" aria-hidden="true" />}
+                  {m.quantity?.trim() && <span className="rx-med-quantity">{standard && /^\d+$/.test(m.quantity.trim()) && <span className="rx-fact-label">{lang === "fr" ? "Quantité" : "الكمية"}: </span>}<Typed>{glueNumberUnit(m.quantity.trim())}</Typed></span>}
                 </p>
                 {/* السطر 2: الجرعة، التكرار، التوقيت، المدة — كل رقم ملصوق بوحدته؛ الفاصل ملصوق بما قبله فلا يبدأ سطر به */}
                 {factItems.length > 0 && (

@@ -2096,5 +2096,10 @@
   "كغ": "kg",
   "الشكل": "Forme",
   "طريقة الأخذ": "Voie",
-  "مثال: قرص واحد عن طريق الفم 3 مرات يوميًا بعد الأكل لمدة 7 أيام": "Ex. : 1 comprimé par voie orale 3 fois par jour après les repas pendant 7 jours"
+  "مثال: قرص واحد عن طريق الفم 3 مرات يوميًا بعد الأكل لمدة 7 أيام": "Ex. : 1 comprimé par voie orale 3 fois par jour après les repas pendant 7 jours",
+  "رقم التسجيل في عمادة الأطباء (N° d'ordre)": "Numéro d'inscription à l'Ordre (N° d'ordre)",
+  "استعمل أرقامًا وحروفًا لاتينية و«/» فقط.": "Utilisez uniquement des chiffres, lettres latines et « / ».",
+  "يُطبع في رأس الوصفة تحت التخصص.": "Imprimé dans l'en-tête, sous la spécialité.",
+  "وحدة الكمية": "Unité de quantité",
+  "مثال: 02 علب": "Ex. : 02 btes"
 }

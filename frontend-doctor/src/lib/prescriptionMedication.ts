@@ -209,3 +209,27 @@ export function toggleInstructionChip(text: string, group: InstructionChipGroup,
 export function chipActive(text: string, chip: string): boolean {
   return text.includes(chip);
 }
+
+/** وحدات الكمية المصروفة كما تُكتب في الوصفات الجزائرية: «02 علب»، «01 tube». */
+export const QUANTITY_UNITS = {
+  box: { ar: ["علبة", "علب"], fr: ["bte", "btes"] },
+  tube: { ar: ["أنبوب", "أنابيب"], fr: ["tube", "tubes"] },
+  bottle: { ar: ["قارورة", "قوارير"], fr: ["flacon", "flacons"] },
+} satisfies Record<string, Record<Lang, [string, string]>>;
+export type QuantityUnit = keyof typeof QUANTITY_UNITS;
+
+/** يحوّل الكمية إلى «العدد بخانتين + الوحدة» (العدد الموجود أو 1)؛ ونفس الوحدة مرة ثانية تُبقي العدد وحده. */
+export function formatQuantity(text: string, unit: QuantityUnit, lang: Lang): string {
+  const n = Number(/\d+/.exec(text)?.[0] ?? "1") || 1;
+  const words = QUANTITY_UNITS[unit][lang];
+  if (quantityUnitOf(text, lang) === unit) return String(n).padStart(2, "0");
+  return `${String(n).padStart(2, "0")} ${n === 1 ? words[0] : words[1]}`;
+}
+
+export function quantityUnitOf(text: string, lang: Lang): QuantityUnit | null {
+  const words = text.trim().split(/\s+/);
+  for (const [unit, forms] of Object.entries(QUANTITY_UNITS) as [QuantityUnit, Record<Lang, [string, string]>][]) {
+    if (forms[lang].some((f) => words.includes(f))) return unit;
+  }
+  return null;
+}

@@ -3,7 +3,7 @@ import { useEffect, useId, useState } from "react";
 import { FileText } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { usePrescriptionSetup } from "../../hooks/usePrescriptionSetup";
-import { DEFAULT_PRESCRIPTION_SETTINGS, sameSettings, type PrescriptionSettings } from "../../lib/prescriptionSettings";
+import { DEFAULT_PRESCRIPTION_SETTINGS, sameSettings, type PrescriptionSettings, validOrderNumber } from "../../lib/prescriptionSettings";
 import type { PrescriptionLanguage, PrescriptionProfessional } from "../../lib/prescriptionPrint";
 import { Button } from "../ui/Button";
 import { Spinner, ErrorState } from "../ui/States";
@@ -42,6 +42,7 @@ export function PrescriptionSettingsSection() {
     setForm(f => ({ ...f, professional: { ...f.professional, [lang]: { ...f.professional[lang], [key]: value } } }));
 
   async function save() {
+    if (!validOrderNumber(form.orderNumber)) { showToast(t("استعمل أرقامًا وحروفًا لاتينية و«/» فقط."), "error"); return; }
     setSaving(true);
     try { await setup.saveSettings(form); showToast(t("تم حفظ إعدادات الوصفة."), "success"); }
     catch (err) { showToast(apiErrorMessage(err, t("تعذّر حفظ إعدادات الوصفة.")), "error"); }
@@ -53,6 +54,7 @@ export function PrescriptionSettingsSection() {
     template: setup.template,
     language: lang,
     headerLanguage: form.headerLanguage,
+    orderNumber: form.orderNumber,
     doctor: user?.doctor,
     professional: form.professional[lang],
     doctorNames: { ar: form.professional.ar?.doctorName, fr: form.professional.fr?.doctorName },
@@ -92,6 +94,12 @@ export function PrescriptionSettingsSection() {
                 <option value="both">{t("العربية والفرنسية")}</option><option value="ar">العربية</option><option value="fr">Français</option>
               </select>
               <span className="mt-1 block text-xs text-slate-600">{t("تتحكم بالترويسة التلقائية فقط؛ النصوص المرسومة داخل صورة مستوردة أو قالب متقدم تبقى كما هي.")}</span>
+            </label>
+            <label className="block">
+              <span className="label">{t("رقم التسجيل في عمادة الأطباء (N° d'ordre)")} <span className="font-normal text-slate-500">({t("اختياري")})</span></span>
+              <input className="input max-w-xs" dir="ltr" translate="no" maxLength={20} placeholder="114" value={form.orderNumber ?? ""} onChange={e => setForm({ ...form, orderNumber: e.target.value })} aria-invalid={!validOrderNumber(form.orderNumber)} />
+              {!validOrderNumber(form.orderNumber) ? <span role="alert" className="mt-1 block text-xs text-red-700">{t("استعمل أرقامًا وحروفًا لاتينية و«/» فقط.")}</span>
+                : <span className="mt-1 block text-xs text-slate-500">{t("يُطبع في رأس الوصفة تحت التخصص.")}</span>}
             </label>
             <fieldset className="rounded-xl border border-slate-200 p-3">
               <legend className="px-1 text-sm font-semibold">{t("البيانات المهنية في رأس الوصفة")}</legend>

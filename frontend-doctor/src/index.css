@@ -242,6 +242,9 @@ body {
 .rx-med-title { font-size: 12.5pt; line-height: 1.45; break-after: avoid; page-break-after: avoid; }
 .rx-standard .rx-med-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 2mm; }
 .rx-standard .rx-med-quantity { float: none; margin-inline-start: auto; }
+.rx-standard .rx-leader { flex: 1 1 10mm; min-width: 10mm; align-self: center; margin: 0 1mm; border-bottom: 0.35mm dashed #9ca3af; }
+.rx-standard .rx-leader + .rx-med-quantity { margin-inline-start: 0; }
+.rx-order { font-size: 9.5pt; color: #374151; }
 .rx-med-facts { margin-top: 0.8mm !important; font-size: 11pt; line-height: 1.6; color: #1f2937; break-after: avoid; page-break-after: avoid; }
 .rx-med-instr { margin-top: 0.8mm !important; font-size: 12pt; line-height: 1.6; font-weight: 600; color: #000; orphans: 2; widows: 2; }
 .rx-med-detail { font-weight: 600; color: #111827; }

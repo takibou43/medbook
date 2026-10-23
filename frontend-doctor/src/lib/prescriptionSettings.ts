@@ -6,6 +6,8 @@ export interface PrescriptionShow { clinicName: boolean; address: boolean; phone
 export interface PrescriptionSettings {
   language: PrescriptionLanguage;
   headerLanguage?: PrescriptionHeaderLanguage;
+  /** رقم التسجيل في عمادة الأطباء (N° d'ordre). */
+  orderNumber?: string;
   professional: Partial<Record<PrescriptionLanguage, PrescriptionProfessional>>;
   show: PrescriptionShow;
 }
@@ -27,6 +29,7 @@ export function normalizeSettings(raw: unknown): PrescriptionSettings {
   return {
     language: r.language === "fr" ? "fr" : "ar",
     ...(r.headerLanguage === "ar" || r.headerLanguage === "fr" || r.headerLanguage === "both" ? { headerLanguage: r.headerLanguage } : {}),
+    ...(typeof r.orderNumber === "string" && r.orderNumber.trim() ? { orderNumber: r.orderNumber.trim() } : {}),
     professional: { ar: clean(r.professional?.ar), fr: clean(r.professional?.fr) },
     show: { ...DEFAULT_PRESCRIPTION_SETTINGS.show, ...Object.fromEntries(Object.entries(r.show ?? {}).filter(([, v]) => typeof v === "boolean")) },
   };
@@ -35,9 +38,15 @@ export function normalizeSettings(raw: unknown): PrescriptionSettings {
 /** الحمولة التي تُرسل للخادم: نصوص مقصوصة وفارغها يُحذف، والأعلام كما هي. */
 export function settingsPayload(s: PrescriptionSettings) {
   const pro = (p: PrescriptionProfessional | undefined) => Object.fromEntries(Object.entries(p ?? {}).map(([k, v]) => [k, (v ?? "").trim()]).filter(([, v]) => v));
-  return { language: s.language, ...(s.headerLanguage ? { headerLanguage: s.headerLanguage } : {}), professional: { ar: pro(s.professional.ar), fr: pro(s.professional.fr) }, show: s.show };
+  return { language: s.language, ...(s.headerLanguage ? { headerLanguage: s.headerLanguage } : {}), ...(s.orderNumber?.trim() ? { orderNumber: s.orderNumber.trim() } : {}), professional: { ar: pro(s.professional.ar), fr: pro(s.professional.fr) }, show: s.show };
 }
 
 export function sameSettings(a: PrescriptionSettings, b: PrescriptionSettings): boolean {
   return JSON.stringify(settingsPayload(a)) === JSON.stringify(settingsPayload(b));
+}
+
+/** نفس قاعدة الخادم: أرقام وحروف لاتينية و«/» و«-» فقط، حتى 20 حرفًا. */
+export function validOrderNumber(value: string | undefined): boolean {
+  const v = (value ?? "").trim();
+  return v === "" || (v.length <= 20 && /^[0-9A-Za-z/\- ]*$/.test(v));
 }

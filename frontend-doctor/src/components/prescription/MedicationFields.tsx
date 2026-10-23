@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { ChevronDown, Pencil, Plus, Trash2, Undo2, X } from "lucide-react";
 import type { PrescriptionMedication } from "../../lib/prescription";
 import type { PrescriptionLanguage } from "../../lib/prescriptionPrint";
-import { CUSTOM, DOSE_UNITS, DURATION_UNITS, FREQUENCIES, INSTRUCTION_CHIPS, TIMINGS, chipActive, editableValues, medicationComplete, medicationHasStructuredValues, medicationSummary, toggleInstructionChip } from "../../lib/prescriptionMedication";
+import { CUSTOM, DOSE_UNITS, DURATION_UNITS, FREQUENCIES, INSTRUCTION_CHIPS, QUANTITY_UNITS, TIMINGS, chipActive, formatQuantity, quantityUnitOf, editableValues, medicationComplete, medicationHasStructuredValues, medicationSummary, toggleInstructionChip } from "../../lib/prescriptionMedication";
 import { Button } from "../ui/Button";
 import { t } from "../../i18n/locale.ts";
 import { readMedicationNames, rememberMedicationName } from "../../lib/medicationNames";
@@ -102,7 +102,7 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
                   </div>
                   <div className="min-w-0 flex-1 space-y-2.5">
                     {/* السطر الأول: اسم الدواء + عدد العلب (يتكدّسان على الهاتف) */}
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_11rem]">
                       <label className="min-w-0">
                         <span className={labelCls}>{t("اسم الدواء")}</span>
                         <input id={fieldId("name")} list={`${formId}-medication-names`} onKeyDown={e => {
@@ -116,7 +116,18 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
                       </label>
                       <label className="min-w-0">
                         <span className={labelCls}>{t("عدد العلب")} <span className="font-normal text-slate-500">({t("اختياري")})</span></span>
-                        <input id={fieldId("quantity")} onKeyDown={e => nextOnEnter(e, fieldId("instructions"))} enterKeyHint="next" className="input py-2 text-center max-sm:max-w-[9rem]" dir="auto" translate="no" autoComplete="off" placeholder={t("مثال: 2")} value={m.quantity ?? ""} onChange={setText("quantity")} />
+                        <input id={fieldId("quantity")} onKeyDown={e => nextOnEnter(e, fieldId("instructions"))} enterKeyHint="next" className="input py-2 text-center max-sm:max-w-[9rem]" dir="auto" translate="no" autoComplete="off" placeholder={lang === "fr" ? "Ex. : 02 btes" : t("مثال: 02 علب")} value={m.quantity ?? ""} onChange={setText("quantity")} />
+                        {/* وحدة الكمية: علبة / أنبوب / قارورة — تكتب «02 علب» كما في الوصفات المعتادة */}
+                        <span className="mt-1 flex flex-wrap gap-1" role="group" aria-label={t("وحدة الكمية")}>
+                          {(Object.keys(QUANTITY_UNITS) as (keyof typeof QUANTITY_UNITS)[]).map(unit => {
+                            const on = quantityUnitOf(m.quantity ?? "", lang) === unit;
+                            return <button key={unit} type="button" aria-pressed={on}
+                              onClick={() => onUpdate(m.id, { quantity: formatQuantity(m.quantity ?? "", unit, lang) })}
+                              className={clsx("min-h-7 rounded-full border px-2 text-[11px] font-semibold transition", focus, on ? "border-primary-600 bg-primary-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-primary-300 hover:bg-primary-50")}>
+                              {QUANTITY_UNITS[unit][lang][0]}
+                            </button>;
+                          })}
+                        </span>
                       </label>
                     </div>
                     {/* السطر الثاني: طريقة الاستعمال + أزرار سريعة */}

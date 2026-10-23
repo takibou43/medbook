@@ -160,25 +160,25 @@ export default function DoctorHome() {
 
       <GuestBookingModal open={bookingOpen} onClose={() => setBookingOpen(false)} />
 
-      {/* 1) بدء/إنهاء المداومة — يفتح العيادة ويُظهرها للمرضى أو يغلقها ويوقف الطابور. */}
-      <ShiftControl variant="hero" />
-
-      {/* 2) الأيام المتبقية في الاشتراك أو الفترة التجريبية. */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* سطر واحد: زر بدء/إنهاء المداومة في جهة، وعدد أيام الاشتراك في الجهة المقابلة. */}
+      <div className="flex items-center justify-between gap-2">
+        <ShiftControl variant="hero" />
         {daysLine ? (
-          <Link to="/subscription" title={t("تفاصيل الاشتراك")} className={clsx("inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold", TONE_CLASS[daysLine.tone])}>
+          <Link to="/subscription" title={t("تفاصيل الاشتراك")} className={clsx("inline-flex min-w-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold sm:gap-2 sm:px-3 sm:text-sm", TONE_CLASS[daysLine.tone])}>
             <Timer className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="min-w-0 break-words">{daysLine.text}</span>
           </Link>
         ) : stats.isPending ? (
-          <span className="h-9 w-48 animate-pulse rounded-xl bg-slate-100" aria-hidden="true" />
-        ) : <span />}
-        {canBook && (
+          <span className="h-9 w-40 animate-pulse rounded-xl bg-slate-100" aria-hidden="true" />
+        ) : null}
+      </div>
+      {canBook && (
+        <div className="-mt-2 flex justify-end">
           <button type="button" className="btn-outline !px-3" onClick={() => setBookingOpen(true)}>
             <CalendarPlus className="h-4 w-4 shrink-0" aria-hidden="true" />{t("حجز موعد")}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* تنبيهات تظهر فقط حين يلزم إجراء. */}
       {stats.data?.verificationStatus === "PENDING" && (

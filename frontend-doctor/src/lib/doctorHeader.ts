@@ -162,3 +162,27 @@ export function bookingHandledByAssistantNote(input: { hasActiveAssistant: boole
     ? t("حجز المواعيد من مسؤولية مساعدك حاليًا.")
     : null;
 }
+
+/**
+ * سطر «الأيام المتبقية» في لوحة الطبيب (العنصر الثاني بعد زر المداومة).
+ * صادق: لا يُعرض عدد أيام إلا إن وُجد تاريخ انتهاء فعلي في السجل؛ null إن لم تتوفر البيانات بعد.
+ */
+export function subscriptionDaysLine(summary: SubscriptionSummary | null | undefined, now = Date.now()): { text: string; tone: BadgeTone } | null {
+  if (!summary) return null;
+  if (!summary.active) {
+    return { text: summary.kind === "CLINIC" ? t("اشتراك العيادة منتهٍ") : t("اشتراكك منتهٍ — جدّده ليظهر ملفك للمرضى"), tone: "red" };
+  }
+  const left = daysUntil(summary.expiresAt, now);
+  const soon = left !== null && left <= EXPIRY_WARNING_DAYS;
+  const tone: BadgeTone = soon ? "amber" : summary.kind === "ACTIVE" ? "green" : "blue";
+  if (left === null) {
+    return { text: summary.kind === "TRIAL" ? t("فترة تجريبية مجانية") : summary.kind === "CLINIC" ? t("ضمن اشتراك العيادة") : t("اشتراك فعّال"), tone };
+  }
+  const days = left === 1 ? t("يوم واحد") : left === 2 ? t("يومان") : t("{0} {1}", { "0": left, "1": left >= 3 && left <= 10 ? t("أيام") : t("يومًا") });
+  const text = summary.kind === "TRIAL"
+    ? t("متبقٍ من الفترة التجريبية: {0}", { "0": days })
+    : summary.kind === "CLINIC"
+    ? t("متبقٍ من اشتراك العيادة: {0}", { "0": days })
+    : t("متبقٍ من اشتراكك: {0}", { "0": days });
+  return { text, tone };
+}

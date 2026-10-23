@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { AlertTriangle, ArrowLeft, CalendarCheck, CalendarClock, CalendarPlus, Check, CheckCircle2, Hourglass, ListOrdered, UserRound, Users } from "lucide-react";
+import { ArrowLeft, CalendarClock, CalendarPlus, Check, CheckCircle2, Hourglass, Timer } from "lucide-react";
 import { api, apiErrorMessage } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { useLiveUpdates } from "../../context/LiveUpdatesContext";
@@ -13,11 +13,11 @@ import { livePollInterval } from "../../lib/livePolling";
 import { useToast } from "../../components/ui/Toast";
 import { Spinner } from "../../components/ui/States";
 import { Button } from "../../components/ui/Button";
-import { VerificationBadge } from "../../components/ui/Badge";
 import { StatCard } from "../../components/StatCard";
 import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
 import { GuestBookingModal } from "../../components/GuestBooking";
-import { TONE_CLASS, bookingHandledByAssistantNote, quickActions, subscriptionAlert, subscriptionBadge, type QuickActionId, type SubscriptionSummary } from "../../lib/doctorHeader";
+import { TONE_CLASS, quickActions, subscriptionDaysLine, type SubscriptionSummary } from "../../lib/doctorHeader";
+import { ShiftControl } from "../../components/ShiftControl";
 import { useCallNext, useFinishAppointment, useQueue } from "../../hooks/useQueue";
 import { useMyAppointments } from "../../hooks/useAppointments";
 import { appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
@@ -82,7 +82,6 @@ export default function DoctorHome() {
     else triggerEls.current.delete(id);
   };
 
-  const doctor = user?.doctor;
   const busy = finish.isPending || callNext.isPending;
 
   // يُنفَّذ بعد انتهاء أي طلب (الأزرار تعود مفعّلة) حتى لا يضيع التركيز على زر معطّل.
@@ -102,7 +101,8 @@ export default function DoctorHome() {
   const turns = useMemo(() => visibleTurnNumbers(todays), [todays, getLanguage()]);
 
   const current = queue.data?.current ?? null;
-  const nextList = (queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])]).slice(0, 3);
+  // الطابور كاملًا بترتيب المناداة الفعلي من الخادم (لا نقتطع منه شيئًا).
+  const nextList = queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])];
   const canCallNext = !current && nextList.length > 0;
 
   function refreshAll() {
@@ -137,18 +137,16 @@ export default function DoctorHome() {
     });
   }
 
-  // ---- رأس اللوحة: كل ما يلي يأتي من /doctor/dashboard (مصدر الحقيقة في الـ Backend) ----
+  // ---- الاشتراك وزر الحجز: من /doctor/dashboard (مصدر الحقيقة في الـ Backend) ----
   const subscription: SubscriptionSummary | null = stats.data?.subscription ?? null;
-  const subBadge = subscriptionBadge(subscription);
-  const subAlert = subscriptionAlert(subscription);
-  const actions = quickActions({
+  const daysLine = subscriptionDaysLine(subscription);
+  // «حجز موعد» يبقى متاحًا للطبيب الذي لا مساعد له فقط (نفس القاعدة السابقة دون تغيير).
+  const canBook = quickActions({
     role: user?.role,
     verificationStatus: stats.data?.verificationStatus,
     subscriptionActive: subscription?.active,
     canCreateAppointments: stats.data?.canCreateAppointments,
-  });
-  const assistantNote = bookingHandledByAssistantNote({ hasActiveAssistant: stats.data?.hasActiveAssistant, canCreateAppointments: stats.data?.canCreateAppointments });
-  const ACTION_ICONS: Record<QuickActionId, typeof CalendarCheck> = { book: CalendarPlus, appointments: CalendarCheck, queue: ListOrdered, patients: Users };
+  }).some((a) => a.id === "book");
 
   // عند فشل التحميل نعرض «—» بدل 0 حتى لا يُفهم أن العيادة فارغة.
   const waitingCount: number | string = queue.isError ? "—" : queue.data?.waiting.length ?? 0;
@@ -162,74 +160,49 @@ export default function DoctorHome() {
 
       <GuestBookingModal open={bookingOpen} onClose={() => setBookingOpen(false)} />
 
-      {/* رأس اللوحة: الهوية وشارة التوثيق بجانب الاسم، شارة اشتراك مختصرة (التفاصيل في صفحة الاشتراك)،
-          ثم الإجراءات السريعة حسب الصلاحيات الفعلية. */}
-      <header className="card p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-          <div className="min-w-0 flex-1">
-            <h1 className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xl font-extrabold text-slate-900 sm:text-2xl">
-              <span className="min-w-0 break-words">{doctor ? t("د. {0} {1}", { "0": doctor.firstName, "1": doctor.lastName }) : ""}</span>
-              {stats.data?.verificationStatus && <VerificationBadge status={stats.data.verificationStatus} />}
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">{t("لوحة إدارة العيادة")}</p>
-          </div>
-          {subBadge && (
-            <Link to="/subscription" title={t("تفاصيل الاشتراك")} className={clsx("badge max-w-full whitespace-nowrap", TONE_CLASS[subBadge.tone])}>
-              {subBadge.label}
-            </Link>
-          )}
-        </div>
+      {/* 1) بدء/إنهاء المداومة — يفتح العيادة ويُظهرها للمرضى أو يغلقها ويوقف الطابور. */}
+      <ShiftControl variant="hero" />
 
-        <section aria-label={t("الإجراءات السريعة")} className="mt-4 border-t border-slate-100 pt-3">
-          <h2 className="text-sm font-bold text-slate-700">{t("الإجراءات السريعة")}</h2>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {actions.map((a) => {
-              const Icon = ACTION_ICONS[a.id] ?? UserRound;
-              return a.to ? (
-                <Link key={a.id} to={a.to} className="btn-outline w-full min-w-0 !px-2">
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{a.label}</span>
-                </Link>
-              ) : (
-                <button key={a.id} type="button" className="btn-primary w-full min-w-0 !px-2" onClick={() => setBookingOpen(true)}>
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{a.label}</span>
-                </button>
-              );
-            })}
-          </div>
-          {assistantNote && <p className="mt-2 text-xs text-slate-500">{assistantNote}</p>}
-        </section>
-      </header>
+      {/* 2) الأيام المتبقية في الاشتراك أو الفترة التجريبية. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {daysLine ? (
+          <Link to="/subscription" title={t("تفاصيل الاشتراك")} className={clsx("inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold", TONE_CLASS[daysLine.tone])}>
+            <Timer className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 break-words">{daysLine.text}</span>
+          </Link>
+        ) : stats.isPending ? (
+          <span className="h-9 w-48 animate-pulse rounded-xl bg-slate-100" aria-hidden="true" />
+        ) : <span />}
+        {canBook && (
+          <button type="button" className="btn-outline !px-3" onClick={() => setBookingOpen(true)}>
+            <CalendarPlus className="h-4 w-4 shrink-0" aria-hidden="true" />{t("حجز موعد")}
+          </button>
+        )}
+      </div>
 
-      {/* تنبيهات مختصرة: فقط حين يلزم إجراء — لا نكرر حالة الاشتراك المعروضة في الشارة. */}
+      {/* تنبيهات تظهر فقط حين يلزم إجراء. */}
       {stats.data?.verificationStatus === "PENDING" && (
         <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{t("ملفك قيد المراجعة من الإدارة، ولن تظهر للمرضى حتى تتم الموافقة. ")}</p>
-      )}
-      {subAlert && (
-        <Link to="/subscription" role="status" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className="min-w-0 break-words">{subAlert}</span>
-        </Link>
       )}
       {stats.data?.rescheduleRequired > 0 && (
         <Link className="block rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800" to={appointmentsLink({ status: "RESCHEDULE_REQUIRED" })}>
           {appointmentsCountAr(stats.data.rescheduleRequired)}{t(" بحاجة إلى إعادة جدولة — مراجعة المواعيد ")}</Link>
       )}
 
-      {/* بطاقات */}
+      {/* 3) ثلاث عدادات */}
       <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
         <StatCard label={t("مواعيد اليوم")} value={todayCount} icon={CalendarClock} to={appointmentsLink({ from: today, to: today })} />
         <StatCard label={t("في الانتظار")} value={waitingCount} icon={Hourglass} tone="amber" to="/appointments?tab=queue" />
         <StatCard label={t("مكتملة")} value={completedCount} icon={CheckCircle2} tone="green" to={`/appointments?status=COMPLETED&date=${today}`} />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
-          {/* المريض الحالي */}
+      {/* ترتيب DOM: المريض الحالي ← الطابور ← الوصفة، فيأتي الطابور مباشرة بعد بطاقة المريض على الهاتف.
+          على الشاشة العريضة يبقى الطابور في العمود الجانبي بجانب البطاقة، والوصفة في مكانها تحتها. */}
+      <div className="grid items-start gap-5 lg:grid-cols-3 lg:grid-rows-[auto_1fr]">
+          {/* 4) المريض الحالي */}
           {/* بعد «إنهاء الكشف»/«استدعاء التالي» يعود التركيز إلى البطاقة نفسها لا إلى زر إجراء آخر:
               ضغطة Enter مكررة يجب ألا تُنهي كشفًا وتنادي مريضًا ثم تُنهيه بالتتابع. */}
-          <section ref={registerTrigger("current-card")} tabIndex={-1} className="card p-4 outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:p-5" aria-label={t("المريض الحالي")}>
+          <section ref={registerTrigger("current-card")} tabIndex={-1} className="card p-4 outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:p-5 lg:col-span-2" aria-label={t("المريض الحالي")}>
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-bold text-slate-900">{t(queue.data?.awaitingAssistant ? "في انتظار تأكيد المساعد" : "المريض الحالي")}</h2>
               {current && <span className="badge bg-sky-100 text-sky-700">{t("قيد الكشف")}</span>}
@@ -256,27 +229,16 @@ export default function DoctorHome() {
               <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-slate-600">{t("لا يوجد مريض بالداخل الآن.")}</p>
             )}
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2 [&>*]:min-w-[9rem]">
               {current?.patientId && isDentalSpecialty(user?.doctor?.specialty) && <Button className="flex-1" variant="outline" onClick={() => setPlanSubject({ patientId: current.patientId!, memberId: current.familyMemberId ?? current.beneficiary?.familyMemberId ?? "", name: beneficiaryName(current) })}>{t("خطط العلاج")}</Button>}
-              {current && (
-                <Button
-                  className="flex-1"
-                  loading={finish.isPending}
-                  disabled={busy}
-                  onClick={() => run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, t("اكتمل الكشف."), "current-card")}
-                >
-                  <Check className="h-4 w-4" aria-hidden="true" />{t(" إنهاء الكشف ")}</Button>
-              )}
-              {current ? (
-                !usesStandaloneFollowUp(user?.doctor?.specialty) ? null : <Button
-                  className="flex-1"
-                  variant="outline"
-                  disabled={busy || !canScheduleFollowUp(current)}
-                  aria-describedby={!canScheduleFollowUp(current) ? "follow-up-hint" : undefined}
-                  onClick={() => openFollowUp(current, "current-card")}
-                >
-                  <CalendarPlus className="h-4 w-4" aria-hidden="true" />{t(" جدولة موعد آخر ")}</Button>
-              ) : (
+              {/* الزرّان ظاهران دائمًا؛ كلٌّ يُفعَّل حسب حالة الطابور الفعلية فقط (لا قواعد جديدة). */}
+              <Button
+                className="flex-1"
+                loading={finish.isPending}
+                disabled={busy || !current}
+                onClick={() => current && run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, t("اكتمل الكشف."), "current-card")}
+              >
+                <Check className="h-4 w-4" aria-hidden="true" />{t(" إنهاء الكشف ")}</Button>
               <Button
                 className="flex-1"
                 variant="outline"
@@ -284,32 +246,39 @@ export default function DoctorHome() {
                 disabled={busy || queue.isPending || queue.isError || !canCallNext}
                 aria-describedby="call-next-hint"
                 onClick={() => run(async () => { await callNext.mutateAsync(); }, t("تم إرسال طلب النداء."), "current-card")}
-              >{t("نادي المريض التالي ")}<ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              >{t("استدعاء التالي")}<ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </Button>
+              {current && usesStandaloneFollowUp(user?.doctor?.specialty) && (
+                <Button
+                  className="flex-1"
+                  variant="outline"
+                  disabled={busy || !canScheduleFollowUp(current)}
+                  aria-describedby={!canScheduleFollowUp(current) ? "follow-up-hint" : undefined}
+                  onClick={() => openFollowUp(current, "current-card")}
+                >
+                  <CalendarPlus className="h-4 w-4" aria-hidden="true" />{t(" جدولة موعد آخر ")}</Button>
               )}
             </div>
-            {!current && <p id="call-next-hint" className="mt-2 text-xs text-slate-500">
+            <p id="call-next-hint" className="mt-2 text-xs text-slate-500">
               {queue.isError || queue.isPending
                 ? t("الاستدعاء غير متاح حتى يُحمَّل الطابور.")
+                : current
+                ? t("أنهِ الكشف الحالي أولًا ثم استدعِ التالي.")
                 : nextList.length === 0
                 ? t("لا يوجد مريض في الانتظار.")
-                : t("ينادى المريض الأول في ترتيب الطابور أدناه.")}
-            </p>}
+                : t("يُستدعى المريض الأول في طابور الانتظار.")}
+            </p>
             {current && usesStandaloneFollowUp(user?.doctor?.specialty) && !canScheduleFollowUp(current) && (
               <p id="follow-up-hint" className="mt-2 text-xs text-slate-500">{t("أكمل اسم المريض ولقبه ورقم هاتفه قبل برمجة المتابعة.")}</p>
             )}
           </section>
 
-          {/* كتابة وصفة — مكان «جدول اليوم» سابقًا (دُمج الجدول في صفحة «المواعيد»). */}
-          <PrescriptionCard current={current} appointments={todays} loading={appointments.isPending} error={appointments.isError} />
-          <Link to="/appointments" className="block text-center text-sm font-semibold text-primary-700 hover:underline">
-            {t("عرض مواعيد اليوم وإدارتها في «المواعيد»")}
-          </Link>
-        </div>
-
-        {/* الدور القادم */}
-        <section className="card h-fit p-4 sm:p-5" aria-label={t("الدور القادم")}>
-          <h2 className="text-lg font-bold text-slate-900">{t("الدور القادم")}</h2>
+        {/* 5) طابور الانتظار — بجانب بطاقة المريض الحالي */}
+        <section className="card h-fit p-4 sm:p-5 lg:col-start-3 lg:row-span-2 lg:row-start-1" aria-label={t("طابور الانتظار")}>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-bold text-slate-900">{t("طابور الانتظار")}</h2>
+            {!queue.isPending && !queue.isError && nextList.length > 0 && <span className="badge bg-amber-100 text-amber-700 tabular-nums">{nextList.length}</span>}
+          </div>
           {queue.isPending ? (
             <div className="py-6"><Spinner /></div>
           ) : queue.isError ? (
@@ -317,7 +286,7 @@ export default function DoctorHome() {
           ) : nextList.length === 0 ? (
             <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-600">{t("لا يوجد منتظرون الآن.")}</p>
           ) : (
-            <ol className="mt-2">
+            <ol className="mt-2 max-h-[28rem] overflow-y-auto">
               {nextList.map((a, i) => (
                 <li key={a.id} className="flex items-center gap-3 border-t border-slate-100 py-3 first:border-t-0">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold tabular-nums text-slate-700" title={t("رقم الدور حسب وقت الموعد")}>
@@ -336,6 +305,14 @@ export default function DoctorHome() {
           )}
           <p className="mt-3 text-xs text-slate-500">{t("الترتيب هنا هو ترتيب المناداة الفعلي من الخادم، وقد يختلف عن رقم الدور المرئي.")}</p>
         </section>
+
+        <div className="space-y-5 lg:col-span-2">
+          {/* 6) كتابة وصفة — دون تغيير. مكان «جدول اليوم» سابقًا (دُمج الجدول في صفحة «المواعيد»). */}
+          <PrescriptionCard current={current} appointments={todays} loading={appointments.isPending} error={appointments.isError} />
+          <Link to="/appointments" className="block text-center text-sm font-semibold text-primary-700 hover:underline">
+            {t("عرض مواعيد اليوم وإدارتها في «المواعيد»")}
+          </Link>
+        </div>
       </div>
     </div>
   );

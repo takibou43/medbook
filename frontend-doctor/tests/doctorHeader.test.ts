@@ -72,3 +72,17 @@ test("اشتراك ضمن عيادة: التفاصيل توضّح ذلك ولا 
   assert.ok(subscriptionDetails(sub({ kind: "EXPIRED", active: false }), (x) => x, NOW).needsAdminContact);
   assert.ok(subscriptionDetails(sub({ kind: "NONE", active: false }), (x) => x, NOW).needsAdminContact);
 });
+
+test("سطر الأيام المتبقية: عدد حقيقي فقط، وصيغ عربية صحيحة", async () => {
+  const { subscriptionDaysLine } = await import("../src/lib/doctorHeader.ts");
+  assert.equal(subscriptionDaysLine(null, NOW), null);
+  assert.deepEqual(subscriptionDaysLine(sub({ kind: "TRIAL", expiresAt: inDays(30) }), NOW), { text: "متبقٍ من الفترة التجريبية: 30 يومًا", tone: "blue" });
+  assert.deepEqual(subscriptionDaysLine(sub({ kind: "ACTIVE", expiresAt: inDays(5) }), NOW), { text: "متبقٍ من اشتراكك: 5 أيام", tone: "amber" });
+  assert.equal(subscriptionDaysLine(sub({ kind: "ACTIVE", expiresAt: inDays(1) }), NOW)?.text, "متبقٍ من اشتراكك: يوم واحد");
+  assert.equal(subscriptionDaysLine(sub({ kind: "ACTIVE", expiresAt: inDays(2) }), NOW)?.text, "متبقٍ من اشتراكك: يومان");
+  assert.equal(subscriptionDaysLine(sub({ kind: "ACTIVE", expiresAt: inDays(60) }), NOW)?.tone, "green");
+  assert.equal(subscriptionDaysLine(sub({ kind: "CLINIC", expiresAt: inDays(20) }), NOW)?.text, "متبقٍ من اشتراك العيادة: 20 يومًا");
+  // لا تاريخ انتهاء في السجل: لا نخترع عددًا
+  assert.equal(subscriptionDaysLine(sub({ kind: "ACTIVE", expiresAt: null }), NOW)?.text, "اشتراك فعّال");
+  assert.equal(subscriptionDaysLine(sub({ kind: "EXPIRED", active: false, expiresAt: inDays(-3) }), NOW)?.tone, "red");
+});

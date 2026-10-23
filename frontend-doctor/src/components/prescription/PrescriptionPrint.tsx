@@ -5,7 +5,7 @@ import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useR
 import { createPortal, flushSync } from "react-dom";
 import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
-import { prescriptionAgeValue, type PrescriptionAgeUnit, type PrescriptionMedication, type PrescriptionRequestItem } from "../../lib/prescription";
+import { prescriptionAgeValue, prescriptionWeightValue, type PrescriptionAgeUnit, type PrescriptionMedication, type PrescriptionRequestItem } from "../../lib/prescription";
 import { DEFAULT_PRESCRIPTION_SETTINGS, type PrescriptionShow, type PrescriptionHeaderLanguage } from "../../lib/prescriptionSettings";
 import { prescriptionLabels, prescriptionNumericDate, prescriptionPlace, prescriptionCatalogName, doctorHeaderName, clinicHeaderName, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
@@ -34,6 +34,7 @@ export interface PrescriptionSheetData {
   patientName: string;
   patientAge?: string;
   patientAgeUnit?: PrescriptionAgeUnit;
+  patientWeight?: string;
   /** YYYY-MM-DD بتوقيت الجزائر. */
   day: string;
   medications: PrescriptionMedication[];
@@ -59,6 +60,7 @@ function Typed({ children, className }: { children: string; className?: string }
 export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const lang = data.language;
   const age = prescriptionAgeValue(data.patientAge, data.patientAgeUnit);
+  const weight = prescriptionWeightValue(data.patientWeight);
   const ageUnit = (lang === "fr" ? { years: "ans", months: "mois", days: "jours" } : { years: "سنة", months: "شهر", days: "يوم" })[data.patientAgeUnit ?? "years"];
   const text = prescriptionLabels(lang);
   const d = data.doctor;
@@ -112,7 +114,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
       {formFields && data.template ? <div className="rx-form-fields" dir="ltr">
         {(["date", "patient", "age"] as const).map(key => {
           const field = formFields[key];
-          const content = key === "date" ? prescriptionNumericDate(data.day) : key === "patient" ? data.patientName : age === null ? "" : `${age} ${ageUnit}`;
+          const content = key === "date" ? prescriptionNumericDate(data.day) : key === "patient" ? data.patientName : [age === null ? "" : `${age} ${ageUnit}`, weight === null ? "" : `${weight} ${text.kg}`].filter(Boolean).join(" · ");
           return <span key={key} data-form-field={key} dir="auto" style={{ position: "absolute", left: `${field.x - data.template!.side}mm`, top: `${field.y - data.template!.top}mm`, width: `${field.width}mm` }}><Typed>{content}</Typed></span>;
         })}
       </div> : <dl className="rx-meta">
@@ -124,7 +126,11 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
           <dt>{text.patient}</dt>
           <dd className="rx-patient"><Typed>{data.patientName}</Typed></dd>
         </div>
-        {age !== null && <div className="rx-meta-age"><dt>{text.age} :</dt><dd><bdi dir="ltr">{age}</bdi> {ageUnit}</dd></div>}
+        {(age !== null || weight !== null) && <div className="rx-meta-age">
+          {age !== null && <><dt>{text.age} :</dt><dd><bdi dir="ltr">{age}</bdi> {ageUnit}</dd></>}
+          {age !== null && weight !== null && <span aria-hidden="true"> · </span>}
+          {weight !== null && <><dt>{text.weight} :</dt><dd><bdi dir="ltr">{weight}</bdi> {text.kg}</dd></>}
+        </div>}
       </dl>}
 
       {!formFields && <h1 className="rx-title">{text.title}</h1>}

@@ -2090,5 +2090,11 @@
   "+ الاسم بالفرنسية": "+ Nom en français",
   "للوصفة الفرنسية فقط.": "Pour l'ordonnance en français uniquement.",
   "تحاليل وأشعة": "Analyses et imagerie",
-  "مثال: الراحة وشرب الماء بكثرة": "Ex. : repos et bonne hydratation"
+  "مثال: الراحة وشرب الماء بكثرة": "Ex. : repos et bonne hydratation",
+  "اكتب وزنًا صحيحًا بالكيلوغرام أو اتركه فارغًا.": "Indiquez un poids valide en kilogrammes ou laissez vide.",
+  "الوزن": "Poids",
+  "كغ": "kg",
+  "الشكل": "Forme",
+  "طريقة الأخذ": "Voie",
+  "مثال: قرص واحد عن طريق الفم 3 مرات يوميًا بعد الأكل لمدة 7 أيام": "Ex. : 1 comprimé par voie orale 3 fois par jour après les repas pendant 7 jours"
 }

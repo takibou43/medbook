@@ -122,11 +122,11 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
                     {/* السطر الثاني: طريقة الاستعمال + أزرار سريعة */}
                     <label className="block min-w-0">
                       <span className={labelCls}>{t("طريقة الاستعمال")}</span>
-                      <input id={fieldId("instructions")} onKeyDown={e => nextOnEnter(e)} enterKeyHint="next" className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" placeholder={lang === "fr" ? "Ex. : 1 comprimé 3 fois par jour après les repas pendant 7 jours" : t("مثال: قرص واحد 3 مرات يوميًا بعد الأكل لمدة 7 أيام")} value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
+                      <input id={fieldId("instructions")} onKeyDown={e => nextOnEnter(e)} enterKeyHint="next" className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" placeholder={lang === "fr" ? "Ex. : 1 comprimé par voie orale 3 fois par jour après les repas pendant 7 jours" : t("مثال: قرص واحد عن طريق الفم 3 مرات يوميًا بعد الأكل لمدة 7 أيام")} value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
                       {errorText("instructions")}
                     </label>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5" aria-label={t("إضافة سريعة إلى طريقة الاستعمال")}>
-                      {([["frequency", "كم مرة"], ["timing", "متى"], ["duration", "المدة"]] as const).map(([group, title]) => (
+                      {([["form", "الشكل"], ["route", "طريقة الأخذ"], ["frequency", "كم مرة"], ["timing", "متى"], ["duration", "المدة"]] as const).map(([group, title]) => (
                         <div key={group} className="flex flex-wrap items-center gap-1">
                           <span className="text-[11px] font-semibold text-slate-500">{t(title)}:</span>
                           {INSTRUCTION_CHIPS[group][lang].map(chip => {

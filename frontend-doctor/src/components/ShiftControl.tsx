@@ -31,14 +31,27 @@ export function ShiftControl({ variant = "compact" }: { variant?: "compact" | "h
   const label = user?.role === "DOCTOR" ? t("المداومة") : t("المناوبة");
   if (variant === "hero") {
     const disabled = state.isLoading || state.isError || change.isPending;
-    return <div className="flex shrink-0 flex-col items-start gap-1" aria-live="polite">
-      <button type="button" aria-pressed={!!active} disabled={disabled} onClick={() => change.mutate(!active)}
-        title={active ? t("العيادة مفتوحة") : t("العيادة مغلقة")}
-        className={"inline-flex min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold sm:px-5 sm:text-base transition disabled:opacity-50 " + (active ? "border border-red-200 bg-white text-red-700 hover:bg-red-50" : "bg-emerald-600 text-white hover:bg-emerald-700")}>
-        <span aria-hidden="true" className={"h-2.5 w-2.5 rounded-full " + (active ? "bg-emerald-500" : "bg-white/80")} />
-        {change.isPending ? t("جارٍ التحديث…") : active ? t("إنهاء المداومة") : t("بدء المداومة")}
+    const on = !!active;
+    return <div className="min-w-0 flex-1" aria-live="polite">
+      <button type="button" role="switch" aria-checked={on} disabled={disabled} onClick={() => change.mutate(!on)}
+        aria-label={on ? t("إنهاء المداومة") : t("بدء المداومة")}
+        className="group flex w-full min-w-0 max-w-full items-center gap-3 rounded-2xl p-1 text-start outline-none transition focus-visible:ring-2 focus-visible:ring-primary-300 disabled:opacity-60">
+        {/* المفتاح: مسار متدرّج + مقبض ينزلق (الاتجاه يتبع RTL/LTR تلقائيًا). */}
+        <span aria-hidden="true" className={"relative inline-flex h-8 w-14 shrink-0 items-center rounded-full p-1 shadow-inner transition-colors duration-300 " + (on ? "bg-gradient-to-l from-emerald-400 to-teal-600" : "bg-slate-300 group-hover:bg-slate-400")}>
+          <span className={"h-6 w-6 rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform duration-300 ease-out " + (on ? "ltr:translate-x-6 rtl:-translate-x-6" : "translate-x-0")} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2 text-sm font-extrabold text-slate-900 sm:text-base">
+            {on && <span aria-hidden="true" className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            </span>}
+            <span className="truncate">{change.isPending ? t("جارٍ التحديث…") : on ? t("المداومة جارية") : t("بدء المداومة")}</span>
+          </span>
+          <span className="block truncate text-xs text-slate-500">{on ? t("العيادة مفتوحة الآن") : t("العيادة مغلقة حاليًا")}</span>
+        </span>
       </button>
-      {(change.isError || state.isError) && <p role="alert" className="text-xs text-red-600">{t("تعذّر تحديث المداومة. حاول مرة أخرى.")}</p>}
+      {(change.isError || state.isError) && <p role="alert" className="mt-1 text-xs text-red-600">{t("تعذّر تحديث المداومة. حاول مرة أخرى.")}</p>}
     </div>;
   }
   return <div className="mb-2 inline-flex items-center gap-2 text-xs" aria-live="polite">

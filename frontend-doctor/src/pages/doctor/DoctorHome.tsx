@@ -16,7 +16,7 @@ import { Button } from "../../components/ui/Button";
 import { StatCard } from "../../components/StatCard";
 import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpModal";
 import { GuestBookingModal } from "../../components/GuestBooking";
-import { TONE_CLASS, quickActions, subscriptionDaysLine, type SubscriptionSummary } from "../../lib/doctorHeader";
+import { TONE_CLASS, quickActions, subscriptionCountdown, type BadgeTone, type SubscriptionSummary } from "../../lib/doctorHeader";
 import { ShiftControl } from "../../components/ShiftControl";
 import { useCallNext, useFinishAppointment, useQueue } from "../../hooks/useQueue";
 import { useMyAppointments } from "../../hooks/useAppointments";
@@ -27,6 +27,10 @@ import { PrescriptionCard } from "../../components/prescription/PrescriptionCard
 import type { Appointment } from "../../types";
 
 // تاريخ اليوم بتوقيت الجزائر (UTC+1) بصيغة YYYY-MM-DD — نفس منطق بقية اللوحة.
+const COUNTDOWN_TEXT: Record<BadgeTone, string> = {
+  green: "text-emerald-600", blue: "text-primary-700", amber: "text-amber-600", red: "text-red-600", slate: "text-slate-600",
+};
+
 function algeriaTodayIso(): string {
   return new Date(Date.now() + 60 * 60000).toISOString().slice(0, 10);
 }
@@ -139,7 +143,7 @@ export default function DoctorHome() {
 
   // ---- الاشتراك وزر الحجز: من /doctor/dashboard (مصدر الحقيقة في الـ Backend) ----
   const subscription: SubscriptionSummary | null = stats.data?.subscription ?? null;
-  const daysLine = subscriptionDaysLine(subscription);
+  const countdown = subscriptionCountdown(subscription);
   // «حجز موعد» يبقى متاحًا للطبيب الذي لا مساعد له فقط (نفس القاعدة السابقة دون تغيير).
   const canBook = quickActions({
     role: user?.role,
@@ -161,17 +165,34 @@ export default function DoctorHome() {
       <GuestBookingModal open={bookingOpen} onClose={() => setBookingOpen(false)} />
 
       {/* سطر واحد: زر بدء/إنهاء المداومة في جهة، وعدد أيام الاشتراك في الجهة المقابلة. */}
-      <div className="flex items-center justify-between gap-2">
-        <ShiftControl variant="hero" />
-        {daysLine ? (
-          <Link to="/subscription" title={t("تفاصيل الاشتراك")} className={clsx("inline-flex min-w-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-bold sm:gap-2 sm:px-3 sm:text-sm", TONE_CLASS[daysLine.tone])}>
-            <Timer className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span className="min-w-0 break-words">{daysLine.text}</span>
-          </Link>
-        ) : stats.isPending ? (
-          <span className="h-9 w-40 animate-pulse rounded-xl bg-slate-100" aria-hidden="true" />
-        ) : null}
-      </div>
+      <section aria-label={t("المداومة والاشتراك")} className="relative overflow-hidden rounded-2xl border border-white/80 bg-white/70 p-3 shadow-[0_18px_40px_-28px_rgba(15,61,92,0.55)] backdrop-blur-md sm:p-4">
+        {/* لمسة ضوئية خفيفة بألوان MedBook */}
+        <span aria-hidden="true" className="pointer-events-none absolute -top-16 start-1/3 h-32 w-56 rounded-full bg-primary-200/40 blur-3xl" />
+        <div className="relative flex items-center justify-between gap-3">
+          <ShiftControl variant="hero" />
+          {countdown ? (
+            <Link to="/subscription" title={t("تفاصيل الاشتراك")}
+              className={clsx("group flex shrink-0 items-center gap-2.5 rounded-xl border-s ps-3 transition sm:ps-5", "border-slate-200/80")}>
+              <span className="text-end leading-tight">
+                {countdown.days !== null ? (
+                  <span className="flex items-baseline justify-end gap-1">
+                    <span className={clsx("text-2xl font-black tabular-nums sm:text-3xl", COUNTDOWN_TEXT[countdown.tone])}>{countdown.days}</span>
+                    <span className="text-xs font-bold text-slate-600">{countdown.unit}</span>
+                  </span>
+                ) : (
+                  <span className={clsx("block text-sm font-extrabold", COUNTDOWN_TEXT[countdown.tone])}>{countdown.caption}</span>
+                )}
+                {countdown.days !== null && <span className="block text-[11px] font-semibold text-slate-500">{countdown.caption}</span>}
+              </span>
+              <span aria-hidden="true" className={clsx("hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl transition group-hover:scale-105 sm:flex", TONE_CLASS[countdown.tone])}>
+                <Timer className="h-4 w-4" />
+              </span>
+            </Link>
+          ) : stats.isPending ? (
+            <span className="h-10 w-28 animate-pulse rounded-xl bg-slate-100" aria-hidden="true" />
+          ) : null}
+        </div>
+      </section>
       {canBook && (
         <div className="-mt-2 flex justify-end">
           <button type="button" className="btn-outline !px-3" onClick={() => setBookingOpen(true)}>

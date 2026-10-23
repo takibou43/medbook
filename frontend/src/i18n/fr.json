@@ -2065,5 +2065,15 @@
   "طابور الانتظار": "File d'attente",
   "استدعاء التالي": "Appeler le suivant",
   "أنهِ الكشف الحالي أولًا ثم استدعِ التالي.": "Terminez d'abord la consultation en cours, puis appelez le suivant.",
-  "يُستدعى المريض الأول في طابور الانتظار.": "Le premier patient de la file d'attente sera appelé."
+  "يُستدعى المريض الأول في طابور الانتظار.": "Le premier patient de la file d'attente sera appelé.",
+  "الاشتراك منتهٍ — جدّده": "Abonnement expiré — à renouveler",
+  "الفترة التجريبية": "Période d'essai",
+  "اشتراكك": "Votre abonnement",
+  "أيام متبقية": "jours restants",
+  "يومًا متبقيًا": "jours restants",
+  "يوم متبقٍ": "jour(s) restant(s)",
+  "المداومة جارية": "Permanence en cours",
+  "العيادة مغلقة حاليًا": "Cabinet actuellement fermé",
+  "المداومة والاشتراك": "Permanence et abonnement",
+  "العيادة مفتوحة الآن": "Cabinet ouvert"
 }

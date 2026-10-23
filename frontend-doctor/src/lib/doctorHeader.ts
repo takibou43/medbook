@@ -186,3 +186,20 @@ export function subscriptionDaysLine(summary: SubscriptionSummary | null | undef
     : t("متبقٍ من اشتراكك: {0}", { "0": days });
   return { text, tone };
 }
+
+/**
+ * عدّاد الاشتراك في سطر المداومة: الرقم منفصل عن الوحدة ليُعرض كبيرًا.
+ * days = null حين لا يوجد تاريخ انتهاء فعلي أو حين الاشتراك غير فعّال — لا نخترع رقمًا.
+ */
+export function subscriptionCountdown(summary: SubscriptionSummary | null | undefined, now = Date.now()): { days: number | null; unit: string; caption: string; tone: BadgeTone } | null {
+  if (!summary) return null;
+  if (!summary.active) {
+    return { days: null, unit: "", caption: summary.kind === "CLINIC" ? t("اشتراك العيادة منتهٍ") : t("الاشتراك منتهٍ — جدّده"), tone: "red" };
+  }
+  const left = daysUntil(summary.expiresAt, now);
+  const caption = summary.kind === "TRIAL" ? t("الفترة التجريبية") : summary.kind === "CLINIC" ? t("اشتراك العيادة") : t("اشتراكك");
+  const tone: BadgeTone = left !== null && left <= EXPIRY_WARNING_DAYS ? "amber" : summary.kind === "ACTIVE" ? "green" : "blue";
+  if (left === null) return { days: null, unit: "", caption: summary.kind === "TRIAL" ? t("فترة تجريبية مجانية") : t("اشتراك فعّال"), tone };
+  const unit = left >= 3 && left <= 10 ? t("أيام متبقية") : left > 10 ? t("يومًا متبقيًا") : t("يوم متبقٍ");
+  return { days: left, unit, caption, tone };
+}

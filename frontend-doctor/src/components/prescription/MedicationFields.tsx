@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { ChevronDown, Pencil, Plus, Trash2, Undo2, X } from "lucide-react";
 import type { PrescriptionMedication } from "../../lib/prescription";
 import type { PrescriptionLanguage } from "../../lib/prescriptionPrint";
-import { CUSTOM, DOSE_UNITS, DURATION_UNITS, FREQUENCIES, TIMINGS, editableValues, medicationComplete, medicationHasStructuredValues, medicationSummary } from "../../lib/prescriptionMedication";
+import { CUSTOM, DOSE_UNITS, DURATION_UNITS, FREQUENCIES, INSTRUCTION_CHIPS, TIMINGS, chipActive, editableValues, medicationComplete, medicationHasStructuredValues, medicationSummary, toggleInstructionChip } from "../../lib/prescriptionMedication";
 import { Button } from "../ui/Button";
 import { t } from "../../i18n/locale.ts";
 import { readMedicationNames, rememberMedicationName } from "../../lib/medicationNames";
@@ -63,8 +63,7 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
 
   return (
     <div>
-      <p className="mb-2 text-xs text-slate-600">{t("Enter: الاسم ثم الكمية ثم طريقة الاستعمال؛ بعد التعليمات يُضاف دواء جديد. يعمل Tab كالمعتاد.")}</p>
-      <p className="mb-2 text-xs text-slate-600">{t("اقتراحات الأسماء من إدخالاتك السابقة على هذا الجهاز. يمكنك كتابة أي دواء يدويًا.")}</p>
+      <p className="mb-2 text-xs text-slate-600">{t("اكتب اسم الدواء، ثم طريقة استعماله أو اختر من الأزرار السريعة. زر Enter ينقلك إلى الخانة التالية.")}</p>
       <datalist id={`${formId}-medication-names`}>
         {names.map(name => <option key={name} value={name} />)}
       </datalist>
@@ -94,29 +93,59 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
 
           if (isFree) {
             return (
-              <li key={m.id} className="p-2.5 sm:p-3" role="group" aria-label={t("الدواء رقم {n}", { n: i + 1 })}>
-                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] items-start gap-2 sm:grid-cols-[minmax(0,5fr)_minmax(0,2fr)_minmax(0,5fr)_44px]">
-                  <label className="col-span-3 min-w-0 sm:col-span-1">
-                    <span className={labelCls}>{t("اسم الدواء")}</span>
-                    <input id={fieldId("name")} list={`${formId}-medication-names`} onKeyDown={e => {
-                      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && names.length) { choosingSuggestion.current = true; return; }
-                      if (e.key === "Escape") { choosingSuggestion.current = false; return; }
-                      if (e.key === "Enter" && choosingSuggestion.current) { choosingSuggestion.current = false; return; }
-                      nextOnEnter(e, fieldId("quantity"));
-                    }} enterKeyHint="next" className="input py-2 font-semibold" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="name" value={m.name} onChange={setText("name")} onBlur={() => { choosingSuggestion.current = false; setNames(rememberMedicationName(ownerUserId, m.name)); }} aria-invalid={Boolean(err?.name)} aria-describedby={describe("name")} />
-                    {(m.strength || m.form) && <span className="block text-xs text-slate-600" dir="auto" translate="no">{[m.strength, m.form].filter(Boolean).join(" ")}</span>}
-                    {errorText("name")}
-                  </label>
-                  <label className="min-w-0">
-                    <span className={labelCls}>{t("الكمية المصروفة")}</span>
-                    <input id={fieldId("quantity")} onKeyDown={e => nextOnEnter(e, fieldId("instructions"))} enterKeyHint="next" className="input py-2" dir="auto" translate="no" autoComplete="off" value={m.quantity ?? ""} onChange={setText("quantity")} />
-                  </label>
-                  <label className="min-w-0">
-                    <span className={labelCls}>{t("الجرعة وطريقة الاستعمال")}</span>
-                    <input id={fieldId("instructions")} onKeyDown={e => nextOnEnter(e)} enterKeyHint="next" className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
-                    {errorText("instructions")}
-                  </label>
-                  <button type="button" onClick={() => remove(m, i)} className={clsx("mt-4 flex h-11 w-11 items-center justify-center rounded-lg text-red-700 hover:bg-red-50", focus)} aria-label={t("حذف الدواء رقم {n}", { n: i + 1 })}><X className="h-4 w-4" aria-hidden="true" /></button>
+              <li key={m.id} className="p-3 sm:p-4" role="group" aria-label={t("الدواء رقم {n}", { n: i + 1 })}>
+                <div className="flex items-start gap-2 sm:gap-2.5">
+                  {/* الرقم وزر الحذف في عمود ضيق واحد لترك العرض كاملًا للحقول على الهاتف */}
+                  <div className="flex shrink-0 flex-col items-center gap-1 pt-5">
+                    {number}
+                    <button type="button" onClick={() => remove(m, i)} className={clsx("flex h-10 w-8 items-center justify-center rounded-lg text-red-700 hover:bg-red-50", focus)} aria-label={t("حذف الدواء رقم {n}", { n: i + 1 })}><Trash2 className="h-4 w-4" aria-hidden="true" /></button>
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2.5">
+                    {/* السطر الأول: اسم الدواء + عدد العلب (يتكدّسان على الهاتف) */}
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                      <label className="min-w-0">
+                        <span className={labelCls}>{t("اسم الدواء")}</span>
+                        <input id={fieldId("name")} list={`${formId}-medication-names`} onKeyDown={e => {
+                          if ((e.key === "ArrowDown" || e.key === "ArrowUp") && names.length) { choosingSuggestion.current = true; return; }
+                          if (e.key === "Escape") { choosingSuggestion.current = false; return; }
+                          if (e.key === "Enter" && choosingSuggestion.current) { choosingSuggestion.current = false; return; }
+                          nextOnEnter(e, fieldId("quantity"));
+                        }} enterKeyHint="next" className="input py-2 font-semibold" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="name" placeholder={t("مثال: Amoxicilline 1g")} value={m.name} onChange={setText("name")} onBlur={() => { choosingSuggestion.current = false; setNames(rememberMedicationName(ownerUserId, m.name)); }} aria-invalid={Boolean(err?.name)} aria-describedby={describe("name")} />
+                        {(m.strength || m.form) && <span className="block text-xs text-slate-600" dir="auto" translate="no">{[m.strength, m.form].filter(Boolean).join(" ")}</span>}
+                        {errorText("name")}
+                      </label>
+                      <label className="min-w-0">
+                        <span className={labelCls}>{t("عدد العلب")} <span className="font-normal text-slate-500">({t("اختياري")})</span></span>
+                        <input id={fieldId("quantity")} onKeyDown={e => nextOnEnter(e, fieldId("instructions"))} enterKeyHint="next" className="input py-2 text-center max-sm:max-w-[9rem]" dir="auto" translate="no" autoComplete="off" placeholder={t("مثال: 2")} value={m.quantity ?? ""} onChange={setText("quantity")} />
+                      </label>
+                    </div>
+                    {/* السطر الثاني: طريقة الاستعمال + أزرار سريعة */}
+                    <label className="block min-w-0">
+                      <span className={labelCls}>{t("طريقة الاستعمال")}</span>
+                      <input id={fieldId("instructions")} onKeyDown={e => nextOnEnter(e)} enterKeyHint="next" className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" placeholder={lang === "fr" ? "Ex. : 1 comprimé 3 fois par jour après les repas pendant 7 jours" : t("مثال: قرص واحد 3 مرات يوميًا بعد الأكل لمدة 7 أيام")} value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
+                      {errorText("instructions")}
+                    </label>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5" aria-label={t("إضافة سريعة إلى طريقة الاستعمال")}>
+                      {([["frequency", "كم مرة"], ["timing", "متى"], ["duration", "المدة"]] as const).map(([group, title]) => (
+                        <div key={group} className="flex flex-wrap items-center gap-1">
+                          <span className="text-[11px] font-semibold text-slate-500">{t(title)}:</span>
+                          {INSTRUCTION_CHIPS[group][lang].map(chip => {
+                            const on = chipActive(m.instructions, chip);
+                            return <button key={chip} type="button" aria-pressed={on}
+                              onClick={() => onUpdate(m.id, { instructions: toggleInstructionChip(m.instructions, group, chip, lang) })}
+                              className={clsx("min-h-8 rounded-full border px-2.5 text-xs font-semibold transition", focus, on ? "border-primary-600 bg-primary-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-primary-300 hover:bg-primary-50")}>
+                              <bdi dir="auto" translate="no">{chip}</bdi>
+                            </button>;
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                    {m.name.trim() && (
+                      <p className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-700" aria-live="polite">
+                        <span className="font-semibold">{t("سيُطبع هكذا")}:</span> <bdi dir="auto" translate="no">{summary}{m.quantity?.trim() ? ` — ${lang === "fr" ? "Quantité" : "الكمية"}: ${m.quantity.trim()}` : ""}</bdi>
+                      </p>
+                    )}
+                  </div>
                 </div>
               </li>
             );

@@ -170,3 +170,27 @@ export function editableValues(m: PrescriptionMedication) {
     durCustom: hasDurFields(m) ? m.durCustom ?? "" : m.duration,
   };
 }
+
+/**
+ * أزرار سريعة لكتابة «طريقة الاستعمال» في النمط الحر: التكرار، الوقت، المدة.
+ * لا جرعات إطلاقًا (لا اقتراح جرعة تلقائي) — الطبيب يختار ويبقى النص قابلًا للتعديل يدويًا.
+ */
+export const INSTRUCTION_CHIPS: Record<"frequency" | "timing" | "duration", Record<Lang, string[]>> = {
+  frequency: { ar: ["مرة واحدة يوميًا", "مرتين يوميًا", "3 مرات يوميًا"], fr: ["1 fois par jour", "2 fois par jour", "3 fois par jour"] },
+  timing: { ar: ["قبل الأكل", "بعد الأكل", "عند النوم"], fr: ["avant les repas", "après les repas", "au coucher"] },
+  duration: { ar: ["لمدة 5 أيام", "لمدة 7 أيام", "لمدة 10 أيام"], fr: ["pendant 5 jours", "pendant 7 jours", "pendant 10 jours"] },
+};
+
+/** يضيف خيارًا سريعًا إلى النص، أو يستبدل خيار نفس المجموعة، أو يزيله إن كان هو نفسه موجودًا. */
+export function toggleInstructionChip(text: string, group: keyof typeof INSTRUCTION_CHIPS, chip: string, lang: Lang): string {
+  const options = INSTRUCTION_CHIPS[group][lang];
+  const tidy = (s: string) => s.replace(/\s{2,}/g, " ").replace(/^\s*[،,]\s*|\s*[،,]\s*$/g, "").trim();
+  if (text.includes(chip)) return tidy(text.replace(chip, ""));
+  const existing = options.find((o) => text.includes(o));
+  if (existing) return tidy(text.replace(existing, chip));
+  return tidy(text.trim() ? `${text.trim()} ${chip}` : chip);
+}
+
+export function chipActive(text: string, chip: string): boolean {
+  return text.includes(chip);
+}

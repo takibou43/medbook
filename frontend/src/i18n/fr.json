@@ -2075,5 +2075,20 @@
   "المداومة جارية": "Permanence en cours",
   "العيادة مغلقة حاليًا": "Cabinet actuellement fermé",
   "المداومة والاشتراك": "Permanence et abonnement",
-  "العيادة مفتوحة الآن": "Cabinet ouvert"
+  "العيادة مفتوحة الآن": "Cabinet ouvert",
+  "اكتب اسم الدواء، ثم طريقة استعماله أو اختر من الأزرار السريعة. زر Enter ينقلك إلى الخانة التالية.": "Saisissez le médicament, puis sa posologie ou utilisez les boutons rapides. Entrée passe au champ suivant.",
+  "مثال: Amoxicilline 1g": "Ex. : Amoxicilline 1g",
+  "عدد العلب": "Nombre de boîtes",
+  "مثال: 2": "Ex. : 2",
+  "طريقة الاستعمال": "Posologie",
+  "مثال: قرص واحد 3 مرات يوميًا بعد الأكل لمدة 7 أيام": "Ex. : 1 comprimé 3 fois par jour après les repas pendant 7 jours",
+  "إضافة سريعة إلى طريقة الاستعمال": "Ajout rapide à la posologie",
+  "كم مرة": "Combien de fois",
+  "متى": "Quand",
+  "العمر": "Âge",
+  "سنة": "ans",
+  "+ الاسم بالفرنسية": "+ Nom en français",
+  "للوصفة الفرنسية فقط.": "Pour l'ordonnance en français uniquement.",
+  "تحاليل وأشعة": "Analyses et imagerie",
+  "مثال: الراحة وشرب الماء بكثرة": "Ex. : repos et bonne hydratation"
 }

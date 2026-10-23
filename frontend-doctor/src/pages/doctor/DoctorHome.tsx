@@ -165,18 +165,18 @@ export default function DoctorHome() {
       <GuestBookingModal open={bookingOpen} onClose={() => setBookingOpen(false)} />
 
       {/* سطر واحد: زر بدء/إنهاء المداومة في جهة، وعدد أيام الاشتراك في الجهة المقابلة. */}
-      <section aria-label={t("المداومة والاشتراك")} className="relative overflow-hidden rounded-2xl border border-white/80 bg-white/70 p-3 shadow-[0_18px_40px_-28px_rgba(15,61,92,0.55)] backdrop-blur-md sm:p-4">
+      <section aria-label={t("المداومة والاشتراك")} className="relative overflow-hidden rounded-xl border border-white/80 bg-white/70 px-3 py-2 shadow-[0_18px_40px_-28px_rgba(15,61,92,0.55)] backdrop-blur-md">
         {/* لمسة ضوئية خفيفة بألوان MedBook */}
         <span aria-hidden="true" className="pointer-events-none absolute -top-16 start-1/3 h-32 w-56 rounded-full bg-primary-200/40 blur-3xl" />
         <div className="relative flex items-center justify-between gap-3">
-          <ShiftControl variant="hero" />
+          <ShiftControl variant="compact" />
           {countdown ? (
             <Link to="/subscription" title={t("تفاصيل الاشتراك")}
               className={clsx("group flex shrink-0 items-center gap-2.5 rounded-xl border-s ps-3 transition sm:ps-5", "border-slate-200/80")}>
               <span className="text-end leading-tight">
                 {countdown.days !== null ? (
                   <span className="flex items-baseline justify-end gap-1">
-                    <span className={clsx("text-2xl font-black tabular-nums sm:text-3xl", COUNTDOWN_TEXT[countdown.tone])}>{countdown.days}</span>
+                    <span className={clsx("text-lg font-extrabold tabular-nums", COUNTDOWN_TEXT[countdown.tone])}>{countdown.days}</span>
                     <span className="text-xs font-bold text-slate-600">{countdown.unit}</span>
                   </span>
                 ) : (
@@ -217,7 +217,7 @@ export default function DoctorHome() {
         <StatCard label={t("مكتملة")} value={completedCount} icon={CheckCircle2} tone="green" to={`/appointments?status=COMPLETED&date=${today}`} />
       </div>
 
-      {/* ترتيب DOM: المريض الحالي ← الطابور ← الوصفة، فيأتي الطابور مباشرة بعد بطاقة المريض على الهاتف.
+      {/* ترتيب DOM: المريض الحالي ← الوصفة ← الطابور، لتبقى كتابة الوصفة مباشرة بعد المريض على الهاتف.
           على الشاشة العريضة يبقى الطابور في العمود الجانبي بجانب البطاقة، والوصفة في مكانها تحتها. */}
       <div className="grid items-start gap-5 lg:grid-cols-3 lg:grid-rows-[auto_1fr]">
           {/* 4) المريض الحالي */}
@@ -252,17 +252,9 @@ export default function DoctorHome() {
 
             <div className="mt-4 flex flex-wrap gap-2 [&>*]:min-w-[9rem]">
               {current?.patientId && isDentalSpecialty(user?.doctor?.specialty) && <Button className="flex-1" variant="outline" onClick={() => setPlanSubject({ patientId: current.patientId!, memberId: current.familyMemberId ?? current.beneficiary?.familyMemberId ?? "", name: beneficiaryName(current) })}>{t("خطط العلاج")}</Button>}
-              {/* الزرّان ظاهران دائمًا؛ كلٌّ يُفعَّل حسب حالة الطابور الفعلية فقط (لا قواعد جديدة). */}
+              {/* الاستدعاء يتبع حالة الطابور الفعلية، وإنهاء الكشف أسفل الوصفة. */}
               <Button
                 className="flex-1"
-                loading={finish.isPending}
-                disabled={busy || !current}
-                onClick={() => current && run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, t("اكتمل الكشف."), "current-card")}
-              >
-                <Check className="h-4 w-4" aria-hidden="true" />{t(" إنهاء الكشف ")}</Button>
-              <Button
-                className="flex-1"
-                variant="outline"
                 loading={callNext.isPending}
                 disabled={busy || queue.isPending || queue.isError || !canCallNext}
                 aria-describedby="call-next-hint"
@@ -294,6 +286,22 @@ export default function DoctorHome() {
             )}
           </section>
 
+        <div className="space-y-5 lg:col-span-2 lg:row-start-2">
+          {/* 6) كتابة وصفة — دون تغيير. مكان «جدول اليوم» سابقًا (دُمج الجدول في صفحة «المواعيد»). */}
+          <PrescriptionCard current={current} appointments={todays} loading={appointments.isPending} error={appointments.isError} />
+          <div className="flex justify-end">
+              <Button
+                className="w-full sm:w-auto" variant="outline"
+                loading={finish.isPending}
+                disabled={busy || !current}
+                onClick={() => current && run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, t("اكتمل الكشف."), "current-card")}
+              >
+                <Check className="h-4 w-4" aria-hidden="true" />{t(" إنهاء الكشف ")}</Button>
+          </div>
+          <Link to="/appointments" className="block text-center text-sm font-semibold text-primary-700 hover:underline">
+            {t("عرض مواعيد اليوم وإدارتها في «المواعيد»")}
+          </Link>
+        </div>
         {/* 5) طابور الانتظار — بجانب بطاقة المريض الحالي */}
         <section className="card h-fit p-4 sm:p-5 lg:col-start-3 lg:row-span-2 lg:row-start-1" aria-label={t("طابور الانتظار")}>
           <div className="flex items-center justify-between gap-2">
@@ -310,7 +318,7 @@ export default function DoctorHome() {
             <ol className="mt-2 max-h-[28rem] overflow-y-auto">
               {nextList.map((a, i) => (
                 <li key={a.id} className="flex items-center gap-3 border-t border-slate-100 py-3 first:border-t-0">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold tabular-nums text-slate-700" title={t("رقم الدور حسب وقت الموعد")}>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-lg font-bold tabular-nums text-primary-700" title={t("رقم الدور حسب وقت الموعد")}>
                     {padTurn(turns.get(a.id))}
                   </span>
                   <div className="min-w-0 flex-1">
@@ -327,13 +335,6 @@ export default function DoctorHome() {
           <p className="mt-3 text-xs text-slate-500">{t("الترتيب هنا هو ترتيب المناداة الفعلي من الخادم، وقد يختلف عن رقم الدور المرئي.")}</p>
         </section>
 
-        <div className="space-y-5 lg:col-span-2">
-          {/* 6) كتابة وصفة — دون تغيير. مكان «جدول اليوم» سابقًا (دُمج الجدول في صفحة «المواعيد»). */}
-          <PrescriptionCard current={current} appointments={todays} loading={appointments.isPending} error={appointments.isError} />
-          <Link to="/appointments" className="block text-center text-sm font-semibold text-primary-700 hover:underline">
-            {t("عرض مواعيد اليوم وإدارتها في «المواعيد»")}
-          </Link>
-        </div>
       </div>
     </div>
   );

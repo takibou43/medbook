@@ -40,3 +40,15 @@ test("الشكل وطريقة الأخذ يُدرجان في بداية الجم
   assert.equal(s, "شراب عن طريق الفم 3 مرات يوميًا بعد الأكل لمدة 7 أيام");
   assert.equal(toggleInstructionChip("pendant 7 jours", "form", "comprimé", "fr"), "comprimé pendant 7 jours");
 });
+
+test("وحدة الكمية: «02 علب» كما في الوصفات المعتادة، والمفرد للعدد 1", async () => {
+  const { formatQuantity, quantityUnitOf } = await import("../src/lib/prescriptionMedication.ts");
+  assert.equal(formatQuantity("", "box", "ar"), "01 علبة");
+  assert.equal(formatQuantity("2", "box", "ar"), "02 علب");
+  assert.equal(formatQuantity("4", "box", "fr"), "04 btes");
+  assert.equal(formatQuantity("1", "tube", "fr"), "01 tube");
+  assert.equal(formatQuantity("02 علب", "bottle", "ar"), "02 قوارير");
+  assert.equal(formatQuantity("02 علب", "box", "ar"), "02"); // نفس الوحدة: تُزال
+  assert.equal(quantityUnitOf("03 أنابيب", "ar"), "tube");
+  assert.equal(quantityUnitOf("3", "ar"), null);
+});

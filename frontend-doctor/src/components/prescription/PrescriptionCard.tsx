@@ -150,6 +150,7 @@ export function PrescriptionCard({
       doctor: user?.doctor,
       language: setup.settings.language,
       headerLanguage: setup.settings.headerLanguage,
+      orderNumber: setup.settings.orderNumber,
       professional: setup.settings.professional[setup.settings.language],
       doctorNames: { ar: setup.settings.professional.ar?.doctorName, fr: setup.settings.professional.fr?.doctorName },
       addresses: { ar: setup.settings.professional.ar?.address, fr: setup.settings.professional.fr?.address },

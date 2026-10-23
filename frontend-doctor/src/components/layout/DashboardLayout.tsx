@@ -352,7 +352,8 @@ export function DashboardLayout({
 
         {/* min-w-0 + overflow-x-hidden: خط دفاع أخير حتى لا يُخرج أي عنصر عريض الصفحة عن عرض الشاشة. */}
         <main id="main-content" tabIndex={-1} className={clsx("min-w-0 flex-1 overflow-x-hidden p-4 outline-none md:p-8 md:ps-5", contentClassName, dailyNavigation && "pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8")}>
-          <ShiftControl />
+          {/* في لوحة تحكم الطبيب («/») يظهر زر المداومة الكبير داخل الصفحة نفسها — لا نكرّره هنا. */}
+          {!(user?.role === "DOCTOR" && pathname === "/") && <ShiftControl />}
           {(user?.role === "DOCTOR" || user?.role === "ASSISTANT") && <GuestClaimReview />}
           {user?.role === "DOCTOR" && <UrgencyRequests />}
           <Outlet />

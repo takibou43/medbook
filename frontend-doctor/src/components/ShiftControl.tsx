@@ -31,21 +31,15 @@ export function ShiftControl({ variant = "compact" }: { variant?: "compact" | "h
   const label = user?.role === "DOCTOR" ? t("المداومة") : t("المناوبة");
   if (variant === "hero") {
     const disabled = state.isLoading || state.isError || change.isPending;
-    return <section aria-label={label} aria-live="polite"
-      className={"card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5 " + (active ? "border-emerald-200 bg-emerald-50/70" : "")}>
-      <div className="flex min-w-0 items-center gap-3">
-        <span aria-hidden="true" className={"h-3 w-3 shrink-0 rounded-full " + (active ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.18)]" : "bg-slate-400")} />
-        <div className="min-w-0">
-          <p className="text-base font-extrabold text-slate-900 sm:text-lg">{active ? t("العيادة مفتوحة") : t("العيادة مغلقة")}</p>
-          <p className="text-sm text-slate-600">{active ? t("يظهر للمرضى أنك متواجد الآن، والطابور يعمل.") : t("ابدأ المداومة ليظهر للمرضى أنك متواجد ويعمل الطابور.")}</p>
-        </div>
-      </div>
+    return <div className="flex shrink-0 flex-col items-start gap-1" aria-live="polite">
       <button type="button" aria-pressed={!!active} disabled={disabled} onClick={() => change.mutate(!active)}
-        className={"inline-flex min-h-[48px] w-full shrink-0 items-center justify-center gap-2 rounded-xl px-6 text-base font-bold transition disabled:opacity-50 sm:w-auto " + (active ? "border border-red-200 bg-white text-red-700 hover:bg-red-50" : "bg-emerald-600 text-white hover:bg-emerald-700")}>
+        title={active ? t("العيادة مفتوحة") : t("العيادة مغلقة")}
+        className={"inline-flex min-h-[44px] items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold sm:px-5 sm:text-base transition disabled:opacity-50 " + (active ? "border border-red-200 bg-white text-red-700 hover:bg-red-50" : "bg-emerald-600 text-white hover:bg-emerald-700")}>
+        <span aria-hidden="true" className={"h-2.5 w-2.5 rounded-full " + (active ? "bg-emerald-500" : "bg-white/80")} />
         {change.isPending ? t("جارٍ التحديث…") : active ? t("إنهاء المداومة") : t("بدء المداومة")}
       </button>
-      {(change.isError || state.isError) && <p role="alert" className="text-sm text-red-600 sm:basis-full">{t("تعذّر تحديث المداومة. حاول مرة أخرى.")}</p>}
-    </section>;
+      {(change.isError || state.isError) && <p role="alert" className="text-xs text-red-600">{t("تعذّر تحديث المداومة. حاول مرة أخرى.")}</p>}
+    </div>;
   }
   return <div className="mb-2 inline-flex items-center gap-2 text-xs" aria-live="polite">
     <button aria-pressed={!!active} disabled={state.isLoading || state.isError || change.isPending}

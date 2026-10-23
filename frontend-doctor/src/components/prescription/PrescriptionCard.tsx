@@ -62,7 +62,9 @@ export function PrescriptionCard({
     setValidation(null);
   };
   const withLatinName = (d: PrescriptionDraft): PrescriptionDraft => ({ ...d, patientNameFr: readPatientLatinName(uid, d.patient) });
-  const patch = (p: Partial<PrescriptionDraft>) => draft && setDraft({ ...draft, ...p });
+  // أي تعديل بعد الطباعة يُلغي علامة «مطبوعة»: النسخة المعدّلة لم تُطبع بعد، فلا تُستبدل تلقائيًا.
+  const patch = (p: Partial<PrescriptionDraft>) => draft && setDraft({ ...draft, ...p, printedAt: undefined });
+  const markPrinted = () => { if (draft) setDraft({ ...draft, printedAt: new Date().toISOString() }); };
 
   // حساب آخر على نفس الجهاز: لا تُعرض مسودته.
   useEffect(() => {
@@ -159,7 +161,7 @@ export function PrescriptionCard({
 
   return (
     <section className="card p-4 sm:p-5" aria-labelledby={`${formId}-title`}>
-      <PrescriptionPreview open={Boolean(preview)} data={preview} onClose={() => setPreview(null)} />
+      <PrescriptionPreview open={Boolean(preview)} data={preview} onClose={() => setPreview(null)} onPrinted={markPrinted} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">

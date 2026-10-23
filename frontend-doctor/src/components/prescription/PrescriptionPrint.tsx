@@ -219,7 +219,7 @@ const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2];
  * مع تكبير/تصغير وشريط أدوات خارج الورقة. الطباعة تُخفي كل شيء عدا الورقة (.rx-print-root في index.css)،
  * ولا تغيّر حالة أي موعد ولا ترسل شيئًا.
  */
-export function PrescriptionPreview({ open, data, onClose }: { open: boolean; data: PrescriptionSheetData | null; onClose: () => void }) {
+export function PrescriptionPreview({ open, data, onClose, onPrinted }: { open: boolean; data: PrescriptionSheetData | null; onClose: () => void; /** يُستدعى عند فتح نافذة الطباعة (مع الحفظ PDF أو بدونه). */ onPrinted?: () => void }) {
   const uiLanguage = useLanguage();
   const { user } = useAuth();
   const localFolder = usePrescriptionFolder(user?.id ?? "");
@@ -344,7 +344,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
   async function printAndSave() {
     if (savingPdfRef.current || !data) return;
     setPdfFailed(false);
-    if (!localFolder.folder) { setPdfMessage(t("الحفظ التلقائي غير مفعّل. يمكنك اختيار حفظ PDF من نافذة الطباعة.")); window.print(); return; }
+    if (!localFolder.folder) { setPdfMessage(t("الحفظ التلقائي غير مفعّل. يمكنك اختيار حفظ PDF من نافذة الطباعة.")); onPrinted?.(); window.print(); return; }
     if (!paperRef.current) return;
     const context = printContext.current;
     const stillCurrent = () => printContext.current.uid === context.uid && printContext.current.data === context.data && printContext.current.open;
@@ -360,6 +360,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
       await writePrescriptionPdf(localFolder.folder, filename, pdf);
       if (stillCurrent()) {
         setPdfMessage(t("تم حفظ PDF: {filename} في المجلد {folder}.", { filename, folder: localFolder.folder.directory.name }));
+        onPrinted?.();
         window.print();
       }
     } catch {

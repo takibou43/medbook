@@ -80,6 +80,8 @@ export interface PrescriptionDraft {
   notes: string;
   /** «current» = رُبطت تلقائيًا بالاستشارة الحالية، «manual» = اختارها الطبيب من موعد قائم. */
   source: "current" | "manual";
+  /** وقت آخر طباعة/حفظ PDF لهذه المسودة كما هي. يُمسح عند أي تعديل لاحق (لم تعد النسخة المطبوعة مطابقة). */
+  printedAt?: string;
 }
 
 let seq = 0;
@@ -131,6 +133,9 @@ export function shouldAutoRebind(d: PrescriptionDraft | null, currentAppointment
   if (!currentAppointmentId) return false;
   if (!d) return true;
   if (d.patient.appointmentId === currentAppointmentId) return false;
+  // وصفة طُبعت/حُفظت ولم تُعدَّل بعدها: انتهى عملها، فينتقل الطبيب مباشرة إلى وصفة فارغة باسم المريض الجديد.
+  // (لا يُنقل أي دواء أو ملاحظة من المريض السابق — الوصفة الجديدة فارغة.)
+  if (d.printedAt) return true;
   return d.source === "current" && !draftHasContent(d);
 }
 

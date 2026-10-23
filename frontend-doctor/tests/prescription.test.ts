@@ -148,3 +148,21 @@ test('patient age is optional, validated, retained with the draft, and never aut
   assert.equal(emptyDraft('doctor', prescriptionPatientFrom(guestAppt)).patientAge, '');
   clearPrescriptionDraft();
 });
+
+test("بعد طباعة الوصفة وانتقال الطبيب للمريض التالي: وصفة فارغة جديدة باسم المريض الجديد", () => {
+  const written = { ...emptyDraft("u1", prescriptionPatientFrom(familyAppt), "current"), medications: [{ ...newMedication(), name: "دواء" }] };
+  // مكتوبة وغير مطبوعة: لا تُستبدل تلقائيًا (حماية عمل لم يُطبع)
+  assert.equal(shouldAutoRebind(written, "a-self"), false);
+  // مطبوعة: تنتقل إلى المريض الجديد
+  const printed = { ...written, printedAt: "2026-10-23T10:00:00.000Z" };
+  assert.equal(shouldAutoRebind(printed, "a-self"), true);
+  // حتى لو كانت مختارة يدويًا لموعد آخر ثم طُبعت
+  assert.equal(shouldAutoRebind({ ...printed, source: "manual" as const }, "a-self"), true);
+  // نفس الزيارة أو لا مريض حالي: لا تغيير
+  assert.equal(shouldAutoRebind(printed, "a-fam"), false);
+  assert.equal(shouldAutoRebind(printed, null), false);
+  // الوصفة الجديدة فارغة تمامًا: لا ينتقل أي دواء من المريض السابق
+  const next = emptyDraft("u1", prescriptionPatientFrom(selfAppt), "current");
+  assert.equal(draftHasContent(next), false);
+  assert.equal(next.printedAt, undefined);
+});

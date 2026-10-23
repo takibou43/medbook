@@ -20,6 +20,23 @@ test("الأزرار السريعة: إضافة، استبدال داخل نفس
   assert.equal(toggleInstructionChip("", "duration", "pendant 7 jours", "fr"), "pendant 7 jours");
 });
 
-test("لا أزرار جرعات: المجموعات ثلاث فقط (تكرار، وقت، مدة)", () => {
-  assert.deepEqual(Object.keys(INSTRUCTION_CHIPS).sort(), ["duration", "frequency", "timing"]);
+test("لا أزرار جرعات أو كميات: المجموعات خمس (شكل، طريقة أخذ، تكرار، وقت، مدة)", () => {
+  assert.deepEqual(Object.keys(INSTRUCTION_CHIPS), ["form", "route", "frequency", "timing", "duration"]);
+  for (const group of Object.values(INSTRUCTION_CHIPS)) for (const chip of [...group.ar, ...group.fr]) {
+    assert.doesNotMatch(chip, /\d+\s*(mg|ml|g|ملغ|مل|غ)(?![\p{L}])/u, `الزر «${chip}» لا يجوز أن يحمل جرعة`);
+  }
+});
+
+test("الشكل وطريقة الأخذ يُدرجان في بداية الجملة مهما كان ترتيب الضغط", () => {
+  let s = toggleInstructionChip("", "frequency", "3 مرات يوميًا", "ar");
+  s = toggleInstructionChip(s, "duration", "لمدة 7 أيام", "ar");
+  s = toggleInstructionChip(s, "form", "قرص", "ar");
+  assert.equal(s, "قرص 3 مرات يوميًا لمدة 7 أيام");
+  s = toggleInstructionChip(s, "route", "عن طريق الفم", "ar");
+  assert.equal(s, "قرص عن طريق الفم 3 مرات يوميًا لمدة 7 أيام");
+  s = toggleInstructionChip(s, "timing", "بعد الأكل", "ar");
+  assert.equal(s, "قرص عن طريق الفم 3 مرات يوميًا بعد الأكل لمدة 7 أيام");
+  s = toggleInstructionChip(s, "form", "شراب", "ar");
+  assert.equal(s, "شراب عن طريق الفم 3 مرات يوميًا بعد الأكل لمدة 7 أيام");
+  assert.equal(toggleInstructionChip("pendant 7 jours", "form", "comprimé", "fr"), "comprimé pendant 7 jours");
 });

@@ -166,3 +166,17 @@ test("بعد طباعة الوصفة وانتقال الطبيب للمريض ا
   assert.equal(draftHasContent(next), false);
   assert.equal(next.printedAt, undefined);
 });
+
+test("الوزن اختياري: يُقبل وزن صحيح ويُرفض غير الصحيح، ويُحسب كمحتوى في المسودة", async () => {
+  const { prescriptionWeightValue } = await import("../src/lib/prescription.ts");
+  assert.equal(prescriptionWeightValue("20"), 20);
+  assert.equal(prescriptionWeightValue("12,5"), 12.5);
+  assert.equal(prescriptionWeightValue(""), null);
+  assert.equal(prescriptionWeightValue("0"), null);
+  assert.equal(prescriptionWeightValue("abc"), null);
+  assert.equal(prescriptionWeightValue("500"), null);
+  const d = { ...emptyDraft("u1", prescriptionPatientFrom(selfAppt), "current"), patientWeight: "20" };
+  assert.equal(draftHasContent(d), true);
+  const bad = validateDraft({ ...d, medications: [{ ...newMedication("freeText"), name: "X", instructions: "مرتين يوميًا" }], patientWeight: "abc" });
+  assert.ok(bad.errors.some(e => e.includes("وزنًا")));
+});

@@ -76,6 +76,8 @@ export interface PrescriptionDraft {
   patientNameFr?: string;
   patientAge?: string;
   patientAgeUnit?: PrescriptionAgeUnit;
+  /** الوزن بالكيلوغرام (اختياري، مفيد خصوصًا للأطفال). */
+  patientWeight?: string;
   medications: PrescriptionMedication[];
   notes: string;
   /** «current» = رُبطت تلقائيًا بالاستشارة الحالية، «manual» = اختارها الطبيب من موعد قائم. */
@@ -153,7 +155,7 @@ export function restoreMedication(list: PrescriptionMedication[], med: Prescript
 /** هل كتب الطبيب شيئًا يُفقد؟ (تعديل الاسم وحده لا يُعدّ محتوى طبيًا لكنه يُحتسب كتعديل). */
 export function draftHasContent(d: PrescriptionDraft | null | undefined): boolean {
   if (!d) return false;
-  return d.medications.some(filled) || (d.labs ?? []).some(requestFilled) || (d.imaging ?? []).some(requestFilled) || d.notes.trim() !== "" || (d.patientNameFr ?? "").trim() !== "" || (d.patientAge ?? "").trim() !== "" || d.patientName.trim() !== d.patient.bookedName.trim()
+  return d.medications.some(filled) || (d.labs ?? []).some(requestFilled) || (d.imaging ?? []).some(requestFilled) || d.notes.trim() !== "" || (d.patientNameFr ?? "").trim() !== "" || (d.patientAge ?? "").trim() !== "" || (d.patientWeight ?? "").trim() !== "" || d.patientName.trim() !== d.patient.bookedName.trim()
     || Object.values(d.professional ?? {}).some(fields => Object.values(fields).some(value => Boolean(value?.trim())));
 }
 
@@ -173,6 +175,7 @@ export function validateDraft(d: PrescriptionDraft): DraftValidation {
   const medicationErrors: DraftValidation["medicationErrors"] = {};
   if (!d.patientName.trim()) errors.push("اكتب اسم المريض.");
   if ((d.patientAge ?? "").trim() && prescriptionAgeValue(d.patientAge, d.patientAgeUnit) === null) errors.push("اكتب عمرًا صحيحًا للمريض أو اتركه فارغًا.");
+  if ((d.patientWeight ?? "").trim() && prescriptionWeightValue(d.patientWeight) === null) errors.push("اكتب وزنًا صحيحًا بالكيلوغرام أو اتركه فارغًا.");
   const rows = d.medications.filter(filled);
   const labs = (d.labs ?? []).filter(requestFilled).map(r => ({ ...r, name: r.name.trim(), note: r.note.trim() }));
   const imaging = (d.imaging ?? []).filter(requestFilled).map(r => ({ ...r, name: r.name.trim(), note: r.note.trim() }));
@@ -225,6 +228,14 @@ export function clearPrescriptionDraft(): void {
 }
 
 /** Age belongs to this prescription only; never infer it from the account holder. */
+/** وزن صالح بالكيلوغرام (0.5–400، حتى رقم عشري واحد) أو null. */
+export function prescriptionWeightValue(value: string | undefined): number | null {
+  const text = (value ?? "").trim().replace(",", ".");
+  if (!/^\d+(?:\.\d)?$/.test(text)) return null;
+  const w = Number(text);
+  return Number.isFinite(w) && w >= 0.5 && w <= 400 ? w : null;
+}
+
 export function prescriptionAgeValue(value: string | undefined, unit: PrescriptionAgeUnit = "years"): number | null {
   const text = (value ?? "").trim().replace(",", ".");
   if (!/^\d+(?:\.\d{1,2})?$/.test(text)) return null;

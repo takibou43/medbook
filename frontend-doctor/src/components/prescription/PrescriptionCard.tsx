@@ -160,6 +160,7 @@ export function PrescriptionCard({
       patientName: lang === "fr" && draft.patientNameFr?.trim() ? draft.patientNameFr.trim() : draft.patientName.trim(),
       patientAge: draft.patientAge,
       patientAgeUnit: draft.patientAgeUnit,
+      patientWeight: draft.patientWeight,
       day: algeriaToday(),
       medications: v.printable,
       notes: draft.notes,
@@ -257,8 +258,8 @@ export function PrescriptionCard({
           <div>
             <Step n={1} title={t("المريض")} />
             <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-              <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2 sm:grid-cols-[minmax(0,1fr)_7rem]">
-                <label className="block min-w-0">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem]">
+                <label className="col-span-2 block min-w-0 sm:col-span-1">
                   <span className="mb-1 block text-xs font-semibold text-slate-700">{t("اسم المريض على الوصفة")}</span>
                   <input
                     className="input py-2 text-base font-bold"
@@ -275,6 +276,10 @@ export function PrescriptionCard({
                 <label className="block min-w-0">
                   <span className="mb-1 block text-xs font-semibold text-slate-700">{t("العمر")} <span className="font-normal text-slate-500">({t("اختياري")})</span></span>
                   <input className="input py-2 text-center" type="number" min="0" step="1" max="150" placeholder={t("سنة")} value={draft.patientAge ?? ""} onChange={e => patch({ patientAge: e.target.value, patientAgeUnit: "years" })} autoComplete="off" />
+                </label>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-xs font-semibold text-slate-700">{t("الوزن")} <span className="font-normal text-slate-500">({t("اختياري")})</span></span>
+                  <input className="input py-2 text-center" type="text" inputMode="decimal" maxLength={5} placeholder={t("كغ")} value={draft.patientWeight ?? ""} onChange={e => patch({ patientWeight: e.target.value })} autoComplete="off" />
                 </label>
               </div>
 

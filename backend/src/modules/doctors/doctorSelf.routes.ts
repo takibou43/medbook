@@ -136,7 +136,7 @@ const weeklyScheduleSchema = z.object({
       startTime: z.string().regex(/^\d{2}:\d{2}$/),
       endTime: z.string().regex(/^\d{2}:\d{2}$/),
     })
-  ),
+  ).max(70), // 7 أيام × 10 فترات كحد أقصى معقول
   confirmAffected: z.boolean().optional().default(false),
 });
 

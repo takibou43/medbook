@@ -15,6 +15,7 @@ import { nextReminderDelay } from "./lib/backgroundTiming";
 import { nextMaintenanceDelay } from "./lib/maintenanceTiming";
 import { liveUpdates } from "./lib/liveUpdates";
 import { backfillFollowUpFlag } from "./lib/backfillFollowUpFlag";
+import { purgeStaleRefreshTokens } from "./lib/tokens";
 
 const app = createApp();
 
@@ -110,6 +111,12 @@ Promise.all([
     } catch (err) {
       console.error("تعذّر حذف إشعارات المواعيد المنتهية:", safeErrorCode(err));
       throw err;
+    }
+    try {
+      await purgeStaleRefreshTokens();
+    } catch (err) {
+      // تنظيف غير حرج: لا يوقف بقية الصيانة ولا يُعاد فورًا.
+      console.error("تعذّر حذف توكنات التجديد القديمة:", safeErrorCode(err));
     }
   }, nextMaintenanceDelay);
   liveUpdates.subscribe(() => maintenanceJob.wake());

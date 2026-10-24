@@ -25,12 +25,12 @@ router.get(
 );
 
 const updateProfileSchema = z.object({
-  firstName: z.string().min(2).optional(),
-  lastName: z.string().min(2).optional(),
+  firstName: z.string().min(2).max(60).optional(),
+  lastName: z.string().min(2).max(60).optional(),
   birthDate: z.coerce.date().optional(),
   gender: z.enum(["MALE", "FEMALE"]).optional(),
   cityId: z.string().uuid().optional(),
-  phone: z.string().optional(),
+  phone: z.string().max(20).optional(),
 });
 
 router.patch(

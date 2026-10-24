@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { ApiError } from "../utils/ApiError";
 import catalog from "../data/algeria-specialties.json";
+import { invalidateCatalogCache } from "./catalogCache";
 
 export const specialtyNameSchema = z.string().trim().min(2, "اسم التخصص قصير جدًا").max(120, "اسم التخصص طويل جدًا").regex(/^[\p{L}\p{M}\p{N}\s()،,.'’/&+-]+$/u, "اسم التخصص غير صالح");
 
@@ -26,5 +27,7 @@ export async function resolveSpecialtyId(tx: Prisma.TransactionClient, input: { 
   });
   if (existing) return existing.id;
   const created = await tx.specialty.upsert({ where: { nameAr }, update: {}, create: { nameAr, ...(nameFr ? { nameFr } : {}), icon: "stethoscope" }, select: { id: true } });
+  // تخصص جديد يظهر في قائمة /api/specialties العامة دون انتظار انتهاء مدة الذاكرة المؤقتة.
+  invalidateCatalogCache();
   return created.id;
 }

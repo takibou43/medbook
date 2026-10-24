@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { validate } from "../../middleware/validate";
-import { bookingLookupLimiter, patientBookingLimiter, publicDiscoveryLimiter } from "../../middleware/rateLimiter";
+import { bookingLookupLimiter, bookingStatusLimiter, patientBookingLimiter, publicDiscoveryLimiter } from "../../middleware/rateLimiter";
 import {
   guestBookingSchema,
   guestSlotsQuerySchema,
@@ -32,7 +32,7 @@ router.get("/lookup", bookingLookupLimiter, validate({ query: lookupQuerySchema 
 // GET /api/booking/status/:id — متابعة رقم الدور لحظيًا. عامة بلا تسجيل دخول لأن الحجز
 // نفسه بلا حساب؛ الحماية أن معرّف الموعد UUID غير قابل للتخمين، والرد لا يحمل أي بيانات
 // عن مرضى آخرين.
-router.get("/status/:id", validate({ params: bookingIdParamsSchema }), controller.getBookingStatus);
+router.get("/status/:id", bookingStatusLimiter, validate({ params: bookingIdParamsSchema }), controller.getBookingStatus);
 
 // إنشاء حجز يتطلب حساب مريض مسجّل الدخول (توكن صالح + دور PATIENT). بلا توكن أو بتوكن منتهٍ → 401،
 // وبدور آخر (طبيب/مساعد/إدارة) → 403. صاحب الموعد يُحدَّد من الجلسة فقط، لا من جسم الطلب.

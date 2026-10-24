@@ -51,3 +51,15 @@ export const publicDiscoveryLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: "طلبات بحث كثيرة خلال وقت قصير. انتظر قليلًا ثم أعد المحاولة." },
 });
+
+// متابعة الدور (/booking/status/:id) عامة لأن الرابط يُفتح من الإشعارات ومن أجهزة بلا جلسة.
+// المريض يستطلع كل 20 ث (≈ 15 طلبًا كل 5 دقائق)، والحد واسع ليتشارك مرضى قاعة انتظار واحدة
+// شبكة العيادة نفسها، لكنه يمنع استعمال المسار المكلف (عدة استعلامات لكل طلب) لاستنزاف الخادم.
+export const BOOKING_STATUS_LIMIT = 300;
+export const bookingStatusLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: BOOKING_STATUS_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "طلبات كثيرة خلال وقت قصير. انتظر قليلًا ثم أعد المحاولة." },
+});

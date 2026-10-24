@@ -24,6 +24,8 @@ import { appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
 import { canScheduleFollowUp, isDentalSpecialty, usesStandaloneFollowUp } from "../../lib/features";
 import { beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import { PrescriptionCard } from "../../components/prescription/PrescriptionCard";
+import { filterQueue, hasUnprintedVisitDraft } from "../../lib/doctorWorkflow";
+import { getStoredDraft } from "../../lib/prescription";
 import type { Appointment } from "../../types";
 
 // تاريخ اليوم بتوقيت الجزائر (UTC+1) بصيغة YYYY-MM-DD — نفس منطق بقية اللوحة.
@@ -78,6 +80,9 @@ export default function DoctorHome() {
   const [planSubject, setPlanSubject] = useState<{ patientId: string; memberId: string; name: string } | null>(null);
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [queueSearch, setQueueSearch] = useState("");
+  const [statsOpen, setStatsOpen] = useState(false);
+  const prescriptionRef = useRef<HTMLDivElement>(null);
   // إعادة التركيز إلى زر الصف بعد إغلاق القائمة أو نافذة التأكيد أو انتهاء الإجراء.
   const triggerEls = useRef(new Map<string, HTMLElement>());
   const [pendingFocusId, setPendingFocusId] = useState<string | null>(null);
@@ -108,6 +113,17 @@ export default function DoctorHome() {
   // الطابور كاملًا بترتيب المناداة الفعلي من الخادم (لا نقتطع منه شيئًا).
   const nextList = queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])];
   const canCallNext = !current && nextList.length > 0;
+  const filteredQueue = filterQueue(nextList, queueSearch);
+
+  function finishCurrent() {
+    if (!current || busy) return;
+    if (hasUnprintedVisitDraft(getStoredDraft(user?.id), current) && !window.confirm(t("توجد وصفة غير مطبوعة لهذه الزيارة. هل تريد إنهاء الكشف؟ اضغط إلغاء للرجوع إلى الوصفة."))) {
+      prescriptionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      prescriptionRef.current?.focus();
+      return;
+    }
+    void run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, t("اكتمل الكشف."), "current-card");
+  }
 
   function refreshAll() {
     void qc.invalidateQueries({ queryKey: ["queue"] });
@@ -211,7 +227,8 @@ export default function DoctorHome() {
       )}
 
       {/* 3) ثلاث عدادات */}
-      <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
+      <button type="button" className="btn-outline w-full md:hidden" aria-expanded={statsOpen} aria-controls="doctor-today-stats" onClick={() => setStatsOpen(v => !v)}>{t(statsOpen ? "إخفاء إحصائيات اليوم" : "عرض إحصائيات اليوم")}</button>
+      <div id="doctor-today-stats" className={clsx("grid-cols-3 gap-2.5 sm:gap-4 md:grid", statsOpen ? "grid" : "hidden")}>
         <StatCard label={t("مواعيد اليوم")} value={todayCount} icon={CalendarClock} to={appointmentsLink({ from: today, to: today })} />
         <StatCard label={t("في الانتظار")} value={waitingCount} icon={Hourglass} tone="amber" to="/appointments?tab=queue" />
         <StatCard label={t("مكتملة")} value={completedCount} icon={CheckCircle2} tone="green" to={`/appointments?status=COMPLETED&date=${today}`} />
@@ -286,7 +303,7 @@ export default function DoctorHome() {
             )}
           </section>
 
-        <div className="space-y-5 lg:col-span-2 lg:row-start-2">
+        <div ref={prescriptionRef} tabIndex={-1} className="space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-primary-300 lg:col-span-2 lg:row-start-2">
           {/* 6) كتابة وصفة — دون تغيير. مكان «جدول اليوم» سابقًا (دُمج الجدول في صفحة «المواعيد»). */}
           <PrescriptionCard current={current} appointments={todays} loading={appointments.isPending} error={appointments.isError} />
           <div className="flex justify-end">
@@ -294,7 +311,7 @@ export default function DoctorHome() {
                 className="w-full sm:w-auto" variant="outline"
                 loading={finish.isPending}
                 disabled={busy || !current}
-                onClick={() => current && run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, t("اكتمل الكشف."), "current-card")}
+                onClick={finishCurrent}
               >
                 <Check className="h-4 w-4" aria-hidden="true" />{t(" إنهاء الكشف ")}</Button>
           </div>
@@ -308,6 +325,10 @@ export default function DoctorHome() {
             <h2 className="text-lg font-bold text-slate-900">{t("طابور الانتظار")}</h2>
             {!queue.isPending && !queue.isError && nextList.length > 0 && <span className="badge bg-amber-100 text-amber-700 tabular-nums">{nextList.length}</span>}
           </div>
+          <label className="mt-3 block">
+            <span className="sr-only">{t("البحث في الانتظار بالاسم أو الهاتف")}</span>
+            <input type="search" className="input" value={queueSearch} onChange={e => setQueueSearch(e.target.value)} placeholder={t("البحث في الانتظار بالاسم أو الهاتف")} />
+          </label>
           {queue.isPending ? (
             <div className="py-6"><Spinner /></div>
           ) : queue.isError ? (
@@ -316,20 +337,21 @@ export default function DoctorHome() {
             <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-600">{t("لا يوجد منتظرون الآن.")}</p>
           ) : (
             <ol className="mt-2 max-h-[28rem] overflow-y-auto">
-              {nextList.map((a, i) => (
-                <li key={a.id} className="flex items-center gap-3 border-t border-slate-100 py-3 first:border-t-0">
+              {filteredQueue.map((a) => (
+                <li key={a.id} className={clsx("flex items-center gap-3 border-t border-slate-100 py-3 first:border-t-0", a.id === nextList[0]?.id && "rounded-xl bg-primary-50/80 px-2 ring-1 ring-inset ring-primary-200")}>
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-lg font-bold tabular-nums text-primary-700" title={t("رقم الدور حسب وقت الموعد")}>
                     {padTurn(turns.get(a.id))}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="break-words font-bold leading-snug text-slate-900">{beneficiaryName(a)}</p>
                     <p className="text-xs text-slate-500">
-                      {a.status === "LATE" ? t("متأخر") : t("في الانتظار")}{t(" · موعده ")}<span className="tabular-nums">{a.startTime}</span>
+                      {a.id === nextList[0]?.id && <span className="me-1 font-bold text-primary-700">{t("التالي")} · </span>}{a.status === "LATE" ? t("متأخر") : t("في الانتظار")}{t(" · موعده ")}<span className="tabular-nums">{a.startTime}</span>
                     </p>
                   </div>
-                  <Avatar name={beneficiaryName(a)} index={i + 1} />
+                  <Avatar name={beneficiaryName(a)} index={nextList.findIndex(item => item.id === a.id) + 1} />
                 </li>
               ))}
+              {filteredQueue.length === 0 && <li className="p-4 text-center text-sm text-slate-600">{t("لا توجد نتائج مطابقة.")}</li>}
             </ol>
           )}
           <p className="mt-3 text-xs text-slate-500">{t("الترتيب هنا هو ترتيب المناداة الفعلي من الخادم، وقد يختلف عن رقم الدور المرئي.")}</p>

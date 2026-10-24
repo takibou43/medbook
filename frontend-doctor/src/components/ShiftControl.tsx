@@ -29,11 +29,16 @@ export function ShiftControl({ variant = "compact" }: { variant?: "compact" | "h
   if (!enabled) return null;
   const active = state.data?.active && !!state.data.endsAt && new Date(state.data.endsAt) > new Date();
   const label = user?.role === "DOCTOR" ? t("المداومة") : t("المناوبة");
+  function toggleShift() {
+    if (state.isLoading || state.isError || change.isPending) return;
+    if (active && !window.confirm(t("هل تريد إنهاء المداومة؟"))) return;
+    change.mutate(!active);
+  }
   if (variant === "hero") {
     const disabled = state.isLoading || state.isError || change.isPending;
     const on = !!active;
     return <div className="min-w-0 flex-1" aria-live="polite">
-      <button type="button" role="switch" aria-checked={on} disabled={disabled} onClick={() => change.mutate(!on)}
+      <button type="button" role="switch" aria-checked={on} disabled={disabled} onClick={toggleShift}
         aria-label={on ? t("إنهاء المداومة") : t("بدء المداومة")}
         className="group flex w-full min-w-0 max-w-full items-center gap-3 rounded-2xl p-1 text-start outline-none transition focus-visible:ring-2 focus-visible:ring-primary-300 disabled:opacity-60">
         {/* المفتاح: مسار متدرّج + مقبض ينزلق (الاتجاه يتبع RTL/LTR تلقائيًا). */}
@@ -54,11 +59,12 @@ export function ShiftControl({ variant = "compact" }: { variant?: "compact" | "h
       {(change.isError || state.isError) && <p role="alert" className="mt-1 text-xs text-red-600">{t("تعذّر تحديث المداومة. حاول مرة أخرى.")}</p>}
     </div>;
   }
-  return <div className="mb-2 inline-flex items-center gap-2 text-xs" aria-live="polite">
-    <button aria-pressed={!!active} disabled={state.isLoading || state.isError || change.isPending}
+  return <div className="inline-flex items-center gap-2 text-xs" aria-live="polite">
+    <button type="button" aria-pressed={!!active} disabled={state.isLoading || state.isError || change.isPending}
+      aria-label={active ? t("المداومة جارية") + " — " + t("إنهاء") + " " + label : t("بدء") + " " + label}
       title={active ? t("إنهاء") + " " + label : t("بدء") + " " + label}
       className={"inline-flex items-center gap-2 rounded-full border px-3 py-1.5 disabled:opacity-50 " + (active ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-600")}
-      onClick={() => change.mutate(!active)}>
+      onClick={toggleShift}>
       <span aria-hidden="true" className={"h-2 w-2 rounded-full " + (active ? "bg-emerald-500" : "bg-slate-400")} />
       {active ? t("إنهاء") : t("بدء")} {label}
     </button>

@@ -13,7 +13,7 @@ export function useNextSlot(doctorId: string | undefined, enabled: boolean, poll
     enabled: Boolean(doctorId) && enabled,
     retry: false,
     staleTime: query => isUpcomingSlot(query.state.data) ? NEXT_SLOT_STALE_MS : 0,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: poll ? "always" : false,
     refetchInterval: poll ? NEXT_SLOT_STALE_MS : false,
     refetchIntervalInBackground: false,
   });

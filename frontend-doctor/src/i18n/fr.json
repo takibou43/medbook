@@ -2101,5 +2101,11 @@
   "استعمل أرقامًا وحروفًا لاتينية و«/» فقط.": "Utilisez uniquement des chiffres, lettres latines et « / ».",
   "يُطبع في رأس الوصفة تحت التخصص.": "Imprimé dans l'en-tête, sous la spécialité.",
   "وحدة الكمية": "Unité de quantité",
-  "مثال: 02 علب": "Ex. : 02 btes"
+  "مثال: 02 علب": "Ex. : 02 btes",
+  "إخفاء إحصائيات اليوم": "Masquer les statistiques du jour",
+  "عرض إحصائيات اليوم": "Afficher les statistiques du jour",
+  "البحث في الانتظار بالاسم أو الهاتف": "Rechercher par nom ou téléphone dans la file",
+  "لا توجد نتائج مطابقة.": "Aucun résultat correspondant.",
+  "هل تريد إنهاء المداومة؟": "Voulez-vous terminer la permanence ?",
+  "توجد وصفة غير مطبوعة لهذه الزيارة. هل تريد إنهاء الكشف؟ اضغط إلغاء للرجوع إلى الوصفة.": "Une ordonnance non imprimée existe pour cette visite. Terminer la consultation ? Cliquez sur Annuler pour revenir à l’ordonnance."
 }

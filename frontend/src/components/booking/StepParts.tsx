@@ -5,8 +5,8 @@ import { ArrowRight } from "lucide-react";
 
 // عنوان كل خطوة: يستقبل التركيز برمجيًا (tabIndex=-1) عند الانتقال بين الخطوات ليعلنه قارئ الشاشة،
 // وله scroll-mt حتى لا تخفيه الترويسة اللاصقة عند التمرير التلقائي.
-export const StepHeading = forwardRef<HTMLHeadingElement, { children: ReactNode; hint?: string; id?: string }>(({ children, hint, id }, ref) => { useLanguage(); return (
-  <div className="mb-4">
+export const StepHeading = forwardRef<HTMLHeadingElement, { children: ReactNode; hint?: string; id?: string; compact?: boolean }>(({ children, hint, id, compact = false }, ref) => { useLanguage(); return (
+  <div className={compact ? "min-w-0" : "mb-4"}>
     <h2 ref={ref} id={id} tabIndex={-1} data-step-heading className="scroll-mt-24 text-xl font-extrabold text-slate-900 outline-none">
       {children}
     </h2>

@@ -2112,5 +2112,10 @@
   "تعذّر التحقق من التوفر. افتح الحجز للمحاولة مجددًا.": "Impossible de vérifier les disponibilités. Ouvrez la réservation pour réessayer.",
   "افتح الحجز للتحقق من أقرب موعد.": "Ouvrez la réservation pour vérifier le prochain créneau.",
   "احجز": "Réserver",
-  "احجز عند الطبيب {0} {1}": "Réserver avec le Dr {0} {1}"
+  "احجز عند الطبيب {0} {1}": "Réserver avec le Dr {0} {1}",
+  "اختر طبيبك واحجز موعدك": "Choisissez votre médecin et réservez",
+  "مسح QR لتسجيل الوصول": "Scanner le QR pour signaler votre arrivée",
+  "تتبّع دوري": "Suivre mon tour",
+  "الموعد لـ {0}": "Rendez-vous pour {0}",
+  "هذا الموعد يحتاج إلى إعادة جدولة": "Ce rendez-vous doit être reprogrammé"
 }

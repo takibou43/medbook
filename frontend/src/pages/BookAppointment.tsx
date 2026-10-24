@@ -22,6 +22,7 @@ import { InlineError } from "../components/booking/StepParts";
 import { useAuth } from "../context/AuthContext";
 import { ReminderCard } from "../components/account/ReminderCard";
 import { BeneficiaryPicker } from "../components/booking/BeneficiaryPicker";
+import { UpcomingAppointmentCard } from "../components/booking/UpcomingAppointmentCard";
 import { BookingCounterCard } from "../components/booking/BookingCounterCard";
 import { beneficiaryLabel, bookableMembers, memberFullName } from "../lib/family";
 
@@ -236,6 +237,7 @@ export default function BookAppointment() {
       showToast(t("تم إرسال طلب الحجز بنجاح!"), "success");
       // نفرّغ بيانات المريض فور نجاح الحجز حتى لا يُكرَّر الحجز بالخطأ بضغطة ثانية.
       form.reset({ fullName: "", phone: "" });
+      queryClient.invalidateQueries({ queryKey: ["my-appointments", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["next-slot"] });
       queryClient.invalidateQueries({ queryKey: ["availability"] });
       setChoice(null);
@@ -312,15 +314,12 @@ export default function BookAppointment() {
   if (qrDoctorId && !authLoading && !user) return <Navigate to={"/account/login?mode=register&redirect=" + encodeURIComponent('/?doctor=' + qrDoctorId + '&intent=booking')} replace />;
 
   return (
-    <div className="container-app py-6 sm:py-8">
+    <div className="container-app py-4 sm:py-6">
       <div className="mx-auto max-w-xl">
-        <div className="mb-6 text-start">
-          <h1 className="text-2xl font-extrabold text-slate-900">{t("احجز موعدك بسهولة")}</h1>
-          <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
-            {user
-              ? t("اختر التخصص ثم الطبيب، والموقع يمنحك أول دور متاح — ويُضاف الموعد إلى حسابك.")
-              : t("اختر التخصص ثم الطبيب، ثم أنشئ حسابك أو سجّل الدخول لتأكيد الحجز.")}
-          </p>
+        <div className="mb-4 text-start">
+          <h1 className="text-xl font-extrabold text-slate-900 sm:text-2xl">{t("احجز موعدك بسهولة")}</h1>
+          <p className="mt-1 text-sm text-slate-600">{t("اختر طبيبك واحجز موعدك")}</p>
+          <BookingCounterCard wilayaId={counterWilayaId || null} />
         </div>
 
         {user?.isBlocked && (
@@ -329,7 +328,7 @@ export default function BookAppointment() {
           </div>
         )}
 
-        <BookingCounterCard wilayaId={counterWilayaId || null} />
+        {step === "specialty" && <UpcomingAppointmentCard />}
 
         <BookingSteps current={step} />
 

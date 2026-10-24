@@ -336,7 +336,7 @@
   "الجلسات:": "Séances :",
   "من": "sur",
   "· التكلفة التقديرية:": "· Coût estimé :",
-  "متابعة": "Suivi",
+  "متابعة": "Continuer",
   "الساعة": "Heure",
   "حوالي": "Environ",
   "دورك التالي مباشرة": "Vous êtes le prochain",
@@ -2118,5 +2118,9 @@
   "تتبّع دوري": "Suivre mon tour",
   "الموعد لـ {0}": "Rendez-vous pour {0}",
   "هذا الموعد يحتاج إلى إعادة جدولة": "Ce rendez-vous doit être reprogrammé",
-  "القريبون مني": "Près de moi"
+  "القريبون مني": "Près de moi",
+  "هذا أقرب موعد متاح. يمكنك اختيار موعد آخر.": "Voici le prochain créneau disponible. Vous pouvez en choisir un autre.",
+  "هذا الموعد مضى. اختر موعدًا آخر.": "Ce créneau est passé. Choisissez un autre rendez-vous.",
+  "الموعد المعروض مضى. حدّث التوفر للمحاولة مجددًا.": "Ce créneau est passé. Actualisez les disponibilités pour réessayer.",
+  "اختيار موعد آخر": "Choisir un autre rendez-vous"
 }

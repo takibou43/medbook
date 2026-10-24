@@ -61,7 +61,7 @@ export function DayTimePicker({
         onClick={() => setOpen(true)}
         className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary-300 px-4 text-sm font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
-        <CalendarDays className="h-4 w-4" aria-hidden="true" />{t(" أفضّل اختيار يوم أو وقت آخر (اختياري) ")}<ChevronDown className="h-4 w-4" aria-hidden="true" />
+        <CalendarDays className="h-4 w-4" aria-hidden="true" />{t("اختيار موعد آخر")}<ChevronDown className="h-4 w-4" aria-hidden="true" />
       </button>
     );
   }

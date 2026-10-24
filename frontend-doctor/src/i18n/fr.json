@@ -2107,5 +2107,10 @@
   "البحث في الانتظار بالاسم أو الهاتف": "Rechercher par nom ou téléphone dans la file",
   "لا توجد نتائج مطابقة.": "Aucun résultat correspondant.",
   "هل تريد إنهاء المداومة؟": "Voulez-vous terminer la permanence ?",
-  "توجد وصفة غير مطبوعة لهذه الزيارة. هل تريد إنهاء الكشف؟ اضغط إلغاء للرجوع إلى الوصفة.": "Une ordonnance non imprimée existe pour cette visite. Terminer la consultation ? Cliquez sur Annuler pour revenir à l’ordonnance."
+  "توجد وصفة غير مطبوعة لهذه الزيارة. هل تريد إنهاء الكشف؟ اضغط إلغاء للرجوع إلى الوصفة.": "Une ordonnance non imprimée existe pour cette visite. Terminer la consultation ? Cliquez sur Annuler pour revenir à l’ordonnance.",
+  "أقرب موعد متاح": "Prochain rendez-vous disponible",
+  "تعذّر التحقق من التوفر. افتح الحجز للمحاولة مجددًا.": "Impossible de vérifier les disponibilités. Ouvrez la réservation pour réessayer.",
+  "افتح الحجز للتحقق من أقرب موعد.": "Ouvrez la réservation pour vérifier le prochain créneau.",
+  "احجز": "Réserver",
+  "احجز عند الطبيب {0} {1}": "Réserver avec le Dr {0} {1}"
 }

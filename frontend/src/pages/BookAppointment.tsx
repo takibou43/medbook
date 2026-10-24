@@ -7,10 +7,11 @@ import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/Toast";
 import { Spinner } from "../components/ui/States";
-import { Doctor, FamilyMember, NextSlot, Paginated } from "../types";
+import { Doctor, FamilyMember, Paginated } from "../types";
 import { bookingError, doctorAddress, splitFullName } from "../lib/booking";
 import { BookingSteps, StepId } from "../components/booking/BookingSteps";
 import { SpecialtyOption, SpecialtyStep } from "../components/booking/SpecialtyStep";
+import { useNextSlot } from "../hooks/useNextSlot";
 import { DoctorStep } from "../components/booking/DoctorStep";
 import { SlotStep } from "../components/booking/SlotStep";
 import { DayTimePicker, DayTimeChoice } from "../components/booking/DayTimePicker";
@@ -183,14 +184,7 @@ export default function BookAppointment() {
     isFetching: loadingSlot,
     error: slotError,
     refetch: refetchSlot,
-  } = useQuery({
-    queryKey: ["next-slot", selectedDoctor?.id],
-    queryFn: async () => (await api.get<{ data: NextSlot }>("/booking/next-slot", { params: { doctorId: selectedDoctor!.id } })).data.data,
-    enabled: slotEnabled,
-    retry: false,
-    refetchInterval: step === "slot" ? 30000 : false,
-    refetchIntervalInBackground: false,
-  });
+  } = useNextSlot(selectedDoctor?.id, slotEnabled, step === "slot");
   const slotErr = slotError ? bookingError(slotError, t("تعذّر تحميل الموعد.")) : null;
 
   const bookMutation = useMutation({
@@ -243,7 +237,6 @@ export default function BookAppointment() {
       // نفرّغ بيانات المريض فور نجاح الحجز حتى لا يُكرَّر الحجز بالخطأ بضغطة ثانية.
       form.reset({ fullName: "", phone: "" });
       queryClient.invalidateQueries({ queryKey: ["next-slot"] });
-      queryClient.invalidateQueries({ queryKey: ["next-slot-preview"] });
       queryClient.invalidateQueries({ queryKey: ["availability"] });
       setChoice(null);
     } catch (err) {
@@ -268,7 +261,6 @@ export default function BookAppointment() {
         queryClient.invalidateQueries({ queryKey: ["availability", selectedDoctor.id] });
         if (choice) setChoice(code === "SLOT_UNAVAILABLE" ? { date: choice.date, startTime: null } : null);
         queryClient.invalidateQueries({ queryKey: ["next-slot", selectedDoctor.id] });
-        queryClient.invalidateQueries({ queryKey: ["next-slot-preview", selectedDoctor.id] });
         setStep("slot");
       } else if (kind === "notFound" && selectedMember) {
         // فرد العائلة أُرشف أو لم يعد متاحًا: نحدّث القائمة ونعيده لاختيار المستفيد.

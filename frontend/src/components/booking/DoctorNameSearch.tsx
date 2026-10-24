@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Search, Star, ChevronDown } from "lucide-react";
 import { api } from "../../lib/api";
 import { Doctor } from "../../types";
+import { NextSlotPreview } from "./NextSlotPreview";
 import { RegionFilters } from "./RegionFilters";
 import { Input } from "../ui/Input";
 import { Spinner, EmptyState } from "../ui/States";
@@ -79,6 +80,7 @@ export function DoctorNameSearch({ onSelect }: Props) {
                       </p>
                       {d.clinic && <p className="text-xs text-primary-700">{d.clinic.nameAr}</p>}
                     </div>
+                    <NextSlotPreview doctorId={d.id} />
                     <div className="flex shrink-0 flex-col items-end gap-2">
                     <span className="flex items-center gap-1 text-sm text-amber-600">
                       <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { formatDzd } from "../src/lib/doctorUi.ts";
-import { setLanguage } from "../src/i18n/locale.ts";
+import { setLanguage, loadFrench } from "../src/i18n/locale.ts";
+
+// القاموس الفرنسي يُحمَّل عند الطلب في التطبيق؛ الاختبارات تحمّله مسبقًا لتبقى متزامنة.
+await loadFrench();
 
 test("clinic report amounts retain thousands order in Arabic and French", () => {
   try {

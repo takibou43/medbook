@@ -1,9 +1,15 @@
 import { RequestHandler } from "express";
 import { liveUpdates } from "../lib/liveUpdates";
 
+// تعديلات لا تغيّر أي شيء تعرضه اللوحات الحية (طابور، مواعيد، لوحة الطبيب)، فلا داعي لأن يعيد كل
+// طبيب ومساعد متصل جلب بياناته بسببها. أهمها نبضة المداومة: تُرسل كل 20 ث من كل طبيب في مداومته
+// وكانت تُطلق إبطالًا عامًا لكل اللوحات المفتوحة ولمهام الخلفية في كل مرة.
+const SILENT_MUTATIONS = /^\/(shifts\/heartbeat|doctor\/messages|admin\/messages|patient\/notifications)(\/|$)/;
+
 export const liveInvalidation: RequestHandler = (req, res, next) => {
   if (["POST", "PATCH", "PUT", "DELETE"].includes(req.method) &&
-      /^\/(appointments|booking|doctor|assistant|clinics|admin|patient|shifts|guest-claims)(\/|$)/.test(req.path)) {
+      /^\/(appointments|booking|doctor|assistant|clinics|admin|patient|shifts|guest-claims)(\/|$)/.test(req.path) &&
+      !SILENT_MUTATIONS.test(req.path)) {
     let doctors: string[] | undefined;
     if (/^\/(appointments|booking)(\/|$)/.test(req.path)) {
       const json = res.json;

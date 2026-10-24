@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { t } from "../i18n/locale";
+import { useLiveUpdates } from "../context/LiveUpdatesContext";
+import { shiftPollInterval } from "../lib/livePolling";
 
 /**
  * زر المداومة. `compact` (الافتراضي): الشارة الصغيرة أعلى الصفحات.
@@ -12,9 +14,11 @@ export function ShiftControl({ variant = "compact" }: { variant?: "compact" | "h
   const { user } = useAuth();
   const qc = useQueryClient();
   const enabled = user?.role === "DOCTOR" || user?.role === "ASSISTANT";
+  const live = useLiveUpdates();
   const state = useQuery({ queryKey: ["shift", user?.id], enabled,
     queryFn: async () => (await api.get<{ data: { active: boolean; endsAt: string | null; suggestedEndTime?: string | null } }>("/shifts")).data.data,
-    refetchInterval: 10000,
+    refetchInterval: shiftPollInterval(live, 10000),
+    refetchIntervalInBackground: false,
   });
   const change = useMutation({ mutationFn: async (active: boolean) => api.post("/shifts", { active }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["shift"] }); qc.invalidateQueries({ queryKey: ["queue"] }); qc.invalidateQueries({ queryKey: ["assistants", "attendance"] }); },

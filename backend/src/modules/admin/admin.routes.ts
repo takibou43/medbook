@@ -3,6 +3,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { Role, VerificationStatus, SubscriptionStatus, AppointmentStatus } from "@prisma/client";
 import { authenticate, authorize } from "../../middleware/auth";
+import { invalidateCatalogCache } from "../../lib/catalogCache";
 import { validate } from "../../middleware/validate";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { ApiError } from "../../utils/ApiError";
@@ -12,6 +13,11 @@ import * as referrals from "../referrals/referrals.service";
 
 const router = Router();
 router.use(authenticate, authorize(Role.ADMIN));
+// أي تعديل ناجح على الفهارس العامة يُبطل ذاكرتها المؤقتة فورًا (انظر lib/catalogCache.ts).
+router.use(/^\/(specialties|wilayas|cities)(\/|$)/, (req, res, next) => {
+  if (req.method !== "GET") res.on("finish", () => { if (res.statusCode < 400) invalidateCatalogCache(); });
+  next();
+});
 
 // ---- مخططات مسارات التعديل (PATCH) ----
 // كل مخطط .strict(): أي حقل غير متوقَّع يُرفض بـ400 بدل أن يُمرَّر إلى Prisma (mass assignment).

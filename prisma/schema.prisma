@@ -784,6 +784,8 @@ model Notification {
 
   @@index([userId, isRead])
   @@index([userId, expiresAt])
+  // للصيانة الدورية: أقرب انتهاء + حذف المنتهي دون مسح الجدول كاملًا.
+  @@index([expiresAt])
   @@index([appointmentId])
   @@index([newDoctorId])
   @@unique([userId, type, newDoctorId])

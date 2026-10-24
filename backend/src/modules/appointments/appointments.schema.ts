@@ -6,7 +6,7 @@ export const createAppointmentSchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "صيغة الوقت يجب أن تكون HH:mm"),
   type: z.enum(["IN_PERSON", "FOLLOW_UP", "ONLINE"]).default("IN_PERSON"),
   notes: z.string().max(1000).optional(),
-  serviceIds: z.array(z.string().uuid()).optional(),
+  serviceIds: z.array(z.string().uuid()).max(20).optional(),
   // الحساب العائلي: المستفيد من الموعد (يُتحقق من ملكيته في الخادم). غيابه = الموعد لصاحب الحساب.
   familyMemberId: z.string().uuid("فرد عائلة غير صالح").optional(),
 });

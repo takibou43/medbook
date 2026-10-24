@@ -22,7 +22,7 @@ export function BookingCounterCard({ wilayaId }: { wilayaId?: string | null }) {
   const text = counterCardText({ data: q.data, isError: q.isError, isLoading: q.isLoading });
   if (!text) return null;
   return (
-    <div className="mb-4 flex items-center justify-center gap-2 rounded-2xl border border-primary-100 bg-primary-50/70 px-4 py-2.5 text-center text-sm font-semibold text-primary-800" role="status">
+    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary-800" role="status">
       <TrendingUp className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span>{text}</span>
     </div>

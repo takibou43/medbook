@@ -6,8 +6,8 @@ export function SpecialtyGridSkeleton() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3" role="status" aria-live="polite" aria-label={t("جارٍ تحميل التخصصات")}>
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="h-32 animate-pulse rounded-2xl glass p-4">
-          <div className="mx-auto h-11 w-11 rounded-full bg-slate-200" />
+        <div key={i} className="h-[6.5rem] animate-pulse rounded-2xl glass p-4">
+          <div className="mx-auto h-10 w-10 rounded-full bg-slate-200" />
           <div className="mx-auto mt-3 h-3 w-3/4 rounded bg-slate-200" />
           <div className="mx-auto mt-2 h-2.5 w-1/2 rounded bg-slate-100" />
         </div>

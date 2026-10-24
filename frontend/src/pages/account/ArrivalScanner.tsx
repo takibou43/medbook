@@ -1,3 +1,5 @@
+import { useLanguage } from "../../i18n/LanguageRoot";
+import { t } from "../../i18n/locale";
 import { arrivalCodeFromQr } from "../../lib/arrivalQr";
 import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { cameraErrorMessage } from "../../lib/arrivalCamera";
@@ -9,6 +11,7 @@ import { api, apiErrorMessage } from "../../lib/api";
 
 type Choice = { id: string; startTime: string; familyMemberId: string | null; familyMember: { firstName: string; lastName: string } | null; doctor: { firstName: string; lastName: string } };
 export default function ArrivalScanner() {
+  useLanguage();
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -71,7 +74,7 @@ export default function ArrivalScanner() {
   if (loading) return <p>جارٍ تحميل الحساب…</p>;
   if (!user) return <Navigate to={"/account/login?mode=register&redirect=" + encodeURIComponent(redirect)} replace />;
   return <section dir="rtl" className="mx-auto max-w-lg space-y-4 p-4">
-    <h1 className="text-xl font-bold">تسجيل الوصول إلى العيادة</h1>
+    <h1 className="text-xl font-bold">{t("مسح QR لتسجيل الوصول")}</h1>
     <p>افتح الكاميرا ووجّهها نحو QR المطبوع في العيادة. إذا كان لديك موعد اليوم يُسجل وصولك، وإلا تفتح خيارات الحجز في العيادة.</p>
     <video ref={video} muted playsInline className={scanning ? 'w-full rounded-xl' : 'hidden'} />
     <div role="status" aria-live={feedback === 'error' ? 'assertive' : 'polite'} aria-busy={busy} className={"flex items-start gap-3 rounded-xl border p-4 text-base font-semibold " + (feedback === 'success' ? 'border-green-300 bg-green-50 text-green-900' : feedback === 'error' ? 'border-red-300 bg-red-50 text-red-900' : 'border-blue-200 bg-blue-50 text-blue-900')}>

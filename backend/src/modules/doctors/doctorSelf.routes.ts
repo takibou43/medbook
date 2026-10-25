@@ -85,16 +85,19 @@ router.get("/prescription-settings", asyncHandler(async (req, res) => {
   const doctorId = await templateOwner(req.user!.id);
   const row = await prisma.prescriptionSettings.findUnique({ where: { doctorId }, select: { language: true, professional: true, show: true } });
   // The additional preference lives in existing JSON; no production schema migration.
-  const { headerLanguage, ...professional } = (row?.professional && typeof row.professional === "object" && !Array.isArray(row.professional) ? row.professional : {}) as Record<string, unknown>;
-  const parsed = row ? prescriptionSettingsSchema.safeParse({ language: row.language, ...(headerLanguage ? { headerLanguage } : {}), professional, show: row.show ?? undefined }) : null;
+  const { headerLanguage, orderNumber, ...professional } = (row?.professional && typeof row.professional === "object" && !Array.isArray(row.professional) ? row.professional : {}) as Record<string, unknown>;
+  const parsed = row ? prescriptionSettingsSchema.safeParse({ language: row.language, ...(headerLanguage ? { headerLanguage } : {}), ...(orderNumber ? { orderNumber } : {}), professional, show: row.show ?? undefined }) : null;
   res.json({ success: true, data: parsed?.success ? { ...defaultPrescriptionSettings, ...parsed.data } : defaultPrescriptionSettings });
 }));
 router.put("/prescription-settings", validate({ body: prescriptionSettingsSchema }), asyncHandler(async (req, res) => {
   const doctorId = await templateOwner(req.user!.id);
   const value = prescriptionSettingsSchema.parse(req.body);
-  const saved = { language: value.language, professional: value.headerLanguage ? { ...value.professional, headerLanguage: value.headerLanguage } : value.professional ?? Prisma.JsonNull, show: value.show ?? Prisma.JsonNull };
+  // التفضيلات الإضافية (لغة الرأس، رقم التسجيل) تُحفظ داخل JSON الموجود — بلا migration.
+  const extras = { ...(value.headerLanguage ? { headerLanguage: value.headerLanguage } : {}), ...(value.orderNumber?.trim() ? { orderNumber: value.orderNumber.trim() } : {}) };
+  const saved = { language: value.language, professional: Object.keys(extras).length ? { ...value.professional, ...extras } : value.professional ?? Prisma.JsonNull, show: value.show ?? Prisma.JsonNull };
   await prisma.prescriptionSettings.upsert({ where: { doctorId }, create: { doctorId, ...saved }, update: saved });
-  res.json({ success: true, data: { ...defaultPrescriptionSettings, ...value } });
+  const { orderNumber, ...rest } = value;
+  res.json({ success: true, data: { ...defaultPrescriptionSettings, ...rest, ...(orderNumber?.trim() ? { orderNumber: orderNumber.trim() } : {}) } });
 }));
 
 // تقييمات المرضى للطبيب الحالي (طبيب فقط): متوسط، عدد، توزيع النجوم، والتقييمات مع التعليقات.
@@ -133,7 +136,7 @@ const weeklyScheduleSchema = z.object({
       startTime: z.string().regex(/^\d{2}:\d{2}$/),
       endTime: z.string().regex(/^\d{2}:\d{2}$/),
     })
-  ),
+  ).max(70), // 7 أيام × 10 فترات كحد أقصى معقول
   confirmAffected: z.boolean().optional().default(false),
 });
 

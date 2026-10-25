@@ -50,3 +50,14 @@ test('header language is independent of content language and preserved through n
  assert.equal(sameSettings(saved,{...saved,headerLanguage:'fr'}),false);
  assert.equal(normalizeSettings({headerLanguage:'invalid'}).headerLanguage,undefined);
 });
+
+test("رقم التسجيل N° d'ordre: يُقرأ ويُرسل مقصوصًا، والفارغ لا يُرسل، وغير الصالح يُرفض", async () => {
+  const { normalizeSettings, settingsPayload, validOrderNumber } = await import("../src/lib/prescriptionSettings.ts");
+  assert.equal(normalizeSettings({ language: "fr", orderNumber: " 114/28 " }).orderNumber, "114/28");
+  assert.equal(normalizeSettings({ language: "fr", orderNumber: 5 }).orderNumber, undefined);
+  const base = normalizeSettings({});
+  assert.equal(settingsPayload({ ...base, orderNumber: " 114 " }).orderNumber, "114");
+  assert.equal("orderNumber" in settingsPayload({ ...base, orderNumber: "  " }), false);
+  assert.ok(validOrderNumber("114/28") && validOrderNumber(""));
+  assert.ok(!validOrderNumber("<b>") && !validOrderNumber("١١٤") && !validOrderNumber("x".repeat(21)));
+});

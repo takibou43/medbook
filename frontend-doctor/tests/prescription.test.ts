@@ -148,3 +148,35 @@ test('patient age is optional, validated, retained with the draft, and never aut
   assert.equal(emptyDraft('doctor', prescriptionPatientFrom(guestAppt)).patientAge, '');
   clearPrescriptionDraft();
 });
+
+test("بعد طباعة الوصفة وانتقال الطبيب للمريض التالي: وصفة فارغة جديدة باسم المريض الجديد", () => {
+  const written = { ...emptyDraft("u1", prescriptionPatientFrom(familyAppt), "current"), medications: [{ ...newMedication(), name: "دواء" }] };
+  // مكتوبة وغير مطبوعة: لا تُستبدل تلقائيًا (حماية عمل لم يُطبع)
+  assert.equal(shouldAutoRebind(written, "a-self"), false);
+  // مطبوعة: تنتقل إلى المريض الجديد
+  const printed = { ...written, printedAt: "2026-10-23T10:00:00.000Z" };
+  assert.equal(shouldAutoRebind(printed, "a-self"), true);
+  // حتى لو كانت مختارة يدويًا لموعد آخر ثم طُبعت
+  assert.equal(shouldAutoRebind({ ...printed, source: "manual" as const }, "a-self"), true);
+  // نفس الزيارة أو لا مريض حالي: لا تغيير
+  assert.equal(shouldAutoRebind(printed, "a-fam"), false);
+  assert.equal(shouldAutoRebind(printed, null), false);
+  // الوصفة الجديدة فارغة تمامًا: لا ينتقل أي دواء من المريض السابق
+  const next = emptyDraft("u1", prescriptionPatientFrom(selfAppt), "current");
+  assert.equal(draftHasContent(next), false);
+  assert.equal(next.printedAt, undefined);
+});
+
+test("الوزن اختياري: يُقبل وزن صحيح ويُرفض غير الصحيح، ويُحسب كمحتوى في المسودة", async () => {
+  const { prescriptionWeightValue } = await import("../src/lib/prescription.ts");
+  assert.equal(prescriptionWeightValue("20"), 20);
+  assert.equal(prescriptionWeightValue("12,5"), 12.5);
+  assert.equal(prescriptionWeightValue(""), null);
+  assert.equal(prescriptionWeightValue("0"), null);
+  assert.equal(prescriptionWeightValue("abc"), null);
+  assert.equal(prescriptionWeightValue("500"), null);
+  const d = { ...emptyDraft("u1", prescriptionPatientFrom(selfAppt), "current"), patientWeight: "20" };
+  assert.equal(draftHasContent(d), true);
+  const bad = validateDraft({ ...d, medications: [{ ...newMedication("freeText"), name: "X", instructions: "مرتين يوميًا" }], patientWeight: "abc" });
+  assert.ok(bad.errors.some(e => e.includes("وزنًا")));
+});

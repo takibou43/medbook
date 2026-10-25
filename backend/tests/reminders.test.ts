@@ -14,6 +14,7 @@ const h = vi.hoisted(() => {
   const val = (v: any) => (v instanceof Date ? v.getTime() : v);
   const match = (row: any, where: any = {}): boolean =>
     Object.entries(where).every(([k, cond]: [string, any]) => {
+      if (k === "OR") return cond.some((clause: any) => match(row, clause));
       const v = row[k];
       if (cond instanceof Date || cond === null || typeof cond !== "object") return val(v) === val(cond);
       if ("in" in cond && !cond.in.map(val).includes(val(v))) return false;
@@ -127,6 +128,7 @@ vi.mock("../src/lib/push", () => ({ sendPushToUser: h.sendPushToUser, isPushEnab
 import {
   runReminderCycle,
   processDueReminders,
+  ensureReminderRows,
   evaluateReminder,
   appointmentStartUtc,
   buildReminderPayload,
@@ -218,6 +220,23 @@ describe("نص الإشعار", () => {
 });
 
 describe("دورة الـscheduler", () => {
+  it("fetches only the two-hour window, including the inclusive horizon across midnight", async () => {
+    const now = new Date("2026-10-01T22:30:20Z");
+    addAppt("past", new Date("2026-10-01T21:00:00Z"));
+    addAppt("near", new Date("2026-10-01T22:45:00Z"));
+    addAppt("next-day", new Date("2026-10-01T23:30:00Z"));
+    addAppt("boundary", new Date("2026-10-02T00:30:00Z"));
+    addAppt("outside", new Date("2026-10-02T00:31:00Z"));
+    const query = vi.spyOn(h.db.appointment, "findMany");
+    try {
+      expect(await ensureReminderRows(now)).toBe(6);
+      expect(h.state.reminders.map(r => r.appointmentId)).not.toContain("outside");
+      expect(h.state.reminders.map(r => r.appointmentId)).not.toContain("past");
+      const rows = await query.mock.results[0].value;
+      expect(rows.map((r: any) => r.id)).toEqual(["near", "next-day", "boundary"]);
+    } finally { query.mockRestore(); }
+  });
+
   it("1) موعد بعد أكثر من ساعة: يُنشأ السجلان ولا يُرسل شيء مبكرًا", async () => {
     addAppt("a1", START);
     const s = await runReminderCycle(new Date(START.getTime() - 61 * MIN));

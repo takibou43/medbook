@@ -10,10 +10,12 @@ import { InstallPrompt } from "./components/InstallPrompt";
 import App from "./App";
 import "./index.css";
 import { LanguageRoot } from "./i18n/LanguageRoot";
+import { languageReady } from "./i18n/locale";
 
 preserveNativeKeyboardFocus();
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+// من اختار الفرنسية سابقًا ينتظر قاموسها (ملف منفصل) قبل أول رسم؛ للعربية يكتمل فورًا.
+void languageReady.then(() => ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <LanguageRoot>{() => (
     <BrowserRouter>
@@ -28,4 +30,4 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </BrowserRouter>
     )}</LanguageRoot>
   </React.StrictMode>
-);
+));

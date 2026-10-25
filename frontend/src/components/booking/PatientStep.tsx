@@ -40,9 +40,9 @@ export const PatientStep = forwardRef<HTMLHeadingElement, Props>(({ form, onSubm
   return (
     <section aria-labelledby="step-patient-title">
       <BackButton onClick={onBack}>{t("تغيير الموعد")}</BackButton>
-      <StepHeading ref={ref} id="step-patient-title" hint={t("الاسم الذي سيظهر للطبيب في الطابور.")}>{t("معلومات المريض ")}</StepHeading>
+      <StepHeading ref={ref} id="step-patient-title">{t("بيانات المريض")}</StepHeading>
 
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="glass space-y-4 p-5">
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="glass space-y-3 p-4">
         {beneficiary}
         {forFamily ? (
           <div className="rounded-xl bg-primary-50 p-3 text-sm text-primary-900">{t("سيظهر للطبيب باسم: ")}<span className="font-bold">{familyMemberName}</span>
@@ -52,8 +52,9 @@ export const PatientStep = forwardRef<HTMLHeadingElement, Props>(({ form, onSubm
             <Input
               label={t("الاسم واللقب")}
               placeholder={t("مثال: محمد بن علي")}
-              autoComplete="name"
-              autoFocus
+              autoComplete="section-booking name"
+              dir="auto"
+              className="min-h-[44px]"
               error={errors.fullName?.message}
               {...register("fullName", {
                 validate: (v) => {
@@ -70,9 +71,9 @@ export const PatientStep = forwardRef<HTMLHeadingElement, Props>(({ form, onSubm
           placeholder="0551234567"
           type="tel"
           inputMode="tel"
-          autoComplete="tel"
+          autoComplete="section-booking tel-national"
           dir="ltr"
-          className="text-left"
+          className="min-h-[44px] text-left"
           error={errors.phone?.message}
           {...register("phone", { pattern: { value: PHONE_REGEX, message: t("رقم هاتف جزائري غير صالح (مثال: 0551234567)") } })}
         />
@@ -83,7 +84,7 @@ export const PatientStep = forwardRef<HTMLHeadingElement, Props>(({ form, onSubm
           type="submit"
           disabled={familyPending}
           className="btn-primary min-h-[48px] w-full text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 disabled:opacity-50"
-        >{t("مراجعة الحجز ")}<ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        >{t("متابعة إلى التأكيد")}<ArrowLeft className="h-4 w-4 ltr:rotate-180" aria-hidden="true" />
         </button>
       </form>
     </section>

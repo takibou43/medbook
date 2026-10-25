@@ -1,15 +1,13 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, getLocale, catalogName, getLanguage } from "../../i18n/locale.ts";
 import { forwardRef, useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
 import { LocateFixed, MapPin, Star, Stethoscope } from "lucide-react";
-import { api } from "../../lib/api";
-import { Doctor, NextSlot, Specialty } from "../../types";
+import { Doctor, Specialty } from "../../types";
 import { distanceToDoctor } from "../../lib/geo";
 import { doctorAddress } from "../../lib/booking";
 import { RegionFilters } from "./RegionFilters";
 import { directionsUrl } from "../../lib/patientPresentation";
-import { formatSlotLabel } from "../../lib/slotLabel";
+import { NextSlotPreview } from "./NextSlotPreview";
 import { useToast } from "../ui/Toast";
 import { StepHeading, BackButton, InlineError } from "./StepParts";
 import { DoctorListSkeleton } from "./Skeletons";
@@ -28,10 +26,6 @@ interface Props {
   onWilayaChange?: (wilayaId: string) => void;
 }
 
-// معاينة "أقرب دور" لأول عدد محدود من الأطباء فقط — لا نُغرق الخادم المجاني بطلبات متوازية
-// (لا يوجد endpoint مجمّع للمعاينة، وهذا هو النمط الذي كانت تعتمده الصفحة أصلًا).
-const PREVIEW_LIMIT = 10;
-
 function DoctorAvatar({ doctor }: { doctor: Doctor }) {
   useLanguage();
   if (doctor.photoUrl) {
@@ -48,6 +42,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
   useLanguage();
   const { showToast } = useToast();
   const [wilayaFilter, setWilayaFilter] = useState<string>("");
+  const [regionOpen, setRegionOpen] = useState(false);
   const [cityFilter, setCityFilter] = useState("");
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -59,15 +54,6 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
       .map((d) => ({ doctor: d, distance: distanceToDoctor(d, pos) }))
       .sort((a, b) => (a.distance?.km ?? Infinity) - (b.distance?.km ?? Infinity));
   }, [doctors, wilayaFilter, cityFilter, pos, getLanguage()]);
-
-  const previews = useQueries({
-    queries: visible.slice(0, PREVIEW_LIMIT).map(({ doctor }) => ({
-      queryKey: ["next-slot-preview", doctor.id],
-      queryFn: async () => (await api.get<{ data: NextSlot }>("/booking/next-slot", { params: { doctorId: doctor.id } })).data.data,
-      retry: false,
-      staleTime: 20000,
-    })),
-  });
 
   // خيار اختياري تمامًا: لا يُطلب إذن الموقع إلا عند الضغط، والحجز لا يتطلب GPS إطلاقًا.
   function sortByNearest() {
@@ -119,33 +105,35 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
               onClick={sortByNearest}
               disabled={locating}
               aria-pressed={Boolean(pos)}
-              className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-60 ${
+              className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-60 ${
                 pos ? "border-primary-600 bg-primary-50 text-primary-700" : "border-slate-300 bg-white text-slate-700 hover:border-primary-400"
               }`}
             >
               <LocateFixed className="h-4 w-4" aria-hidden="true" />
-              {locating ? t("جارٍ تحديد موقعك...") : pos ? t("مرتّبون حسب الأقرب إليك") : t("الأطباء القريبون منك")}
+              {locating ? t("جارٍ تحديد موقعك...") : pos ? t("مرتّبون حسب الأقرب إليك") : t("القريبون مني")}
             </button>
+            <button type="button" className="btn-outline min-h-[44px] text-xs" aria-expanded={regionOpen} aria-controls="doctor-region-filters" onClick={() => setRegionOpen(open => !open)}>{t("تحديد المنطقة — اختياري")}{(wilayaFilter || cityFilter) && <span className="ms-1 h-2 w-2 rounded-full bg-primary-600" />}</button>
           </div>
 
-          <RegionFilters wilayaId={wilayaFilter} cityId={cityFilter} onChange={(w, c) => { setWilayaFilter(w); setCityFilter(c); onWilayaChange?.(w); }} />
-          <button type="button" className="btn-outline mb-3" onClick={() => { setWilayaFilter(""); setCityFilter(""); setPos(null); onWilayaChange?.(""); }}>{t("مسح الفلاتر")}</button>
+          <div id="doctor-region-filters" hidden={!regionOpen}><RegionFilters wilayaId={wilayaFilter} cityId={cityFilter} onChange={(w, c) => { setWilayaFilter(w); setCityFilter(c); onWilayaChange?.(w); }} /></div>
+          {(wilayaFilter || cityFilter || pos) && <button type="button" className="btn-outline mb-3" onClick={() => { setWilayaFilter(""); setCityFilter(""); setPos(null); onWilayaChange?.(""); }}>{t("مسح الفلاتر")}</button>}
           {visible.length === 0 && <p className="glass p-4" role="status">{t("لا يوجد أطباء يطابقون المنطقة المختارة. جرّب منطقة أخرى أو امسح الفلاتر.")}</p>}
           <ul className="space-y-3">
-            {visible.map(({ doctor: d, distance }, i) => {
-              const preview = i < PREVIEW_LIMIT ? previews[i] : undefined;
+            {visible.map(({ doctor: d, distance }) => {
               const address = doctorAddress(d);
               const directions = directionsUrl(address, d.city?.nameAr, catalogName(d.wilaya), d.latitude, d.longitude);
-              const place = [d.clinic?.nameAr, d.city?.nameAr, catalogName(d.wilaya)].filter(Boolean).join(" — ");
+              const place = [catalogName(d.city), catalogName(d.wilaya)].filter(Boolean).join(" — ");
               return (
                 <li key={d.id} className="glass p-4">
                   <div className="flex gap-3">
                     <DoctorAvatar doctor={d} />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="mb-1 text-xs text-emerald-700">{t(d.dutyEndsAt && new Date(d.dutyEndsAt) > new Date() ? "الطبيب متواجد الآن" : "لم يبدأ المداومة")}</p>
-                        <p className="font-bold leading-snug text-slate-900">{t("د. ")}{d.firstName} {d.lastName}
+                      <div>
+                        <p className="break-words font-bold leading-snug text-slate-900">{t("د. ")}{d.firstName} {d.lastName}
                         </p>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <p className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{t(d.dutyEndsAt && new Date(d.dutyEndsAt) > new Date() ? "الطبيب متواجد الآن" : "لم يبدأ المداومة")}</p>
                         <span className="flex shrink-0 items-center gap-1 text-sm text-amber-600">
                           <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
                           {d.avgRating > 0 ? d.avgRating.toFixed(1) : t("جديد")}
@@ -159,43 +147,35 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
                           <span>{place}</span>
                         </p>
                       )}
-                      {address && <p className="mt-0.5 ps-[18px] text-xs text-slate-400">{address}</p>}
+
                       {distance?.exact && (
                         <p className="mt-0.5 ps-[18px] text-xs font-semibold text-slate-600">{t("على بعد ")}{distance.km < 1 ? t("أقل من 1") : Math.round(distance.km * 10) / 10}{t(" كم ")}</p>
                       )}
                     </div>
                   </div>
 
-                  {(d.bio || d.languages?.length || d.yearsExperience > 0 || d.consultationFee != null) && <details className="mt-3 rounded-xl border border-slate-200 p-3 text-sm">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                    <NextSlotPreview doctorId={d.id} />
+                    <button
+                      type="button"
+                      onClick={() => onSelect(d)}
+                      aria-label={t("احجز عند الطبيب {0} {1}", { "0": d.firstName, "1": d.lastName })}
+                      className="btn-primary min-h-[44px] shrink-0 px-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+                    >{t("احجز")}</button>
+                  </div>
+                  <details className="mt-3 rounded-xl border border-slate-200 p-3 text-sm">
                     <summary className="min-h-[48px] cursor-pointer font-semibold text-primary-700">{t("معلومات الطبيب")}</summary>
+                    {d.clinic?.nameAr && <p className="mt-2 font-semibold">{d.clinic.nameAr}</p>}
+                    {address && <p className="mt-2 break-words text-slate-600">{address}</p>}
                     {d.bio && <p className="mt-2 whitespace-pre-line break-words text-slate-600">{d.bio}</p>}
                     {d.yearsExperience > 0 && <p className="mt-2">{t("الخبرة: ")}{d.yearsExperience}{t(" سنوات")}</p>}
                     {d.languages?.length > 0 && <p className="mt-2">{t("اللغات: ")}{d.languages.join(t("، "))}</p>}
                     {d.consultationFee != null && Number.isFinite(d.consultationFee) && <p className="mt-2">{t("سعر الاستشارة المسجّل: ")}<bdi dir="ltr">{d.consultationFee.toLocaleString(getLocale())}</bdi>{t(" دج")}</p>}
-                  </details>}
                   <div className="mt-2 flex flex-wrap gap-2">
                     {(d.clinic?.phone || d.phone) && <a className="btn-outline" href={`tel:${d.clinic?.phone || d.phone}`}>{t("اتصل بالعيادة")}</a>}
                     {directions && <a className="btn-outline" href={directions} target="_blank" rel="noopener noreferrer">{t("الاتجاهات")}</a>}
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                    <p className="min-w-0 text-xs font-semibold" aria-live="polite">
-                      {preview?.isLoading ? (
-                        <span className="text-slate-400">{t("جارٍ التحقق من التوفر...")}</span>
-                      ) : preview?.data ? (
-                        <span className="flex items-center gap-1.5 text-emerald-700">
-                          <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />{t("أقرب دور: ")}{formatSlotLabel(preview.data.date, preview.data.startTime)}
-                        </span>
-                      ) : preview?.isError ? (
-                        <span className="text-slate-500">{t("لا تتوفر أدوار حاليًا")}</span>
-                      ) : null}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => onSelect(d)}
-                      aria-label={t("اختيار الطبيب {0} {1}", { "0": d.firstName, "1": d.lastName })}
-                      className="btn-primary min-h-[44px] shrink-0 px-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-                    >{t("اختيار الطبيب ")}</button>
-                  </div>
+                  </details>
                 </li>
               );
             })}

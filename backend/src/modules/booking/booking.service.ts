@@ -291,6 +291,9 @@ async function createAutoAssignedAppointment(
       async (tx) => {
         await lockDoctorQueue(tx, doctorId);
         const slot = await scanForNextSlot(doctor, 60, tx);
+        if (input.expectedSlot && (input.expectedSlot.date !== slot.dateStr || input.expectedSlot.startTime !== slot.startTime)) {
+          throw ApiError.conflict("تغيّر الموعد المتاح. راجع الموعد الجديد قبل التأكيد.", { code: "SLOT_CHANGED" });
+        }
         const created = await createPatientAppointment(tx, {
           data: {
             patientId,
@@ -638,17 +641,23 @@ export async function cancelGuestAppointment(id: string, phone: string) {
  * عن مرضى آخرين — أرقامًا مجرّدة فقط (كم واحدًا يسبقك). حتى لو تسرّب الرابط،
  * أقصى ما يكشفه هو موعد صاحبه هو نفسه.
  */
+const STATUS_PAST_GRACE_MS = 24 * 60 * 60 * 1000;
+
 export async function getAppointmentQueueStatus(appointmentId: string) {
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
     include: { doctor: { include: { specialty: true, clinic: true, city: true, wilaya: true } } },
   });
-  if (!appointment) throw ApiError.notFound("الموعد غير موجود.");
+  const today = algeriaTodayUTCMidnight();
+  // الرابط عام، فلا نكشف تفاصيل المواعيد القديمة لمن يحمل رابطًا قديمًا: صفحة المتابعة تُفتح فقط
+  // للمواعيد النشطة (اليوم أو بعده)، ونترك يومًا واحدًا هامشًا لمن يفتحها بعد منتصف الليل.
+  if (!appointment || appointment.date.getTime() < today.getTime() - STATUS_PAST_GRACE_MS) {
+    throw ApiError.notFound("الموعد غير موجود.");
+  }
 
   const doctor = appointment.doctor;
   const slotMinutes = doctor.slotDurationMin > 0 ? doctor.slotDurationMin : SLOT_MINUTES;
 
-  const today = algeriaTodayUTCMidnight();
   const isToday = appointment.date.getTime() === today.getTime();
 
   const base = {

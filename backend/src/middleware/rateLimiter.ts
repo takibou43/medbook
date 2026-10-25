@@ -1,4 +1,6 @@
+import { isKnownLoginBrowser } from "../lib/loginBrowser";
 import rateLimit from "express-rate-limit";
+import { createHash } from "crypto";
 import { env } from "../config/env";
 
 export const apiLimiter = rateLimit({
@@ -18,6 +20,63 @@ export const authLimiter = rateLimit({
   message: { success: false, message: "محاولات كثيرة لتسجيل الدخول. الرجاء المحاولة بعد قليل." },
 });
 
+// تسجيل الدخول (واجهتا الأطباء والمرضى) — حدّان مستقلان عن authLimiter:
+// 1) لكل عنوان IP: تُحسب المحاولات الفاشلة فقط، فلا يستنفد مستخدمون كثيرون خلف عنوان مشترك
+//    (CGNAT لدى شبكات الهاتف) الحدّ بمجرد تسجيل دخولهم الناجح.
+// 2) لكل حساب (بصمة البريد بعد التطبيع): يوقف تخمين كلمة مرور حساب واحد من عناوين كثيرة.
+//    المتصفح المعروف بتوقيع الخادم له ميزانية مستقلة؛ المتصفح الجديد قد يُحجب مؤقتًا.
+// العدّادات في ذاكرة النسخة الحالية وتبدأ من الصفر عند إعادة تشغيل Render.
+export const LOGIN_IP_FAILURE_LIMIT = 30;
+export const LOGIN_ACCOUNT_FAILURE_LIMIT = 10;
+
+export const loginIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: LOGIN_IP_FAILURE_LIMIT,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => `login-ip:${req.ip}`,
+  message: { success: false, message: "محاولات دخول خاطئة كثيرة من هذه الشبكة. الرجاء المحاولة بعد قليل." },
+});
+
+export function loginAccountKey(email: unknown): string {
+  if (typeof email !== "string" || email.length > 254) return "login-account:invalid";
+  return "login-account:" + createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+}
+
+export const loginAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: LOGIN_ACCOUNT_FAILURE_LIMIT,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: isKnownLoginBrowser,
+  keyGenerator: req => loginAccountKey((req.body as { email?: unknown } | undefined)?.email),
+  message: { success: false, message: "محاولات دخول خاطئة كثيرة لهذا الحساب. انتظر 15 دقيقة ثم أعد المحاولة." },
+});
+
+// Known browsers get an isolated account/IP budget; password and IP checks remain.
+export const knownLoginBrowserLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: LOGIN_ACCOUNT_FAILURE_LIMIT,
+  skipSuccessfulRequests: true, standardHeaders: true, legacyHeaders: false,
+  skip: req => !isKnownLoginBrowser(req),
+  keyGenerator: req => `${loginAccountKey(req.body?.email)}:${req.ip}`,
+  message: { success: false, message: "محاولات دخول خاطئة كثيرة. الرجاء المحاولة بعد قليل." },
+});
+
+// تغيير رقم الهاتف من الملف الشخصي: الرقم فريد، فرد «مستخدم مسبقًا» يكشف أن الرقم مسجّل.
+// حدّ لكل حساب يجعل هذا المسار أداة بطيئة غير صالحة لفحص أرقام كثيرة.
+export const PHONE_CHANGE_LIMIT = 5;
+export const phoneChangeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: PHONE_CHANGE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => `phone-change:${req.user!.id}`,
+  skip: req => typeof (req.body as { phone?: unknown } | undefined)?.phone !== "string" || (req.body as { phone: string }).phone === "",
+  message: { success: false, message: "محاولات كثيرة لتغيير رقم الهاتف. الرجاء المحاولة لاحقًا." },
+});
+
 // مسارات حجز الضيف (lookup/cancel) لا تتطلب حسابًا: رقم الهاتف وحده هو "المفتاح"، لذا نحدّها
 // بنفس صرامة تسجيل الدخول حتى لا يستطيع أحد تجربة أرقام هواتف جزائرية عشوائية بسرعة كبيرة
 // لاكتشاف مواعيد مرضى آخرين (لا يمنع المحاولات المتفرقة، لكنه يمنع التخمين الآلي السريع).
@@ -29,19 +88,37 @@ export const bookingLookupLimiter = rateLimit({
   message: { success: false, message: "محاولات كثيرة. الرجاء المحاولة بعد قليل." },
 });
 
-// حدّ محاولات الدخول الفاشلة لكل بريد إلكتروني (إضافة إلى authLimiter الذي يعدّ لكل IP): هجوم موزَّع على
-// عناوين كثيرة كان يستطيع تخمين كلمة مرور حساب واحد بلا سقف. تُحسب المحاولات الفاشلة فقط
-// (skipSuccessfulRequests) فلا يتأثر المستخدم الشرعي بنجاح دخوله، ويُصفَّر العدّاد بعد نافذة 15 دقيقة.
-// الحساب الحقيقي قد يُقفل مؤقتًا عن المهاجم وعن صاحبه معًا، وهو ثمن مقبول مقابل حماية حساب طبيب يحمل بيانات مرضى.
-export const loginEmailLimiter = rateLimit({
+// Share one budget across both patient booking APIs. Identity comes only from
+// authenticate, so changing IP, beneficiary, doctor or route cannot reset it.
+export const PATIENT_BOOKING_ATTEMPT_LIMIT = 20;
+export const patientBookingLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: PATIENT_BOOKING_ATTEMPT_LIMIT,
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  keyGenerator: (req) => {
-    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase().slice(0, 254) : "";
-    return email ? `login-email:${email}` : `login-ip:${req.ip ?? "unknown"}`;
-  },
-  message: { success: false, message: "محاولات دخول فاشلة كثيرة لهذا الحساب. الرجاء المحاولة بعد 15 دقيقة." },
+  keyGenerator: req => `patient-booking:${req.user!.id}`,
+  message: { success: false, message: "محاولات حجز كثيرة خلال وقت قصير. انتظر قليلًا ثم أعد المحاولة." },
+});
+
+// Public discovery can fan out into many DB queries. Leave tracking and staff
+// polling outside this burst limit; retain the existing general IP budget.
+export const PUBLIC_DISCOVERY_LIMIT = 120;
+export const publicDiscoveryLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: PUBLIC_DISCOVERY_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "طلبات بحث كثيرة خلال وقت قصير. انتظر قليلًا ثم أعد المحاولة." },
+});
+
+// متابعة الدور (/booking/status/:id) عامة لأن الرابط يُفتح من الإشعارات ومن أجهزة بلا جلسة.
+// المريض يستطلع كل 20 ث (≈ 15 طلبًا كل 5 دقائق)، والحد واسع ليتشارك مرضى قاعة انتظار واحدة
+// شبكة العيادة نفسها، لكنه يمنع استعمال المسار المكلف (عدة استعلامات لكل طلب) لاستنزاف الخادم.
+export const BOOKING_STATUS_LIMIT = 300;
+export const bookingStatusLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: BOOKING_STATUS_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "طلبات كثيرة خلال وقت قصير. انتظر قليلًا ثم أعد المحاولة." },
 });

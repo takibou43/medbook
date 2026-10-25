@@ -1,6 +1,5 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
-import { Check } from "lucide-react";
 import clsx from "clsx";
 
 export type StepId = "specialty" | "doctor" | "slot" | "patient" | "confirm";
@@ -13,53 +12,27 @@ export const BOOKING_STEPS: { id: StepId; label: string }[] = [
   { id: "confirm", label: "التأكيد" },
 ];
 
-// شريط الخطوات: المرحلة الحالية لا تُميَّز باللون وحده — بل بالرقم داخل دائرة مؤطَّرة، والمكتملة بعلامة ✓،
-// والقادمة بدائرة فارغة، مع نص مخفي للقارئات الشاشية يذكر حالة كل خطوة (aria-current="step" للحالية).
+// Compact visible progress, with the full ordered sequence retained for screen readers.
 export function BookingSteps({ current }: { current: StepId }) {
   useLanguage();
   const currentIndex = BOOKING_STEPS.findIndex((s) => s.id === current);
 
   return (
-    <nav aria-label={t("مراحل الحجز")} className="glass mb-6 px-3 py-4 sm:px-5">
-      <p className="mb-4 flex items-center justify-between gap-3 text-sm">
-        <span className="font-semibold text-slate-900">{t(BOOKING_STEPS[currentIndex].label)}</span>
-        <span className="text-slate-600">{t("الخطوة {0} من {1}", { "0": currentIndex + 1, "1": BOOKING_STEPS.length })}</span>
-      </p>
-      <ol className="flex items-start">
-        {BOOKING_STEPS.map((step, i) => {
-          const done = i < currentIndex;
-          const active = i === currentIndex;
-          const isLast = i === BOOKING_STEPS.length - 1;
-          return (
-            <li key={step.id} className="relative flex flex-1 flex-col items-center gap-1.5" aria-current={active ? "step" : undefined}>
-              {!isLast && (
-                <span
-                  aria-hidden="true"
-                  className={clsx("absolute start-1/2 top-4 h-0.5 w-full", done ? "bg-primary-500" : "bg-slate-200")}
-                />
-              )}
-              <span
-                className={clsx(
-                  "relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 text-sm font-bold transition",
-                  done && "border-primary-600 bg-primary-600 text-white",
-                  active && "border-primary-600 bg-white text-primary-700 ring-4 ring-primary-100",
-                  !done && !active && "border-slate-300 bg-white text-slate-400"
-                )}
-              >
-                {done ? <Check className="h-4 w-4" aria-hidden="true" /> : i + 1}
-              </span>
-              <span
-                className={clsx(
-                  "text-center text-xs font-semibold leading-relaxed",
-                  active ? "text-primary-700" : "text-slate-600"
-                )}
-              >
-                {t(step.label)}
-                <span className="sr-only">{done ? t(" (مكتملة)") : active ? t(" (المرحلة الحالية)") : t(" (قادمة)")}</span>
-              </span>
-            </li>
-          );
-        })}
+    <nav aria-label={t("مراحل الحجز")} className="glass mb-4 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2 text-xs sm:text-sm">
+        <span className="flex items-center gap-2 font-bold text-primary-800" aria-current="step">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs text-white" aria-hidden="true">{currentIndex + 1}</span>
+          {t(BOOKING_STEPS[currentIndex].label)}
+        </span>
+        <span className="shrink-0 text-slate-600">{t("الخطوة {0} من {1}", { "0": currentIndex + 1, "1": BOOKING_STEPS.length })}</span>
+      </div>
+      <div className="mt-2 flex gap-1" aria-hidden="true">
+        {BOOKING_STEPS.map((step, i) => <span key={step.id} className={clsx("h-1 flex-1 rounded-full", i <= currentIndex ? "bg-primary-600" : "bg-slate-200")} />)}
+      </div>
+      <ol className="sr-only">
+        {BOOKING_STEPS.map((step, i) => <li key={step.id} aria-current={i === currentIndex ? "step" : undefined}>
+          {t(step.label)}{i < currentIndex ? t(" (مكتملة)") : i === currentIndex ? t(" (المرحلة الحالية)") : t(" (قادمة)")}
+        </li>)}
       </ol>
     </nav>
   );

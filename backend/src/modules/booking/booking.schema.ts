@@ -7,6 +7,7 @@ export const guestSlotsQuerySchema = z.object({
 });
 
 export const guestBookingSchema = z.object({
+  expectedSlot: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), startTime: z.string().regex(/^\d{2}:\d{2}$/) }).optional(),
   firstName: z.string().trim().min(2, "الاسم قصير جدًا").max(60),
   lastName: z.string().trim().min(2, "اللقب قصير جدًا").max(60),
   phone: z

@@ -1,8 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { t, getLanguage, getLocale, setLanguage, catalogName, subscribeLanguage } from "../src/i18n/locale.ts";
+import { t, getLanguage, getLocale, setLanguage, catalogName, subscribeLanguage, loadFrench } from "../src/i18n/locale.ts";
 import { beneficiaryLabel } from "../src/lib/family.ts";
+
+// القاموس الفرنسي يُحمَّل عند الطلب في التطبيق؛ الاختبارات تحمّله مسبقًا لتبقى متزامنة.
+await loadFrench();
 
 test("language changes preserve canonical data and interpolate patient names verbatim", () => {
   try {

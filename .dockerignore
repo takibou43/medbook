@@ -1,0 +1,25 @@
+# Deny local credentials and generated files at every nesting level.
+**/.env
+**/.env.*
+**/.git
+**/.ssh
+**/.npmrc
+**/*.pem
+**/*.key
+**/id_rsa*
+**/id_ed25519*
+**/*.sql.gz
+**/*.dump
+**/*.backup
+**/*.bak
+**/*.log
+**/node_modules
+**/dist
+**/build
+**/coverage
+**/.vite-cache
+**/.npm-cache
+**/.DS_Store
+.agents
+.github
+docs

@@ -1,6 +1,3 @@
-# ملف تطوير محلي فقط — لا يُستعمل كما هو في الإنتاج (أسرار افتراضية وتركيب مجلدات المصدر).
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,12 +5,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: medbook
-      # للتطوير المحلي فقط. يمكن تجاوزها بمتغير POSTGRES_PASSWORD في .env (وتغييرها أيضًا في DATABASE_URL أدناه).
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medbook}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong POSTGRES_PASSWORD in .env}
       POSTGRES_DB: medbook
-    ports:
-      # مربوط بالواجهة المحلية فقط: لا يصل أي جهاز آخر على الشبكة إلى قاعدة البيانات.
-      - "127.0.0.1:5432:5432"
     volumes:
       - medbook_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -24,15 +17,15 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: medbook_backend
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: "postgresql://medbook:${POSTGRES_PASSWORD:-medbook}@postgres:5432/medbook?schema=public"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong POSTGRES_PASSWORD in .env}
       PORT: 4000
       NODE_ENV: production
       CLIENT_URL: "http://localhost:5173"
@@ -45,24 +38,23 @@ services:
       AI_MODEL: ${AI_MODEL:-}
     ports:
       - "4000:4000"
-    volumes:
-      - ./backend:/app/backend
-      - ./prisma:/app/prisma
+    security_opt:
+      - no-new-privileges:true
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000/api}
     container_name: medbook_frontend
     restart: unless-stopped
     depends_on:
       - backend
-    environment:
-      VITE_API_URL: "http://localhost:4000/api"
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app/frontend
+      - "5173:8080"
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   medbook_pgdata:

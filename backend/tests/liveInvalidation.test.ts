@@ -9,6 +9,10 @@ app.post("/api/booking/success", (_req, res) => res.status(201).json({ privatePa
 app.post("/api/booking/failure", (_req, res) => res.sendStatus(409));
 app.post("/api/auth/refresh", (_req, res) => res.json({ token: "test" }));
 app.get("/api/appointments/queue", (_req, res) => res.json({ data: [] }));
+app.post("/api/shifts/heartbeat", (_req, res) => res.json({ data: { active: true } }));
+app.post("/api/shifts", (_req, res) => res.json({ data: { active: true } }));
+app.post("/api/doctor/messages/conversation", (_req, res) => res.status(201).json({ data: {} }));
+app.patch("/api/patient/notifications/read-all", (_req, res) => res.json({ data: {} }));
 describe("post-commit invalidation", () => {
   it("uses doctor IDs from appointment responses, never patient or user IDs", () => {
     expect(affectedDoctors({ data: { appointment: { doctorId: "doctor-a", patient: { id: "private" } } } })).toEqual(["doctor-a"]);
@@ -26,5 +30,16 @@ describe("post-commit invalidation", () => {
     await request(app).post("/api/booking/success");
     expect(seen).toEqual([liveUpdates.current()]);
     expect(seen[0]).not.toContain("must-not-be-in-signal"); close();
+  });
+  it("does not wake every live dashboard for duty heartbeats, chat or notification reads", async () => {
+    const seen: string[] = [];
+    const close = liveUpdates.subscribe(value => seen.push(value));
+    await request(app).post("/api/shifts/heartbeat");
+    await request(app).post("/api/doctor/messages/conversation");
+    await request(app).patch("/api/patient/notifications/read-all");
+    expect(seen).toHaveLength(0);
+    // بدء/إنهاء المداومة نفسه يبقى إشارة حية كما كان.
+    await request(app).post("/api/shifts");
+    expect(seen).toHaveLength(1); close();
   });
 });

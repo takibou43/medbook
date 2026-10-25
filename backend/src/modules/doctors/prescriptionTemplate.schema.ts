@@ -63,6 +63,8 @@ const professionalText = z.object({
 export const prescriptionSettingsSchema = z.object({
   language: z.enum(["ar", "fr"]),
   headerLanguage: z.enum(["ar", "fr", "both"]).optional(),
+  /** رقم التسجيل في عمادة الأطباء (N° d'ordre) — أرقام وحروف لاتينية و/ أو - فقط. */
+  orderNumber: z.string().trim().max(20).regex(/^[0-9A-Za-z\/\- ]*$/).optional(),
   professional: z.object({ ar: professionalText.optional(), fr: professionalText.optional() }).strict().optional(),
   show: z.object({ clinicName: z.boolean(), address: z.boolean(), phone: z.boolean(), specialty: z.boolean() }).strict().optional(),
 }).strict();

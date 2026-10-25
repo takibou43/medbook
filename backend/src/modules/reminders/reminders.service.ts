@@ -159,11 +159,23 @@ export interface ReminderRunStats {
 /** ينشئ سجلات التذكير (PENDING) للمواعيد المرتبطة بحساب مريض والتي تبدأ قريبًا. آمن للتكرار. */
 export async function ensureReminderRows(now: Date): Promise<number> {
   const horizon = new Date(now.getTime() + LOOKAHEAD_MS);
+  const day = algeriaDayOf(now);
+  const lastDay = algeriaDayOf(horizon);
+  // Times can contain seconds (follow-up appointments), so keep boundary
+  // minutes inclusive and retain the exact instant check below.
+  const localMinute = (instant: Date) => new Date(instant.getTime() + ALGERIA_OFFSET_MINUTES * MINUTE_MS).toISOString().slice(11, 16);
+  const from = localMinute(now);
+  const through = localMinute(horizon) + ":59";
   const appointments = await prisma.appointment.findMany({
     where: {
       patientId: { not: null },
       status: { in: ROW_CREATION_STATUSES },
-      date: { gte: algeriaDayOf(now), lte: algeriaDayOf(horizon) },
+      OR: day.getTime() === lastDay.getTime()
+        ? [{ date: day, startTime: { gte: from, lte: through } }]
+        : [
+            { date: day, startTime: { gte: from } },
+            { date: lastDay, startTime: { lte: through } },
+          ],
     },
     select: { id: true, date: true, startTime: true },
     take: 2000,

@@ -30,6 +30,16 @@ const DISCARD_MSG = (name: string) => t("لديك وصفة غير مطبوعة �
  * - المسودة لمريض واحد فقط ولا تنتقل لغيره؛ تغيير المريض بمسودة مكتوبة يتطلب تأكيدًا.
  * - لا حفظ في الخادم ولا تغيير لحالة الموعد ولا إرسال أي شيء: الكتابة والطباعة محلية فقط.
  */
+function Step({ n, title, hint }: { n: number; title: string; hint?: string }) {
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs font-bold text-white">{n}</span>
+      <span className="text-sm font-bold text-slate-800">{title}</span>
+      {hint && <span className="text-xs text-slate-500">({hint})</span>}
+    </div>
+  );
+}
+
 export function PrescriptionCard({
   current,
   appointments,
@@ -47,7 +57,6 @@ export function PrescriptionCard({
   const formId = useId();
   const { showToast } = useToast();
   const [draft, setDraftState] = useState<PrescriptionDraft | null>(() => getStoredDraft(uid));
-  const [picking, setPicking] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [validation, setValidation] = useState<DraftValidation | null>(null);
   const [preview, setPreview] = useState<PrescriptionSheetData | null>(null);
@@ -55,6 +64,7 @@ export function PrescriptionCard({
   const setup = usePrescriptionSetup(uid);
   const lang = setup.settings?.language ?? "ar";
   const [listKey, setListKey] = useState(0);
+  const [frOpen, setFrOpen] = useState(false);
 
   const setDraft = (d: PrescriptionDraft | null) => {
     storeDraft(d);
@@ -63,7 +73,9 @@ export function PrescriptionCard({
     setValidation(null);
   };
   const withLatinName = (d: PrescriptionDraft): PrescriptionDraft => ({ ...d, patientNameFr: readPatientLatinName(uid, d.patient) });
-  const patch = (p: Partial<PrescriptionDraft>) => draft && setDraft({ ...draft, ...p });
+  // أي تعديل بعد الطباعة يُلغي علامة «مطبوعة»: النسخة المعدّلة لم تُطبع بعد، فلا تُستبدل تلقائيًا.
+  const patch = (p: Partial<PrescriptionDraft>) => draft && setDraft({ ...draft, ...p, printedAt: undefined });
+  const markPrinted = () => { if (draft) setDraft({ ...draft, printedAt: new Date().toISOString() }); };
 
   // حساب آخر على نفس الجهاز: لا تُعرض مسودته.
   useEffect(() => {
@@ -73,10 +85,10 @@ export function PrescriptionCard({
 
   // الربط التلقائي بالاستشارة الحالية (فقط حين لا يضيع شيء ولا يُلغى اختيار يدوي).
   useEffect(() => {
-    if (!uid || picking || !current) return;
+    if (!uid || !current) return;
     if (shouldAutoRebind(draft, current.id)) setDraft(withLatinName(emptyDraft(uid, prescriptionPatientFrom(current), "current")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.id, uid, picking]);
+  }, [current?.id, uid]);
 
   // تنبيه المتصفح قبل إغلاق/تحديث الصفحة بمسودة مكتوبة (الحفظ غير متاح حاليًا).
   const dirty = draftHasContent(draft);
@@ -100,22 +112,14 @@ export function PrescriptionCard({
     return window.confirm(DISCARD_MSG(draft.patientName || draft.patient.bookedName));
   }
 
-  function changePatient() {
-    if (!confirmDiscard()) return;
-    setDraft(null);
-    setPicking(true);
-  }
-
   function choose(appointmentId: string) {
     const a = choices.find((c) => c.id === appointmentId);
     if (!a) return;
     setDraft(withLatinName(emptyDraft(uid, prescriptionPatientFrom(a), current?.id === a.id ? "current" : "manual")));
-    setPicking(false);
   }
 
   function startForCurrent() {
     if (!current || !confirmDiscard()) return;
-    setPicking(false);
     setDraft(withLatinName(emptyDraft(uid, prescriptionPatientFrom(current), "current")));
   }
 
@@ -146,6 +150,7 @@ export function PrescriptionCard({
       doctor: user?.doctor,
       language: setup.settings.language,
       headerLanguage: setup.settings.headerLanguage,
+      orderNumber: setup.settings.orderNumber,
       professional: setup.settings.professional[setup.settings.language],
       doctorNames: { ar: setup.settings.professional.ar?.doctorName, fr: setup.settings.professional.fr?.doctorName },
       addresses: { ar: setup.settings.professional.ar?.address, fr: setup.settings.professional.fr?.address },
@@ -156,6 +161,7 @@ export function PrescriptionCard({
       patientName: lang === "fr" && draft.patientNameFr?.trim() ? draft.patientNameFr.trim() : draft.patientName.trim(),
       patientAge: draft.patientAge,
       patientAgeUnit: draft.patientAgeUnit,
+      patientWeight: draft.patientWeight,
       day: algeriaToday(),
       medications: v.printable,
       notes: draft.notes,
@@ -168,7 +174,7 @@ export function PrescriptionCard({
 
   return (
     <section className="card p-4 sm:p-5" aria-labelledby={`${formId}-title`}>
-      <PrescriptionPreview open={Boolean(preview)} data={preview} onClose={() => setPreview(null)} />
+      <PrescriptionPreview open={Boolean(preview)} data={preview} onClose={() => setPreview(null)} onPrinted={markPrinted} />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -181,11 +187,6 @@ export function PrescriptionCard({
             </span>
           )}
         </div>
-        {draft && (
-          <button type="button" onClick={changePatient} className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-primary-700 underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-primary-400">
-            {t("تغيير المريض")}
-          </button>
-        )}
       </div>
 
       <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-slate-600" role={setup.error ? "alert" : "status"}>
@@ -242,11 +243,6 @@ export function PrescriptionCard({
                   </select>
                 </label>
               )}
-              {picking && current && (
-                <button type="button" onClick={() => choose(current.id)} className="mt-2 inline-flex min-h-11 items-center px-2 text-sm font-semibold text-primary-700 hover:underline">
-                  {t("الرجوع إلى المريض الحالي")}
-                </button>
-              )}
             </>
           )}
         </div>
@@ -259,57 +255,74 @@ export function PrescriptionCard({
           }}
           aria-describedby={`${formId}-note`}
         >
-          {/* المريض */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 sm:p-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-              <UserRound className="h-4 w-4 text-slate-500" aria-hidden="true" />
-              {draftIsCurrent ? <span className="badge bg-sky-100 text-sky-700">{t("الاستشارة الحالية")}</span> : <span className="badge bg-slate-200 text-slate-700">{t("موعد مختار")}</span>}
-              <span>{t("موعد")} <bdi dir="ltr" className="tabular-nums">{draft.patient.appointmentDate.slice(0, 10)} — {draft.patient.startTime}</bdi></span>
-              {draft.patient.relationship && (
-                <span className="badge border border-primary-200 bg-primary-50 text-primary-800">
-                  {t(draft.patient.relationship)}{draft.patient.accountHolderName ? ` — ${t("حساب {name}", { name: draft.patient.accountHolderName })}` : ""}
-                </span>
+          {/* ① المريض */}
+          <div>
+            <Step n={1} title={t("المريض")} />
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem]">
+                <label className="col-span-2 block min-w-0 sm:col-span-1">
+                  <span className="mb-1 block text-xs font-semibold text-slate-700">{t("اسم المريض على الوصفة")}</span>
+                  <input
+                    className="input py-2 text-base font-bold"
+                    dir="auto"
+                    translate="no"
+                    value={draft.patientName}
+                    onChange={(e) => patch({ patientName: e.target.value })}
+                    autoComplete="off"
+                    aria-invalid={Boolean(errors.length && !draft.patientName.trim())}
+                    aria-describedby={errors.length && !draft.patientName.trim() ? formId + '-patient-error' : undefined}
+                  />
+                  {errors.length > 0 && !draft.patientName.trim() && <span id={formId + '-patient-error'} className="block text-sm text-red-700">{t("اكتب اسم المريض.")}</span>}
+                </label>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-xs font-semibold text-slate-700">{t("العمر")} <span className="font-normal text-slate-500">({t("اختياري")})</span></span>
+                  <input className="input py-2 text-center" type="number" min="0" step="1" max="150" placeholder={t("سنة")} value={draft.patientAge ?? ""} onChange={e => patch({ patientAge: e.target.value, patientAgeUnit: "years" })} autoComplete="off" />
+                </label>
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-xs font-semibold text-slate-700">{t("الوزن")} <span className="font-normal text-slate-500">({t("اختياري")})</span></span>
+                  <input className="input py-2 text-center" type="text" inputMode="decimal" maxLength={5} placeholder={t("كغ")} value={draft.patientWeight ?? ""} onChange={e => patch({ patientWeight: e.target.value })} autoComplete="off" />
+                </label>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-600">
+                <UserRound className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                {draftIsCurrent ? <span className="badge bg-sky-100 text-sky-700">{t("الاستشارة الحالية")}</span> : <span className="badge bg-slate-200 text-slate-700">{t("موعد مختار")}</span>}
+                <span>{t("موعد")} <bdi dir="ltr" className="tabular-nums">{draft.patient.startTime}</bdi></span>
+                {draft.patient.relationship && (
+                  <span className="badge border border-primary-200 bg-primary-50 text-primary-800">
+                    {t(draft.patient.relationship)}{draft.patient.accountHolderName ? ` — ${t("حساب {name}", { name: draft.patient.accountHolderName })}` : ""}
+                  </span>
+                )}
+                {nameEdited && (
+                  <button type="button" onClick={() => patch({ patientName: draft.patient.bookedName })} className="inline-flex items-center gap-1 font-semibold text-primary-700 hover:underline" title={t("عُدّل الاسم للوصفة فقط — لا يتغيّر ملف المريض ولا الحجز.")}>
+                    <RotateCcw className="h-3 w-3" aria-hidden="true" /> {t("الاسم الأصلي")}
+                  </button>
+                )}
+                {!(frOpen || lang === "fr" || (draft.patientNameFr ?? "").trim()) && (
+                  <button type="button" onClick={() => setFrOpen(true)} className="ms-auto font-semibold text-primary-700 hover:underline">{t("+ الاسم بالفرنسية")}</button>
+                )}
+              </div>
+
+              {/* الاسم بالفرنسية: يظهر عند الطلب أو تلقائيًا إن كانت لغة الوصفة فرنسية. */}
+              {(frOpen || lang === "fr" || (draft.patientNameFr ?? "").trim()) && (
+                <div className="mt-2 border-t border-slate-200 pt-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-semibold text-slate-700">{t("اسم المريض بالفرنسية (اختياري)")}</span>
+                    <input className="input py-2" dir="ltr" lang="fr" translate="no" autoComplete="off" maxLength={160} placeholder="Ex. : Karim Ayachi" value={draft.patientNameFr ?? ""} onChange={e => patch({ patientNameFr: e.target.value })} />
+                  </label>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 text-xs">
+                    <span className="text-slate-500">{t("للوصفة الفرنسية فقط.")}</span>
+                    <button type="button" disabled={!validLatinPatientName(draft.patientNameFr ?? "")} className="min-h-8 font-semibold text-primary-700 hover:underline disabled:opacity-40" onClick={() => { const ok = rememberPatientLatinName(uid, draft.patient, draft.patientNameFr ?? ""); showToast(ok ? t("حُفظ الاسم لهذا المريض على هذا الجهاز لمدة 90 يومًا.") : t("تعذّر حفظ الاسم على هذا الجهاز."), ok ? "success" : "error"); }}>{t("تذكّر الاسم على هذا الجهاز")}</button>
+                    <button type="button" className="min-h-8 font-semibold text-slate-600 hover:underline" onClick={() => { const ok = forgetPatientLatinName(uid, draft.patient); if (ok) patch({ patientNameFr: "" }); showToast(ok ? t("أُلغي تذكّر الاسم على هذا الجهاز.") : t("تعذّر حفظ التغيير."), ok ? "info" : "error"); }}>{t("إلغاء تذكّر الاسم")}</button>
+                  </div>
+                </div>
               )}
             </div>
-            <label className="mt-2 block">
-              <span className="mb-1 block text-xs font-medium text-slate-600">{t("اسم المريض على الوصفة")}</span>
-              <input
-                className="input py-2 text-base font-bold"
-                dir="auto"
-                translate="no"
-                value={draft.patientName}
-                onChange={(e) => patch({ patientName: e.target.value })}
-                autoComplete="off"
-                aria-invalid={Boolean(errors.length && !draft.patientName.trim())}
-                aria-describedby={errors.length && !draft.patientName.trim() ? formId + '-patient-error' : undefined}
-              />
-              {errors.length > 0 && !draft.patientName.trim() && <span id={formId + '-patient-error'} className="block text-sm text-red-700">{t("اكتب اسم المريض.")}</span>}
-            </label>
-            <label className="mt-2 block">
-              <span className="mb-1 block text-xs font-medium text-slate-600">{t("اسم المريض بالفرنسية (اختياري)")}</span>
-              <input className="input py-2" dir="ltr" lang="fr" translate="no" autoComplete="off" maxLength={160} value={draft.patientNameFr ?? ""} onChange={e => patch({ patientNameFr: e.target.value })} />
-              <span className="mt-1 block text-xs text-slate-600">{t("يُستخدم في الوصفة الفرنسية بعد مراجعتك؛ الاسم الأصلي والحجز لا يتغيّران.")}</span>
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={!validLatinPatientName(draft.patientNameFr ?? "")} className="btn-outline min-h-11 text-xs" onClick={() => { const ok = rememberPatientLatinName(uid, draft.patient, draft.patientNameFr ?? ""); showToast(ok ? t("حُفظ الاسم لهذا المريض على هذا الجهاز لمدة 90 يومًا.") : t("تعذّر حفظ الاسم على هذا الجهاز."), ok ? "success" : "error"); }}>{t("تذكّر الاسم على هذا الجهاز")}</button>
-              <button type="button" className="btn-outline min-h-11 text-xs" onClick={() => { const ok = forgetPatientLatinName(uid, draft.patient); if (ok) patch({ patientNameFr: "" }); showToast(ok ? t("أُلغي تذكّر الاسم على هذا الجهاز.") : t("تعذّر حفظ التغيير."), ok ? "info" : "error"); }}>{t("إلغاء تذكّر الاسم")}</button>
-            </div>
-            <label className="mt-2 block max-w-40">
-              <span className="mb-1 block text-xs font-medium text-slate-600">{t("عمر المريض (اختياري)")}</span>
-              <input className="input py-2" type="number" min="0" step="1" max="150" placeholder="23" value={draft.patientAge ?? ""} onChange={e => patch({ patientAge: e.target.value, patientAgeUnit: "years" })} autoComplete="off" />
-            </label>
-            {nameEdited && (
-              <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                {t("عُدّل الاسم للوصفة فقط — لا يتغيّر ملف المريض ولا الحجز.")}
-                <button type="button" onClick={() => patch({ patientName: draft.patient.bookedName })} className="inline-flex min-h-11 items-center gap-1 px-2 font-semibold text-primary-700 hover:underline">
-                  <RotateCcw className="h-3 w-3" aria-hidden="true" /> {t("الاسم الأصلي")}
-                </button>
-              </p>
-            )}
           </div>
 
+          {/* ② الأدوية */}
           <fieldset>
-            <legend className="mb-2 text-sm font-bold text-slate-800">{t("الأدوية")} ({draft.medications.length})</legend>
+            <legend className="w-full"><Step n={2} title={t("الأدوية")} hint={String(draft.medications.length)} /></legend>
             <MedicationList
               key={`${draft.patient.appointmentId}-${listKey}`}
               medications={draft.medications}
@@ -324,12 +337,19 @@ export function PrescriptionCard({
             />
           </fieldset>
 
+          {/* ③ تحاليل وأشعة — اختيارية ومطوية حتى تُفتح */}
+          <div>
+            <Step n={3} title={t("تحاليل وأشعة")} hint={t("اختياري")} />
+            <div className="space-y-2">
           <RequestItems kind="labs" title={t("التحاليل الطبية")} addLabel={t("إضافة تحليل")} items={draft.labs ?? []} errors={validation?.requestErrors} onChange={labs => patch({ labs })} />
           <RequestItems kind="imaging" title={t("الأشعة والفحوصات")} addLabel={t("إضافة أشعة أو فحص")} items={draft.imaging ?? []} errors={validation?.requestErrors} onChange={imaging => patch({ imaging })} />
+            </div>
+          </div>
 
+          {/* ④ ملاحظات */}
           <label className="block">
-            <span className="mb-1 block text-sm font-bold text-slate-800">{t("ملاحظات عامة")} <span className="font-normal text-slate-500">({t("اختياري")})</span></span>
-            <textarea className="input min-h-[64px]" dir="auto" value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} />
+            <Step n={4} title={t("ملاحظات عامة")} hint={t("اختياري")} />
+            <textarea className="input min-h-[64px]" dir="auto" placeholder={t("مثال: الراحة وشرب الماء بكثرة")} value={draft.notes} onChange={(e) => patch({ notes: e.target.value })} />
           </label>
 
           {errors.length > 0 && (

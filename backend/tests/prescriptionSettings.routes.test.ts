@@ -43,6 +43,16 @@ describe("doctor-owned prescription settings", () => {
     expect(h.rows.get("doctor-d1").professional.headerLanguage).toBe("ar");
     expect((await request(app).put(url).set("Authorization", auth("d1")).send({ ...next, headerLanguage: "de" })).status).toBe(400);
   });
+  it("round-trips the order number (N° d'ordre) inside existing JSON alongside the header preference", async () => {
+    const next = { ...value, headerLanguage: "both", orderNumber: "114/28" };
+    expect((await request(app).put(url).set("Authorization", auth("d1")).send(next)).status).toBe(200);
+    expect((await request(app).get(url).set("Authorization", auth("d1"))).body.data).toEqual(next);
+    expect(h.rows.get("doctor-d1").professional).toMatchObject({ headerLanguage: "both", orderNumber: "114/28", fr: value.professional.fr });
+    for (const bad of ["<script>", "x".repeat(21), "١١٤"]) expect((await request(app).put(url).set("Authorization", auth("d1")).send({ ...next, orderNumber: bad })).status).toBe(400);
+    // empty number is simply not stored
+    await request(app).put(url).set("Authorization", auth("d1")).send({ ...value, orderNumber: "" });
+    expect((await request(app).get(url).set("Authorization", auth("d1"))).body.data.orderNumber).toBeUndefined();
+  });
   it.each(["assistant", "patient", "owner", "admin"])("rejects settings operations from %s", async id => {
     for (const method of ["get", "put"] as const) expect((await request(app)[method](url).set("Authorization", auth(id)).send(method === "put" ? value : undefined)).status).toBe(403);
     expect(h.rows.size).toBe(0);

@@ -2,22 +2,22 @@
  * حدّ محاولات الدخول الفاشلة لكل بريد: يُعدّ الفشل فقط، ولكل بريد سلّته الخاصة مهما تغيّر عنوان IP.
  * لا يحتاج قاعدة بيانات: تطبيق Express مصغّر يرد 401 لكلمة المرور الخاطئة و200 للصحيحة.
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import express from "express";
 import request from "supertest";
 
-describe("loginEmailLimiter", () => {
+describe("loginAccountLimiter", () => {
   let app: express.Express;
 
   beforeAll(async () => {
     process.env.DATABASE_URL ??= "postgresql://test:test@127.0.0.1:5432/test";
     process.env.JWT_SECRET ??= "test-access-secret";
     process.env.JWT_REFRESH_SECRET ??= "test-refresh-secret";
-    const { loginEmailLimiter } = await import("../src/middleware/rateLimiter");
+    const { loginAccountLimiter } = await import("../src/middleware/rateLimiter");
     app = express();
     app.set("trust proxy", 1);
     app.use(express.json());
-    app.post("/login", loginEmailLimiter, (req, res) => {
+    app.post("/login", loginAccountLimiter, (req, res) => {
       if (req.body.password === "correct") return res.json({ ok: true });
       return res.status(401).json({ ok: false });
     });
@@ -36,5 +36,15 @@ describe("loginEmailLimiter", () => {
   it("لا يتأثر بريد آخر، ولا تُحسب المحاولات الناجحة", async () => {
     for (let i = 0; i < 15; i++) expect((await attempt("doctor@example.com", "correct", "198.51.100.9")).status).toBe(200);
     expect((await attempt("doctor@example.com", "wrong", "198.51.100.9")).status).toBe(401);
+  });
+
+  it("allows the account again after the 15 minute window", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      for (let i = 0; i < 10; i++) expect((await attempt("expiry@example.com", "wrong", "198.51.100.10")).status).toBe(401);
+      expect((await attempt("expiry@example.com", "correct", "198.51.100.10")).status).toBe(429);
+      vi.setSystemTime(Date.now() + 15 * 60 * 1000 + 1);
+      expect((await attempt("expiry@example.com", "correct", "198.51.100.10")).status).toBe(200);
+    } finally { vi.useRealTimers(); }
   });
 });

@@ -26,3 +26,17 @@ export async function issueTokens(userId: string, role: Role) {
 
   return { accessToken, refreshToken, decoded };
 }
+
+/**
+ * حذف توكنات التجديد التي لم تعد صالحة لأي شيء: المنتهية، والملغاة منذ أكثر من يومين.
+ * التحقق في refresh() يقبل فقط توكنًا غير ملغى وغير منتهٍ، فحذفها لا يغيّر أي سلوك؛
+ * دونه يكبر الجدول بلا حد (توكن جديد مع كل تجديد ≈ كل 15 دقيقة لكل جلسة مفتوحة).
+ */
+export const REVOKED_TOKEN_RETENTION_MS = 2 * 24 * 60 * 60 * 1000;
+export async function purgeStaleRefreshTokens(now = new Date()): Promise<number> {
+  const revokedBefore = new Date(now.getTime() - REVOKED_TOKEN_RETENTION_MS);
+  const result = await prisma.refreshToken.deleteMany({
+    where: { OR: [{ expiresAt: { lt: now } }, { revoked: true, createdAt: { lt: revokedBefore } }] },
+  });
+  return result.count;
+}

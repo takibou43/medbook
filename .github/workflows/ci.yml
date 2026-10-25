@@ -90,6 +90,22 @@ jobs:
           '
       - name: Fail if any integration file was skipped
         run: node scripts/assert-integration-ran.mjs vitest-report.json
+      - name: Prepare separate empty workload database
+        env:
+          PGPASSWORD: medbook_ci_only
+          TEST_DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_load_test?schema=public
+          DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_load_test?schema=public
+        run: |
+          psql -h 127.0.0.1 -U medbook_ci -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE medbook_load_test'
+          bash scripts/ci-prepare-test-db.sh
+      - name: Verify actual concurrent booking and admission workload
+        env:
+          TEST_DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_load_test?schema=public
+          DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_load_test?schema=public
+          RUN_CLINIC_LOAD: "1"
+          JWT_SECRET: ci_only_workload_access_secret_2026
+          JWT_REFRESH_SECRET: ci_only_workload_refresh_secret_2026
+        run: npx vitest run tests/integration/clinicDay.load.test.ts
       - name: Build with production dependencies (Render parity)
         run: |
           npm prune --omit=dev
@@ -128,4 +144,78 @@ jobs:
       - run: npm ci --include=dev
       - run: npm test
       - run: npm run build
+
+  container-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Synthetic, isolated CI credentials; reserved URL characters exercise encoding.
+      POSTGRES_PASSWORD: "ci_only:p@ss/word?#2026"
+      JWT_SECRET: "ci_only_container_access_secret_2026"
+      JWT_REFRESH_SECRET: "ci_only_container_refresh_secret_2026"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject missing passwords and public database ports
+        run: |
+          if POSTGRES_PASSWORD='' docker compose config --quiet 2>/dev/null; then
+            echo 'Compose accepted an empty database password' >&2
+            exit 1
+          fi
+          docker compose config --format json | python3 -c '
+          import json,sys
+          c=json.load(sys.stdin)
+          assert not c["services"]["postgres"].get("ports"), "Database must stay internal"
+          assert not c["services"]["backend"].get("volumes"), "No writable source mounts"
+          assert not c["services"]["frontend"].get("volumes"), "No writable source mounts"
+          '
+      - name: Build with synthetic sensitive files in the context
+        run: |
+          for dir in backend frontend; do
+            printf '%s\n' 'AUDIT_SYNTHETIC_MARKER=must_not_enter_image' > "$dir/.env.audit-fixture"
+            printf '%s\n' 'SYNTHETIC_KEY_NOT_A_CREDENTIAL' > "$dir/audit-fixture.pem"
+          done
+          docker compose build
+          docker build --target build -t medbook-frontend-build frontend
+      - name: Verify non-root runtime and excluded sensitive files
+        run: |
+          docker compose run --rm --no-deps --entrypoint sh backend -c '
+            test "$(id -u)" -ne 0
+            test ! -e /app/backend/.env.audit-fixture
+            test ! -e /app/backend/audit-fixture.pem
+          '
+          docker compose run --rm --no-deps --entrypoint sh frontend -c '
+            test "$(id -u)" -ne 0
+            test ! -e /usr/share/nginx/html/.env.audit-fixture
+            nginx -t
+          '
+          docker run --rm --entrypoint sh medbook-frontend-build -c '
+            test ! -e /app/.env.audit-fixture
+            test ! -e /app/audit-fixture.pem
+          '
+      - name: Start a fresh isolated stack and verify HTTP boundaries
+        run: |
+          docker compose up -d
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://localhost:4000/health >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://localhost:4000/health >/dev/null
+          curl -fsS http://localhost:5173/ >/tmp/medbook-home.html
+          curl -fsS http://localhost:5173/book >/tmp/medbook-route.html
+          cmp /tmp/medbook-home.html /tmp/medbook-route.html
+          curl -fsS http://localhost:5173/sw.js | grep -q 'addEventListener'
+          curl -fsS http://localhost:5173/manifest.webmanifest >/dev/null
+          for path in /.env /.env.audit-fixture /.git/config /.ssh/id_rsa /audit-fixture.pem /backup.sql; do
+            test "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:5173$path")" = 404
+            test "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:4000$path")" = 404
+          done
+          curl -fsSI http://localhost:5173/sw.js | grep -qi 'cache-control: no-cache'
+          curl -fsSI http://localhost:5173/ | grep -qi 'x-content-type-options: nosniff'
+          curl -fsSI http://localhost:5173/ | grep -qi 'permissions-policy:.*geolocation=(self)'
+          test -n "$(docker compose exec -T postgres psql -U medbook -d medbook -Atc "SELECT tgname FROM pg_trigger WHERE tgname = 'appointments_sync_active_slot';")"
+      - name: Clean up isolated containers and fixtures
+        if: always()
+        run: |
+          docker compose down -v
+          rm -f backend/.env.audit-fixture backend/audit-fixture.pem frontend/.env.audit-fixture frontend/audit-fixture.pem
 

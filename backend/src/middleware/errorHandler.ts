@@ -4,17 +4,37 @@ import { ApiError } from "../utils/ApiError";
 import { Prisma } from "@prisma/client";
 import { safeErrorCode } from "../lib/safeError";
 
+const MAX_REPORTED_ISSUES = 20;
+
 export function notFoundHandler(req: Request, res: Response) {
   res.status(404).json({ success: false, message: `المسار غير موجود: ${req.method} ${req.originalUrl}` });
 }
 
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
+  // Body-parser errors can contain the complete submitted body. Return fixed
+  // messages and never log/echo those objects or trust arbitrary error statuses.
+  if (err && typeof err === "object" && "type" in err && "status" in err) {
+    if (err.type === "entity.too.large" && err.status === 413) {
+      return res.status(413).json({ success: false, message: "حجم الطلب أكبر من الحد المسموح." });
+    }
+    if (err.type === "entity.parse.failed" && err.status === 400) {
+      return res.status(400).json({ success: false, message: "محتوى الطلب غير صالح." });
+    }
+    if ((err.type === "encoding.unsupported" || err.type === "charset.unsupported") && err.status === 415) {
+      return res.status(415).json({ success: false, message: "ترميز الطلب غير مدعوم." });
+    }
+  }
   // Zod validation errors
   if (err instanceof ZodError) {
+    // A bounded list is enough for the forms; an unbounded one let a single request
+    // build a multi-megabyte response.
     return res.status(400).json({
       success: false,
       message: "بيانات غير صالحة.",
-      errors: err.errors.map((e) => ({ path: e.path.join("."), message: e.message })),
+      errors: err.errors.slice(0, MAX_REPORTED_ISSUES).map((e) => ({
+        path: e.path.slice(0, 10).join(".").slice(0, 200),
+        message: e.message.slice(0, 300),
+      })),
     });
   }
 

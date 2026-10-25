@@ -7,10 +7,11 @@ import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/Toast";
 import { Spinner } from "../components/ui/States";
-import { Doctor, FamilyMember, NextSlot, Paginated } from "../types";
+import { Doctor, FamilyMember, Paginated } from "../types";
 import { bookingError, doctorAddress, splitFullName } from "../lib/booking";
 import { BookingSteps, StepId } from "../components/booking/BookingSteps";
 import { SpecialtyOption, SpecialtyStep } from "../components/booking/SpecialtyStep";
+import { useNextSlot } from "../hooks/useNextSlot";
 import { DoctorStep } from "../components/booking/DoctorStep";
 import { SlotStep } from "../components/booking/SlotStep";
 import { DayTimePicker, DayTimeChoice } from "../components/booking/DayTimePicker";
@@ -21,6 +22,7 @@ import { InlineError } from "../components/booking/StepParts";
 import { useAuth } from "../context/AuthContext";
 import { ReminderCard } from "../components/account/ReminderCard";
 import { BeneficiaryPicker } from "../components/booking/BeneficiaryPicker";
+import { UpcomingAppointmentCard } from "../components/booking/UpcomingAppointmentCard";
 import { BookingCounterCard } from "../components/booking/BookingCounterCard";
 import { beneficiaryLabel, bookableMembers, memberFullName } from "../lib/family";
 
@@ -183,20 +185,13 @@ export default function BookAppointment() {
     isFetching: loadingSlot,
     error: slotError,
     refetch: refetchSlot,
-  } = useQuery({
-    queryKey: ["next-slot", selectedDoctor?.id],
-    queryFn: async () => (await api.get<{ data: NextSlot }>("/booking/next-slot", { params: { doctorId: selectedDoctor!.id } })).data.data,
-    enabled: slotEnabled,
-    retry: false,
-    refetchInterval: step === "slot" ? 30000 : false,
-    refetchIntervalInBackground: false,
-  });
+  } = useNextSlot(selectedDoctor?.id, slotEnabled, step === "slot");
   const slotErr = slotError ? bookingError(slotError, t("تعذّر تحميل الموعد.")) : null;
 
   const bookMutation = useMutation({
     // بلا اختيار: لا نرسل التاريخ ولا الوقت — الخادم يعيّن الدور التالي لحظة الحجز ويمنع التكرار (كما كان).
     // مع اختيار: اليوم فقط (أول وقت شاغر فيه) أو اليوم + الوقت بالضبط (exactTime) — والخادم يعيد التحقق.
-    mutationFn: async (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor; choice: DayTimeChoice | null; familyMemberId: string | null }) =>
+    mutationFn: async (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor; choice: DayTimeChoice | null; familyMemberId: string | null; expectedSlot?: { date: string; startTime: string } }) =>
       (
         await api.post("/booking", {
           firstName: payload.firstName,
@@ -205,6 +200,7 @@ export default function BookAppointment() {
           wilayaId: payload.doctor.wilaya.id,
           specialtyId: payload.doctor.specialtyId,
           doctorId: payload.doctor.id,
+          ...(payload.expectedSlot ? { expectedSlot: payload.expectedSlot } : {}),
           // الخادم يتحقق من ملكية فرد العائلة ويأخذ اسمه من قاعدة البيانات.
           ...(payload.familyMemberId ? { familyMemberId: payload.familyMemberId } : {}),
           ...(payload.choice
@@ -232,7 +228,7 @@ export default function BookAppointment() {
     }
     setSubmitError(null);
     try {
-      const appointment = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice, familyMemberId: selectedMember?.id ?? null });
+      const appointment = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice, expectedSlot: !choice && nextSlot ? { date: nextSlot.date, startTime: nextSlot.startTime } : undefined, familyMemberId: selectedMember?.id ?? null });
       setConfirmed({
         date: appointment.date,
         startTime: appointment.startTime,
@@ -242,8 +238,8 @@ export default function BookAppointment() {
       showToast(t("تم إرسال طلب الحجز بنجاح!"), "success");
       // نفرّغ بيانات المريض فور نجاح الحجز حتى لا يُكرَّر الحجز بالخطأ بضغطة ثانية.
       form.reset({ fullName: "", phone: "" });
+      queryClient.invalidateQueries({ queryKey: ["my-appointments", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["next-slot"] });
-      queryClient.invalidateQueries({ queryKey: ["next-slot-preview"] });
       queryClient.invalidateQueries({ queryKey: ["availability"] });
       setChoice(null);
     } catch (err) {
@@ -268,7 +264,6 @@ export default function BookAppointment() {
         queryClient.invalidateQueries({ queryKey: ["availability", selectedDoctor.id] });
         if (choice) setChoice(code === "SLOT_UNAVAILABLE" ? { date: choice.date, startTime: null } : null);
         queryClient.invalidateQueries({ queryKey: ["next-slot", selectedDoctor.id] });
-        queryClient.invalidateQueries({ queryKey: ["next-slot-preview", selectedDoctor.id] });
         setStep("slot");
       } else if (kind === "notFound" && selectedMember) {
         // فرد العائلة أُرشف أو لم يعد متاحًا: نحدّث القائمة ونعيده لاختيار المستفيد.
@@ -320,15 +315,12 @@ export default function BookAppointment() {
   if (qrDoctorId && !authLoading && !user) return <Navigate to={"/account/login?mode=register&redirect=" + encodeURIComponent('/?doctor=' + qrDoctorId + '&intent=booking')} replace />;
 
   return (
-    <div className="container-app py-6 sm:py-8">
+    <div className="container-app py-4 sm:py-6">
       <div className="mx-auto max-w-xl">
-        <div className="mb-6 text-start">
-          <h1 className="text-2xl font-extrabold text-slate-900">{t("احجز موعدك بسهولة")}</h1>
-          <p className="mt-2 text-sm leading-relaxed text-slate-600 sm:text-base">
-            {user
-              ? t("اختر التخصص ثم الطبيب، والموقع يمنحك أول دور متاح — ويُضاف الموعد إلى حسابك.")
-              : t("اختر التخصص ثم الطبيب، ثم أنشئ حسابك أو سجّل الدخول لتأكيد الحجز.")}
-          </p>
+        <div className="mb-4 text-start">
+          <h1 className="text-xl font-extrabold text-slate-900 sm:text-2xl">{t("احجز موعدك بسهولة")}</h1>
+          <p className="mt-1 text-sm text-slate-600">{t("اختر طبيبك واحجز موعدك")}</p>
+          <BookingCounterCard wilayaId={counterWilayaId || null} />
         </div>
 
         {user?.isBlocked && (
@@ -337,7 +329,7 @@ export default function BookAppointment() {
           </div>
         )}
 
-        <BookingCounterCard wilayaId={counterWilayaId || null} />
+        {step === "specialty" && <UpcomingAppointmentCard />}
 
         <BookingSteps current={step} />
 

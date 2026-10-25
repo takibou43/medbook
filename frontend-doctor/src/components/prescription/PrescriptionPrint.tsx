@@ -5,7 +5,7 @@ import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useR
 import { createPortal, flushSync } from "react-dom";
 import { Maximize2, Minus, Plus, Printer, X } from "lucide-react";
 import type { Doctor } from "../../types";
-import { prescriptionAgeValue, type PrescriptionAgeUnit, type PrescriptionMedication, type PrescriptionRequestItem } from "../../lib/prescription";
+import { prescriptionAgeValue, prescriptionWeightValue, type PrescriptionAgeUnit, type PrescriptionMedication, type PrescriptionRequestItem } from "../../lib/prescription";
 import { DEFAULT_PRESCRIPTION_SETTINGS, type PrescriptionShow, type PrescriptionHeaderLanguage } from "../../lib/prescriptionSettings";
 import { prescriptionLabels, prescriptionNumericDate, prescriptionPlace, prescriptionCatalogName, doctorHeaderName, clinicHeaderName, type PrescriptionLanguage, type PrescriptionProfessional } from "../../lib/prescriptionPrint";
 import { useLanguage } from "../../i18n/LanguageRoot";
@@ -22,6 +22,8 @@ export interface PrescriptionSheetData {
   template?: PrescriptionTemplate | null;
   language: PrescriptionLanguage;
   headerLanguage?: PrescriptionHeaderLanguage;
+  /** رقم التسجيل في عمادة الأطباء (N° d'ordre). */
+  orderNumber?: string;
   professional?: PrescriptionProfessional;
   /** اسم الطبيب كما كتبه بنفسه لكل جهة: ar يمين الترويسة، fr يسارها. */
   doctorNames?: { ar?: string; fr?: string };
@@ -34,6 +36,7 @@ export interface PrescriptionSheetData {
   patientName: string;
   patientAge?: string;
   patientAgeUnit?: PrescriptionAgeUnit;
+  patientWeight?: string;
   /** YYYY-MM-DD بتوقيت الجزائر. */
   day: string;
   medications: PrescriptionMedication[];
@@ -59,6 +62,8 @@ function Typed({ children, className }: { children: string; className?: string }
 export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
   const lang = data.language;
   const age = prescriptionAgeValue(data.patientAge, data.patientAgeUnit);
+  const weight = prescriptionWeightValue(data.patientWeight);
+  const orderNumber = (data.orderNumber ?? "").trim();
   const ageUnit = (lang === "fr" ? { years: "ans", months: "mois", days: "jours" } : { years: "سنة", months: "شهر", days: "يوم" })[data.patientAgeUnit ?? "years"];
   const text = prescriptionLabels(lang);
   const d = data.doctor;
@@ -99,12 +104,14 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
         <div className="rx-side rx-side-fr" lang="fr" dir="ltr" hidden={data.headerLanguage === "ar"}>
           {doctorNameFr && <p className="rx-doctor"><bdi dir="ltr">{fr.doctor}</bdi> <Typed>{doctorNameFr}</Typed></p>}
           {specialtyFr && <p className="rx-specialty">{specialtyFr}</p>}
+          {orderNumber && <p className="rx-order">N° d'ordre : <bdi dir="ltr" translate="no">{orderNumber}</bdi></p>}
           {clinicNameFr && <p className="rx-clinic"><Typed>{clinicNameFr}</Typed></p>}
         </div>
         <div className="rx-logo-slot">{data.logo ? <img src={data.logo} alt="" /> : <SpecialtyIcon specialty={d?.specialty ?? {}} className="rx-specialty-logo" />}</div>
         <div className="rx-side rx-side-ar" lang="ar" dir="rtl" hidden={data.headerLanguage === "fr"}>
           {doctorNameAr && <p className="rx-doctor"><bdi dir="rtl">{ar.doctor}</bdi> <Typed>{doctorNameAr}</Typed></p>}
           {specialtyAr && <p className="rx-specialty">{specialtyAr}</p>}
+          {orderNumber && <p className="rx-order">رقم التسجيل: <bdi dir="ltr" translate="no">{orderNumber}</bdi></p>}
           {clinicNameAr && <p className="rx-clinic"><Typed>{clinicNameAr}</Typed></p>}
         </div>
       </header>}
@@ -112,7 +119,7 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
       {formFields && data.template ? <div className="rx-form-fields" dir="ltr">
         {(["date", "patient", "age"] as const).map(key => {
           const field = formFields[key];
-          const content = key === "date" ? prescriptionNumericDate(data.day) : key === "patient" ? data.patientName : age === null ? "" : `${age} ${ageUnit}`;
+          const content = key === "date" ? prescriptionNumericDate(data.day) : key === "patient" ? data.patientName : [age === null ? "" : `${age} ${ageUnit}`, weight === null ? "" : `${weight} ${text.kg}`].filter(Boolean).join(" · ");
           return <span key={key} data-form-field={key} dir="auto" style={{ position: "absolute", left: `${field.x - data.template!.side}mm`, top: `${field.y - data.template!.top}mm`, width: `${field.width}mm` }}><Typed>{content}</Typed></span>;
         })}
       </div> : <dl className="rx-meta">
@@ -124,7 +131,11 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
           <dt>{text.patient}</dt>
           <dd className="rx-patient"><Typed>{data.patientName}</Typed></dd>
         </div>
-        {age !== null && <div className="rx-meta-age"><dt>{text.age} :</dt><dd><bdi dir="ltr">{age}</bdi> {ageUnit}</dd></div>}
+        {(age !== null || weight !== null) && <div className="rx-meta-age">
+          {age !== null && <><dt>{text.age} :</dt><dd><bdi dir="ltr">{age}</bdi> {ageUnit}</dd></>}
+          {age !== null && weight !== null && <span aria-hidden="true"> · </span>}
+          {weight !== null && <><dt>{text.weight} :</dt><dd><bdi dir="ltr">{weight}</bdi> {text.kg}</dd></>}
+        </div>}
       </dl>}
 
       {!formFields && <h1 className="rx-title">{text.title}</h1>}
@@ -145,7 +156,9 @@ export function PrescriptionSheet({ data }: { data: PrescriptionSheetData }) {
                 <p className="rx-med-title">
                   <Typed className="rx-med-name">{p.name}</Typed>
                   {p.detail && <Typed className="rx-med-detail">{glueNumberUnit(p.detail)}</Typed>}
-                  {m.quantity?.trim() && <span className="rx-med-quantity">{standard && <span className="rx-fact-label">{lang === "fr" ? "Quantité" : "الكمية"}: </span>}<Typed>{glueNumberUnit(m.quantity.trim())}</Typed></span>}
+                  {/* خط متقطّع يربط الاسم بالكمية كما في الوصفات المعتادة */}
+                  {m.quantity?.trim() && standard && <span className="rx-leader" aria-hidden="true" />}
+                  {m.quantity?.trim() && <span className="rx-med-quantity">{standard && /^\d+$/.test(m.quantity.trim()) && <span className="rx-fact-label">{lang === "fr" ? "Quantité" : "الكمية"}: </span>}<Typed>{glueNumberUnit(m.quantity.trim())}</Typed></span>}
                 </p>
                 {/* السطر 2: الجرعة، التكرار، التوقيت، المدة — كل رقم ملصوق بوحدته؛ الفاصل ملصوق بما قبله فلا يبدأ سطر به */}
                 {factItems.length > 0 && (
@@ -219,7 +232,7 @@ const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2];
  * مع تكبير/تصغير وشريط أدوات خارج الورقة. الطباعة تُخفي كل شيء عدا الورقة (.rx-print-root في index.css)،
  * ولا تغيّر حالة أي موعد ولا ترسل شيئًا.
  */
-export function PrescriptionPreview({ open, data, onClose }: { open: boolean; data: PrescriptionSheetData | null; onClose: () => void }) {
+export function PrescriptionPreview({ open, data, onClose, onPrinted }: { open: boolean; data: PrescriptionSheetData | null; onClose: () => void; /** يُستدعى عند فتح نافذة الطباعة (مع الحفظ PDF أو بدونه). */ onPrinted?: () => void }) {
   const uiLanguage = useLanguage();
   const { user } = useAuth();
   const localFolder = usePrescriptionFolder(user?.id ?? "");
@@ -344,7 +357,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
   async function printAndSave() {
     if (savingPdfRef.current || !data) return;
     setPdfFailed(false);
-    if (!localFolder.folder) { setPdfMessage(t("الحفظ التلقائي غير مفعّل. يمكنك اختيار حفظ PDF من نافذة الطباعة.")); window.print(); return; }
+    if (!localFolder.folder) { setPdfMessage(t("الحفظ التلقائي غير مفعّل. يمكنك اختيار حفظ PDF من نافذة الطباعة.")); onPrinted?.(); window.print(); return; }
     if (!paperRef.current) return;
     const context = printContext.current;
     const stillCurrent = () => printContext.current.uid === context.uid && printContext.current.data === context.data && printContext.current.open;
@@ -360,6 +373,7 @@ export function PrescriptionPreview({ open, data, onClose }: { open: boolean; da
       await writePrescriptionPdf(localFolder.folder, filename, pdf);
       if (stillCurrent()) {
         setPdfMessage(t("تم حفظ PDF: {filename} في المجلد {folder}.", { filename, folder: localFolder.folder.directory.name }));
+        onPrinted?.();
         window.print();
       }
     } catch {

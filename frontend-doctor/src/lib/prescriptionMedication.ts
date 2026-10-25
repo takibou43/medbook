@@ -170,3 +170,66 @@ export function editableValues(m: PrescriptionMedication) {
     durCustom: hasDurFields(m) ? m.durCustom ?? "" : m.duration,
   };
 }
+
+/**
+ * أزرار سريعة لكتابة «طريقة الاستعمال» في النمط الحر: الشكل، طريقة الأخذ، التكرار، الوقت، المدة.
+ * لا جرعات ولا كميات إطلاقًا (لا اقتراح جرعة تلقائي) — الطبيب يختار ويبقى النص قابلًا للتعديل يدويًا.
+ * ترتيب المجموعات هو ترتيب الجملة المطبوعة: «قرص عن طريق الفم 3 مرات يوميًا بعد الأكل لمدة 7 أيام».
+ */
+export const INSTRUCTION_CHIPS = {
+  form: { ar: ["قرص", "كبسولة", "شراب", "حقنة"], fr: ["comprimé", "gélule", "sirop", "injection"] },
+  route: { ar: ["عن طريق الفم", "موضعيًا", "في العين"], fr: ["par voie orale", "en application locale", "dans l'œil"] },
+  frequency: { ar: ["مرة واحدة يوميًا", "مرتين يوميًا", "3 مرات يوميًا"], fr: ["1 fois par jour", "2 fois par jour", "3 fois par jour"] },
+  timing: { ar: ["قبل الأكل", "بعد الأكل", "عند النوم"], fr: ["avant les repas", "après les repas", "au coucher"] },
+  duration: { ar: ["لمدة 5 أيام", "لمدة 7 أيام", "لمدة 10 أيام"], fr: ["pendant 5 jours", "pendant 7 jours", "pendant 10 jours"] },
+} satisfies Record<string, Record<Lang, string[]>>;
+export type InstructionChipGroup = keyof typeof INSTRUCTION_CHIPS;
+const CHIP_ORDER = Object.keys(INSTRUCTION_CHIPS) as InstructionChipGroup[];
+
+/**
+ * يضيف خيارًا سريعًا إلى النص في موضعه الطبيعي من الجملة، أو يستبدل خيار نفس المجموعة،
+ * أو يزيله إن كان هو نفسه موجودًا. نص الطبيب اليدوي لا يُمسّ.
+ */
+export function toggleInstructionChip(text: string, group: InstructionChipGroup, chip: string, lang: Lang): string {
+  const tidy = (s: string) => s.replace(/\s{2,}/g, " ").replace(/^\s*[،,]\s*|\s*[،,]\s*$/g, "").trim();
+  if (text.includes(chip)) return tidy(text.replace(chip, ""));
+  const existing = INSTRUCTION_CHIPS[group][lang].find((o) => text.includes(o));
+  if (existing) return tidy(text.replace(existing, chip));
+  // أول خيار موجود من مجموعة لاحقة: نُدرج قبله ليبقى ترتيب الجملة طبيعيًا.
+  const later = CHIP_ORDER.slice(CHIP_ORDER.indexOf(group) + 1);
+  let at = -1;
+  for (const g of later) for (const o of INSTRUCTION_CHIPS[g][lang]) {
+    const i = text.indexOf(o);
+    if (i >= 0 && (at < 0 || i < at)) at = i;
+  }
+  if (at >= 0) return tidy(`${text.slice(0, at)}${chip} ${text.slice(at)}`);
+  return tidy(text.trim() ? `${text.trim()} ${chip}` : chip);
+}
+
+export function chipActive(text: string, chip: string): boolean {
+  return text.includes(chip);
+}
+
+/** وحدات الكمية المصروفة كما تُكتب في الوصفات الجزائرية: «02 علب»، «01 tube». */
+export const QUANTITY_UNITS = {
+  box: { ar: ["علبة", "علب"], fr: ["bte", "btes"] },
+  tube: { ar: ["أنبوب", "أنابيب"], fr: ["tube", "tubes"] },
+  bottle: { ar: ["قارورة", "قوارير"], fr: ["flacon", "flacons"] },
+} satisfies Record<string, Record<Lang, [string, string]>>;
+export type QuantityUnit = keyof typeof QUANTITY_UNITS;
+
+/** يحوّل الكمية إلى «العدد بخانتين + الوحدة» (العدد الموجود أو 1)؛ ونفس الوحدة مرة ثانية تُبقي العدد وحده. */
+export function formatQuantity(text: string, unit: QuantityUnit, lang: Lang): string {
+  const n = Number(/\d+/.exec(text)?.[0] ?? "1") || 1;
+  const words = QUANTITY_UNITS[unit][lang];
+  if (quantityUnitOf(text, lang) === unit) return String(n).padStart(2, "0");
+  return `${String(n).padStart(2, "0")} ${n === 1 ? words[0] : words[1]}`;
+}
+
+export function quantityUnitOf(text: string, lang: Lang): QuantityUnit | null {
+  const words = text.trim().split(/\s+/);
+  for (const [unit, forms] of Object.entries(QUANTITY_UNITS) as [QuantityUnit, Record<Lang, [string, string]>][]) {
+    if (forms[lang].some((f) => words.includes(f))) return unit;
+  }
+  return null;
+}

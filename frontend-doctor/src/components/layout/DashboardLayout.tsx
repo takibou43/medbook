@@ -1,7 +1,7 @@
 import { UrgencyRequests } from "../UrgencyRequests";
 import { GuestClaimReview } from "../GuestClaimReview";
 import { ShiftControl } from "../ShiftControl";
-import { useLanguage } from "../../i18n/LanguageRoot";
+import { LanguageSwitcher, useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale";
 import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -254,6 +254,7 @@ export function DashboardLayout({
         )}
       >
         <div className={clsx("relative flex h-16 shrink-0 items-center gap-2.5 px-4", collapsed && "justify-center px-0")}>
+          {!collapsed && <LanguageSwitcher />}
           <Logo className="h-9 w-9 shrink-0" />
           {!collapsed && <span className="truncate text-lg font-extrabold tracking-tight text-white">MedBook</span>}
           <button
@@ -273,6 +274,7 @@ export function DashboardLayout({
         </div>
 
         <div className={clsx("px-3", collapsed && "px-2")}>
+          {collapsed && <LanguageSwitcher />}
           {accountCard(collapsed)}
           {renderClinicSwitch(collapsed)}
         </div>
@@ -294,6 +296,7 @@ export function DashboardLayout({
               <p className="truncate text-xs font-medium text-slate-600">{t(currentItem?.label ?? title)}</p>
             </div>
           </div>
+          <div className="flex items-center gap-2"><LanguageSwitcher />
           <button
             type="button"
             aria-controls={menuId}
@@ -304,6 +307,7 @@ export function DashboardLayout({
           >
             <Menu className="h-5 w-5" aria-hidden />
           </button>
+          </div>
         </header>
 
         <div
@@ -352,7 +356,8 @@ export function DashboardLayout({
 
         {/* min-w-0 + overflow-x-hidden: خط دفاع أخير حتى لا يُخرج أي عنصر عريض الصفحة عن عرض الشاشة. */}
         <main id="main-content" tabIndex={-1} className={clsx("min-w-0 flex-1 overflow-x-hidden p-4 outline-none md:p-8 md:ps-5", contentClassName, dailyNavigation && "pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8")}>
-          <ShiftControl />
+          {/* في لوحة تحكم الطبيب («/») يظهر زر المداومة الكبير داخل الصفحة نفسها — لا نكرّره هنا. */}
+          {!(user?.role === "DOCTOR" && pathname === "/") && <ShiftControl />}
           {(user?.role === "DOCTOR" || user?.role === "ASSISTANT") && <GuestClaimReview />}
           {user?.role === "DOCTOR" && <UrgencyRequests />}
           <Outlet />

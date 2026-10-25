@@ -2154,5 +2154,11 @@
   "طباعة QR": "Imprimer le QR",
   "تعذر تحميل الكود. أعد المحاولة.": "Impossible de charger le code. Réessayez.",
   "يرجى إعادة طباعة الملصق بعد التحديث. كود الحجز العام لا يسجل الحضور.": "Veuillez réimprimer l’affiche après la mise à jour. Le code général de réservation n’enregistre pas la présence.",
-  "امسح الكود عند الوصول: إذا كان لديك موعد اليوم يُسجل حضورك لدى طبيبك، وإلا تظهر أطباء العيادة للحجز. المستخدم الجديد يسجل أولًا.": "Scannez à l’arrivée : votre présence est enregistrée si vous avez rendez-vous aujourd’hui. Sinon, les médecins de la clinique sont proposés pour réserver. Les nouveaux utilisateurs doivent d’abord s’inscrire."
+  "امسح الكود عند الوصول: إذا كان لديك موعد اليوم يُسجل حضورك لدى طبيبك، وإلا تظهر أطباء العيادة للحجز. المستخدم الجديد يسجل أولًا.": "Scannez à l’arrivée : votre présence est enregistrée si vous avez rendez-vous aujourd’hui. Sinon, les médecins de la clinique sont proposés pour réserver. Les nouveaux utilisateurs doivent d’abord s’inscrire.",
+  "تم نداؤه — النداء وحده لا يؤكد دخول المريض": "Patient appelé — l’appel seul ne confirme pas son entrée",
+  "نداءات الأطباء الحالية": "Appels en cours des médecins",
+  "ينادي على المريض": "Appelle le patient",
+  "وقت النداء": "Heure de l’appel",
+  "توقيت النداء غير متاح": "Heure de l’appel indisponible",
+  "النداءات تظهر لكل الأطباء حتى عند تصفية الطابور. النداء وحده لا يؤكد دخول المريض.": "Les appels de tous les médecins restent visibles même lorsque la file est filtrée. L’appel seul ne confirme pas l’entrée du patient."
 }

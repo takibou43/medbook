@@ -12,7 +12,7 @@ import {
 } from "./auth.schema";
 import { authenticate, authorize } from "../../middleware/auth";
 import { Role } from "@prisma/client";
-import { authLimiter } from "../../middleware/rateLimiter";
+import { authLimiter, loginAccountLimiter, loginIpLimiter } from "../../middleware/rateLimiter";
 import { registerClinicSchema, acceptClinicInviteSchema } from "../clinics/clinics.schema";
 
 const router = Router();
@@ -24,7 +24,7 @@ router.post("/register/doctor", authLimiter, validate({ body: registerDoctorSche
 // تسجيل مساعد — لا يُقبل إلا برمز دعوة صالح (token)؛ لا اختيار دور من الواجهة، ونفس حدّ
 // المحاولات الصارم المطبَّق على بقية عمليات التسجيل/الدخول لمنع تخمين الرموز بالقوة الغاشمة.
 router.post("/register/assistant", authLimiter, validate({ body: registerAssistantSchema }), controller.registerAssistant);
-router.post("/login", authLimiter, validate({ body: loginSchema }), controller.login);
+router.post("/login", loginIpLimiter, loginAccountLimiter, validate({ body: loginSchema }), controller.login);
 router.post("/refresh", controller.refresh);
 router.post("/logout", controller.logout);
 router.get("/me", authenticate, controller.me);

@@ -5,7 +5,7 @@ import * as clinicsService from "../clinics/clinics.service";
 import { issueTokens } from "../../lib/tokens";
 import { env } from "../../config/env";
 import * as profilesService from "./profiles.service";
-import { clearPatientSession, setPatientSession } from "../../lib/sessionCookies";
+import { clearDoctorSession, clearPatientSession, setPatientSession } from "../../lib/sessionCookies";
 
 function sanitizeUser(user: any) {
   const { passwordHash, ...rest } = user;
@@ -77,7 +77,8 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
   const token = req.cookies?.[REFRESH_COOKIE];
   const all = req.body?.allSessions === true;
   await authService.logout(token, all);
-  res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+  // Same attributes as when set (SameSite=None; Secure in production), or the browser ignores it.
+  clearDoctorSession(res);
   if (all) clearPatientSession(res);
   res.json({ success: true, message: "تم تسجيل الخروج." });
 });
@@ -91,7 +92,7 @@ export const updateAccount = asyncHandler(async (req: Request, res: Response) =>
   const { user, sessionsRevoked } = await authService.updateAccount(req.user!.id, req.body);
   // تغيير كلمة المرور أو البريد يُبطل جلسات التحديث، لذا نمسح الكوكي ليعيد المستخدم الدخول ببياناته الجديدة.
   const relogin = sessionsRevoked;
-  if (relogin) res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+  if (relogin) clearDoctorSession(res);
   res.json({
     success: true,
     message: relogin ? "تم تحديث بيانات الحساب. الرجاء تسجيل الدخول من جديد." : "تم تحديث بيانات الحساب.",

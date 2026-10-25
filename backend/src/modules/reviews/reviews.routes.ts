@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
+import { publicDiscoveryLimiter } from "../../middleware/rateLimiter";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { Role } from "@prisma/client";
 import * as service from "./reviews.service";
@@ -31,6 +32,8 @@ router.post(
 
 router.get(
   "/doctor/:doctorId",
+  publicDiscoveryLimiter,
+  validate({ params: z.object({ doctorId: z.string().uuid() }) }),
   asyncHandler(async (req, res) => {
     res.json({ success: true, data: await service.listForDoctor(req.params.doctorId) });
   })

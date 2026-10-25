@@ -2123,5 +2123,8 @@
   "هذا الموعد مضى. اختر موعدًا آخر.": "Ce créneau est passé. Choisissez un autre rendez-vous.",
   "الموعد المعروض مضى. حدّث التوفر للمحاولة مجددًا.": "Ce créneau est passé. Actualisez les disponibilités pour réessayer.",
   "اختيار موعد آخر": "Choisir un autre rendez-vous",
-  "متابعة إلى التأكيد": "Passer à la confirmation"
+  "متابعة إلى التأكيد": "Passer à la confirmation",
+  "يتحقق النظام من التوفر عند التأكيد": "La disponibilité est vérifiée à la confirmation",
+  "تغيير الطبيب": "Changer de médecin",
+  "تغيّر الموعد المتاح. راجع الموعد الجديد قبل التأكيد.": "Le créneau disponible a changé. Vérifiez le nouveau rendez-vous avant de confirmer."
 }

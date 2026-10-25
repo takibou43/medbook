@@ -191,7 +191,7 @@ export default function BookAppointment() {
   const bookMutation = useMutation({
     // بلا اختيار: لا نرسل التاريخ ولا الوقت — الخادم يعيّن الدور التالي لحظة الحجز ويمنع التكرار (كما كان).
     // مع اختيار: اليوم فقط (أول وقت شاغر فيه) أو اليوم + الوقت بالضبط (exactTime) — والخادم يعيد التحقق.
-    mutationFn: async (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor; choice: DayTimeChoice | null; familyMemberId: string | null }) =>
+    mutationFn: async (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor; choice: DayTimeChoice | null; familyMemberId: string | null; expectedSlot?: { date: string; startTime: string } }) =>
       (
         await api.post("/booking", {
           firstName: payload.firstName,
@@ -200,6 +200,7 @@ export default function BookAppointment() {
           wilayaId: payload.doctor.wilaya.id,
           specialtyId: payload.doctor.specialtyId,
           doctorId: payload.doctor.id,
+          ...(payload.expectedSlot ? { expectedSlot: payload.expectedSlot } : {}),
           // الخادم يتحقق من ملكية فرد العائلة ويأخذ اسمه من قاعدة البيانات.
           ...(payload.familyMemberId ? { familyMemberId: payload.familyMemberId } : {}),
           ...(payload.choice
@@ -227,7 +228,7 @@ export default function BookAppointment() {
     }
     setSubmitError(null);
     try {
-      const appointment = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice, familyMemberId: selectedMember?.id ?? null });
+      const appointment = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice, expectedSlot: !choice && nextSlot ? { date: nextSlot.date, startTime: nextSlot.startTime } : undefined, familyMemberId: selectedMember?.id ?? null });
       setConfirmed({
         date: appointment.date,
         startTime: appointment.startTime,

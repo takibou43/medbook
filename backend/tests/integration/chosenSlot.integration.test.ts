@@ -152,6 +152,16 @@ describe.skipIf(!TEST_URL)("اختيار اليوم والوقت الاختيا�
     expect(r.data.status).toBe("CONFIRMED");
   });
 
+  it("rejects a changed automatic preview without creating a second appointment", async () => {
+    const d = await mkDoctor();
+    const preview = await call("GET", `/api/booking/next-slot?doctorId=${d}`);
+    expect((await book(d)).status).toBe(201);
+    const result = await book(d, { expectedSlot: { date: preview.data.date, startTime: preview.data.startTime } }, pool[1]);
+    expect(result.status).toBe(409);
+    expect(result.details.code).toBe("SLOT_CHANGED");
+    expect(await db.appointment.count({ where: { doctorId: d } })).toBe(1);
+  });
+
   it("2) اليوم فقط → أول وقت شاغر في ذلك اليوم", async () => {
     const d = await mkDoctor();
     const day = workDays[2];

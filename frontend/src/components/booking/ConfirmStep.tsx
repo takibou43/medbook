@@ -8,78 +8,45 @@ import { Button } from "../ui/Button";
 import { StepHeading, BackButton } from "./StepParts";
 
 interface Props {
-  doctor: Doctor;
-  slot: NextSlot;
-  patientName: string;
-  patientPhone: string;
-  submitting: boolean;
-  errorMessage: string | null;
-  onConfirm: () => void;
-  onBack: () => void;
-  onEditDoctor?: () => void;
-  onEditSlot?: () => void;
-  // الوقت اختاره المريض بنفسه (لا نقل تلقائي إلى وقت آخر إن أُخذ).
-  exactChoice?: boolean;
-  // الحساب العائلي: «ياسين بن علي (ابن/ابنة)» — يُعرض بوضوح قبل التأكيد. غيابه = الموعد لصاحب الحساب.
-  beneficiaryLabel?: string | null;
+  doctor: Doctor; slot: NextSlot; patientName: string; patientPhone: string;
+  submitting: boolean; errorMessage: string | null;
+  onConfirm: () => void; onBack: () => void; onEditDoctor?: () => void; onEditSlot?: () => void;
+  exactChoice?: boolean; beneficiaryLabel?: string | null;
 }
-
-function Row({ label, children, onEdit, disabled }: { label: string; children: React.ReactNode; onEdit?: () => void; disabled?: boolean }) {
-  useLanguage();
-  return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
-      <dt className="shrink-0 text-sm text-slate-500">{t(label ?? "")}</dt>
-      <dd className="min-w-0 text-end text-sm font-semibold text-slate-800">{children}{onEdit && <button type="button" disabled={disabled} onClick={onEdit} className="ms-2 inline-flex min-h-11 items-center px-2 font-semibold text-primary-700 underline disabled:opacity-50" aria-label={t("تعديل {field}", { field: label })}>{t("تعديل")}</button>}</dd>
-    </div>
-  );
-}
-
-// الخطوة 5: ملخص واضح قبل الإرسال. الخادم هو المرجع النهائي للدور (يعيد حسابه لحظة الحجز
-// ويمنع التكرار)، وشاشة النجاح تعرض الدور الفعلي الذي سجّله.
 export const ConfirmStep = forwardRef<HTMLHeadingElement, Props>(
-  ({ doctor, slot, patientName, patientPhone, submitting, errorMessage, onConfirm, onBack, onEditDoctor, onEditSlot, exactChoice, beneficiaryLabel }, ref) => {
-  useLanguage();
+  ({ doctor, slot, patientName, patientPhone, submitting, errorMessage, onConfirm, onBack, onEditDoctor, onEditSlot, beneficiaryLabel }, ref) => {
+    useLanguage();
     const address = doctorAddress(doctor);
-    return (
-      <section aria-labelledby="step-confirm-title">
-        <BackButton onClick={onBack} disabled={submitting}>{t("تعديل البيانات")}</BackButton>
-        <StepHeading ref={ref} id="step-confirm-title" hint={t("راجع بياناتك ثم أكّد الحجز.")}>{t("تأكيد الحجز ")}</StepHeading>
-
-        <dl className="glass divide-y divide-slate-100 px-5 py-2">
-          <Row label={t("التخصص")}>{catalogName(doctor.specialty)}</Row>
-          <Row label={t("الطبيب")} onEdit={onEditDoctor} disabled={submitting}>{t("د. ")}{doctor.firstName} {doctor.lastName}
-          </Row>
-          {address && <Row label={t("العنوان")} onEdit={onEditDoctor} disabled={submitting}>{address}</Row>}
-          <Row label={t("التاريخ")} onEdit={onEditSlot} disabled={submitting}>{formatLongDate(slot.date)}</Row>
-          <Row label={t("الوقت")} onEdit={onEditSlot} disabled={submitting}>
-            {/^\d{2}:\d{2}$/.test(slot.startTime) ? <span dir="ltr">{slot.startTime}</span> : slot.startTime}
-          </Row>
-          {beneficiaryLabel ? (
-            <Row label={t("الموعد لـ")} onEdit={onBack} disabled={submitting}>
-              <span className="rounded-full bg-primary-50 px-2 py-0.5 text-primary-800">{beneficiaryLabel}</span>
-            </Row>
-          ) : (
-            <Row label={t("اسم المريض")} onEdit={onBack} disabled={submitting}>{patientName}</Row>
-          )}
-          <Row label={t("رقم الهاتف")} onEdit={onBack} disabled={submitting}>{patientPhone ? <span dir="ltr">{patientPhone}</span> : "—"}</Row>
-        </dl>
-
-        <p className="mt-3 text-xs text-slate-500">
-          {exactChoice
-            ? t("الخادم يتحقق من توفر الوقت لحظة التأكيد؛ إن حُجز قبلك للتوّ سنطلب منك اختيار وقت آخر.")
-            : t("الأدوار تُمنح بالترتيب؛ إن حُجز هذا الوقت قبلك للتوّ سيُعطى لك الدور التالي مباشرة.")}
-        </p>
-
-        {errorMessage && (
-          <p role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-            {errorMessage}
-          </p>
-        )}
-
-        <Button type="button" onClick={onConfirm} loading={submitting} className="mt-4 min-h-[48px] w-full text-base">
-          <CalendarDays className="me-1.5 h-4 w-4" aria-hidden="true" />{t(" تأكيد الحجز ")}</Button>
-      </section>
-    );
+    const edit = (label: string, action?: () => void) => action && <button type="button" disabled={submitting} onClick={action} className="min-h-[44px] shrink-0 px-2 text-xs font-semibold text-primary-700 underline disabled:opacity-50">{t(label)}</button>;
+    return <section aria-labelledby="step-confirm-title">
+      <BackButton onClick={onBack} disabled={submitting}>{t("تعديل البيانات")}</BackButton>
+      <StepHeading ref={ref} id="step-confirm-title">{t("تأكيد الحجز")}</StepHeading>
+      <div className="glass divide-y divide-slate-100 px-4">
+        <div className="flex items-start justify-between gap-2 py-3">
+          <div className="min-w-0 text-sm">
+            <p className="break-words font-bold text-slate-900">{t("د. ")}{doctor.firstName} {doctor.lastName}</p>
+            <p className="mt-1 text-primary-700">{catalogName(doctor.specialty)}</p>
+            {address && <p className="mt-1 break-words text-xs text-slate-600">{address}</p>}
+          </div>{edit("تغيير الطبيب", onEditDoctor)}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+          <p className="min-w-0 text-sm font-semibold text-slate-800">{formatLongDate(slot.date)} <bdi>{slot.startTime}</bdi></p>
+          {edit("تغيير الموعد", onEditSlot)}
+        </div>
+        <div className="flex items-start justify-between gap-2 py-3">
+          <div className="min-w-0 text-sm">
+            <p className="text-xs text-slate-500">{t("الموعد لـ")}</p>
+            <p className="mt-1 break-words font-bold text-slate-900">{beneficiaryLabel || patientName}</p>
+            <p className="mt-1 text-slate-600"><bdi>{patientPhone || "—"}</bdi></p>
+          </div>{edit("تعديل البيانات", onBack)}
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-slate-600">{t("يتحقق النظام من التوفر عند التأكيد")}</p>
+      {errorMessage && <p role="alert" className="mt-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMessage}</p>}
+      <div className="sticky bottom-0 z-20 mt-3 rounded-2xl glass-chrome p-2" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
+        <Button type="button" onClick={onConfirm} loading={submitting} className="min-h-[48px] w-full text-base"><CalendarDays className="me-1.5 h-4 w-4" aria-hidden="true" />{t("تأكيد الحجز")}</Button>
+      </div>
+    </section>;
   }
 );
 ConfirmStep.displayName = "ConfirmStep";

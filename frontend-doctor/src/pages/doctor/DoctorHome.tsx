@@ -24,7 +24,7 @@ import { appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
 import { canScheduleFollowUp, isDentalSpecialty, usesStandaloneFollowUp } from "../../lib/features";
 import { beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import { PrescriptionCard } from "../../components/prescription/PrescriptionCard";
-import { filterQueue, hasUnprintedVisitDraft } from "../../lib/doctorWorkflow";
+import { awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft } from "../../lib/doctorWorkflow";
 import { getStoredDraft } from "../../lib/prescription";
 import type { Appointment } from "../../types";
 
@@ -112,7 +112,8 @@ export default function DoctorHome() {
   const current = queue.data?.current ?? null;
   // الطابور كاملًا بترتيب المناداة الفعلي من الخادم (لا نقتطع منه شيئًا).
   const nextList = queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])];
-  const canCallNext = !current && nextList.length > 0;
+  const awaitingAssistant = awaitingAssistantAdmission(queue.data, stats.data?.hasActiveAssistant);
+  const canCallNext = !current && !awaitingAssistant && nextList.length > 0;
   const filteredQueue = filterQueue(nextList, queueSearch);
 
   function finishCurrent() {
@@ -242,7 +243,7 @@ export default function DoctorHome() {
               ضغطة Enter مكررة يجب ألا تُنهي كشفًا وتنادي مريضًا ثم تُنهيه بالتتابع. */}
           <section ref={registerTrigger("current-card")} tabIndex={-1} className="card p-4 outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:p-5 lg:col-span-2" aria-label={t("المريض الحالي")}>
             <div className="flex items-center justify-between gap-3">
-              <h2 className="text-lg font-bold text-slate-900">{t(queue.data?.awaitingAssistant ? "في انتظار تأكيد المساعد" : "المريض الحالي")}</h2>
+              <h2 className="text-lg font-bold text-slate-900">{t(awaitingAssistant ? "في انتظار تأكيد المساعد" : "المريض الحالي")}</h2>
               {current && <span className="badge bg-sky-100 text-sky-700">{t("قيد الكشف")}</span>}
             </div>
 
@@ -258,13 +259,13 @@ export default function DoctorHome() {
                 <Avatar name={beneficiaryName(current)} index={0} />
                 <div className="min-w-0 flex-1">
                   <p className="break-words text-xl font-extrabold leading-snug text-slate-900">{beneficiaryName(current)}</p>
-                  <p className="mt-1 text-sm text-slate-500">{t("وقت الموعد ")}<span className="font-semibold text-slate-700 tabular-nums">{current.startTime}</span>
+                  <p className="mt-1 text-sm text-slate-500">{t("وقت الموعد ")}<span className="font-semibold text-slate-700 tabular-nums">{current.startTime.slice(0, 5)}</span>
                     <span className="mx-2" aria-hidden="true">·</span>{t("رقم الدور ")}<span className="font-semibold text-slate-700 tabular-nums">{padTurn(turns.get(current.id))}</span>
                   </p>
                 </div>
               </div>
             ) : (
-              <p className="mt-3 rounded-xl bg-slate-50 p-4 text-center text-slate-600">{t("لا يوجد مريض بالداخل الآن.")}</p>
+              <p role="status" className={clsx("mt-3 rounded-xl p-4 text-center", awaitingAssistant ? "border border-primary-200 bg-primary-50 text-primary-900" : "bg-slate-50 text-slate-600")}>{t(awaitingAssistant ? "تم إرسال الطلب إلى المساعد. يبدأ الكشف بعد تأكيد إدخال المريض." : "لا يوجد مريض بالداخل الآن.")}</p>
             )}
 
             <div className="mt-4 flex flex-wrap gap-2 [&>*]:min-w-[9rem]">
@@ -276,7 +277,7 @@ export default function DoctorHome() {
                 disabled={busy || queue.isPending || queue.isError || !canCallNext}
                 aria-describedby="call-next-hint"
                 onClick={() => run(async () => { await callNext.mutateAsync(); }, t("تم إرسال طلب النداء."), "current-card")}
-              >{t("استدعاء التالي")}<ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              >{t(awaitingAssistant ? "بانتظار إدخال المريض" : "استدعاء التالي")}<ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </Button>
               {current && usesStandaloneFollowUp(user?.doctor?.specialty) && (
                 <Button
@@ -292,6 +293,8 @@ export default function DoctorHome() {
             <p id="call-next-hint" className="mt-2 text-xs text-slate-500">
               {queue.isError || queue.isPending
                 ? t("الاستدعاء غير متاح حتى يُحمَّل الطابور.")
+                : awaitingAssistant
+                ? t("طلب الإدخال ظاهر لدى المساعد؛ لا حاجة إلى إعادة النداء.")
                 : current
                 ? t("أنهِ الكشف الحالي أولًا ثم استدعِ التالي.")
                 : nextList.length === 0
@@ -320,7 +323,7 @@ export default function DoctorHome() {
           </Link>
         </div>
         {/* 5) طابور الانتظار — بجانب بطاقة المريض الحالي */}
-        <section className="card h-fit p-4 sm:p-5 lg:col-start-3 lg:row-span-2 lg:row-start-1" aria-label={t("طابور الانتظار")}>
+        <section className="card h-fit p-4 sm:p-5 lg:sticky lg:top-4 lg:col-start-3 lg:row-span-2 lg:row-start-1" aria-label={t("طابور الانتظار")}>
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-bold text-slate-900">{t("طابور الانتظار")}</h2>
             {!queue.isPending && !queue.isError && nextList.length > 0 && <span className="badge bg-amber-100 text-amber-700 tabular-nums">{nextList.length}</span>}
@@ -345,7 +348,7 @@ export default function DoctorHome() {
                   <div className="min-w-0 flex-1">
                     <p className="break-words font-bold leading-snug text-slate-900">{beneficiaryName(a)}</p>
                     <p className="text-xs text-slate-500">
-                      {a.id === nextList[0]?.id && <span className="me-1 font-bold text-primary-700">{t("التالي")} · </span>}{a.status === "LATE" ? t("متأخر") : t("في الانتظار")}{t(" · موعده ")}<span className="tabular-nums">{a.startTime}</span>
+                      {a.id === nextList[0]?.id && <span className="me-1 font-bold text-primary-700">{t("التالي")} · </span>}{a.status === "LATE" ? t("متأخر") : t("في الانتظار")}{t(" · موعده ")}<span className="tabular-nums">{a.startTime.slice(0, 5)}</span>
                     </p>
                   </div>
                   <Avatar name={beneficiaryName(a)} index={nextList.findIndex(item => item.id === a.id) + 1} />

@@ -63,8 +63,8 @@ export function Modal({ open, onClose, title, children, footer, wide = false }: 
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-slate-900/50" onClick={onClose} />
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} tabIndex={-1} className={`relative z-10 max-h-[calc(100dvh-2rem)] w-full ${wide ? "max-w-6xl" : "max-w-lg"} glass-dialog overflow-y-auto rounded-2xl p-6 shadow-xl outline-none`}>
+      <div className="mb-modal-backdrop absolute inset-0 bg-slate-900/50" onClick={onClose} />
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined} tabIndex={-1} className={`mb-modal-panel relative z-10 max-h-[calc(100dvh-2rem)] w-full ${wide ? "max-w-6xl" : "max-w-lg"} glass-dialog overflow-y-auto rounded-2xl p-6 shadow-xl outline-none`}>
         <div className="mb-4 flex items-center justify-between">
           {title && <h3 id={titleId} className="text-lg font-bold text-slate-900">{t(title ?? "")}</h3>}
           <button type="button" aria-label={t("إغلاق")} title={t("إغلاق النافذة")} onClick={onClose} className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-primary-400">

@@ -436,3 +436,16 @@ html[lang="fr"] body { font-family: system-ui, -apple-system, "Segoe UI", sans-s
 
 /* Dashboard language control lives in its header; retain the fallback on public pages. */
 body:has(.dashboard-language) .floating-language { display: none; }
+
+/* One-shot feedback only; no continuous animation or extra network polling. */
+@media (prefers-reduced-motion: no-preference) {
+  .mb-modal-backdrop { animation: mb-fade-in 150ms ease-out both; }
+  .mb-modal-panel { animation: mb-dialog-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+  .admission-request { animation: mb-request-in 200ms ease-out both; }
+}
+@keyframes mb-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mb-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes mb-request-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media print {
+  .mb-modal-backdrop, .mb-modal-panel, .admission-request { animation: none !important; }
+}

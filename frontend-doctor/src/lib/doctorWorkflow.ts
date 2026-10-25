@@ -18,3 +18,8 @@ export function filterQueue(queue: Appointment[], query: string): Appointment[] 
 export function hasUnprintedVisitDraft(draft: PrescriptionDraft | null, appointment: Appointment): boolean {
   return Boolean(draft && !draft.printedAt && samePrescriptionVisit(draft.patient, appointment) && draftHasContent(draft));
 }
+
+/** A pending request must not block the doctor after the assistant ends their shift. */
+export function awaitingAssistantAdmission(queue: { awaitingAssistant?: boolean; current: Appointment | null } | undefined, hasActiveAssistant: boolean | undefined): boolean {
+  return Boolean(queue?.awaitingAssistant && !queue.current && hasActiveAssistant !== false);
+}

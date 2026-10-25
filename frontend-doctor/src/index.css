@@ -433,3 +433,6 @@ html[lang="fr"] body { font-family: system-ui, -apple-system, "Segoe UI", sans-s
     backdrop-filter: none;
   }
 }
+
+/* Dashboard language control lives in its header; retain the fallback on public pages. */
+body:has(.dashboard-language) .floating-language { display: none; }

@@ -67,7 +67,7 @@ export function ShiftControl({ variant = "compact" }: { variant?: "compact" | "h
     <button type="button" aria-pressed={!!active} disabled={state.isLoading || state.isError || change.isPending}
       aria-label={active ? t("المداومة جارية") + " — " + t("إنهاء") + " " + label : t("بدء") + " " + label}
       title={active ? t("إنهاء") + " " + label : t("بدء") + " " + label}
-      className={"inline-flex items-center gap-2 rounded-full border px-3 py-1.5 disabled:opacity-50 " + (active ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-600")}
+      className={"inline-flex min-h-11 items-center gap-2 rounded-full border px-3 py-1.5 disabled:opacity-50 " + (active ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-white text-slate-600")}
       onClick={toggleShift}>
       <span aria-hidden="true" className={"h-2 w-2 rounded-full " + (active ? "bg-emerald-500" : "bg-slate-400")} />
       {active ? t("إنهاء") : t("بدء")} {label}

@@ -2168,5 +2168,8 @@
   "اضغط إدخال المريض بعد دخوله فعليًا. إغلاق النافذة لا يسجّل دخوله.": "Confirmez après l’entrée effective du patient. Fermer la fenêtre n’enregistre pas son entrée.",
   "طلبات إدخال المرضى ({0})": "Demandes d’entrée des patients ({0})",
   "تم إدخال المريض عند الطبيب.": "L’entrée du patient chez le médecin est confirmée.",
-  "عند الطبيب": "Chez le médecin"
+  "عند الطبيب": "Chez le médecin",
+  "تم إرسال الطلب إلى المساعد. يبدأ الكشف بعد تأكيد إدخال المريض.": "La demande a été envoyée à l’assistant. La consultation commence après confirmation de l’entrée du patient.",
+  "بانتظار إدخال المريض": "En attente de l’entrée du patient",
+  "طلب الإدخال ظاهر لدى المساعد؛ لا حاجة إلى إعادة النداء.": "La demande est visible chez l’assistant ; inutile de renouveler l’appel."
 }

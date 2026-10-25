@@ -133,7 +133,7 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
                     {/* السطر الثاني: طريقة الاستعمال + أزرار سريعة */}
                     <label className="block min-w-0">
                       <span className={labelCls}>{t("طريقة الاستعمال")}</span>
-                      <input id={fieldId("instructions")} onKeyDown={e => nextOnEnter(e)} enterKeyHint="next" className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" placeholder={lang === "fr" ? "Ex. : 1 comprimé par voie orale 3 fois par jour après les repas pendant 7 jours" : t("مثال: قرص واحد عن طريق الفم 3 مرات يوميًا بعد الأكل لمدة 7 أيام")} value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
+                      <input id={fieldId("instructions")} onKeyDown={e => nextOnEnter(e)} enterKeyHint="next" className="input min-h-11 py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" placeholder={lang === "fr" ? "Ex. : 1 comprimé par voie orale 3 fois par jour après les repas pendant 7 jours" : t("مثال: قرص واحد عن طريق الفم 3 مرات يوميًا بعد الأكل لمدة 7 أيام")} value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
                       {errorText("instructions")}
                     </label>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5" aria-label={t("إضافة سريعة إلى طريقة الاستعمال")}>
@@ -144,7 +144,7 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
                             const on = chipActive(m.instructions, chip);
                             return <button key={chip} type="button" aria-pressed={on}
                               onClick={() => onUpdate(m.id, { instructions: toggleInstructionChip(m.instructions, group, chip, lang) })}
-                              className={clsx("min-h-8 rounded-full border px-2.5 text-xs font-semibold transition", focus, on ? "border-primary-600 bg-primary-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-primary-300 hover:bg-primary-50")}>
+                              className={clsx("min-h-11 rounded-full border px-2.5 text-xs font-semibold transition", focus, on ? "border-primary-600 bg-primary-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-primary-300 hover:bg-primary-50")}>
                               <bdi dir="auto" translate="no">{chip}</bdi>
                             </button>;
                           })}
@@ -202,11 +202,11 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
                 </label>
                 <label className="col-span-1 block min-w-0 sm:col-span-3">
                   <span className={labelCls}>{t("التركيز")} <span className="font-normal text-slate-600">({t("اختياري")})</span></span>
-                  <input id={fieldId("strength")} className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} placeholder="500 mg" value={m.strength ?? ""} onChange={setText("strength")} />
+                  <input id={fieldId("strength")} className="input min-h-11 py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} placeholder="500 mg" value={m.strength ?? ""} onChange={setText("strength")} />
                 </label>
                 <label className="col-span-1 block min-w-0 sm:col-span-3">
                   <span className={labelCls}>{t("الشكل الدوائي")} <span className="font-normal text-slate-600">({t("اختياري")})</span></span>
-                  <input id={fieldId("form")} className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} value={m.form ?? ""} onChange={setText("form")} />
+                  <input id={fieldId("form")} className="input min-h-11 py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} value={m.form ?? ""} onChange={setText("form")} />
                 </label>
               </div>
 
@@ -228,7 +228,7 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
 
                   <div className="min-w-0">
                     <span className={labelCls} id={fieldId("freq-l")}>{t("عدد مرات الاستخدام")}</span>
-                    <select id={fieldId("frequency")} data-field="frequency" className="input py-2" aria-labelledby={fieldId("freq-l")} value={v.freqKey} onChange={e => freq({ freqKey: e.target.value })} aria-invalid={Boolean(err?.frequency)} aria-describedby={describe("frequency")}>
+                    <select id={fieldId("frequency")} data-field="frequency" className="input min-h-11 py-2" aria-labelledby={fieldId("freq-l")} value={v.freqKey} onChange={e => freq({ freqKey: e.target.value })} aria-invalid={Boolean(err?.frequency)} aria-describedby={describe("frequency")}>
                       <option value="">{t("اختر")}</option>
                       {FREQUENCIES.map(o => <option key={o.key} value={o.key}>{lbl(o, lang)}</option>)}
                       <option value={CUSTOM}>{t("أخرى…")}</option>
@@ -239,7 +239,7 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
 
                   <div className="min-w-0">
                     <span className={labelCls} id={fieldId("timing-l")}>{t("وقت الاستخدام")} <span className="font-normal text-slate-600">({t("اختياري")})</span></span>
-                    <select className="input py-2" aria-labelledby={fieldId("timing-l")} value={v.timingKey} onChange={e => onUpdate(m.id, { timingKey: e.target.value })}>
+                    <select className="input min-h-11 py-2" aria-labelledby={fieldId("timing-l")} value={v.timingKey} onChange={e => onUpdate(m.id, { timingKey: e.target.value })}>
                       <option value="">{t("بدون تحديد")}</option>
                       {TIMINGS.map(o => <option key={o.key} value={o.key}>{lbl(o, lang)}</option>)}
                       <option value={CUSTOM}>{t("أخرى…")}</option>
@@ -270,7 +270,7 @@ export function MedicationList({ medications, ownerUserId, lang, errors, formId,
               {showInstr ? (
                 <label className="mt-2 block">
                   <span className={labelCls}>{isFree ? t("تعليمات الاستخدام الكاملة") : <>{t("تعليمات إضافية")} <span className="font-normal text-slate-600">({t("اختياري")})</span></>}</span>
-                  <input id={fieldId("instructions")} className="input py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
+                  <input id={fieldId("instructions")} className="input min-h-11 py-2" dir="auto" translate="no" autoComplete="off" spellCheck={false} data-field="instructions" value={m.instructions} onChange={setText("instructions")} aria-invalid={Boolean(err?.instructions)} aria-describedby={describe("instructions")} />
                   {isFree && <span className="mt-1 block text-xs text-slate-700">{t("اكتب طريقة الاستخدام كاملة، بما يناسب الدواء والحالة. لا يتحقق النظام من ملاءمتها الطبية.")}</span>}
                   {errorText("instructions")}
                 </label>

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filterQueue, hasUnprintedVisitDraft } from "../src/lib/doctorWorkflow.ts";
+import { awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft } from "../src/lib/doctorWorkflow.ts";
 import { emptyDraft, prescriptionPatientFrom } from "../src/lib/prescription.ts";
 import type { Appointment } from "../src/types/index.ts";
 
@@ -30,4 +30,15 @@ test("completion warning is scoped to an unprinted draft of the same visit", () 
   assert.equal(hasUnprintedVisitDraft(draft, first), false);
   draft.printedAt = undefined;
   assert.equal(hasUnprintedVisitDraft(draft, first), true);
+});
+
+test("admission stays pending only while an assistant may still handle it", () => {
+  const requested = { awaitingAssistant: true, current: null };
+  assert.equal(awaitingAssistantAdmission(requested, true), true);
+  assert.equal(awaitingAssistantAdmission(requested, undefined), true);
+  // The doctor can use next-call themselves after the assistant ends their shift.
+  assert.equal(awaitingAssistantAdmission(requested, false), false);
+  assert.equal(awaitingAssistantAdmission({ ...requested, current: first }, true), false);
+  assert.equal(awaitingAssistantAdmission({ ...requested, awaitingAssistant: false }, true), false);
+  assert.equal(awaitingAssistantAdmission(undefined, true), false);
 });

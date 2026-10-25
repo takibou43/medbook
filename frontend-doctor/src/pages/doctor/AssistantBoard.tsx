@@ -1,3 +1,4 @@
+import { AdmissionRequestCard } from "../../components/AdmissionRequestCard";
 import { Modal } from "../../components/ui/Modal";
 import { ArrivalPoster } from "../../components/ArrivalPoster";
 import { useAttendanceActions } from "../../hooks/useAttendanceActions";
@@ -17,7 +18,7 @@ import { Appointment, AppointmentStatus } from "../../types";
 import { ASSISTANT_QUEUE_POLL_MS, QueueState } from "../../hooks/useQueue";
 import { admissionCandidate, callSignatures, newlyCalled } from "../../lib/assistantCalls";
 import { RELATIONSHIP_LABELS } from "../../lib/features";
-import { beneficiaryName } from "../../lib/appointmentPeople";
+import { beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import { appointmentActions } from "../../lib/doctorUi";
 import { NoShowSmsDialog, NoShowTarget } from "../../components/NoShowSmsDialog";
 import { WalkInPanel, WALK_IN_NOTE } from "../../components/WalkInPanel";
@@ -161,6 +162,13 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     return { doctor, candidate, key: `${doctor.id}:${candidate?.id ?? "waiting"}` };
   });
   const openRequests = requests.filter(request => !dismissedRequests.includes(request.key));
+  const requestCard = ({ doctor, candidate, key }: typeof requests[number]) => {
+    const doctorAppointments = (appointments.data ?? []).filter(a => a.doctorId === doctor.id && a.status !== "CANCELLED");
+    const turn = appointments.isSuccess && !appointments.isError && candidate ? padTurn(visibleTurnNumbers(doctorAppointments).get(candidate.id)) : undefined;
+    return <AdmissionRequestCard key={key} doctorName={doctorName(doctor)} patientName={candidate ? patientName(candidate) : undefined} turn={turn}>
+      {candidate && <Button className="min-h-12 w-full" loading={admit.isPending && admit.variables?.id === candidate.id} disabled={admit.isPending || action.isPending || !canManageAttendance || queues.isError} onClick={() => { if (!admit.isPending) admit.mutate(candidate); }}>{t("إدخال المريض")}</Button>}
+    </AdmissionRequestCard>;
+  };
   // Use the faster queue response for today's current/waiting rows, keeping the
   // full daily list (including pending/completed appointments) from its own API.
   const liveAppointments = new Map(doctorQueues.filter(row => row.queue.date.slice(0, 10) === appointmentDate).flatMap(({ queue }) => [
@@ -184,19 +192,19 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     <NoShowSmsDialog target={dialog?.target ?? null} mode={dialog?.mode} onClose={() => setDialog(null)} />
     <Modal open={!appointmentsView && openRequests.length > 0 && !dialog} onClose={() => { if (!admit.isPending) setDismissedRequests(keys => [...keys, ...openRequests.map(r => r.key)]); }} title={t("طلب إدخال مريض")}>
       <div className="space-y-3">
-        {openRequests.map(({ doctor, candidate, key }) => <section key={key} className="rounded-xl border border-primary-200 bg-primary-50/80 p-4">
-          <p className="text-lg font-bold text-primary-800">{doctorName(doctor)}</p>
-          <p className="mt-1 text-sm text-slate-700">{t("يطلب إدخال المريض التالي")}</p>
-          {candidate ? <>
-            <p className="my-4 break-words text-2xl font-extrabold text-slate-900">{patientName(candidate)}</p>
-            <Button className="min-h-12 w-full" loading={admit.isPending && admit.variables?.id === candidate.id} disabled={admit.isPending || action.isPending || !canManageAttendance || queues.isError} onClick={() => { if (!admit.isPending) admit.mutate(candidate); }}>{t("إدخال المريض")}</Button>
-          </> : <p className="mt-3 text-sm text-amber-800">{t("لا يوجد مريض حاضر جاهز للإدخال. سجّل الحضور من الطابور أولًا.")}</p>}
-        </section>)}
+        {openRequests.map(requestCard)}
         <p className="text-xs text-slate-600">{t("اضغط إدخال المريض بعد دخوله فعليًا. إغلاق النافذة لا يسجّل دخوله.")}</p>
         {admit.isError && <p role="alert" className="text-sm text-red-700">{apiErrorMessage(admit.error)}</p>}
       </div>
     </Modal>
-    {!appointmentsView && requests.length > 0 && <Button variant="outline" className="min-h-11 w-full border-amber-300 bg-amber-50 text-amber-900" onClick={() => { admit.reset(); setDismissedRequests([]); }}><Bell className="h-5 w-5" />{t("طلبات إدخال المرضى ({0})", { "0": requests.length })}</Button>}
+    {!appointmentsView && requests.length > 0 && <section aria-label={t("طلبات إدخال المرضى ({0})", { "0": requests.length })} className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-bold text-primary-900">{t("طلبات إدخال المرضى ({0})", { "0": requests.length })}</h2>
+        <Button variant="outline" onClick={() => { admit.reset(); setDismissedRequests([]); }}>{t("عرض التفاصيل")}</Button>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">{requests.map(requestCard)}</div>
+      {admit.isError && <p role="alert" className="text-sm text-red-700">{apiErrorMessage(admit.error)}</p>}
+    </section>}
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h1 className="text-xl font-bold">{appointmentsView ? t("مواعيد الأطباء") : t("طابور اليوم")}</h1>
       {!appointmentsView && <WalkInPanel doctors={doctorQueues.map(row => row.doctor)} />}

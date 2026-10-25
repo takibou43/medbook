@@ -1,3 +1,4 @@
+import { Modal } from "../../components/ui/Modal";
 import { ArrivalPoster } from "../../components/ArrivalPoster";
 import { useAttendanceActions } from "../../hooks/useAttendanceActions";
 import { useLanguage } from "../../i18n/LanguageRoot";
@@ -14,7 +15,7 @@ import { Button } from "../../components/ui/Button";
 import { Spinner } from "../../components/ui/States";
 import { Appointment, AppointmentStatus } from "../../types";
 import { ASSISTANT_QUEUE_POLL_MS, QueueState } from "../../hooks/useQueue";
-import { callSignatures, newlyCalled } from "../../lib/assistantCalls";
+import { admissionCandidate, callSignatures, newlyCalled } from "../../lib/assistantCalls";
 import { RELATIONSHIP_LABELS } from "../../lib/features";
 import { beneficiaryName } from "../../lib/appointmentPeople";
 import { appointmentActions } from "../../lib/doctorUi";
@@ -56,6 +57,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   const [date, setDate] = useState(() => new Date(Date.now() + 3600000).toISOString().slice(0, 10));
   const today = new Date(Date.now() + 3600000).toISOString().slice(0, 10);
   const appointmentDate = appointmentsView ? date : today;
+  const [dismissedRequests, setDismissedRequests] = useState<string[]>([]);
   const [sound, setSound] = useState(false);
   const [filter, setFilter] = useState({ doctorId: "", status: "", search: "" });
   const [now, setNow] = useState(Date.now);
@@ -84,7 +86,9 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
   const income = useQuery({ queryKey: ["assistant-daily-income", user?.id], enabled: !appointmentsView, queryFn: async () => (await api.get<{ data: { totalDzd: number; completedCount: number } }>("/assistant/daily-income")).data.data, retry: false, refetchInterval: livePollInterval(live, 30000), refetchIntervalInBackground: false, refetchOnWindowFocus: true });
   useEffect(() => {
     if (!queues.data) return;
-    const rows = queues.data.map(row => ({ doctorId: row.doctor.id, current: row.queue.current }));
+    const rows = queues.data.map(row => ({ doctorId: row.doctor.id, current: admissionCandidate(row.queue, today) }));
+    const activeKeys = queues.data.filter(row => row.queue.awaitingAssistant && !row.queue.current).map(row => `${row.doctor.id}:${admissionCandidate(row.queue, today)?.id ?? "waiting"}`);
+    setDismissedRequests(keys => keys.filter(key => activeKeys.includes(key)));
     const calls = newlyCalled(rows, previous.current);
     if (calls.length) showToast(t("نداء جديد: {0}", { "0": calls.map(call => {
       const doctor = queues.data.find(row => row.doctor.id === call.doctorId)!.doctor;
@@ -92,7 +96,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     }).join(t("؛ ")) }), "info");
     if (calls.length && sound) chime(audio.current);
     previous.current = callSignatures(rows);
-  }, [queues.data, sound, showToast]);
+  }, [queues.data, sound, showToast, today]);
   useEffect(() => () => { void audio.current?.close().catch(() => undefined); }, []);
   const action = useMutation({
     mutationFn: async ({ appointment, kind }: { appointment: Appointment; kind: "arrived" | "late" | "call" | "urgency" | AppointmentStatus }) => {
@@ -116,7 +120,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     action.mutate({ appointment, kind });
   }
   function actions(a: Appointment) {
-    if (a.status === "IN_PROGRESS") return <p className="text-sm text-green-800">{t("تم نداؤه — النداء وحده لا يؤكد دخول المريض")}</p>;
+    if (a.status === "IN_PROGRESS") return <p className="text-sm text-green-800">{t("المريض عند الطبيب — انتظر انتهاء الكشف")}</p>;
     const rules = appointmentActions(a, "ASSISTANT");
     const today = new Date(Date.now() + 3600000).toISOString().slice(0, 10);
     const openDialog = (mode: "call" | "final") => {
@@ -126,7 +130,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     return <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
       {a.status === "PENDING" && <Button variant="outline" disabled={action.isPending} onClick={() => update(a, "CONFIRMED")}>{t("تأكيد")}</Button>}
       {(a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt && a.date.slice(0, 10) === today && <Button variant="outline" disabled={action.isPending || !canManageAttendance} onClick={() => update(a, "arrived")}>{t("وصل المريض")}</Button>}
-      {a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && queues.data?.some(row => row.doctor.id === a.doctorId && row.queue.awaitingAssistant && !row.queue.current) && <Button disabled={action.isPending || !canManageAttendance} onClick={() => update(a, "call")}>{t("تأكيد الإدخال")}</Button>}
+      {a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && queues.data?.some(row => row.doctor.id === a.doctorId && row.queue.awaitingAssistant && !row.queue.current) && <Button disabled={action.isPending || !canManageAttendance} onClick={() => update(a, "call")}>{t("إدخال المريض")}</Button>}
       {a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && (!a.urgencyStatus || a.urgencyStatus === "NONE") && <Button variant="outline" disabled={!canManageAttendance || action.isPending} onClick={() => update(a, "urgency")}>{t("طلب تقديم حالة مستعجلة")}</Button>}
       {a.urgencyStatus === "REQUESTED" && <span className="text-xs text-amber-700">{t("بانتظار قرار الطبيب")}</span>}
       {a.urgencyStatus === "APPROVED" && <span className="text-xs text-red-700">{t("حالة مستعجلة معتمدة")}</span>}
@@ -136,8 +140,27 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       {(a.status === "PENDING" || a.status === "CONFIRMED") && <Button variant="ghost" disabled={action.isPending} onClick={() => update(a, "CANCELLED")}>{t("إلغاء الموعد")}</Button>}
     </div>;
   }
+  const admit = useMutation({
+    mutationFn: async (appointment: Appointment) => api.post(`/appointments/${appointment.id}/call`, {}, { headers: { "X-Assistant-Doctor-Id": appointment.doctorId } }),
+    onSuccess: (_data, appointment) => {
+      setDismissedRequests(keys => [...keys, `${appointment.doctorId}:${appointment.id}`]);
+      showToast(t("تم إدخال المريض عند الطبيب."), "success");
+      void qc.invalidateQueries({ queryKey: ["assistant-queues"] });
+      void qc.invalidateQueries({ queryKey: ["assistant-appointments"] });
+    },
+    onError: error => {
+      showToast(apiErrorMessage(error), "error");
+      void qc.invalidateQueries({ queryKey: ["assistant-queues"] });
+      void qc.invalidateQueries({ queryKey: ["assistant-appointments"] });
+    },
+  });
   if (queues.isPending) return <Spinner />;
   const doctorQueues = queues.data ?? [];
+  const requests = doctorQueues.filter(({ queue }) => queue.date.slice(0, 10) === today && queue.awaitingAssistant && !queue.current).map(({ doctor, queue }) => {
+    const candidate = admissionCandidate(queue, today);
+    return { doctor, candidate, key: `${doctor.id}:${candidate?.id ?? "waiting"}` };
+  });
+  const openRequests = requests.filter(request => !dismissedRequests.includes(request.key));
   // Use the faster queue response for today's current/waiting rows, keeping the
   // full daily list (including pending/completed appointments) from its own API.
   const liveAppointments = new Map(doctorQueues.filter(row => row.queue.date.slice(0, 10) === appointmentDate).flatMap(({ queue }) => [
@@ -153,13 +176,27 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       <span dir="ltr" className="text-start text-sm tabular-nums">{receptionTime(a.startTime)}</span>
       <span className="break-words font-semibold">{patientName(a)}</span>
       <span className="text-sm text-slate-700">{doctorName(a.doctor)}</span>
-      <div><span className={`inline-block rounded-lg px-2 py-1 text-xs font-semibold ${a.status === "IN_PROGRESS" || a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") ? "bg-green-100 text-green-900" : "bg-slate-100 text-slate-800"}`}>{receptionLabel(a)}</span>{a.status === "IN_PROGRESS" && a.calledAt && <span className="mt-1 block text-xs text-slate-700"><bdi dir="ltr">{callTime(a.calledAt)}</bdi> — {callAge(a.calledAt, now)}</span>}{a.notes?.startsWith(WALK_IN_NOTE) && <span className="mt-1 block text-xs text-slate-600">{t("حضر بدون موعد")}</span>}</div>
+      <div><span className={`inline-block rounded-lg px-2 py-1 text-xs font-semibold ${a.status === "IN_PROGRESS" || a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") ? "bg-green-100 text-green-900" : "bg-slate-100 text-slate-800"}`}>{a.status === "IN_PROGRESS" ? t("عند الطبيب") : receptionLabel(a)}</span>{a.status === "IN_PROGRESS" && a.calledAt && <span className="mt-1 block text-xs text-slate-700"><bdi dir="ltr">{callTime(a.calledAt)}</bdi> — {callAge(a.calledAt, now)}</span>}{a.notes?.startsWith(WALK_IN_NOTE) && <span className="mt-1 block text-xs text-slate-600">{t("حضر بدون موعد")}</span>}</div>
       <div className="col-span-2 lg:col-span-1">{actions(a)}</div>
     </li>)}
   </ol>;
   return <div className="space-y-3">
     <NoShowSmsDialog target={dialog?.target ?? null} mode={dialog?.mode} onClose={() => setDialog(null)} />
-    {doctorQueues.filter(row => row.queue.awaitingAssistant && !row.queue.current).map(row => <p key={row.doctor.id} role="status" className="rounded-xl bg-amber-50 p-3">{row.doctor.firstName} {row.doctor.lastName}: {t("في انتظار تأكيد المساعد")}</p>)}
+    <Modal open={!appointmentsView && openRequests.length > 0 && !dialog} onClose={() => { if (!admit.isPending) setDismissedRequests(keys => [...keys, ...openRequests.map(r => r.key)]); }} title={t("طلب إدخال مريض")}>
+      <div className="space-y-3">
+        {openRequests.map(({ doctor, candidate, key }) => <section key={key} className="rounded-xl border border-primary-200 bg-primary-50/80 p-4">
+          <p className="text-lg font-bold text-primary-800">{doctorName(doctor)}</p>
+          <p className="mt-1 text-sm text-slate-700">{t("يطلب إدخال المريض التالي")}</p>
+          {candidate ? <>
+            <p className="my-4 break-words text-2xl font-extrabold text-slate-900">{patientName(candidate)}</p>
+            <Button className="min-h-12 w-full" loading={admit.isPending && admit.variables?.id === candidate.id} disabled={admit.isPending || action.isPending || !canManageAttendance || queues.isError} onClick={() => { if (!admit.isPending) admit.mutate(candidate); }}>{t("إدخال المريض")}</Button>
+          </> : <p className="mt-3 text-sm text-amber-800">{t("لا يوجد مريض حاضر جاهز للإدخال. سجّل الحضور من الطابور أولًا.")}</p>}
+        </section>)}
+        <p className="text-xs text-slate-600">{t("اضغط إدخال المريض بعد دخوله فعليًا. إغلاق النافذة لا يسجّل دخوله.")}</p>
+        {admit.isError && <p role="alert" className="text-sm text-red-700">{apiErrorMessage(admit.error)}</p>}
+      </div>
+    </Modal>
+    {!appointmentsView && requests.length > 0 && <Button variant="outline" className="min-h-11 w-full border-amber-300 bg-amber-50 text-amber-900" onClick={() => { admit.reset(); setDismissedRequests([]); }}><Bell className="h-5 w-5" />{t("طلبات إدخال المرضى ({0})", { "0": requests.length })}</Button>}
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h1 className="text-xl font-bold">{appointmentsView ? t("مواعيد الأطباء") : t("طابور اليوم")}</h1>
       {!appointmentsView && <WalkInPanel doctors={doctorQueues.map(row => row.doctor)} />}
@@ -172,23 +209,6 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       }}>{sound ? <Bell /> : <BellOff />}{sound ? t("إيقاف الصوت") : t("تفعيل صوت النداء")}</Button>
     </div>
     {queues.isSuccess && !doctorQueues.length && <p className="card p-5">{t("لا يوجد أطباء مرتبطون بك حاليًا. تواصل مع مالك العيادة.")}</p>}
-    {!appointmentsView && doctorQueues.some(({ queue }) => queue.date.slice(0, 10) === today && queue.current) && <section aria-labelledby="active-calls-title" className="rounded-2xl border-2 border-primary-600 bg-white/90 p-3 shadow-sm">
-      <h2 id="active-calls-title" className="mb-3 flex items-center gap-2 text-lg font-bold text-primary-800"><Bell className="h-5 w-5 shrink-0" aria-hidden="true" />{t("نداءات الأطباء الحالية")}</h2>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {doctorQueues.filter(({ queue }) => queue.date.slice(0, 10) === today && queue.current).map(({ doctor, queue }) => {
-          const current = queue.current!;
-          return <article key={doctor.id} className="rounded-xl border border-primary-200 bg-primary-50 p-3">
-            <p className="text-sm font-bold text-primary-800">{doctorName(doctor)}</p>
-            <p className="mt-2 text-xs font-semibold text-slate-600">{t("ينادي على المريض")}</p>
-            <p className="mt-1 break-words text-xl font-extrabold text-slate-900">{patientName(current)}</p>
-            <p className="mt-2 text-sm font-semibold text-primary-800">{t("تم نداؤه")}</p>
-            {current.calledAt ? <p className="mt-1 text-xs text-slate-700">{t("وقت النداء")}: <bdi dir="ltr">{callTime(current.calledAt)}</bdi> · {callAge(current.calledAt, now)}</p> : <p className="mt-1 text-xs text-slate-700">{t("توقيت النداء غير متاح")}</p>}
-          </article>;
-        })}
-      </div>
-      <p className="mt-3 text-xs text-slate-700">{t("النداءات تظهر لكل الأطباء حتى عند تصفية الطابور. النداء وحده لا يؤكد دخول المريض.")}</p>
-      {queues.isError && <p role="alert" className="mt-2 text-sm font-bold text-amber-800">{t("انقطع التحديث — البيانات المعروضة قديمة")}</p>}
-    </section>}
     {!appointmentsView && <details className="card px-3 py-2 text-sm text-slate-700">
       <summary className="flex min-h-11 cursor-pointer flex-wrap items-center justify-between gap-2">
         <span>{t("المدخول اليومي ")}</span><strong className="text-lg text-slate-900">{income.isSuccess ? <><bdi dir="ltr" className="tabular-nums">{income.data.totalDzd.toLocaleString("en-US")}</bdi>{t(" دج")}</> : income.isError ? "—" : "…"}</strong>

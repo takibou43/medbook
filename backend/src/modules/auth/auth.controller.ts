@@ -1,3 +1,4 @@
+import { rememberLoginBrowser } from "../../lib/loginBrowser";
 import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as authService from "./auth.service";
@@ -5,7 +6,7 @@ import * as clinicsService from "../clinics/clinics.service";
 import { issueTokens } from "../../lib/tokens";
 import { env } from "../../config/env";
 import * as profilesService from "./profiles.service";
-import { clearPatientSession, setPatientSession } from "../../lib/sessionCookies";
+import { clearDoctorSession, clearPatientSession, setPatientSession } from "../../lib/sessionCookies";
 
 function sanitizeUser(user: any) {
   const { passwordHash, ...rest } = user;
@@ -62,6 +63,7 @@ export const registerAssistant = asyncHandler(async (req: Request, res: Response
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const result = await authService.login(email, password);
+  rememberLoginBrowser(res, email);
   res.cookie(REFRESH_COOKIE, result.refreshToken, cookieOptions);
   res.json({ success: true, data: { user: sanitizeUser(result.user), accessToken: result.accessToken } });
 });
@@ -77,7 +79,8 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
   const token = req.cookies?.[REFRESH_COOKIE];
   const all = req.body?.allSessions === true;
   await authService.logout(token, all);
-  res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+  // Same attributes as when set (SameSite=None; Secure in production), or the browser ignores it.
+  clearDoctorSession(res);
   if (all) clearPatientSession(res);
   res.json({ success: true, message: "تم تسجيل الخروج." });
 });
@@ -91,7 +94,7 @@ export const updateAccount = asyncHandler(async (req: Request, res: Response) =>
   const { user, sessionsRevoked } = await authService.updateAccount(req.user!.id, req.body);
   // تغيير كلمة المرور أو البريد يُبطل جلسات التحديث، لذا نمسح الكوكي ليعيد المستخدم الدخول ببياناته الجديدة.
   const relogin = sessionsRevoked;
-  if (relogin) res.clearCookie(REFRESH_COOKIE, { path: "/api/auth" });
+  if (relogin) clearDoctorSession(res);
   res.json({
     success: true,
     message: relogin ? "تم تحديث بيانات الحساب. الرجاء تسجيل الدخول من جديد." : "تم تحديث بيانات الحساب.",

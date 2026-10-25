@@ -1,4 +1,6 @@
+import { isKnownLoginBrowser } from "../lib/loginBrowser";
 import rateLimit from "express-rate-limit";
+import { createHash } from "crypto";
 import { env } from "../config/env";
 
 export const apiLimiter = rateLimit({
@@ -16,6 +18,63 @@ export const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: "محاولات كثيرة لتسجيل الدخول. الرجاء المحاولة بعد قليل." },
+});
+
+// تسجيل الدخول (واجهتا الأطباء والمرضى) — حدّان مستقلان عن authLimiter:
+// 1) لكل عنوان IP: تُحسب المحاولات الفاشلة فقط، فلا يستنفد مستخدمون كثيرون خلف عنوان مشترك
+//    (CGNAT لدى شبكات الهاتف) الحدّ بمجرد تسجيل دخولهم الناجح.
+// 2) لكل حساب (بصمة البريد بعد التطبيع): يوقف تخمين كلمة مرور حساب واحد من عناوين كثيرة.
+//    المتصفح المعروف بتوقيع الخادم له ميزانية مستقلة؛ المتصفح الجديد قد يُحجب مؤقتًا.
+// العدّادات في ذاكرة النسخة الحالية وتبدأ من الصفر عند إعادة تشغيل Render.
+export const LOGIN_IP_FAILURE_LIMIT = 30;
+export const LOGIN_ACCOUNT_FAILURE_LIMIT = 10;
+
+export const loginIpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: LOGIN_IP_FAILURE_LIMIT,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => `login-ip:${req.ip}`,
+  message: { success: false, message: "محاولات دخول خاطئة كثيرة من هذه الشبكة. الرجاء المحاولة بعد قليل." },
+});
+
+export function loginAccountKey(email: unknown): string {
+  if (typeof email !== "string" || email.length > 254) return "login-account:invalid";
+  return "login-account:" + createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+}
+
+export const loginAccountLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: LOGIN_ACCOUNT_FAILURE_LIMIT,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: isKnownLoginBrowser,
+  keyGenerator: req => loginAccountKey((req.body as { email?: unknown } | undefined)?.email),
+  message: { success: false, message: "محاولات دخول خاطئة كثيرة لهذا الحساب. انتظر 15 دقيقة ثم أعد المحاولة." },
+});
+
+// Known browsers get an isolated account/IP budget; password and IP checks remain.
+export const knownLoginBrowserLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: LOGIN_ACCOUNT_FAILURE_LIMIT,
+  skipSuccessfulRequests: true, standardHeaders: true, legacyHeaders: false,
+  skip: req => !isKnownLoginBrowser(req),
+  keyGenerator: req => `${loginAccountKey(req.body?.email)}:${req.ip}`,
+  message: { success: false, message: "محاولات دخول خاطئة كثيرة. الرجاء المحاولة بعد قليل." },
+});
+
+// تغيير رقم الهاتف من الملف الشخصي: الرقم فريد، فرد «مستخدم مسبقًا» يكشف أن الرقم مسجّل.
+// حدّ لكل حساب يجعل هذا المسار أداة بطيئة غير صالحة لفحص أرقام كثيرة.
+export const PHONE_CHANGE_LIMIT = 5;
+export const phoneChangeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: PHONE_CHANGE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: req => `phone-change:${req.user!.id}`,
+  skip: req => typeof (req.body as { phone?: unknown } | undefined)?.phone !== "string" || (req.body as { phone: string }).phone === "",
+  message: { success: false, message: "محاولات كثيرة لتغيير رقم الهاتف. الرجاء المحاولة لاحقًا." },
 });
 
 // مسارات حجز الضيف (lookup/cancel) لا تتطلب حسابًا: رقم الهاتف وحده هو "المفتاح"، لذا نحدّها

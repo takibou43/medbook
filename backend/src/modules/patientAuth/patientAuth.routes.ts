@@ -1,9 +1,10 @@
+import { rememberLoginBrowser } from "../../lib/loginBrowser";
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { Role } from "@prisma/client";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
-import { authLimiter } from "../../middleware/rateLimiter";
+import { authLimiter, loginAccountLimiter, loginIpLimiter, knownLoginBrowserLimiter } from "../../middleware/rateLimiter";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { PATIENT_REFRESH_COOKIE, setPatientSession, setDoctorSession, clearPatientSession, clearDoctorSession } from "../../lib/sessionCookies";
 import { issueDoctorPortalSession } from "../auth/profiles.service";
@@ -37,10 +38,13 @@ patientAuthRouter.post(
 
 patientAuthRouter.post(
   "/login",
-  authLimiter,
+  loginIpLimiter,
+  loginAccountLimiter,
+  knownLoginBrowserLimiter,
   validate({ body: patientLoginSchema }),
   asyncHandler(async (req: Request, res: Response) => {
     const result = await service.loginPatient(req.body.email, req.body.password);
+    rememberLoginBrowser(res, req.body.email);
     setPatientSession(res, result.refreshToken);
     res.json({ success: true, data: { user: result.user, accessToken: result.accessToken } });
   })

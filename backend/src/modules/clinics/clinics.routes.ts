@@ -4,7 +4,7 @@ import { z } from "zod";
 import { Role, SubscriptionStatus, VerificationStatus } from "@prisma/client";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
-import { authLimiter } from "../../middleware/rateLimiter";
+import { authLimiter, publicDiscoveryLimiter } from "../../middleware/rateLimiter";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as service from "./clinics.service";
 import { assistantScopeSchema, managerPermissionsSchema } from "../../lib/clinicPermissions";
@@ -16,7 +16,7 @@ router.get('/mine/arrival-poster', ...owner, asyncHandler(async (req, res) => {
   const clinic = await service.ownedClinic(req.user!.id);
   send(res, { code: signArrivalCode('clinic', clinic.id), name: clinic.nameAr });
 }));
-router.get("/", validate({ query: clinicSearchSchema }), asyncHandler(async (req, res) => send(res, await service.searchClinics(req.query as unknown as z.infer<typeof clinicSearchSchema>))));
+router.get("/", publicDiscoveryLimiter, validate({ query: clinicSearchSchema }), asyncHandler(async (req, res) => send(res, await service.searchClinics(req.query as unknown as z.infer<typeof clinicSearchSchema>))));
 router.get("/invites/:token", authLimiter, validate({ params: tokenSchema }), asyncHandler(async (req, res) => send(res, await service.previewInvite(req.params.token))));
 router.post("/invites/accept", authenticate, authorize(Role.DOCTOR), validate({ body: tokenSchema }), asyncHandler(async (req, res) => send(res, await service.acceptExistingDoctor(req.user!.id, req.body.token))));
 router.get("/mine", ...owner, asyncHandler(async (req, res) => send(res, await service.getOwnClinic(req.user!.id))));
@@ -56,5 +56,5 @@ router.patch("/admin/:id", authenticate, authorize(Role.ADMIN), validate({ param
   verificationStatus: z.nativeEnum(VerificationStatus).optional(), subscriptionStatus: z.nativeEnum(SubscriptionStatus).optional(),
   expectedSnapshot:z.string().max(1000).optional(), subscriptionExpiresAt: z.coerce.date().nullable().optional(), paidDoctorCount: z.number().int().min(0).max(1000).optional(),
 }).strict() }), asyncHandler(async (req, res) => send(res, await service.adminUpdateClinic(req.params.id, req.body))));
-router.get("/:id", validate({ params: clinicIdParams }), asyncHandler(async (req, res) => send(res, await service.publicClinic(req.params.id))));
+router.get("/:id", publicDiscoveryLimiter, validate({ params: clinicIdParams }), asyncHandler(async (req, res) => send(res, await service.publicClinic(req.params.id))));
 export default router;

@@ -2160,5 +2160,13 @@
   "ينادي على المريض": "Appelle le patient",
   "وقت النداء": "Heure de l’appel",
   "توقيت النداء غير متاح": "Heure de l’appel indisponible",
-  "النداءات تظهر لكل الأطباء حتى عند تصفية الطابور. النداء وحده لا يؤكد دخول المريض.": "Les appels de tous les médecins restent visibles même lorsque la file est filtrée. L’appel seul ne confirme pas l’entrée du patient."
+  "النداءات تظهر لكل الأطباء حتى عند تصفية الطابور. النداء وحده لا يؤكد دخول المريض.": "Les appels de tous les médecins restent visibles même lorsque la file est filtrée. L’appel seul ne confirme pas l’entrée du patient.",
+  "طلب إدخال مريض": "Demande d’entrée d’un patient",
+  "يطلب إدخال المريض التالي": "Demande de faire entrer le patient suivant",
+  "إدخال المريض": "Faire entrer le patient",
+  "لا يوجد مريض حاضر جاهز للإدخال. سجّل الحضور من الطابور أولًا.": "Aucun patient présent n’est prêt à entrer. Enregistrez d’abord sa présence dans la file.",
+  "اضغط إدخال المريض بعد دخوله فعليًا. إغلاق النافذة لا يسجّل دخوله.": "Confirmez après l’entrée effective du patient. Fermer la fenêtre n’enregistre pas son entrée.",
+  "طلبات إدخال المرضى ({0})": "Demandes d’entrée des patients ({0})",
+  "تم إدخال المريض عند الطبيب.": "L’entrée du patient chez le médecin est confirmée.",
+  "عند الطبيب": "Chez le médecin"
 }

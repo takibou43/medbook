@@ -116,7 +116,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     action.mutate({ appointment, kind });
   }
   function actions(a: Appointment) {
-    if (a.status === "IN_PROGRESS") return <p className="text-sm text-green-800">{t("المريض عند الطبيب — انتظر انتهاء الكشف")}</p>;
+    if (a.status === "IN_PROGRESS") return <p className="text-sm text-green-800">{t("تم نداؤه — النداء وحده لا يؤكد دخول المريض")}</p>;
     const rules = appointmentActions(a, "ASSISTANT");
     const today = new Date(Date.now() + 3600000).toISOString().slice(0, 10);
     const openDialog = (mode: "call" | "final") => {
@@ -172,6 +172,23 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       }}>{sound ? <Bell /> : <BellOff />}{sound ? t("إيقاف الصوت") : t("تفعيل صوت النداء")}</Button>
     </div>
     {queues.isSuccess && !doctorQueues.length && <p className="card p-5">{t("لا يوجد أطباء مرتبطون بك حاليًا. تواصل مع مالك العيادة.")}</p>}
+    {!appointmentsView && doctorQueues.some(({ queue }) => queue.date.slice(0, 10) === today && queue.current) && <section aria-labelledby="active-calls-title" className="rounded-2xl border-2 border-primary-600 bg-white/90 p-3 shadow-sm">
+      <h2 id="active-calls-title" className="mb-3 flex items-center gap-2 text-lg font-bold text-primary-800"><Bell className="h-5 w-5 shrink-0" aria-hidden="true" />{t("نداءات الأطباء الحالية")}</h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {doctorQueues.filter(({ queue }) => queue.date.slice(0, 10) === today && queue.current).map(({ doctor, queue }) => {
+          const current = queue.current!;
+          return <article key={doctor.id} className="rounded-xl border border-primary-200 bg-primary-50 p-3">
+            <p className="text-sm font-bold text-primary-800">{doctorName(doctor)}</p>
+            <p className="mt-2 text-xs font-semibold text-slate-600">{t("ينادي على المريض")}</p>
+            <p className="mt-1 break-words text-xl font-extrabold text-slate-900">{patientName(current)}</p>
+            <p className="mt-2 text-sm font-semibold text-primary-800">{t("تم نداؤه")}</p>
+            {current.calledAt ? <p className="mt-1 text-xs text-slate-700">{t("وقت النداء")}: <bdi dir="ltr">{callTime(current.calledAt)}</bdi> · {callAge(current.calledAt, now)}</p> : <p className="mt-1 text-xs text-slate-700">{t("توقيت النداء غير متاح")}</p>}
+          </article>;
+        })}
+      </div>
+      <p className="mt-3 text-xs text-slate-700">{t("النداءات تظهر لكل الأطباء حتى عند تصفية الطابور. النداء وحده لا يؤكد دخول المريض.")}</p>
+      {queues.isError && <p role="alert" className="mt-2 text-sm font-bold text-amber-800">{t("انقطع التحديث — البيانات المعروضة قديمة")}</p>}
+    </section>}
     {!appointmentsView && <details className="card px-3 py-2 text-sm text-slate-700">
       <summary className="flex min-h-11 cursor-pointer flex-wrap items-center justify-between gap-2">
         <span>{t("المدخول اليومي ")}</span><strong className="text-lg text-slate-900">{income.isSuccess ? <><bdi dir="ltr" className="tabular-nums">{income.data.totalDzd.toLocaleString("en-US")}</bdi>{t(" دج")}</> : income.isError ? "—" : "…"}</strong>

@@ -149,6 +149,36 @@ describe("password guessing is limited per account, not only per IP", () => {
     expect(other.status).toBe(401);
   });
 
+  it.each([
+    ["/auth/login", () => h.login],
+    ["/patient/auth/login", () => h.loginPatient],
+  ])("%s lets a previously successful browser sign in during an external account lockout", async (path, svc) => {
+    const { ApiError } = await import("../src/utils/ApiError");
+    const email = `known-${path.length}@example.test`;
+    svc().mockResolvedValue({ user: { id: "u", role: "DOCTOR" }, accessToken: "a", refreshToken: "r" });
+    const first = await request(app).post(path).set("X-Forwarded-For", "192.0.2.80").send({ email, password: "correct" });
+    const cookie = (first.headers["set-cookie"] as unknown as string[]).find(c => c.startsWith("medbook_login_browser="))!.split(";")[0];
+    svc().mockRejectedValue(ApiError.unauthorized("bad"));
+    for (let i = 0; i < 10; i++) {
+      expect((await request(app).post(path).set("X-Forwarded-For", `198.51.100.${i + 1}`).send({ email, password: "wrong" })).status).toBe(401);
+    }
+    const attempt = (c?: string, e = email) => {
+      const r = request(app).post(path).set("X-Forwarded-For", "192.0.2.80");
+      if (c) r.set("Cookie", c);
+      return r.send({ email: e, password: "correct" });
+    };
+    expect((await attempt()).status).toBe(429);
+    expect((await attempt(cookie.slice(0, -1) + (cookie.endsWith("a") ? "b" : "a"))).status).toBe(429);
+    // The hint never replaces password verification.
+    expect((await attempt(cookie)).status).toBe(401);
+    svc().mockResolvedValue({ user: { id: "u", role: "DOCTOR" }, accessToken: "a", refreshToken: "r" });
+    expect((await attempt(cookie)).status).toBe(200);
+    svc().mockRejectedValue(ApiError.unauthorized("bad"));
+    // One failure above already consumed this browser's independent budget.
+    for (let i = 0; i < 9; i++) expect((await attempt(cookie)).status).toBe(401);
+    expect((await attempt(cookie)).status).toBe(429);
+  });
+
   it("successful logins behind one shared (CGNAT) IP do not exhaust the IP budget", async () => {
     h.login.mockResolvedValue({ user: { id: "u", role: "DOCTOR" }, accessToken: "a", refreshToken: "r" });
     for (let i = 0; i < 40; i++) {

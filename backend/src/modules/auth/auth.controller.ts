@@ -1,3 +1,4 @@
+import { rememberLoginBrowser } from "../../lib/loginBrowser";
 import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/asyncHandler";
 import * as authService from "./auth.service";
@@ -62,6 +63,7 @@ export const registerAssistant = asyncHandler(async (req: Request, res: Response
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
   const result = await authService.login(email, password);
+  rememberLoginBrowser(res, email);
   res.cookie(REFRESH_COOKIE, result.refreshToken, cookieOptions);
   res.json({ success: true, data: { user: sanitizeUser(result.user), accessToken: result.accessToken } });
 });

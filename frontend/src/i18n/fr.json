@@ -1224,7 +1224,7 @@
   "لا نتائج مطابقة للبحث": "Aucun résultat correspondant à la recherche",
   "لا توجد مواعيد مطابقة للفلاتر": "Aucun rendez-vous correspondant aux filtres",
   "جرّب مسح الفلاتر أو تغيير الفترة.": "Effacez les filtres ou modifiez la période.",
-  "طابور اليوم": "File d’attente du jour",
+  "طابور اليوم": "File du jour",
   "كل المواعيد": "Tous les rendez-vous",
   "أقسام المواعيد": "Rubriques des rendez-vous",
   "؟": "?",
@@ -2147,5 +2147,12 @@
   "إيقاف الفلاش": "Éteindre le flash",
   "تشغيل الفلاش": "Allumer le flash",
   "موعدي أنا": "Mon rendez-vous",
-  "فتح كاميرا المسح": "Ouvrir la caméra"
+  "فتح كاميرا المسح": "Ouvrir la caméra",
+  "لا يوجد مرضى في القائمة لهذا اليوم.": "Aucun patient dans la file pour cette journée.",
+  "تعذر تحميل المواعيد. أعد المحاولة.": "Impossible de charger les rendez-vous. Réessayez.",
+  "كود الحضور والحجز": "QR de présence et réservation",
+  "طباعة QR": "Imprimer le QR",
+  "تعذر تحميل الكود. أعد المحاولة.": "Impossible de charger le code. Réessayez.",
+  "يرجى إعادة طباعة الملصق بعد التحديث. كود الحجز العام لا يسجل الحضور.": "Veuillez réimprimer l’affiche après la mise à jour. Le code général de réservation n’enregistre pas la présence.",
+  "امسح الكود عند الوصول: إذا كان لديك موعد اليوم يُسجل حضورك لدى طبيبك، وإلا تظهر أطباء العيادة للحجز. المستخدم الجديد يسجل أولًا.": "Scannez à l’arrivée : votre présence est enregistrée si vous avez rendez-vous aujourd’hui. Sinon, les médecins de la clinique sont proposés pour réserver. Les nouveaux utilisateurs doivent d’abord s’inscrire."
 }

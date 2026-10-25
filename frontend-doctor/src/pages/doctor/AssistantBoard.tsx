@@ -157,24 +157,28 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       <div className="col-span-2 lg:col-span-1">{actions(a)}</div>
     </li>)}
   </ol>;
-  return <div className="space-y-5">
-    <ArrivalPoster />
+  return <div className="space-y-3">
     <NoShowSmsDialog target={dialog?.target ?? null} mode={dialog?.mode} onClose={() => setDialog(null)} />
     {doctorQueues.filter(row => row.queue.awaitingAssistant && !row.queue.current).map(row => <p key={row.doctor.id} role="status" className="rounded-xl bg-amber-50 p-3">{row.doctor.firstName} {row.doctor.lastName}: {t("في انتظار تأكيد المساعد")}</p>)}
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h1 className="text-2xl font-bold">{appointmentsView ? t("مواعيد الأطباء") : t("الطابور")}</h1><p className="mt-1 text-sm text-slate-600">{t("المواعيد والنداءات في قائمة واحدة، دون تكرار المريض.")}</p></div>
-      <Button variant="outline" onClick={() => {
+      <h1 className="text-xl font-bold">{appointmentsView ? t("مواعيد الأطباء") : t("طابور اليوم")}</h1>
+      {!appointmentsView && <WalkInPanel doctors={doctorQueues.map(row => row.doctor)} />}
+    </div>
+    <div className="flex flex-wrap items-start gap-2">
+      <ArrivalPoster />
+      <Button variant="outline" aria-pressed={sound} className="min-h-11 text-sm" onClick={() => {
         if (!sound) { try { audio.current ??= new AudioContext(); chime(audio.current); } catch { showToast(t("المتصفح لا يدعم التنبيه الصوتي."), "error"); return; } }
         setSound(value => !value);
       }}>{sound ? <Bell /> : <BellOff />}{sound ? t("إيقاف الصوت") : t("تفعيل صوت النداء")}</Button>
     </div>
     {queues.isSuccess && !doctorQueues.length && <p className="card p-5">{t("لا يوجد أطباء مرتبطون بك حاليًا. تواصل مع مالك العيادة.")}</p>}
-    {!appointmentsView && <section className="flex flex-wrap items-center justify-between gap-3" aria-label={t("المدخول اليومي وإضافة مريض")}>
-      <p className="card min-w-[14rem] flex-1 p-4 text-sm text-slate-700">{t("المدخول اليومي ")}<strong className="mt-1 block text-2xl text-slate-900">{income.isSuccess ? <><bdi dir="ltr" className="tabular-nums">{income.data.totalDzd.toLocaleString("en-US")}</bdi>{t(" دج")}</> : income.isError ? "—" : "…"}</strong>
-        <span className="text-xs text-slate-600">{income.isSuccess ? t("{0} كشف مكتمل اليوم", { "0": income.data.completedCount }) : income.isError ? t("تعذّر تحميل المدخول.") : t("جارٍ التحميل")}</span>
-      </p>
-      <WalkInPanel doctors={doctorQueues.map(row => row.doctor)} />
-    </section>}
+    {!appointmentsView && <details className="card px-3 py-2 text-sm text-slate-700">
+      <summary className="flex min-h-11 cursor-pointer flex-wrap items-center justify-between gap-2">
+        <span>{t("المدخول اليومي ")}</span><strong className="text-lg text-slate-900">{income.isSuccess ? <><bdi dir="ltr" className="tabular-nums">{income.data.totalDzd.toLocaleString("en-US")}</bdi>{t(" دج")}</> : income.isError ? "—" : "…"}</strong>
+      </summary>
+      <p className="pb-2 text-xs">{income.isSuccess ? t("{0} كشف مكتمل اليوم", { "0": income.data.completedCount }) : income.isError ? t("تعذّر تحميل المدخول.") : t("جارٍ التحميل")}</p>
+    </details>}
+    {!appointmentsView && doctorQueues.length > 1 && <label className="block text-sm font-semibold">{t("الطبيب")}<select className="input mt-1 min-h-11 w-full" value={filter.doctorId} onChange={e => setFilter(f => ({ ...f, doctorId: e.target.value }))}><option value="">{t("كل الأطباء")}</option>{doctorQueues.map(({ doctor }) => <option key={doctor.id} value={doctor.id}>{doctorName(doctor)}</option>)}</select></label>}
     {appointmentsView && <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label={t("أعداد النتائج بعد التصفية")}>
       {[[t("النتائج"), list.length], [t("وصل — ينتظر"), list.filter(a => a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE")).length], [t("تم نداؤه"), list.filter(canMarkUnanswered).length], [t("مكتمل"), completed.length]].map(([label, count]) => <p key={label} className="card p-3 text-sm text-slate-700">{t(label ?? "")}<strong className="mt-1 block text-xl text-slate-900">{count}</strong></p>)}
     </div>}
@@ -186,10 +190,9 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
       {(filter.doctorId || filter.status || filter.search) && <Button variant="ghost" onClick={() => setFilter({ doctorId: "", status: "", search: "" })}>{t("مسح المرشحات")}</Button>}
     </section>}
     <section aria-label={t("قائمة المواعيد الموحدة")} className="space-y-3">
-      <h2 className="text-lg font-bold">{appointmentsView ? t("المواعيد") : t("مواعيد اليوم والطابور")}</h2>
-      <p className="text-sm text-slate-700">{t("مرتبة وفق طابور كل طبيب. المريض الذي تم إدخاله يبقى عند الطبيب حتى انتهاء الكشف.")}</p>
+      {appointmentsView && <h2 className="text-lg font-bold">{t("المواعيد")}</h2>}
       {appointments.isPending ? <Spinner /> : <>
-        {!list.length ? <p className="card p-5">{t("لا توجد مواعيد تطابق المرشحات في هذا اليوم.")}</p> : <>
+        {appointments.isError ? <p role="alert" className="card p-4">{t("تعذر تحميل المواعيد. أعد المحاولة.")}</p> : !visible.length ? <p className="card p-5">{filter.doctorId || filter.status || filter.search ? t("لا توجد مواعيد تطابق المرشحات في هذا اليوم.") : t("لا يوجد مرضى في القائمة لهذا اليوم.")}</p> : <>
           {visible.length > 0 && rows(visible)}
         </>}
       </>}

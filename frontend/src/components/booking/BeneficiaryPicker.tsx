@@ -26,12 +26,12 @@ export function BeneficiaryPicker({ members, loading, error, onRetry, value, fam
   useLanguage();
   const option = (active: boolean) =>
     clsx(
-      "flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500",
+      "flex min-h-[44px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl border px-2 text-xs sm:text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500",
       active ? "border-primary-600 bg-primary-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-primary-400"
     );
 
   return (
-    <fieldset className="space-y-3">
+    <fieldset className="space-y-2">
       <legend className="label">{t("لمن هذا الموعد؟")}</legend>
       <div className="flex gap-2" role="radiogroup">
         <button type="button" role="radio" aria-checked={!familyMode} className={option(!familyMode)} onClick={() => onChange({ familyMode: false, memberId: null })}>

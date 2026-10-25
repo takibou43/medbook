@@ -291,6 +291,9 @@ async function createAutoAssignedAppointment(
       async (tx) => {
         await lockDoctorQueue(tx, doctorId);
         const slot = await scanForNextSlot(doctor, 60, tx);
+        if (input.expectedSlot && (input.expectedSlot.date !== slot.dateStr || input.expectedSlot.startTime !== slot.startTime)) {
+          throw ApiError.conflict("تغيّر الموعد المتاح. راجع الموعد الجديد قبل التأكيد.", { code: "SLOT_CHANGED" });
+        }
         const created = await createPatientAppointment(tx, {
           data: {
             patientId,

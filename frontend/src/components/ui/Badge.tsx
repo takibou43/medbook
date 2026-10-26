@@ -2,7 +2,7 @@ import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import { ReactNode } from "react";
 import clsx from "clsx";
-import { AppointmentStatus, VerificationStatus } from "../../types";
+import { AppointmentStatus } from "../../types";
 
 const APPT_LABELS: Record<AppointmentStatus, { label: string; className: string }> = {
   PENDING: { label: "بانتظار التأكيد", className: "bg-amber-100 text-amber-700" },
@@ -16,21 +16,9 @@ const APPT_LABELS: Record<AppointmentStatus, { label: string; className: string 
   LATE: { label: "تم تجاوز دورك مؤقتًا", className: "bg-orange-100 text-orange-700" },
 };
 
-const VERIFY_LABELS: Record<VerificationStatus, { label: string; className: string }> = {
-  PENDING: { label: "قيد المراجعة", className: "bg-amber-100 text-amber-700" },
-  VERIFIED: { label: "موثّق", className: "bg-green-100 text-green-700" },
-  REJECTED: { label: "مرفوض", className: "bg-red-100 text-red-700" },
-};
-
 export function AppointmentStatusBadge({ status }: { status: AppointmentStatus }) {
   useLanguage();
   const { label, className } = APPT_LABELS[status];
-  return <span className={clsx("badge", className)}>{t(label ?? "")}</span>;
-}
-
-export function VerificationBadge({ status }: { status: VerificationStatus }) {
-  useLanguage();
-  const { label, className } = VERIFY_LABELS[status];
   return <span className={clsx("badge", className)}>{t(label ?? "")}</span>;
 }
 

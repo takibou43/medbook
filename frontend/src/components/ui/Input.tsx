@@ -1,6 +1,6 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
-import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, forwardRef, ReactNode, useId } from "react";
+import { InputHTMLAttributes, forwardRef, ReactNode, useId } from "react";
 import clsx from "clsx";
 
 interface FieldWrapperProps {
@@ -53,30 +53,3 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, c
   );
 });
 Input.displayName = "Input";
-
-interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
-  label?: string;
-  error?: string;
-  children: ReactNode;
-}
-
-export const Select = forwardRef<HTMLSelectElement, SelectProps>(({ label, error, className, children, ...rest }, ref) => { useLanguage(); return (
-  <FieldWrapper label={t(label ?? "")} error={t(error ?? "")}>
-    <select ref={ref} className={clsx("input", error && "border-red-400", className)} {...rest}>
-      {children}
-    </select>
-  </FieldWrapper>
-); });
-Select.displayName = "Select";
-
-interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
-  label?: string;
-  error?: string;
-}
-
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(({ label, error, className, ...rest }, ref) => { useLanguage(); return (
-  <FieldWrapper label={t(label ?? "")} error={t(error ?? "")}>
-    <textarea dir="auto" ref={ref} className={clsx("input min-h-[100px] resize-y", error && "border-red-400", className)} {...rest} />
-  </FieldWrapper>
-); });
-Textarea.displayName = "Textarea";

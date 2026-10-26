@@ -81,7 +81,3 @@ export async function disablePatientPush(): Promise<void> {
   await api.delete("/patient/notifications/subscribe", { data: { endpoint: sub.endpoint } }).catch(() => undefined);
   await sub.unsubscribe().catch(() => undefined);
 }
-
-export async function sendTestPush(): Promise<void> {
-  await api.post("/patient/notifications/test");
-}

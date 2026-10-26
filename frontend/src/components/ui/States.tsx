@@ -1,6 +1,6 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
-import { Loader2, Inbox, AlertTriangle } from "lucide-react";
+import { Loader2, Inbox } from "lucide-react";
 
 export function Spinner({ label = t("جارٍ التحميل...") }: { label?: string }) {
   useLanguage();
@@ -19,17 +19,6 @@ export function EmptyState({ title, description }: { title: string; description?
       <Inbox className="h-10 w-10 text-slate-400" aria-hidden="true" />
       <p className="font-semibold text-slate-700">{t(title ?? "")}</p>
       {description && <p className="max-w-sm text-sm leading-relaxed text-slate-600">{t(description ?? "")}</p>}
-    </div>
-  );
-}
-
-export function ErrorState({ message }: { message: string }) {
-  useLanguage();
-  return (
-    <div role="alert" className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-12 text-center">
-      <AlertTriangle className="h-10 w-10 text-red-500" aria-hidden="true" />
-      <p className="font-semibold text-red-700">{t("حدث خطأ")}</p>
-      <p className="max-w-sm text-sm text-red-600">{t(message ?? "")}</p>
     </div>
   );
 }

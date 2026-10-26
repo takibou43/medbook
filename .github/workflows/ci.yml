@@ -63,8 +63,10 @@ jobs:
           done
           echo "PostgreSQL لم يصبح جاهزًا خلال 60 ثانية" >&2
           exit 1
-      - name: Prepare test database (db push + SQL guards)
-        run: bash scripts/ci-prepare-test-db.sh
+      - name: Replay candidate migrations from an empty database
+        run: |
+          node --test scripts/check-migration-url.mjs
+          node scripts/ci-prepare-migration-db.mjs
       - name: Run all backend tests (unit + integration)
         run: npx vitest run --reporter=default --reporter=json --outputFile.json=vitest-report.json
       - name: Report failing tests as annotations
@@ -97,7 +99,7 @@ jobs:
           DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_load_test?schema=public
         run: |
           psql -h 127.0.0.1 -U medbook_ci -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE medbook_load_test'
-          bash scripts/ci-prepare-test-db.sh
+          node scripts/ci-prepare-migration-db.mjs
       - name: Verify actual concurrent booking and admission workload
         env:
           TEST_DATABASE_URL: postgresql://medbook_ci:medbook_ci_only@127.0.0.1:5432/medbook_load_test?schema=public

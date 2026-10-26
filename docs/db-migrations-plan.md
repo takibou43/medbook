@@ -13,12 +13,30 @@
 5. **قبل فتح PR يمس المخطط:** `git fetch origin main` ودمجه في الفرع؛ وأي جلسة تجد PR مفتوحًا لنفس الميزة تتوقف وتسأل بدل أن تبني نسخة موازية.
 6. **لا `--accept-data-loss` في الإنتاج أبدًا.**
 
-## خطة استبدال `prisma db push` بـ `prisma migrate deploy` (للتنفيذ لاحقًا بموافقة)
-حاليًا `start = prisma db push && node dist/index.js`. المشكلة: يعدّل الإنتاج ضمنيًا عند كل إقلاع ويفاجئنا بتحذيرات فقدان البيانات.
-1. توليد ترحيل أساسي من الحالة الفعلية: `prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/migrations/00000000000000_baseline/migration.sql`.
-2. تحقق من أن الأساس مطابق للإنتاج: `prisma migrate diff --from-url "$PROD_URL" --to-schema-datamodel prisma/schema.prisma` يجب أن يكون فارغًا (يُنفَّذ على فرع Neon النسخة لا على الإنتاج).
-3. على الإنتاج مرة واحدة: `prisma migrate resolve --applied 00000000000000_baseline` (يكتب جدول `_prisma_migrations` فقط).
-4. تحويل ملفات SQL اليدوية الحالية إلى ترحيلات Prisma مرتبة بعد الأساس (كلها idempotent، فتطبيقها على الإنتاج آمن).
-5. تغيير أمر التشغيل في Render إلى `npx prisma migrate deploy --schema ../prisma/schema.prisma && node dist/index.js`.
-6. في CI: خطوة `prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url $SHADOW --exit-code` تفشل إن تغيّر المخطط بلا ترحيل — هذا هو الحارس الدائم ضد تعارض الجلسات.
-7. التراجع عن الخطوة 5 فوري (إعادة أمر التشغيل القديم) ولا يمس البيانات.
+## المرحلة الحالية: إثبات مستقل قبل تغيير الإنتاج
+
+أُضيف مرشح مستقل في `prisma/migration-candidate`، مع فحص CI يبني قاعدة فارغة
+بـ `migrate deploy` مرتين ويتحقق من سجل الترحيلات وتطابق المخطط والحراسات، ثم
+يشغّل اختبارات التكامل والحمل الحالية. لا يغيّر هذا المسار سجل الإنتاج ولا أوامر إقلاعه.
+التفاصيل ومعايير الانتقال في `prisma/migration-candidate/README.md`.
+
+### تصحيح الخطة السابقة
+
+- لا يجوز إنشاء baseline من المخطط الحالي ثم إعادة تشغيل جميع الترحيلات القديمة بعده:
+  ليست كل الملفات قابلة لإعادة التطبيق، وبعضها يحوّل البيانات (مثل تفعيل اشتراك كل طبيب).
+- التوليد من `schema.prisma` لا يغطي وحده triggers وقيود CHECK؛ المرشح يضيف تعريفاتها
+  النهائية دون إعادة تطبيق backfills التاريخية.
+- `migrate resolve --applied` يكتب في سجل الترحيلات؛ لا يُنفّذ قبل مطابقة المخطط والحراسات
+  وسجل الإنتاج وتجربة الانتقال على بيانات اصطناعية محفوظة.
+- `migrate diff --from-migrations` يستخدم قاعدة shadow قابلة للكتابة، وليس فحص قراءة فقط.
+  فحص CI الحالي يقارن القاعدة المؤقتة المبنية مباشرة بالمخطط دون shadow.
+- الرجوع إلى أمر `db push` القديم ليس تراجعًا آمنًا مضمونًا؛ قد يغيّر المخطط أو يمنع الإقلاع.
+- لا نفترض أن إنشاء فروع Neon إضافية مجاني أو مطلوب؛ اختبار المرشح يستخدم PostgreSQL
+  المؤقت في CI فقط. استراتيجية النسخ الاحتياطي للإنتاج تُتحقق ضمن الخطة القائمة قبل الانتقال.
+
+### إزالة db push لاحقًا
+
+بعد نجاح CI على PostgreSQL 16 وتجربة انتقال البيانات القائمة، تُقرأ إعدادات Render الفعلية
+ويُعد تغيير مستقل يشمل `backend/package.json` و`backend/docker-entrypoint.sh`، مع
+خطوة ترحيل مضبوطة وتوقف عند الخطأ، دون fallback إلى db push ودون `--accept-data-loss`.
+النشر يقوم به المستخدم بعد اكتمال التحقق، ولا يكفي نجاح بناء قاعدة فارغة وحده لاعتماده.

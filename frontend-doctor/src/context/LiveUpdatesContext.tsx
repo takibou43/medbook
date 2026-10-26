@@ -1,8 +1,9 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./AuthContext";
-import { api } from "../lib/api";
+import { api, API_URL } from "../lib/api";
 import { LIVE_QUERY_ROOTS } from "../lib/livePolling";
+import { shareLiveConnection, type LiveSignal } from "../lib/sharedLiveConnection";
 
 const LiveUpdatesContext = createContext(false);
 export function useLiveUpdates() { return useContext(LiveUpdatesContext); }
@@ -21,6 +22,9 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
     let retry: number | undefined;
     let revision: string | undefined;
     let refreshing: number | undefined;
+    let stopShared: (() => void) | undefined;
+    let owner = false;
+    let publish: (signal: LiveSignal) => void = () => {};
     const invalidate = () => {
       if (refreshing !== undefined) return;
       refreshing = window.setTimeout(() => {
@@ -29,7 +33,7 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
       }, 150);
     };
     const poll = async () => {
-      if (stopped || document.hidden || !navigator.onLine) return;
+      if (stopped || !owner || document.hidden || !navigator.onLine) return;
       const request = new AbortController();
       controller = request;
       try {
@@ -41,29 +45,55 @@ export function LiveUpdatesProvider({ children }: { children: ReactNode }) {
         if (stopped || request.signal.aborted) return;
         const next = res.data.data.revision;
         if (typeof next !== "string" || !next) throw new Error("Invalid live response");
-        if (revision !== next) invalidate(); // reconnect refreshes missed events too
-        revision = next;
-        setConnected(true);
+        publish({ connected: true, revision: next });
         retry = window.setTimeout(() => { void poll(); }, 100);
       } catch {
         if (stopped || request.signal.aborted) return;
-        setConnected(false); // restore original fast polling on failure
+        publish({ connected: false }); // restore original fast polling on failure
         retry = window.setTimeout(() => { void poll(); }, 10_000);
       }
     };
     const restart = () => {
+      stopShared?.();
+      stopShared = undefined;
       controller?.abort();
       window.clearTimeout(retry);
       setConnected(false);
       revision = undefined;
-      if (!document.hidden && navigator.onLine) void poll();
+      if (document.hidden || !navigator.onLine) return;
+      const key = JSON.stringify(["medbook-live-v1", API_URL, user.id, user.role]);
+      let channel: BroadcastChannel | undefined;
+      try { if (typeof BroadcastChannel !== "undefined") channel = new BroadcastChannel(key); } catch { /* independent polling */ }
+      stopShared = shareLiveConnection({
+        key, channel, locks: navigator.locks,
+        receive: signal => {
+          if (stopped) return;
+          if (signal.connected && signal.revision && revision !== signal.revision) {
+            revision = signal.revision;
+            invalidate();
+          }
+          setConnected(signal.connected);
+        },
+        start: send => {
+          owner = true;
+          revision = undefined;
+          publish = send;
+          void poll();
+          return () => {
+            owner = false;
+            controller?.abort();
+            window.clearTimeout(retry);
+          };
+        },
+      });
     };
-    void poll();
+    restart();
     document.addEventListener("visibilitychange", restart);
     window.addEventListener("online", restart);
     window.addEventListener("offline", restart);
     return () => {
       stopped = true;
+      stopShared?.();
       controller?.abort();
       window.clearTimeout(retry);
       window.clearTimeout(refreshing);

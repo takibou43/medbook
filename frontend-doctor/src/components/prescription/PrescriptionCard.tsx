@@ -22,7 +22,7 @@ import { useToast } from "../ui/Toast";
 import { MedicationList } from "./MedicationFields";
 
 
-const DISCARD_MSG = (name: string) => t("لديك وصفة غير مطبوعة لـ «{name}» لم تُحفظ. ستُحذف هذه المسودة نهائيًا. هل تريد المتابعة؟", { name });
+const DISCARD_MSG = (name: string) => t("لديك وصفة لـ «{name}» ستُستبدل بالوصفة الجديدة. هل تريد المتابعة؟", { name });
 
 /**
  * «كتابة وصفة» في الرئيسية (مكان «جدول اليوم» سابقًا).
@@ -132,7 +132,7 @@ export function PrescriptionCard({
   function removeMed(id: string) {
     if (!draft) return;
     const rest = draft.medications.filter((m) => m.id !== id);
-    patch({ medications: rest.length ? rest : [newMedication("freeText")] });
+    patch({ medications: rest.length ? rest : [newMedication("structured")] });
   }
 
   function openPreview() {
@@ -333,7 +333,7 @@ export function PrescriptionCard({
               onUpdate={(id, p) => draft && patch({ medications: draft.medications.map((m) => (m.id === id ? { ...m, ...p } : m)) })}
               onRemove={removeMed}
               onRestore={(med, index) => draft && patch({ medications: restoreMedication(draft.medications, med, index) })}
-              onAdd={() => patch({ medications: [...draft.medications, newMedication("freeText")] })}
+              onAdd={() => patch({ medications: [...draft.medications, newMedication("structured")] })}
             />
           </fieldset>
 

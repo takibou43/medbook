@@ -124,21 +124,21 @@ export function prescriptionPatientFrom(a: Appointment): PrescriptionPatient {
 }
 
 export function emptyDraft(ownerUserId: string, patient: PrescriptionPatient, source: "current" | "manual" = "manual"): PrescriptionDraft {
-  return { ownerUserId, patient, patientName: patient.bookedName, patientAge: "", patientAgeUnit: "years", medications: [newMedication("freeText")], notes: "", source };
+  // تبدأ الوصفة بحقوق جرعة واضحة ومنفصلة؛ لا نملأ أي جرعة أو تكرار تلقائيًا.
+  return { ownerUserId, patient, patientName: patient.bookedName, patientAge: "", patientAgeUnit: "years", medications: [newMedication("structured")], notes: "", source };
 }
 
 /**
- * هل نُعيد ربط المسودة تلقائيًا بالمريض الحالي الجديد؟ فقط إن كانت مرتبطة تلقائيًا بالاستشارة السابقة
- * وفارغة. أي محتوى مكتوب لا ينتقل أبدًا إلى مريض آخر، واختيار الطبيب اليدوي لا يُلغى تلقائيًا.
+ * هل نُعيد ربط المسودة تلقائيًا بالمريض الحالي الجديد؟ بعد طباعة مسودة الاستشارة أو إذا كانت فارغة.
+ * المسودة المكتوبة غير المطبوعة والاختيار اليدوي لا يُلغيان تلقائيًا.
  */
 export function shouldAutoRebind(d: PrescriptionDraft | null, currentAppointmentId: string | null): boolean {
   if (!currentAppointmentId) return false;
   if (!d) return true;
   if (d.patient.appointmentId === currentAppointmentId) return false;
-  // وصفة طُبعت/حُفظت ولم تُعدَّل بعدها: انتهى عملها، فينتقل الطبيب مباشرة إلى وصفة فارغة باسم المريض الجديد.
-  // (لا يُنقل أي دواء أو ملاحظة من المريض السابق — الوصفة الجديدة فارغة.)
-  if (d.printedAt) return true;
-  return d.source === "current" && !draftHasContent(d);
+  // بعد طباعة وصفة الاستشارة، يُسمح بإنشاء مسودة فارغة للمريض الحالي الجديد.
+  // أما المسودة المكتوبة غير المطبوعة فلا تنتقل تلقائيًا حتى لا تُفقد بياناتها.
+  return d.source === "current" && (Boolean(d.printedAt) || !draftHasContent(d));
 }
 
 export const filled = (m: PrescriptionMedication) => [m.name, m.quantity, m.dose, m.frequency, m.duration, m.instructions, m.strength, m.form, m.doseQty, m.doseUnit, m.doseCustom, m.freqKey, m.freqCustom, m.timingKey, m.durQty, m.durUnit, m.durCustom].some((v) => (v ?? "").trim() !== "");

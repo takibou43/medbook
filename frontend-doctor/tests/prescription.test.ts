@@ -149,16 +149,16 @@ test('patient age is optional, validated, retained with the draft, and never aut
   clearPrescriptionDraft();
 });
 
-test("بعد طباعة الوصفة وانتقال الطبيب للمريض التالي: وصفة فارغة جديدة باسم المريض الجديد", () => {
+test("إنهاء الكشف يفرغ مسودة الزيارة، ثم يسمح بربط اسم المريض التالي", () => {
   const written = { ...emptyDraft("u1", prescriptionPatientFrom(familyAppt), "current"), medications: [{ ...newMedication(), name: "دواء" }] };
   // مكتوبة وغير مطبوعة: لا تُستبدل تلقائيًا (حماية عمل لم يُطبع)
   assert.equal(shouldAutoRebind(written, "a-self"), false);
-  // مطبوعة: تنتقل إلى المريض الجديد
+  // بعد إنهاء الكشف تُمسح المسودة الحالية؛ وعند ظهور مريض جديد يمكن إنشاء وصفة باسمه.
   const printed = { ...written, printedAt: "2026-10-23T10:00:00.000Z" };
   assert.equal(shouldAutoRebind(printed, "a-self"), true);
-  // حتى لو كانت مختارة يدويًا لموعد آخر ثم طُبعت
-  assert.equal(shouldAutoRebind({ ...printed, source: "manual" as const }, "a-self"), true);
-  // نفس الزيارة أو لا مريض حالي: لا تغيير
+  // الوصفة اليدوية لموعد آخر لا تُستبدل تلقائيًا.
+  assert.equal(shouldAutoRebind({ ...printed, source: "manual" as const }, "a-self"), false);
+  // نفس الزيارة أو لا مريض حالي: لا إعادة ربط
   assert.equal(shouldAutoRebind(printed, "a-fam"), false);
   assert.equal(shouldAutoRebind(printed, null), false);
   // الوصفة الجديدة فارغة تمامًا: لا ينتقل أي دواء من المريض السابق

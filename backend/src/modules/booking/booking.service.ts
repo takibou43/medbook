@@ -20,7 +20,7 @@ import {
 const QUEUE_TURN_MAX_WAIT_MS = 30_000;
 import { GuestBookingInput, GuestSlotsQuery, AvailabilityQuery } from "./booking.schema";
 import { estimateSessionMinutes } from "../appointments/appointments.service";
-import { locateInQueue, DAY_QUEUE_STATUSES } from "../../lib/doctorQueue";
+import { estimateMinutesUntilTurn, locateInQueue, DAY_QUEUE_STATUSES } from "../../lib/doctorQueue";
 import { withNearTurnFlags } from "../../lib/queueNotified";
 import { getDoctorAvailability as getDoctorDaySlots } from "../doctors/doctors.service";
 
@@ -644,6 +644,8 @@ export async function cancelGuestAppointment(id: string, phone: string) {
 const STATUS_PAST_GRACE_MS = 24 * 60 * 60 * 1000;
 
 export async function getAppointmentQueueStatus(appointmentId: string) {
+  // لقطة زمنية واحدة من خادم التطبيق لكل حقول الحالة والتقدير في الاستجابة.
+  const now = new Date();
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
     include: { doctor: { include: { specialty: true, clinic: true, city: true, wilaya: true } } },
@@ -669,8 +671,8 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
     deferredCount: appointment.deferredCount,
     skipCredits: appointment.skipCredits,
     priceDzd: await patientPriceFor(appointment.id, doctor.id),
-    updatedAt: new Date().toISOString(),
-    doctorOnDuty: Boolean(doctor.dutyEndsAt && doctor.dutyEndsAt.getTime() > Date.now()),
+    updatedAt: now.toISOString(),
+    doctorOnDuty: Boolean(doctor.dutyEndsAt && doctor.dutyEndsAt.getTime() > now.getTime()),
     doctor: {
       firstName: doctor.firstName,
       lastName: doctor.lastName,
@@ -711,18 +713,22 @@ export async function getAppointmentQueueStatus(appointmentId: string) {
   // من يسبقك فعليًا: المريض الجالس بالداخل الآن + من يسبقك في ترتيب المناداة المتوقع، محسوبًا بنفس
   // قواعد الطابور التي يستعملها الطبيب (lib/queueOrder.ts) — ومنها تراجع المتأخر 2 ثم 4 مراكز.
   // (التعريف المشترك في lib/doctorQueue.ts — يستعمله أيضًا تذكير الـ5 دقائق وتنبيه «دورك اقترب».)
-  const { aheadOfYou } = locateInQueue(dayQueue, appointment.id);
+  const position = locateInQueue(dayQueue, appointment.id);
+  const { aheadOfYou } = position;
 
-  // المدة الذكية: متوسط مدة آخر جلسات هذا الطبيب الفعلية (calledAt إلى endedAt)، وليس
-  // الوقت المجدول للموعد — فتقدير الانتظار يعكس سير العيادة الحقيقي.
+  // المدة الذكية: متوسط مدة آخر جلسات هذا الطبيب الفعلية من إدخال المريض حتى نهاية الكشف.
+  // calledAt يسجله الخادم لحظة الانتقال إلى IN_PROGRESS (وعند المساعد: بعد ضغط «إدخال المريض»)،
+  // لذلك لا يدخل وقت الانتظار بين النداء والدخول في مدة الكشف.
   const sessionMinutes = await estimateSessionMinutes(doctor.id);
+  // إذا كان هناك مريض عند الطبيب، نطرح ما انقضى منذ دخوله بدل احتساب جلسة كاملة من جديد.
+  const estimatedWaitMinutes = estimateMinutesUntilTurn(position, sessionMinutes, now);
 
   return {
     ...base,
     isToday: true,
     aheadOfYou,
     position: aheadOfYou + 1,
-    estimatedWaitMinutes: aheadOfYou * sessionMinutes,
+    estimatedWaitMinutes,
     someoneInside,
   };
 }

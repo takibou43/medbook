@@ -3,20 +3,26 @@ import assert from "node:assert/strict";
 import { emptyDraft, validateDraft, filled, newMedication, type PrescriptionPatient } from "../src/lib/prescription.ts";
 import { readMedicationNames, rememberMedicationName } from "../src/lib/medicationNames.ts";
 
-test("compact entry validates free instructions and preserves quantity independently of dosage", () => {
+test("new medication entry starts with explicit dose fields and no assumed values", () => {
   const draft = emptyDraft("doctor", { bookedName: "TEST PATIENT" } as PrescriptionPatient);
   const row = draft.medications[0];
-  assert.equal(row.directionsMode, "freeText");
-  row.quantity = "1 boîte";
-  assert.equal(filled(row), true);
+  assert.equal(row.directionsMode, "structured");
+  assert.equal(row.dose, "");
+  assert.equal(row.frequency, "");
+  assert.equal(row.duration, "");
   assert.equal(validateDraft(draft).ok, false);
   row.name = "TEST MEDICINE";
-  row.instructions = "TEST DIRECTIONS";
+  row.doseQty = "1";
+  row.doseUnit = "tablet";
+  row.freqKey = "twice";
+  row.durQty = "5";
+  row.durUnit = "day";
+  assert.equal(filled(row), true);
   const result = validateDraft(draft);
   assert.equal(result.ok, true);
-  assert.equal(result.printable[0].quantity, "1 boîte");
-  assert.equal(result.printable[0].instructions, "TEST DIRECTIONS");
-  assert.equal(result.printable[0].dose, "");
+  assert.equal(result.printable[0].doseQty, "1");
+  assert.equal(result.printable[0].freqKey, "twice");
+  assert.equal(result.printable[0].durQty, "5");
   assert.equal(validateDraft({ ...draft, medications: [...draft.medications, newMedication("freeText")] }).printable.length, 1);
 });
 

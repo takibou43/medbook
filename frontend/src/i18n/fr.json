@@ -1695,7 +1695,7 @@
   "الحساسية والمناعة السريرية": "Allergologie et immunologie clinique",
   "الوراثة الطبية": "Génétique médicale",
   "طب الشيخوخة": "Gériatrie",
-  "لديك وصفة غير مطبوعة لـ «{name}» لم تُحفظ. ستُحذف هذه المسودة نهائيًا. هل تريد المتابعة؟": "Vous avez une ordonnance non imprimée et non enregistrée pour « {name} ». Ce brouillon sera définitivement supprimé. Continuer ?",
+  "لديك وصفة لـ «{name}» ستُستبدل بالوصفة الجديدة. هل تريد المتابعة؟": "Une ordonnance pour « {name} » sera remplacée par la nouvelle. Continuer ?",
   "كتابة وصفة": "Rédiger une ordonnance",
   "الوصفة لا تُحفظ في النظام": "L’ordonnance n’est pas enregistrée dans le système",
   "مسودة غير محفوظة": "Brouillon non enregistré",
@@ -2171,5 +2171,16 @@
   "عند الطبيب": "Chez le médecin",
   "تم إرسال الطلب إلى المساعد. يبدأ الكشف بعد تأكيد إدخال المريض.": "La demande a été envoyée à l’assistant. La consultation commence après confirmation de l’entrée du patient.",
   "بانتظار إدخال المريض": "En attente de l’entrée du patient",
-  "طلب الإدخال ظاهر لدى المساعد؛ لا حاجة إلى إعادة النداء.": "La demande est visible chez l’assistant ; inutile de renouveler l’appel."
+  "طلب الإدخال ظاهر لدى المساعد؛ لا حاجة إلى إعادة النداء.": "La demande est visible chez l’assistant ; inutile de renouveler l’appel.",
+  "أدخل اسم الدواء والجرعة وعدد المرات ومدة العلاج. الطبيب يحدد القيم يدويًا، ولا تُضاف جرعات تلقائيًا.": "Saisissez le médicament, la dose, la fréquence et la durée. Le médecin choisit chaque valeur ; aucune dose n’est proposée automatiquement.",
+  "خيارات إضافية": "Options supplémentaires",
+  "إخفاء الخيارات الإضافية": "Masquer les options supplémentaires",
+  "كتابة طريقة الاستعمال كنص كامل": "Saisir les instructions complètes en texte libre",
+  "اختيار وقت سريع": "Choisir rapidement le moment",
+  "صباحًا": "Le matin",
+  "ظهرًا": "À midi",
+  "مساءً": "Le soir",
+  "طريقة الاستعمال الكاملة": "Instructions complètes d’utilisation",
+  "إدخال الجرعة في خانات منفصلة": "Saisir la dose dans des champs séparés",
+  "مثال: 2 علب": "Ex. : 2 boîtes"
 }

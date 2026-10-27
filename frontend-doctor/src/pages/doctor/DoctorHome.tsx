@@ -25,7 +25,7 @@ import { canScheduleFollowUp, isDentalSpecialty, usesStandaloneFollowUp } from "
 import { beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import { PrescriptionCard } from "../../components/prescription/PrescriptionCard";
 import { awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft } from "../../lib/doctorWorkflow";
-import { getStoredDraft } from "../../lib/prescription";
+import { clearPrescriptionDraft, getStoredDraft } from "../../lib/prescription";
 import type { Appointment } from "../../types";
 
 // تاريخ اليوم بتوقيت الجزائر (UTC+1) بصيغة YYYY-MM-DD — نفس منطق بقية اللوحة.
@@ -82,6 +82,8 @@ export default function DoctorHome() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [queueSearch, setQueueSearch] = useState("");
   const [statsOpen, setStatsOpen] = useState(false);
+  const [finishedCurrentId, setFinishedCurrentId] = useState<string | null>(null);
+  const [prescriptionResetKey, setPrescriptionResetKey] = useState(0);
   const prescriptionRef = useRef<HTMLDivElement>(null);
   // إعادة التركيز إلى زر الصف بعد إغلاق القائمة أو نافذة التأكيد أو انتهاء الإجراء.
   const triggerEls = useRef(new Map<string, HTMLElement>());
@@ -110,6 +112,8 @@ export default function DoctorHome() {
   const turns = useMemo(() => visibleTurnNumbers(todays), [todays, getLanguage()]);
 
   const current = queue.data?.current ?? null;
+  // أبقِ الوصفة فارغة بعد الإنهاء حتى لو تأخر تحديث الطابور وأعاد المريض المكتمل مؤقتًا.
+  const prescriptionCurrent = current?.id === finishedCurrentId ? null : current;
   // الطابور كاملًا بترتيب المناداة الفعلي من الخادم (لا نقتطع منه شيئًا).
   const nextList = queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])];
   const awaitingAssistant = awaitingAssistantAdmission(queue.data, stats.data?.hasActiveAssistant);
@@ -123,7 +127,16 @@ export default function DoctorHome() {
       prescriptionRef.current?.focus();
       return;
     }
-    void run(async () => { await finish.mutateAsync(current.id); refreshAll(); }, t("اكتمل الكشف."), "current-card");
+    void run(async () => {
+      const completedId = current.id;
+      await finish.mutateAsync(completedId);
+      const prescription = getStoredDraft(user?.id);
+      const belongsToCompletedVisit = prescription?.patient.appointmentId === completedId;
+      if (belongsToCompletedVisit) clearPrescriptionDraft();
+      setFinishedCurrentId(completedId);
+      if (belongsToCompletedVisit) setPrescriptionResetKey(key => key + 1);
+      refreshAll();
+    }, t("اكتمل الكشف."), "current-card");
   }
 
   function refreshAll() {
@@ -308,7 +321,7 @@ export default function DoctorHome() {
 
         <div ref={prescriptionRef} tabIndex={-1} className="space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-primary-300 lg:col-span-2 lg:row-start-2">
           {/* 6) كتابة وصفة — دون تغيير. مكان «جدول اليوم» سابقًا (دُمج الجدول في صفحة «المواعيد»). */}
-          <PrescriptionCard current={current} appointments={todays} loading={appointments.isPending} error={appointments.isError} />
+          <PrescriptionCard key={prescriptionResetKey} current={prescriptionCurrent} appointments={todays} loading={appointments.isPending} error={appointments.isError} />
           <div className="flex justify-end">
               <Button
                 className="w-full sm:w-auto" variant="outline"

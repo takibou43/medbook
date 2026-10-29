@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft } from "../src/lib/doctorWorkflow.ts";
+import { awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft, nextPresentPatient } from "../src/lib/doctorWorkflow.ts";
 import { emptyDraft, prescriptionPatientFrom } from "../src/lib/prescription.ts";
 import type { Appointment } from "../src/types/index.ts";
 
@@ -41,4 +41,17 @@ test("admission stays pending only while an assistant may still handle it", () =
   assert.equal(awaitingAssistantAdmission({ ...requested, current: first }, true), false);
   assert.equal(awaitingAssistantAdmission({ ...requested, awaitingAssistant: false }, true), false);
   assert.equal(awaitingAssistantAdmission(undefined, true), false);
+});
+
+test("next call skips unarrived patients and preserves server priority after QR or assistant arrival", () => {
+  const absent = { ...first, status: "CONFIRMED", arrivedAt: null } as Appointment;
+  const present = { ...second, status: "LATE", arrivedAt: "2026-10-29T09:00:00Z" } as Appointment;
+  const later = { ...present, id: "c", status: "CONFIRMED" } as Appointment;
+  assert.equal(nextPresentPatient([]), undefined);
+  assert.equal(nextPresentPatient([absent]), undefined);
+  assert.equal(nextPresentPatient([absent, present, later]), present);
+  const arrived = { ...absent, arrivedAt: "2026-10-29T09:01:00Z" };
+  assert.equal(nextPresentPatient([arrived, present]), arrived);
+  assert.equal(nextPresentPatient([{ ...arrived, status: "COMPLETED" }, present]), present);
+  assert.equal(nextPresentPatient([{ ...arrived, status: "CANCELLED" }]), undefined);
 });

@@ -1,4 +1,8 @@
 {
+  "يُستدعى أول مريض حاضر حسب ترتيب الطابور.": "Le premier patient présent est appelé selon l’ordre de la file.",
+  "بانتظار تسجيل حضور المرضى": "En attente de l’enregistrement de l’arrivée des patients",
+  "لم يصل بعد": "Pas encore arrivé",
+  "حاضر — جاهز للنداء": "Présent — prêt à être appelé",
   "دورك اقترب": "Votre tour approche",
   "موعدك مع الطبيب بعد 5 دقائق": "Votre rendez-vous commence dans 5 minutes",
   "تأكيد إلغاء الموعد": "Confirmer l’annulation du rendez-vous",

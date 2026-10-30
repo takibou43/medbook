@@ -23,3 +23,8 @@ export function hasUnprintedVisitDraft(draft: PrescriptionDraft | null, appointm
 export function awaitingAssistantAdmission(queue: { awaitingAssistant?: boolean; current: Appointment | null } | undefined, hasActiveAssistant: boolean | undefined): boolean {
   return Boolean(queue?.awaitingAssistant && !queue.current && hasActiveAssistant !== false);
 }
+
+/** Select from server order without allowing an unarrived or finished visit to be called. */
+export function nextPresentPatient(queue: Appointment[]): Appointment | undefined {
+  return queue.find(a => Boolean(a.arrivedAt) && (a.status === "CONFIRMED" || a.status === "LATE"));
+}

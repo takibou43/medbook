@@ -1,3 +1,4 @@
+import { nextPresentPatient } from "../../lib/doctorWorkflow";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import { canSendAttendanceMessage } from "../../lib/assistantReception";
@@ -192,6 +193,7 @@ export default function DoctorQueue() {
   // مع خادم قديم بلا هذا الحقل نعود للعرض السابق: المنتظرون ثم قائمة المتأخرين منفصلة.
   const ordered = data?.ordered;
   const queueList: Appointment[] = ordered ?? waiting;
+  const nextPresent = nextPresentPatient(ordered ?? [...waiting, ...late]);
 
   return (
     <div className="space-y-5">
@@ -326,10 +328,14 @@ export default function DoctorQueue() {
           <Button
             className="mt-3 w-full"
             loading={callNext.isPending}
-            disabled={busy || (waiting.length === 0 && late.length === 0)}
+            disabled={busy || !nextPresent}
+            aria-describedby="queue-call-next-hint"
             onClick={() => run(callNext.mutateAsync(), t("تمت مناداة المريض التالي."), t("تعذّرت مناداة المريض التالي."))}
           >
             <PhoneCall className="me-1.5 h-4 w-4" />{t(" نادِ المريض التالي ")}</Button>
+          <p id="queue-call-next-hint" className="mt-2 text-sm text-slate-600">
+            {t(!nextPresent ? "بانتظار تسجيل حضور المرضى" : "يُستدعى أول مريض حاضر حسب ترتيب الطابور.")}
+          </p>
         </Card>
       )}
 
@@ -372,7 +378,7 @@ export default function DoctorQueue() {
                       )}
                     </p>
                     <p className={"text-xs " + (isLate ? "text-amber-700" : "text-slate-500")}>
-                      {a.startTime}
+                      {a.startTime} · {t(a.arrivedAt ? "حاضر — جاهز للنداء" : "لم يصل بعد")}
                       {isLate && t(" · الأولوية حسب وقت الموعد عند الحضور")}
                       {isLate && a.deferredCount ? t(" · تأخّر ") + a.deferredCount + t(" مرة") : ""}
                     </p>

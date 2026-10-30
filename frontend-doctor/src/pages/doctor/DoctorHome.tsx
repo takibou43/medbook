@@ -18,13 +18,13 @@ import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpMo
 import { GuestBookingModal } from "../../components/GuestBooking";
 import { TONE_CLASS, quickActions, subscriptionCountdown, type BadgeTone, type SubscriptionSummary } from "../../lib/doctorHeader";
 import { ShiftControl } from "../../components/ShiftControl";
-import { useCallNext, useFinishAppointment, useQueue } from "../../hooks/useQueue";
+import { useCallNext, useFinishAppointment, useMarkArrived, useQueue } from "../../hooks/useQueue";
 import { useMyAppointments } from "../../hooks/useAppointments";
 import { appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
 import { canScheduleFollowUp, isDentalSpecialty, usesStandaloneFollowUp } from "../../lib/features";
 import { beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import { PrescriptionCard } from "../../components/prescription/PrescriptionCard";
-import { awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft } from "../../lib/doctorWorkflow";
+import { awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft, nextPresentPatient } from "../../lib/doctorWorkflow";
 import { clearPrescriptionDraft, getStoredDraft } from "../../lib/prescription";
 import type { Appointment } from "../../types";
 
@@ -76,6 +76,8 @@ export default function DoctorHome() {
 
   const finish = useFinishAppointment();
   const callNext = useCallNext();
+  const markArrived = useMarkArrived();
+  const canRecordArrival = user?.role === "DOCTOR" && stats.data?.hasActiveAssistant === false;
 
   const [planSubject, setPlanSubject] = useState<{ patientId: string; memberId: string; name: string } | null>(null);
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
@@ -93,7 +95,7 @@ export default function DoctorHome() {
     else triggerEls.current.delete(id);
   };
 
-  const busy = finish.isPending || callNext.isPending;
+  const busy = finish.isPending || callNext.isPending || markArrived.isPending;
 
   // يُنفَّذ بعد انتهاء أي طلب (الأزرار تعود مفعّلة) حتى لا يضيع التركيز على زر معطّل.
   useEffect(() => {
@@ -117,7 +119,8 @@ export default function DoctorHome() {
   // الطابور كاملًا بترتيب المناداة الفعلي من الخادم (لا نقتطع منه شيئًا).
   const nextList = queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])];
   const awaitingAssistant = awaitingAssistantAdmission(queue.data, stats.data?.hasActiveAssistant);
-  const canCallNext = !current && !awaitingAssistant && nextList.length > 0;
+  const nextPresent = nextPresentPatient(nextList);
+  const canCallNext = !current && !awaitingAssistant && Boolean(nextPresent);
   const filteredQueue = filterQueue(nextList, queueSearch);
 
   function finishCurrent() {
@@ -312,7 +315,9 @@ export default function DoctorHome() {
                 ? t("أنهِ الكشف الحالي أولًا ثم استدعِ التالي.")
                 : nextList.length === 0
                 ? t("لا يوجد مريض في الانتظار.")
-                : t("يُستدعى المريض الأول في طابور الانتظار.")}
+                : !nextPresent
+                ? t("بانتظار تسجيل حضور المرضى")
+                : t("يُستدعى أول مريض حاضر حسب ترتيب الطابور.")}
             </p>
             {current && usesStandaloneFollowUp(user?.doctor?.specialty) && !canScheduleFollowUp(current) && (
               <p id="follow-up-hint" className="mt-2 text-xs text-slate-500">{t("أكمل اسم المريض ولقبه ورقم هاتفه قبل برمجة المتابعة.")}</p>
@@ -354,16 +359,24 @@ export default function DoctorHome() {
           ) : (
             <ol className="mt-2 max-h-[28rem] overflow-y-auto">
               {filteredQueue.map((a) => (
-                <li key={a.id} className={clsx("flex items-center gap-3 border-t border-slate-100 py-3 first:border-t-0", a.id === nextList[0]?.id && "rounded-xl bg-primary-50/80 px-2 ring-1 ring-inset ring-primary-200")}>
+                <li key={a.id} className={clsx("flex items-center gap-3 border-t border-slate-100 py-3 first:border-t-0", a.id === nextPresent?.id && "rounded-xl bg-primary-50/80 px-2 ring-1 ring-inset ring-primary-200")}>
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-lg font-bold tabular-nums text-primary-700" title={t("رقم الدور حسب وقت الموعد")}>
                     {padTurn(turns.get(a.id))}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="break-words font-bold leading-snug text-slate-900">{beneficiaryName(a)}</p>
                     <p className="text-xs text-slate-500">
-                      {a.id === nextList[0]?.id && <span className="me-1 font-bold text-primary-700">{t("التالي")} · </span>}{a.status === "LATE" ? t("متأخر") : t("في الانتظار")}{t(" · موعده ")}<span className="tabular-nums">{a.startTime.slice(0, 5)}</span>
+                      {a.id === nextPresent?.id && <span className="me-1 font-bold text-primary-700">{t("التالي")} · </span>}{t(a.arrivedAt ? "حاضر — جاهز للنداء" : "لم يصل بعد")}{a.status === "LATE" && <> · {t("متأخر")}</>}{t(" · موعده ")}<span className="tabular-nums">{a.startTime.slice(0, 5)}</span>
                     </p>
                   </div>
+                  {!a.arrivedAt && canRecordArrival && (
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      aria-label={t("تسجيل وصول {0}", { "0": beneficiaryName(a) })}
+                      onClick={() => run(() => markArrived.mutateAsync(a.id), t("تم تسجيل وصوله."))}
+                    >{t("وصل المريض")}</Button>
+                  )}
                   <Avatar name={beneficiaryName(a)} index={nextList.findIndex(item => item.id === a.id) + 1} />
                 </li>
               ))}

@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { t } from "../i18n/locale";
 import { useLiveUpdates } from "../context/LiveUpdatesContext";
 import { shiftPollInterval } from "../lib/livePolling";
+import { applyHeartbeatResult } from "../lib/shiftHeartbeat";
 
 /**
  * زر المداومة. `compact` (الافتراضي): الشارة الصغيرة أعلى الصفحات.
@@ -26,7 +27,7 @@ export function ShiftControl({ variant = "compact" }: { variant?: "compact" | "h
   useEffect(() => {
     if (user?.role !== "DOCTOR" || !state.data?.active) return;
     const timer = window.setInterval(() => {
-      api.post("/shifts/heartbeat").then(() => qc.invalidateQueries({ queryKey: ["shift", user.id] })).catch(() => {});
+      api.post("/shifts/heartbeat").then((res) => applyHeartbeatResult(qc, user.id, res.data)).catch(() => {});
     }, 20000);
     return () => window.clearInterval(timer);
   }, [user?.role, user?.id, state.data?.active, qc]);

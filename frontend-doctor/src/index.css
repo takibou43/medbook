@@ -449,3 +449,31 @@ body:has(.dashboard-language) .floating-language { display: none; }
 @media print {
   .mb-modal-backdrop, .mb-modal-panel, .admission-request { animation: none !important; }
 }
+
+:root { --ease-out: cubic-bezier(0.23, 1, 0.32, 1); accent-color: #187f77; }
+/* دخول النوافذ والإشعارات: يظهر من حالة مرئية جزئيًا (لا من العدم) ثم يستقر خلال 200ms تقريبًا.
+   الخروج فوري عمدًا. @starting-style غير المدعوم يعني ظهورًا مباشرًا دون أي عطل. */
+.motion-fade { transition: opacity 160ms var(--ease-out); }
+.motion-pop { transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+.motion-toast { transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out); }
+@starting-style {
+  .motion-fade { opacity: 0; }
+  .motion-pop { opacity: 0; transform: scale(0.96) translateY(6px); }
+  .motion-toast { opacity: 0; transform: translateY(10px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-pop, .motion-toast { transition-property: opacity; }
+  @starting-style {
+    .motion-pop, .motion-toast { transform: none; }
+  }
+}
+
+/* عنصر قابل للضغط (بطاقة/شريحة اختيار): استجابة فورية للمس دون تحريك التخطيط. */
+.press {
+  transition: transform 160ms var(--ease-out), background-color 160ms var(--ease-out), border-color 160ms var(--ease-out),
+    color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), opacity 160ms var(--ease-out);
+}
+.press:not(:disabled):active { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) {
+  .press:not(:disabled):active { transform: none; }
+}

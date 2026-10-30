@@ -191,7 +191,7 @@ export default function DoctorPatients() {
             {items.map((p, i) => (
               <li key={rowKey(p, i)} className="card p-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <h2 className="min-w-0 truncate text-base font-bold text-slate-900"><bdi translate="no">{fullName(p)}</bdi></h2>
+                  <h2 className="min-w-0 truncate text-base font-bold text-slate-900"><bdi translate="no"><bdi>{fullName(p)}</bdi></bdi></h2>
                   <Tags p={p} />
                 </div>
                 {p.phone && (
@@ -258,7 +258,7 @@ export default function DoctorPatients() {
                   <tr key={rowKey(p, i)}>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1.5 font-semibold text-slate-800">
-                        <bdi translate="no">{fullName(p)}</bdi>
+                        <bdi translate="no"><bdi>{fullName(p)}</bdi></bdi>
                         <Tags p={p} />
                       </div>
                       {p.email && <div className="ltr-nums mt-0.5 text-xs text-slate-600">{p.email}</div>}

@@ -76,7 +76,7 @@ export default function DoctorQueue() {
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
   const canManageAttendance = useAttendanceActions();
-  const { data, isLoading, isFetching } = useQueue(isAssistant ? ASSISTANT_QUEUE_POLL_MS : QUEUE_POLL_MS);
+  const { data, isLoading, isFetching, isError, refetch } = useQueue(isAssistant ? ASSISTANT_QUEUE_POLL_MS : QUEUE_POLL_MS);
 
   // شريط «الطبيب نادى على: فلان» الذي يظهر عند المساعد تلقائيًا.
   const [callBanner, setCallBanner] = useState<{ id: string; name: string; time: string } | null>(null);
@@ -182,6 +182,8 @@ export default function DoctorQueue() {
 
   if (isLoading && !data) return <Spinner label={t("جارٍ تحميل طابور اليوم...")} />;
 
+  if (isError && !data) return <div role="alert">{t("تعذر تحميل طابور اليوم.")} <Button onClick={() => void refetch()}>{t("إعادة المحاولة")}</Button></div>;
+
   const current = data?.current ?? null;
   const waiting = data?.waiting ?? [];
   const late = data?.late ?? [];
@@ -197,6 +199,7 @@ export default function DoctorQueue() {
 
   return (
     <div className="space-y-5">
+      {isError && data && <p role="alert">{t("تعذر تحديث الطابور؛ المعروض آخر بيانات متاحة.")} <Button onClick={() => void refetch()}>{t("إعادة المحاولة")}</Button></p>}
       <NoShowSmsDialog target={noShowTarget} mode="call" onClose={() => setNoShowTarget(null)} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -256,7 +259,7 @@ export default function DoctorQueue() {
       {current ? (
         <Card className="border-primary-200 bg-primary-50">
           <p className="text-xs font-semibold text-primary-700">{t("المريض الحالي")}</p>
-          <p className="mt-1 text-2xl font-extrabold text-slate-900">{patientName(current)}</p>
+          <p className="mt-1 text-2xl font-extrabold text-slate-900"><bdi>{patientName(current)}</bdi></p>
           <p className="text-sm text-slate-600">{t("موعده ")}{current.startTime}
             {patientPhone(current) ? <> · <span className="ltr-nums">{patientPhone(current)}</span></> : null}
           </p>

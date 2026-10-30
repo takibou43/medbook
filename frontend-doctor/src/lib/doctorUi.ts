@@ -88,6 +88,8 @@ export interface AppointmentFilters {
   from?: string;
   to?: string;
   q: string;
+  view?: "all" | "upcoming" | "past" | "action";
+  page?: number;
 }
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -122,7 +124,9 @@ export function parseAppointmentFilters(search: string | URLSearchParams, now = 
     from = today;
     to = today;
   }
-  return { tab, status, from, to, q: p.get("q") ?? "" };
+  const view = p.get("view");
+  const page = Math.max(1, Math.floor(Number(p.get("page")) || 1));
+  return { tab, status, from, to, q: p.get("q") ?? "", ...(view && ["upcoming", "past", "action"].includes(view) ? { view: view as AppointmentFilters["view"] } : {}), ...(page > 1 && Number.isFinite(page) ? { page } : {}) };
 }
 
 export function serializeAppointmentFilters(f: AppointmentFilters): URLSearchParams {
@@ -135,6 +139,8 @@ export function serializeAppointmentFilters(f: AppointmentFilters): URLSearchPar
     // بلا تاريخ = كل التواريخ صراحةً (وإلا يعود الافتراضي «اليوم»).
     if (!f.from && !f.to) p.set("period", "all");
     if (f.q.trim()) p.set("q", f.q.trim());
+    if (f.view && f.view !== "all") p.set("view", f.view);
+    if (f.page && f.page > 1) p.set("page", String(f.page));
   }
   return p;
 }
@@ -178,6 +184,32 @@ export interface AppointmentActions {
   noShow: ActionState;
   /** ملاحظة عامة تُعرض بدل الأزرار (مثل: «الإجراءات تتاح يوم الموعد»). */
   note?: string;
+}
+
+export function canArriveLate(a: { status: AppointmentStatus; date: string }, now = Date.now()): boolean {
+  return a.status === "NO_SHOW" && appointmentDay(a.date) === algeriaToday(now);
+}
+
+export function matchesAppointmentView(a: { status: AppointmentStatus; date: string }, view: AppointmentFilters["view"], now = Date.now()): boolean {
+  const day = appointmentDay(a.date);
+  const today = algeriaToday(now);
+  const final = ["COMPLETED", "CANCELLED", "NO_SHOW"].includes(a.status);
+  if (view === "past") return day < today || final;
+  if (view === "upcoming") return day >= today && !final;
+  if (view === "action") return day >= today && ["PENDING", "RESCHEDULE_REQUIRED", "IN_PROGRESS", "LATE"].includes(a.status);
+  return true;
+}
+
+export function scheduleError(blocks: { dayOfWeek: number; startTime: string; endTime: string }[]): string | null {
+  for (let day = 0; day < 7; day++) {
+    const slots = blocks.filter(b => b.dayOfWeek === day).sort((a, b) => a.startTime.localeCompare(b.startTime));
+    for (let i = 0; i < slots.length; i++) {
+      const b = slots[i];
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(b.startTime) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(b.endTime) || b.endTime <= b.startTime) return t("نهاية الفترة يجب أن تكون بعد بدايتها في اليوم نفسه.");
+      if (i && slots[i - 1].endTime > b.startTime) return t("توجد فترات متداخلة في اليوم نفسه.");
+    }
+  }
+  return null;
 }
 
 const HIDDEN: ActionState = { visible: false, enabled: false };

@@ -50,7 +50,8 @@ export function bookingError(err: unknown, fallback = t("تعذّر إتمام �
   const { kind } = classifyApiError(err);
   if (kind === "offline" || kind === "network" || kind === "timeout") return { kind: "network", message: API_MESSAGES[kind] };
   if (kind === "server") return { kind: "server", message: API_MESSAGES.server };
-  if (kind === "rateLimited") return { kind: "other", message: API_MESSAGES.rateLimited };
+  // 429 من سقوف الحجز (مواعيد نشطة كثيرة / حد 24 ساعة) يحمل رسالة عربية دقيقة تُرشد المريض (مثل: ألغِ موعدًا)، فنعرضها.
+  if (kind === "rateLimited") return { kind: "other", message: serverMsg ?? API_MESSAGES.rateLimited };
   if (status === 409) return { kind: "conflict", message: serverMsg ?? t("هذا الموعد لم يعد متاحًا. سنعرض لك أقرب موعد متاح.") };
   if (status === 404) return { kind: "notFound", message: serverMsg ?? t("هذا الطبيب لم يعد متاحًا حاليًا.") };
   if (status === 403) return { kind: "forbidden", message: serverMsg ?? fallback };

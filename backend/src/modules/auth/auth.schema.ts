@@ -1,3 +1,4 @@
+import { personName } from "../../lib/personName";
 import { z } from "zod";
 import { specialtyNameSchema } from "../../lib/specialtySelection";
 
@@ -5,8 +6,8 @@ export const registerPatientSchema = z.object({
   email: z.string().email("بريد إلكتروني غير صالح").max(254),
   phone: z.string().min(9, "رقم الهاتف غير صالح").max(20).optional(),
   password: z.string().min(8, "كلمة المرور يجب أن تكون 8 خانات على الأقل").max(128),
-  firstName: z.string().min(2, "الاسم قصير جدًا").max(60),
-  lastName: z.string().min(2, "اللقب قصير جدًا").max(60),
+  firstName: personName(),
+  lastName: personName(),
   birthDate: z.coerce.date().optional(),
   gender: z.enum(["MALE", "FEMALE"]).optional(),
   cityId: z.string().uuid().optional(),
@@ -16,8 +17,8 @@ export const registerDoctorSchema = z.object({
   email: z.string().email("بريد إلكتروني غير صالح").max(254),
   phone: z.string().min(9, "رقم الهاتف غير صالح").max(20).optional(),
   password: z.string().min(8, "كلمة المرور يجب أن تكون 8 خانات على الأقل").max(128),
-  firstName: z.string().min(2).max(60),
-  lastName: z.string().min(2).max(60),
+  firstName: personName(),
+  lastName: personName(),
   specialtyId: z.string().uuid("التخصص مطلوب").optional(),
   specialtyName: specialtyNameSchema.optional(),
   wilayaId: z.string().uuid("الولاية مطلوبة"),
@@ -37,8 +38,8 @@ export const registerDoctorSchema = z.object({
 export const registerAssistantSchema = z.object({
   token: z.string().min(10, "رابط الدعوة غير صالح").max(200),
   password: z.string().min(8, "كلمة المرور يجب أن تكون 8 خانات على الأقل").max(128),
-  firstName: z.string().min(2, "الاسم قصير جدًا").max(60),
-  lastName: z.string().min(2, "اللقب قصير جدًا").max(60),
+  firstName: personName(),
+  lastName: personName(),
 });
 
 export const loginSchema = z.object({
@@ -62,8 +63,8 @@ export const updateAccountSchema = z
 export const addPatientProfileSchema = z
   .object({
     password: z.string().min(1, "كلمة المرور مطلوبة").max(128),
-    firstName: z.string().trim().min(2, "الاسم قصير جدًا").max(60).optional(),
-    lastName: z.string().trim().min(2, "اللقب قصير جدًا").max(60).optional(),
+    firstName: personName().optional(),
+    lastName: personName().optional(),
     cityId: z.string().uuid("البلدية غير صالحة").optional(),
   })
   .strict("يحتوي الطلب على حقول غير مسموح بها.");
@@ -73,8 +74,8 @@ export const addPatientProfileSchema = z
 export const applyDoctorProfileSchema = z
   .object({
     password: z.string().min(1, "كلمة المرور مطلوبة").max(128),
-    firstName: z.string().trim().min(2).max(60),
-    lastName: z.string().trim().min(2).max(60),
+    firstName: personName(),
+    lastName: personName(),
     specialtyId: z.string().uuid("التخصص مطلوب"),
     wilayaId: z.string().uuid("الولاية مطلوبة"),
     cityId: z.string().uuid("المدينة مطلوبة"),

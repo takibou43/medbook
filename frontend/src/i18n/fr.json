@@ -2186,5 +2186,18 @@
   "مساءً": "Le soir",
   "طريقة الاستعمال الكاملة": "Instructions complètes d’utilisation",
   "إدخال الجرعة في خانات منفصلة": "Saisir la dose dans des champs séparés",
-  "مثال: 2 علب": "Ex. : 2 boîtes"
+  "مثال: 2 علب": "Ex. : 2 boîtes",
+  "أقسام سجل المواعيد": "Sections de l’historique des rendez-vous",
+  "تحتاج إجراءً": "Action requise",
+  "تعذر تحميل أوقات العمل.": "Impossible de charger les horaires de travail.",
+  "تعذر تحميل طابور اليوم.": "Impossible de charger la file du jour.",
+  "تعذر تحديث الطابور؛ المعروض آخر بيانات متاحة.": "Impossible d’actualiser la file ; les dernières données disponibles sont affichées.",
+  "تعديلات لم تُحفظ بعد": "Modifications non enregistrées",
+  "الجدول مطابق لآخر نسخة محفوظة": "Les horaires correspondent à la dernière version enregistrée",
+  "نسخ أوقات يوم إلى أيام أخرى": "Copier les horaires vers d’autres jours",
+  "اليوم المصدر": "Jour source",
+  "يستبدل فترات الأيام المختارة في المسودة. لا يتغير الجدول حتى تحفظه.": "Remplace les plages des jours sélectionnés dans le brouillon. Les horaires changent uniquement après l’enregistrement.",
+  "نسخ إلى المسودة": "Copier dans le brouillon",
+  "نهاية الفترة يجب أن تكون بعد بدايتها في اليوم نفسه.": "La fin de la plage doit suivre son début le même jour.",
+  "توجد فترات متداخلة في اليوم نفسه.": "Certaines plages se chevauchent le même jour."
 }

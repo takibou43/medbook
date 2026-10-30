@@ -122,3 +122,12 @@ export const bookingStatusLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: "طلبات كثيرة خلال وقت قصير. انتظر قليلًا ثم أعد المحاولة." },
 });
+
+// Refresh/logout share a generous per-IP budget; login keeps its separate account limits.
+export const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "طلبات تجديد كثيرة. الرجاء المحاولة لاحقًا." },
+});

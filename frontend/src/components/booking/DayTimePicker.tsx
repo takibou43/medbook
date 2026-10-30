@@ -103,7 +103,7 @@ export function DayTimePicker({
 
                 aria-pressed={selected}
                 onClick={() => onChange({ date: d.date, startTime: null })}
-                className={`min-h-[56px] shrink-0 rounded-xl border px-3 py-2 text-center text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                className={`min-h-[56px] shrink-0 rounded-xl border px-3 py-2 text-center text-sm press focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                   selected ? "border-primary-600 bg-primary-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-primary-300"
                 }`}
               >
@@ -152,7 +152,7 @@ export function DayTimePicker({
                     aria-pressed={selected}
                     dir="ltr"
                     onClick={() => onChange({ date: value.date, startTime: t })}
-                    className={`min-h-[44px] rounded-xl border text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                    className={`min-h-[44px] rounded-xl border text-sm font-bold press focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                       selected ? "border-primary-600 bg-primary-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:border-primary-300"
                     }`}
                   >

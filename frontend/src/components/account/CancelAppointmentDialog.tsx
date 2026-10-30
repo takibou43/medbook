@@ -9,8 +9,8 @@ export function CancelAppointmentDialog({ appointment, busy, onClose, onConfirm 
 }) {
   useLanguage();
   const ref = useDialogFocus(() => { if (!busy) onClose(); });
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-    <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="cancel-title" aria-describedby="cancel-details" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+  return <div className="motion-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+    <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="cancel-title" aria-describedby="cancel-details" className="motion-pop w-full max-w-md rounded-2xl bg-white p-5 shadow-pop">
       <h2 id="cancel-title" className="text-lg font-bold">{t("تأكيد إلغاء الموعد")}</h2>
       <div id="cancel-details" className="mt-3 space-y-2 text-sm text-slate-700">
         <p>{t("المستفيد: ")}<strong>{patientName(appointment.beneficiary)}</strong></p>

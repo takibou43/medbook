@@ -1,10 +1,11 @@
+import { requireTrustedOrigin } from "../../middleware/originGuard";
 import { rememberLoginBrowser } from "../../lib/loginBrowser";
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { Role } from "@prisma/client";
 import { authenticate, authorize } from "../../middleware/auth";
 import { validate } from "../../middleware/validate";
-import { authLimiter, loginAccountLimiter, loginIpLimiter, knownLoginBrowserLimiter } from "../../middleware/rateLimiter";
+import { authLimiter, refreshLimiter, loginAccountLimiter, loginIpLimiter, knownLoginBrowserLimiter } from "../../middleware/rateLimiter";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { PATIENT_REFRESH_COOKIE, setPatientSession, setDoctorSession, clearPatientSession, clearDoctorSession } from "../../lib/sessionCookies";
 import { issueDoctorPortalSession } from "../auth/profiles.service";
@@ -52,6 +53,8 @@ patientAuthRouter.post(
 
 patientAuthRouter.post(
   "/refresh",
+  requireTrustedOrigin,
+  refreshLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const result = await service.refreshPatientSession(req.cookies?.[PATIENT_REFRESH_COOKIE]);
     setPatientSession(res, result.refreshToken);
@@ -61,6 +64,8 @@ patientAuthRouter.post(
 
 patientAuthRouter.post(
   "/logout",
+  requireTrustedOrigin,
+  refreshLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const all = req.body?.allSessions === true;
     await service.logoutPatient(req.cookies?.[PATIENT_REFRESH_COOKIE], all);

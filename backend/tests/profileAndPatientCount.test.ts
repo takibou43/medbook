@@ -23,7 +23,9 @@ describe("dashboard beneficiary count", () => {
       { id: "7", patientId: null, familyMemberId: null, guestPhone: null },
       { id: "8", patientId: null, familyMemberId: null, guestPhone: null },
     ];
-    expect(countPatients(rows)).toBe(6);
+    // Shared phone numbers do not establish guest identity.
+    expect(countPatients(rows)).toBe(7);
+    expect(patientKey(rows[4])).not.toBe(patientKey(rows[5]));
     expect(countPatients(rows)).toBe(new Set(rows.map(patientKey)).size);
     expect(countPatients([])).toBe(0);
   });

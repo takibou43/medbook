@@ -1,3 +1,4 @@
+import { requireTrustedOrigin } from "../../middleware/originGuard";
 import { Router } from "express";
 import * as controller from "./auth.controller";
 import { validate } from "../../middleware/validate";
@@ -12,7 +13,7 @@ import {
 } from "./auth.schema";
 import { authenticate, authorize } from "../../middleware/auth";
 import { Role } from "@prisma/client";
-import { authLimiter, loginAccountLimiter, loginIpLimiter, knownLoginBrowserLimiter } from "../../middleware/rateLimiter";
+import { authLimiter, refreshLimiter, loginAccountLimiter, loginIpLimiter, knownLoginBrowserLimiter } from "../../middleware/rateLimiter";
 import { registerClinicSchema, acceptClinicInviteSchema } from "../clinics/clinics.schema";
 
 const router = Router();
@@ -25,8 +26,8 @@ router.post("/register/doctor", authLimiter, validate({ body: registerDoctorSche
 // المحاولات الصارم المطبَّق على بقية عمليات التسجيل/الدخول لمنع تخمين الرموز بالقوة الغاشمة.
 router.post("/register/assistant", authLimiter, validate({ body: registerAssistantSchema }), controller.registerAssistant);
 router.post("/login", loginIpLimiter, loginAccountLimiter, knownLoginBrowserLimiter, validate({ body: loginSchema }), controller.login);
-router.post("/refresh", controller.refresh);
-router.post("/logout", controller.logout);
+router.post("/refresh", requireTrustedOrigin, refreshLimiter, controller.refresh);
+router.post("/logout", requireTrustedOrigin, refreshLimiter, controller.logout);
 router.get("/me", authenticate, controller.me);
 // حساب بملفين (مريض + طبيب): ملخص الملفين، تفعيل ملف مريض لطبيب، طلب طبيب من مريض، والانتقال إلى واجهة المرضى.
 // كلها مقيّدة بسياق الجلسة في الخادم (لا اعتماد على الواجهة)، وتتطلب كلمة المرور من جديد عند إضافة ملف.

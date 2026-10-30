@@ -1,3 +1,4 @@
+import { Pagination } from "../../components/ui/Pagination";
 import { GuestFollowUpNotice } from "../../components/GuestFollowUpNotice";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, getLanguage } from "../../i18n/locale.ts";
@@ -22,7 +23,7 @@ import { FollowUpModal, type FollowUpContext } from "../../components/FollowUpMo
 import { canScheduleFollowUp, RELATIONSHIP_LABELS, usesStandaloneFollowUp } from "../../lib/features";
 import { padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import {
-  activePreset, algeriaToday, appointmentActions, formatDayAr, parseAppointmentFilters, presetRange, serializeAppointmentFilters,
+  canArriveLate, matchesAppointmentView, activePreset, algeriaToday, appointmentActions, formatDayAr, parseAppointmentFilters, presetRange, serializeAppointmentFilters,
   type AppointmentFilters, type DatePreset, type StatusFilter,
 } from "../../lib/doctorUi";
 
@@ -286,7 +287,7 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
           <Button variant="outline" onClick={onFollowUp} disabled={busy} title={t("إنشاء موعد عودة فعلي لهذا المريض")}>
             <CalendarPlus className="h-4 w-4" />{t(" برمجة موعد عودة ")}</Button>
         )}
-        {canManageAttendance && a.status === "NO_SHOW" && (
+        {canManageAttendance && canArriveLate(a) && (
           <>
             <Button onClick={onArrivedLate} disabled={busy} loading={pending} title={t("وصل بعد فوات موعده — أدخله الآن")}>
               <UserCheck className="h-4 w-4" />{t(" حضر متأخرًا ")}</Button>
@@ -306,6 +307,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
   const standaloneFollowUp = !isAssistant && usesStandaloneFollowUp(user?.doctor?.specialty);
   const canManageAttendance = useAttendanceActions();
   const { status: filter, from, to } = filters;
+  const view = filters.view ?? "all";
   // البحث يُكتب محليًا فورًا ويُحفظ في الرابط بعد توقف الكتابة قليلًا (يبقى عند الرجوع/التنقل).
   const [query, setQuery] = useState(filters.q);
   useEffect(() => setQuery(filters.q), [filters.q]);
@@ -351,9 +353,13 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
       return qDigits.length > 0 && (patientPhone(a) ?? "").replace(/\D/g, "").includes(qDigits);
     };
     return appointments
-      .filter(matches)
+      .filter(a => matches(a) && matchesAppointmentView(a, view))
       .sort((a: any, b: any) => Number(hasTimePassed(a.date, a.startTime)) - Number(hasTimePassed(b.date, b.startTime)));
-  }, [appointments, query, getLanguage()]);
+  }, [appointments, query, view, getLanguage()]);
+
+  const totalPages = Math.max(1, Math.ceil((visible?.length ?? 0) / 20));
+  const page = Math.min(filters.page ?? 1, totalPages);
+  const paged = visible?.slice((page - 1) * 20, page * 20) ?? [];
 
   // عرض «اليوم» كاملًا (بلا تصفية حالة): نُظهر رقم الدور المرئي كما كان في «جدول اليوم» بالرئيسية.
   // يُحسب على كل مواعيد اليوم غير الملغاة قبل البحث، فلا يتغيّر بتصفية القائمة.
@@ -419,6 +425,9 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
         </div>
       </header>
 
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t("أقسام سجل المواعيد")}>
+        {([['all', 'الكل'], ['upcoming', 'القادمة'], ['action', 'تحتاج إجراءً'], ['past', 'السابقة']] as const).map(([value, label]) => <Button key={value} variant={view === value ? 'primary' : 'outline'} aria-pressed={view === value} onClick={() => onFiltersChange({ ...filters, view: value, page: 1 })}>{t(label)}</Button>)}
+      </div>
       {/* شريط الأدوات: بحث + فترة زمنية */}
       <div className="card space-y-3 p-3 sm:p-4">
         <div className="relative">
@@ -511,7 +520,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
         <ErrorState message={apiErrorMessage(error, t("تعذّر تحميل المواعيد."))} onRetry={() => void refetch()} />
       ) : visible && visible.length > 0 ? (
         <div className={clsx("space-y-3 transition-opacity", isFetching && "opacity-80")} aria-busy={isFetching}>
-          {visible.map((a: any) => (
+          {paged.map((a: any) => (
             <AppointmentCard
               key={a.id}
               appointment={a}
@@ -526,6 +535,7 @@ function AppointmentsListSection({ filters, onFiltersChange }: { filters: Appoin
               onFollowUp={standaloneFollowUp ? () => openFollowUp(a) : undefined}
             />
           ))}
+          <Pagination page={page} totalPages={totalPages} onChange={n => onFiltersChange({ ...filters, page: n })} />
         </div>
       ) : (
         <EmptyState
@@ -557,7 +567,10 @@ export default function DoctorAppointments() {
   // تفتح «كل المواعيد» بالفلتر الصريح نفسه، ويبقى كل شيء عند التحديث أو الرجوع.
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => parseAppointmentFilters(searchParams), [searchParams, getLanguage()]);
-  const update = (next: AppointmentFilters) => setSearchParams(serializeAppointmentFilters(next), { replace: true });
+  const update = (next: AppointmentFilters) => {
+    const changed = next.q !== filters.q || next.status !== filters.status || next.from !== filters.from || next.to !== filters.to || next.view !== filters.view;
+    setSearchParams(serializeAppointmentFilters({ ...next, page: changed ? 1 : next.page }), { replace: true });
+  };
   const tab = filters.tab;
 
   return (

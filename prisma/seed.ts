@@ -15,6 +15,13 @@ import fs from "fs";
 import path from "path";
 import specialtyCatalog from "../backend/src/data/algeria-specialties.json";
 
+// حارس إنتاج: هذا السكربت ينشئ حسابات تجريبية بكلمات مرور معروفة (Admin@123 / Doctor@123 / Patient@123)
+// ولا يجوز تشغيله على قاعدة إنتاج. التجاوز الصريح فقط بـ ALLOW_DEMO_SEED=yes-i-know.
+if (process.env.NODE_ENV === "production" && process.env.ALLOW_DEMO_SEED !== "yes-i-know") {
+  console.error("رفض تشغيل seed.ts في الإنتاج: ينشئ حسابات بكلمات مرور معروفة.");
+  process.exit(1);
+}
+
 const prisma = new PrismaClient();
 
 // كل بلديات الجزائر (1541 بلدية) مفهرسة برمز الولاية — ملف بيانات مرجعية بجانب هذا السكربت.

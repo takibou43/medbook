@@ -27,13 +27,13 @@ export function SuccessModal({ booking, onClose, extra }: { booking: ConfirmedBo
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
+    <div className="motion-fade fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="booking-success-title"
-        className="w-full max-w-xs glass-dialog rounded-2xl p-6 text-center shadow-xl"
+        className="w-full max-w-xs motion-pop glass-dialog rounded-2xl p-6 text-center shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <CheckCircle2 className="mx-auto mb-3 h-12 w-12 text-emerald-500" aria-hidden="true" />

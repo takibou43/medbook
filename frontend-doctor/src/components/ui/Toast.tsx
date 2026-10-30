@@ -49,7 +49,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="fixed bottom-4 end-4 z-[100] flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2">
         {toasts.map((toast) => (
-          <div key={toast.id} role={toast.kind === "error" ? "alert" : "status"} className={`flex items-start gap-2 rounded-xl border p-3 shadow-card ${STYLES[toast.kind]}`}>
+          <div key={toast.id} role={toast.kind === "error" ? "alert" : "status"} className={`motion-toast flex items-start gap-2 rounded-xl border p-3 shadow-card ${STYLES[toast.kind]}`}>
             {ICONS[toast.kind]}
             {toast.href ? (
               <button

@@ -370,7 +370,7 @@ export function DashboardLayout({
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  clsx("relative flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-xs", isItemActive(item, isActive) ? "bg-primary-50 font-bold text-primary-700" : "font-medium text-slate-600")
+                  clsx("transition-colors duration-150 motion-reduce:transition-none active:bg-slate-100 relative flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-xs", isItemActive(item, isActive) ? "bg-primary-50 font-bold text-primary-700" : "font-medium text-slate-600")
                 }
               >
                 <item.icon className="h-5 w-5" aria-hidden />

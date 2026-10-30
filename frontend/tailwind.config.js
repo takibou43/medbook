@@ -1,5 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // :hover يعمل على الأجهزة التي تدعم المرور فقط، فلا يبقى الزر «عالقًا» بعد اللمس على الهاتف.
+  future: { hoverOnlyWhenSupported: true },
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
@@ -22,7 +24,8 @@ export default {
         },
       },
       boxShadow: {
-        card: "0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06)",
+        card: "0 1px 2px 0 rgb(15 37 35 / 0.05), 0 4px 12px -4px rgb(15 37 35 / 0.08)",
+        pop: "0 20px 40px -12px rgb(6 39 37 / 0.35), 0 2px 8px rgb(6 39 37 / 0.10)",
       },
     },
   },

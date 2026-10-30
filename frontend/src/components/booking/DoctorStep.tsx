@@ -32,7 +32,7 @@ function DoctorAvatar({ doctor }: { doctor: Doctor }) {
     return <img src={doctor.photoUrl} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded-full border border-slate-200 object-cover" />;
   }
   return (
-    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-600" aria-hidden="true">
+    <span className="press flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-50 text-primary-600" aria-hidden="true">
       <Stethoscope className="h-7 w-7" />
     </span>
   );
@@ -125,7 +125,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
               const place = [catalogName(d.city), catalogName(d.wilaya)].filter(Boolean).join(" — ");
               return (
                 <li key={d.id} className="glass p-4">
-                  <div className="flex gap-3">
+                  <div className="press flex gap-3">
                     <DoctorAvatar doctor={d} />
                     <div className="min-w-0 flex-1">
                       <div>
@@ -134,7 +134,7 @@ export const DoctorStep = forwardRef<HTMLHeadingElement, Props>(({ specialty, do
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <p className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{t(d.dutyEndsAt && new Date(d.dutyEndsAt) > new Date() ? "الطبيب متواجد الآن" : "لم يبدأ المداومة")}</p>
-                        <span className="flex shrink-0 items-center gap-1 text-sm text-amber-600">
+                        <span className="press flex shrink-0 items-center gap-1 text-sm text-amber-600">
                           <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden="true" />
                           {d.avgRating > 0 ? d.avgRating.toFixed(1) : t("جديد")}
                           {typeof d.reviewsCount === "number" && <span className="text-xs text-slate-500">({d.reviewsCount}{t(" مراجعة)")}</span>}

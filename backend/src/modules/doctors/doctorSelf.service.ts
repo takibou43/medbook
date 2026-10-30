@@ -1,3 +1,4 @@
+import { weeklyScheduleError } from "../../lib/scheduleValidation";
 import { resolveSpecialtyId } from "../../lib/specialtySelection";
 import { AppointmentStatus, Prisma, Role } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
@@ -150,6 +151,8 @@ export async function replaceWeeklySchedule(
   blocks: { dayOfWeek: number; startTime: string; endTime: string }[],
   confirmAffected = false
 ) {
+  const validation = weeklyScheduleError(blocks);
+  if (validation) throw ApiError.badRequest(validation);
   const doctor = await getDoctorByUserId(userId);
   const exceptions = await prisma.doctorSchedule.findMany({ where: { doctorId: doctor.id, isException: true } });
   const proposed: ScheduleBlock[] = [

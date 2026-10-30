@@ -55,9 +55,9 @@ export const SpecialtyStep = forwardRef<HTMLHeadingElement, Props>(({ options, l
               <button
                 type="button"
                 onClick={() => onSelect(specialty.id)}
-                className="flex min-h-[6.5rem] w-full flex-col items-center justify-center gap-1.5 glass p-3 text-center transition-colors hover:border-primary-400 hover:bg-white/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 active:bg-primary-100"
+                className="press flex min-h-[6.5rem] w-full flex-col items-center justify-center gap-1.5 glass p-3 text-center transition-colors hover:border-primary-400 hover:bg-white/75 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 active:bg-primary-100"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+                <span className="press flex h-10 w-10 items-center justify-center rounded-full bg-primary-50 text-primary-600">
                   <SpecialtyIcon specialty={specialty} className="h-7 w-7" />
                 </span>
                 <span className="text-sm font-bold leading-snug text-slate-800">{catalogName(specialty)}</span>

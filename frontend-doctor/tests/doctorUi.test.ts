@@ -1,13 +1,35 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  activePreset, algeriaToday, appointmentActions, appointmentsLink, doctorsCountAr, formatDayAr, monthRange,
+  canArriveLate, matchesAppointmentView, scheduleError, activePreset, algeriaToday, appointmentActions, appointmentsLink, doctorsCountAr, formatDayAr, monthRange,
   parseAppointmentFilters, presetRange, relativeDayAr, serializeAppointmentFilters, weekRange,
 } from "../src/lib/doctorUi.ts";
 
 // الجمعة 2 أكتوبر 2026، 13:00 بتوقيت الجزائر (12:00 UTC).
 const NOW = Date.UTC(2026, 9, 2, 12, 0);
 const iso = (day: string) => `${day}T00:00:00.000Z`;
+
+test("late arrival is a today-only action, separate from historical records", () => {
+  assert.equal(canArriveLate({status:"NO_SHOW",date:iso("2026-10-02")}, NOW),true);
+  assert.equal(canArriveLate({status:"NO_SHOW",date:iso("2026-10-01")}, NOW),false);
+  assert.equal(canArriveLate({status:"NO_SHOW",date:iso("2026-10-03")}, NOW),false);
+});
+test("appointment sections distinguish final, upcoming and actionable records", () => {
+  assert.equal(matchesAppointmentView({status:"COMPLETED",date:iso("2026-10-02")},"upcoming",NOW),false);
+  assert.equal(matchesAppointmentView({status:"RESCHEDULE_REQUIRED",date:iso("2026-10-03")},"action",NOW),true);
+  assert.equal(matchesAppointmentView({status:"CONFIRMED",date:iso("2026-10-01")},"past",NOW),true);
+  const f=parseAppointmentFilters('?tab=list&view=past&page=3&q=Sara');
+  assert.deepEqual(parseAppointmentFilters(serializeAppointmentFilters(f)),f);
+  assert.equal(parseAppointmentFilters('?page=Infinity').page,undefined);
+});
+test("weekly intervals reject invalid times, reversed periods and overlap; allow breaks", () => {
+  const b={dayOfWeek:1,startTime:'08:00',endTime:'12:00'};
+  assert.equal(scheduleError([b,{...b,startTime:'13:00',endTime:'17:00'}]),null);
+  assert.ok(scheduleError([b,{...b,startTime:'11:00',endTime:'13:00'}]));
+  assert.ok(scheduleError([{...b,endTime:'07:00'}]));
+  assert.ok(scheduleError([{...b,startTime:'25:00'}]));
+  assert.equal(scheduleError([b,{...b,dayOfWeek:2}]),null);
+});
 
 test("today and day boundaries follow Algeria time", () => {
   assert.equal(algeriaToday(NOW), "2026-10-02");

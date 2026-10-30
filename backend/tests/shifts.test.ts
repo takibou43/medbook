@@ -5,7 +5,7 @@ vi.mock("../src/lib/prisma", () => ({ prisma: db }));
 vi.mock("../src/lib/actingDoctor", () => ({ resolveActingDoctorId: vi.fn(async () => "doctor-1") }));
 vi.mock("../src/lib/doctorLock", () => ({ lockDoctorCalls: vi.fn() }));
 vi.mock("../src/lib/audit", () => ({ writeAudit: vi.fn() }));
-import { setShift, heartbeatShift, assertReception, hasOnDutyAssistant } from "../src/modules/shifts/shifts.service";
+import { setShift, heartbeatShift, shiftState, assertReception, hasOnDutyAssistant } from "../src/modules/shifts/shifts.service";
 describe("shift reception responsibility", () => {
   beforeEach(() => { vi.clearAllMocks(); db.doctor.findUniqueOrThrow.mockResolvedValue({ clinicId: "clinic-1" }); });
   it("rejects assistants before starting and after expiry", async () => {
@@ -58,6 +58,16 @@ describe("doctor live availability", () => {
     expect(db.doctor.updateMany.mock.calls[0][0].where.dutyEndsAt.gt).toBeInstanceOf(Date);
     expect(db.doctor.update).not.toHaveBeenCalled();
     expect(db.doctor.updateMany.mock.calls[0][0].data.queueRequestedAt).toBeUndefined();
+  });
+  it("heartbeat returns exactly the GET /shifts state (the doctor portal stores it instead of refetching)", async () => {
+    const dutyEndsAt = new Date(Date.now() + 90000);
+    db.doctor.updateMany.mockResolvedValue({ count: 1 });
+    db.doctor.findUniqueOrThrow.mockResolvedValue({ clinicId: null, schedules: [], dutyEndsAt });
+    const fromHeartbeat = await heartbeatShift("d", Role.DOCTOR);
+    const fromGet = await shiftState("d", Role.DOCTOR);
+    expect(Object.keys(fromHeartbeat).sort()).toEqual(["active", "endsAt", "hasActiveAssistant", "suggestedEndTime"]);
+    expect(fromHeartbeat).toEqual(fromGet);
+    expect(fromHeartbeat.active).toBe(true);
   });
   it("rejects assistant heartbeats", async () => {
     await expect(heartbeatShift("a", Role.ASSISTANT)).rejects.toThrow();

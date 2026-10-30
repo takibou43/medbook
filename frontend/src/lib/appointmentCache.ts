@@ -92,10 +92,6 @@ export function loadAppointmentCache(userId: string, storage: StorageLike = loca
   }
 }
 
-export function clearAppointmentCache(userId: string, storage: StorageLike = localStorage) {
-  if (userId) storage.removeItem(keyFor(userId));
-}
-
 // يمسح كاش المواعيد لكل الحسابات على هذا المتصفح، مع إبقاء حساب واحد اختياريًا (keepUserId).
 // يُستدعى عند انتهاء الجلسة وتسجيل الخروج (بلا استثناء)، وعند دخول حساب (مع إبقاء كاشه فقط)،
 // حتى لا تبقى مواعيد مريض سابق مخزّنة على جهاز مشترك.

@@ -73,7 +73,3 @@ export function useMarkArrived() {
 export function useFinishAppointment() {
   return useQueueMutation<string>(async (id) => (await api.patch("/appointments/" + id, { status: "COMPLETED" })).data.data);
 }
-
-export function useMarkNoShow() {
-  return useQueueMutation<string>(async (id) => (await api.patch("/appointments/" + id, { status: "NO_SHOW" })).data.data);
-}

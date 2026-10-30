@@ -1,6 +1,6 @@
 const fs=require('node:fs');
 const assert=require('node:assert/strict');
-const {chromium}=require(process.env.MEDBOOK_PLAYWRIGHT || 'C:/Users/benz/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const {chromium}=require(process.env.MEDBOOK_PLAYWRIGHT || 'playwright');
 const doctor={id:'fixture-doctor',firstName:'آمنة',lastName:'بن علي',specialtyId:'specialty-1',specialty:{id:'specialty-1',nameAr:'طب الأسنان',nameFr:'Médecine dentaire'},wilayaId:'wilaya-1',wilaya:{id:'wilaya-1',code:'16',nameAr:'الجزائر',nameFr:'Alger'},city:{id:'city-1',nameAr:'الجزائر الوسطى'},cityId:'city-1',clinic:null,avgRating:0,reviewsCount:0,yearsExperience:5,languages:['العربية','Français'],consultationFee:2000,verificationStatus:'VERIFIED',subscriptionStatus:'ACTIVE'};
 const result=[];
 (async()=>{

@@ -198,7 +198,7 @@ export function DashboardLayout({
           { to: "/", label: t("وضع الطبيب"), icon: Stethoscope, end: true },
           { to: "/clinic", label: t("إدارة العيادة"), icon: Building2, end: false },
         ].map((m) => (
-          <div key={m.to} className="group relative flex-1">
+          <div key={m.to} className="group relative min-w-0 flex-1">
             <NavLink
               to={m.to}
               end={m.end}
@@ -206,13 +206,13 @@ export function DashboardLayout({
               aria-label={compact ? m.label : undefined}
               className={({ isActive }) =>
                 clsx(
-                  "flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-semibold transition-colors duration-200 motion-reduce:transition-none",
+                  "flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-1.5 text-center text-xs font-semibold transition-colors duration-200 motion-reduce:transition-none",
                   isActive ? "bg-primary-500 text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"
                 )
               }
             >
               <m.icon className="h-4 w-4 shrink-0" aria-hidden />
-              {!compact && <span className="truncate">{m.label}</span>}
+              {!compact && <span className="min-w-0 break-words">{m.label}</span>}
             </NavLink>
             {compact && <Tip>{m.label}</Tip>}
           </div>

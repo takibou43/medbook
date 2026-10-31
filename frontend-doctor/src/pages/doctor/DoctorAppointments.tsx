@@ -4,7 +4,7 @@ import { useLanguage } from "../../i18n/LanguageRoot";
 import { t, getLanguage } from "../../i18n/locale.ts";
 import { canSendAttendanceMessage } from "../../lib/assistantReception";
 import { useAttendanceActions } from "../../hooks/useAttendanceActions";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import { AlertTriangle, CalendarPlus, CheckCircle2, Clock3, Info, MessageCircle, Phone, Search, UserCheck, X } from "lucide-react";
@@ -184,6 +184,7 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
   const wa = toWhatsAppNumber(phone);
   const isOpen = a.status === "CONFIRMED" || a.status === "PENDING";
   const actions = appointmentActions(a, role);
+  const completionReasonId = useId();
 
   const reminderHref = wa
     ? t("https://wa.me/{0}?text={1}", { "0": wa, "1": encodeURIComponent(
@@ -267,13 +268,21 @@ function AppointmentCard({ appointment: a, onComplete, onNoShow, onArrivedLate, 
           </>
         )}
         {actions.complete.visible && (
-          <Button
-            onClick={onComplete}
-            disabled={busy || !actions.complete.enabled}
-            loading={pending}
-            title={actions.complete.reason ?? t("المريض حضر وأنهى استشارته")}
-          >
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />{t(" اكتمل الموعد ")}</Button>
+          <div className="flex max-w-xs flex-col gap-1">
+            <Button
+              onClick={onComplete}
+              disabled={busy || !actions.complete.enabled}
+              loading={pending}
+              aria-describedby={actions.complete.reason ? completionReasonId : undefined}
+              title={actions.complete.reason ?? t("المريض حضر وأنهى استشارته")}
+            >
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />{t(" اكتمل الموعد ")}</Button>
+            {actions.complete.reason && (
+              <p id={completionReasonId} className="text-sm leading-relaxed text-slate-600">
+                {actions.complete.reason}
+              </p>
+            )}
+          </div>
         )}
         {canManageAttendance && canSendAttendanceMessage(a) && (
           <Button

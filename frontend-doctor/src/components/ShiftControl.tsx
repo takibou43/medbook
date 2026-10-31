@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { t } from "../i18n/locale";
 import { useLiveUpdates } from "../context/LiveUpdatesContext";
 import { shiftPollInterval } from "../lib/livePolling";
-import { applyHeartbeatResult } from "../lib/shiftHeartbeat";
+import { createShiftHeartbeatSender } from "../lib/shiftHeartbeat";
 
 /**
  * زر المداومة. `compact` (الافتراضي): الشارة الصغيرة أعلى الصفحات.
@@ -25,12 +25,14 @@ export function ShiftControl({ variant = "compact" }: { variant?: "compact" | "h
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["shift"] }); qc.invalidateQueries({ queryKey: ["queue"] }); qc.invalidateQueries({ queryKey: ["assistants", "attendance"] }); },
   });
   useEffect(() => {
-    if (user?.role !== "DOCTOR" || !state.data?.active) return;
+    if (user?.role !== "DOCTOR" || !state.data?.active || change.isPending) return;
+    const heartbeat = createShiftHeartbeatSender(qc, user.id, async signal =>
+      (await api.post("/shifts/heartbeat", undefined, { signal })).data);
     const timer = window.setInterval(() => {
-      api.post("/shifts/heartbeat").then((res) => applyHeartbeatResult(qc, user.id, res.data)).catch(() => {});
+      void heartbeat.send();
     }, 20000);
-    return () => window.clearInterval(timer);
-  }, [user?.role, user?.id, state.data?.active, qc]);
+    return () => { window.clearInterval(timer); heartbeat.stop(); };
+  }, [user?.role, user?.id, state.data?.active, change.isPending, qc]);
   if (!enabled) return null;
   const active = state.data?.active && !!state.data.endsAt && new Date(state.data.endsAt) > new Date();
   const label = user?.role === "DOCTOR" ? t("المداومة") : t("المناوبة");

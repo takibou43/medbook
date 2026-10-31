@@ -21,6 +21,52 @@ async function mountShiftQuery(initial: unknown) {
 }
 
 describe("shift heartbeat", () => {
+  it("rejects a response when the shift changes during cancellation", async () => {
+    const qc = new QueryClient();
+    qc.setQueryData(shiftQueryKey("u1"), state);
+    let release!: () => void;
+    const cancel = qc.cancelQueries.bind(qc);
+    qc.cancelQueries = async () => { await new Promise<void>(resolve => { release = resolve; }); };
+    const sender = createShiftHeartbeatSender(qc, "u1", async () => ({ data: state }));
+    const pending = sender.send();
+    await Promise.resolve();
+    const ended = { active: false, endsAt: null };
+    qc.setQueryData(shiftQueryKey("u1"), ended);
+    release();
+    await pending;
+    assert.deepEqual(qc.getQueryData(shiftQueryKey("u1")), ended);
+    sender.stop(); qc.cancelQueries = cancel; qc.clear();
+  });
+
+  it("does not restore account data removed before effect cleanup", async () => {
+    const qc = new QueryClient();
+    qc.setQueryData(shiftQueryKey("u1"), state);
+    let release!: (value: unknown) => void;
+    const sender = createShiftHeartbeatSender(qc, "u1", () => new Promise(resolve => { release = resolve; }));
+    const pending = sender.send();
+    qc.removeQueries({ queryKey: ["shift"] });
+    release({ data: state });
+    await pending;
+    assert.equal(qc.getQueryData(shiftQueryKey("u1")), undefined);
+    sender.stop(); qc.clear();
+  });
+
+  it("keeps restarted duty when the stopped duty response arrives last", async () => {
+    const qc = new QueryClient();
+    qc.setQueryData(shiftQueryKey("u1"), state);
+    let release!: (value: unknown) => void;
+    const old = createShiftHeartbeatSender(qc, "u1", () => new Promise(resolve => { release = resolve; }));
+    const pending = old.send();
+    old.stop();
+    const restarted = { ...state, endsAt: "2026-10-30T17:00:00.000Z" };
+    qc.setQueryData(shiftQueryKey("u1"), restarted);
+    const next = createShiftHeartbeatSender(qc, "u1", async () => ({ data: restarted }));
+    await next.send();
+    release({ data: { active: false, endsAt: null } });
+    await pending;
+    assert.deepEqual(qc.getQueryData(shiftQueryKey("u1")), restarted);
+    next.stop(); qc.clear();
+  });
   it("stores a current heartbeat without an extra GET and retries after a failed request", async () => {
     const { qc, gets, unsubscribe } = await mountShiftQuery({ ...state, endsAt: "2026-10-30T15:01:10.000Z" });
     let calls = 0;

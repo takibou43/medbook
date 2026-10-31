@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -12,9 +12,10 @@ import { createShiftHeartbeatSender } from "../lib/shiftHeartbeat";
  * `hero`: الزر الكبير أعلى لوحة تحكم الطبيب — نفس الطلبات تمامًا (POST /shifts) دون أي منطق جديد.
  */
 export function ShiftControl({ variant = "compact" }: { variant?: "compact" | "hero" } = {}) {
-  const { user } = useAuth();
+  const { user, loggingOut } = useAuth();
   const qc = useQueryClient();
-  const enabled = user?.role === "DOCTOR" || user?.role === "ASSISTANT";
+  const heartbeatRef = useRef<ReturnType<typeof createShiftHeartbeatSender> | null>(null);
+  const enabled = !loggingOut && (user?.role === "DOCTOR" || user?.role === "ASSISTANT");
   const live = useLiveUpdates();
   const state = useQuery({ queryKey: ["shift", user?.id], enabled,
     queryFn: async () => (await api.get<{ data: { active: boolean; endsAt: string | null; suggestedEndTime?: string | null } }>("/shifts")).data.data,
@@ -25,20 +26,23 @@ export function ShiftControl({ variant = "compact" }: { variant?: "compact" | "h
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["shift"] }); qc.invalidateQueries({ queryKey: ["queue"] }); qc.invalidateQueries({ queryKey: ["assistants", "attendance"] }); },
   });
   useEffect(() => {
-    if (user?.role !== "DOCTOR" || !state.data?.active || change.isPending) return;
+    if (user?.role !== "DOCTOR" || !state.data?.active || change.isPending || loggingOut) return;
     const heartbeat = createShiftHeartbeatSender(qc, user.id, async signal =>
       (await api.post("/shifts/heartbeat", undefined, { signal })).data);
+    heartbeatRef.current = heartbeat;
     const timer = window.setInterval(() => {
       void heartbeat.send();
     }, 20000);
-    return () => { window.clearInterval(timer); heartbeat.stop(); };
-  }, [user?.role, user?.id, state.data?.active, change.isPending, qc]);
+    return () => { window.clearInterval(timer); heartbeat.stop(); heartbeatRef.current = null; };
+  }, [user?.role, user?.id, state.data?.active, change.isPending, loggingOut, qc]);
   if (!enabled) return null;
   const active = state.data?.active && !!state.data.endsAt && new Date(state.data.endsAt) > new Date();
   const label = user?.role === "DOCTOR" ? t("المداومة") : t("المناوبة");
   function toggleShift() {
     if (state.isLoading || state.isError || change.isPending) return;
     if (active && !window.confirm(t("هل تريد إنهاء المداومة؟"))) return;
+    // Close the response window before React runs effect cleanup.
+    heartbeatRef.current?.stop();
     change.mutate(!active);
   }
   if (variant === "hero") {

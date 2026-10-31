@@ -36,6 +36,39 @@ describe.skipIf(!TEST_URL)("تحرير أوقات المواعيد الملغا�
   let poolIdx = 0;
   const nextPatient = () => pool[poolIdx++ % pool.length];
 
+  function signal() {
+    let resolve!: () => void;
+    const promise = new Promise<void>(done => { resolve = done; });
+    return { promise, resolve };
+  }
+  // Pause only after the API has read a real PostgreSQL snapshot. A separate
+  // client commits the competing write before the API attempts its real UPDATE.
+  // No query results or Prisma errors are mocked.
+  let pausedRead: { id: string; reached: ReturnType<typeof signal>; resume: ReturnType<typeof signal> } | undefined;
+
+  async function withStaleCancellation(id: string, competingWrite: () => Promise<void>) {
+    const gate = { id, reached: signal(), resume: signal() };
+    pausedRead = gate;
+    const request = call("PATCH", `/api/booking/${id}/cancel`, { phone: "0550000000" });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        gate.reached.promise,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Cancellation did not reach the database read barrier")), 10000);
+        }),
+      ]);
+      await competingWrite();
+    } finally {
+      clearTimeout(timer);
+      pausedRead = undefined;
+      gate.resume.resolve();
+      // Drain HTTP work even if the competing write/assertion fails.
+      await request;
+    }
+    return request;
+  }
+
   const call = async (method: string, url: string, body?: unknown, token?: string) => {
     const r = await fetch(base + url, {
       method,
@@ -90,6 +123,17 @@ describe.skipIf(!TEST_URL)("تحرير أوقات المواعيد الملغا�
     process.env.RATE_LIMIT_MAX = "1000000";
     process.env.REMINDERS_ENABLED = "false";
     db = new PrismaClient({ datasourceUrl: TEST_URL });
+    const { prisma } = await import("../../src/lib/prisma");
+    prisma.$use(async (params, next) => {
+      const result = await next(params);
+      const gate = pausedRead;
+      if (gate && params.model === "Appointment" && params.action === "findUnique" && params.args?.where?.id === gate.id) {
+        pausedRead = undefined;
+        gate.reached.resolve();
+        await gate.resume.promise;
+      }
+      return result;
+    });
     ({ signAccessToken: sign } = await import("../../src/utils/jwt"));
     const w = await db.wilaya.create({ data: { code: tag.slice(-6), nameAr: `ولاية ${tag}` } });
     const c = await db.city.create({ data: { nameAr: `مدينة ${tag}`, wilayaId: w.id } });
@@ -260,6 +304,77 @@ describe.skipIf(!TEST_URL)("تحرير أوقات المواعيد الملغا�
         .toMatchObject({ status: "CANCELLED", activeSlot: null });
     }
   );
+
+  it.each(["NO_SHOW", "IN_PROGRESS", "LATE", "COMPLETED", "PENDING"] as const)(
+    "stale public cancellation loses to a committed %s transition without releasing the slot", async status => {
+      const date = freshDate();
+      const g = await seedExisting(date, "CONFIRMED");
+      let winner = g;
+      const response = await withStaleCancellation(g.id, async () => {
+        winner = await db.appointment.update({ where: { id: g.id }, data: { status } });
+      });
+      expect(response.status).toBe(409);
+      expect(await db.appointment.findUniqueOrThrow({ where: { id: g.id } })).toEqual(winner);
+      expect(winner.activeSlot).toBe(true);
+      expect(await availability(date)).not.toContain("10:00");
+      const booking = await createAt(nextPatient().token, date);
+      expect(booking.status).toBe(201);
+      expect(booking.data.startTime).toBe("10:20");
+    }
+  );
+
+  it.each(["patientId", "guestPhone"] as const)(
+    "stale public cancellation loses to a committed %s ownership change", async field => {
+      const date = freshDate();
+      const g = await seedExisting(date, "CONFIRMED");
+      let winner = g;
+      const response = await withStaleCancellation(g.id, async () => {
+        winner = await db.appointment.update({
+          where: { id: g.id },
+          data: field === "patientId" ? { patientId: nextPatient().patientId } : { guestPhone: "0559999999" },
+        });
+      });
+      expect(response.status).toBe(409);
+      expect(await db.appointment.findUniqueOrThrow({ where: { id: g.id } })).toEqual(winner);
+      expect(winner.activeSlot).toBe(true);
+      expect(await availability(date)).not.toContain("10:00");
+    }
+  );
+
+  it("two overlapping public cancellations have one winner and release exactly one reusable slot", async () => {
+    const date = freshDate();
+    const g = await seedExisting(date, "CONFIRMED");
+    let winner = g;
+    const loser = await withStaleCancellation(g.id, async () => {
+      const response = await call("PATCH", `/api/booking/${g.id}/cancel`, { phone: "0550000000" });
+      expect(response.status).toBe(200);
+      winner = await db.appointment.findUniqueOrThrow({ where: { id: g.id } });
+    });
+    expect(loser.status).toBe(409);
+    expect(winner).toMatchObject({ status: "CANCELLED", activeSlot: null });
+    expect(await db.appointment.findUniqueOrThrow({ where: { id: g.id } })).toEqual(winner);
+    expect(await availability(date)).toContain("10:00");
+    const replacement = await createAt(nextPatient().token, date);
+    expect(replacement.status).toBe(201);
+    expect(replacement.data.startTime).toBe("10:00");
+    const rows = await slotRows(date);
+    expect(rows).toHaveLength(2);
+    expect(rows.filter(row => row.activeSlot === true)).toHaveLength(1);
+    expect(rows.find(row => row.id === g.id)).toEqual(winner);
+  });
+
+  it.each(["registered", "wrong-phone"])("public cancellation cannot change a %s record", async kind => {
+    const date = freshDate();
+    const g = await seedExisting(date, "CONFIRMED");
+    const original = await db.appointment.update({
+      where: { id: g.id },
+      data: kind === "registered" ? { patientId: nextPatient().patientId } : { guestPhone: "0559999999" },
+    });
+    const response = await call("PATCH", `/api/booking/${g.id}/cancel`, { phone: "0550000000" });
+    expect(response.status).toBe(404);
+    expect(await db.appointment.findUniqueOrThrow({ where: { id: g.id } })).toEqual(original);
+    expect(await availability(date)).not.toContain("10:00");
+  });
 
   it("الحجز الآلي (POST /api/booking) يعيد استخدام أول خانة كانت ملغاة بدل تخطيها", async () => {
     const p = nextPatient();

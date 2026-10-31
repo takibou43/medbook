@@ -4,11 +4,13 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { api, setAccessToken, getAccessToken, classifyApiError, ApiErrorKind } from "../lib/api";
 import { User } from "../types";
 import { logoutBody, wantsSessionBootstrap, withoutSwitchParam } from "../lib/portalSwitch";
+import { useQueryClient } from "@tanstack/react-query";
 import { clearPrescriptionDraft } from "../lib/prescription";
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
+  loggingOut: boolean;
   // صحيح عندما يفشل التحقق من الجلسة لسبب شبكي (لا لانتهاء الجلسة): نعرض عندها شاشة
   // إعادة محاولة بدل إخراج الطبيب من حسابه أو تركه أمام دائرة تحميل لا تنتهي.
   sessionError: boolean;
@@ -33,8 +35,10 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   useLanguage();
+  const qc = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [sessionError, setSessionError] = useState(false);
   const [sessionErrorKind, setSessionErrorKind] = useState<ApiErrorKind | null>(null);
 
@@ -137,19 +141,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
+    const body = logoutBody(user?.profiles);
+    // Stop observing the account immediately, even when the logout request is slow.
+    setLoggingOut(true);
+    qc.removeQueries({ queryKey: ["shift"] });
     try {
-      await api.post("/auth/logout", logoutBody(user?.profiles));
+      await api.post("/auth/logout", body);
     } finally {
       // لا تبقى مسودة وصفة (بيانات طبية) في ذاكرة الصفحة بعد الخروج.
       clearPrescriptionDraft();
       setAccessToken(null);
       setUser(null);
+      setLoggingOut(false);
       setSessionError(false);
     }
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, sessionError, sessionErrorKind, login, registerDoctor, registerClinic, registerClinicDoctor, registerAssistant, logout, refreshMe, applyAsDoctor, addPatientProfile, prepareSwitchToPatient }}>
+    <AuthContext.Provider value={{ user, loading, loggingOut, sessionError, sessionErrorKind, login, registerDoctor, registerClinic, registerClinicDoctor, registerAssistant, logout, refreshMe, applyAsDoctor, addPatientProfile, prepareSwitchToPatient }}>
       {children}
     </AuthContext.Provider>
   );

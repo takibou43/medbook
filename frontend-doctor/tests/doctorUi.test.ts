@@ -134,3 +134,31 @@ test("assistant cannot change an appointment already with the doctor", () => {
  assert.equal(a.complete.visible, false);
  assert.equal(a.noShow.visible, false);
 });
+
+// Same completion cases as the server guard, including Algeria midnight.
+test("completion timing covers called patients, exact start and Algeria day boundaries", () => {
+  const cases = [
+    { day: "2026-10-02", time: "13:01", status: "CONFIRMED", now: NOW, enabled: false, visible: true },
+    { day: "2026-10-02", time: "13:00", status: "CONFIRMED", now: NOW, enabled: true, visible: true },
+    { day: "2026-10-02", time: "12:59", status: "CONFIRMED", now: NOW, enabled: true, visible: true },
+    { day: "2026-10-02", time: "16:00", status: "IN_PROGRESS", now: NOW, enabled: true, visible: true },
+    { day: "2026-10-02", time: "16:00", status: "LATE", now: NOW, enabled: true, visible: true },
+    { day: "2026-10-01", time: "23:59", status: "CONFIRMED", now: NOW, enabled: true, visible: true },
+    { day: "2026-10-02", time: "23:59", status: "CONFIRMED", now: Date.UTC(2026, 9, 2, 22, 58), enabled: false, visible: true },
+    { day: "2026-10-02", time: "23:59", status: "CONFIRMED", now: Date.UTC(2026, 9, 2, 22, 59), enabled: true, visible: true },
+    { day: "2026-10-02", time: "23:59", status: "CONFIRMED", now: Date.UTC(2026, 9, 2, 23, 0), enabled: true, visible: true },
+  ] as const;
+  for (const c of cases) {
+    const { complete } = appointmentActions({ date: iso(c.day), startTime: c.time, status: c.status }, "DOCTOR", c.now);
+    const label = JSON.stringify(c);
+    assert.equal(complete.visible, c.visible, label);
+    assert.equal(complete.enabled, c.enabled, label);
+    if (!c.enabled) assert.ok(complete.reason?.includes(c.time), label);
+    else assert.equal(complete.reason, undefined, label);
+  }
+  for (const status of ["CONFIRMED", "IN_PROGRESS", "LATE"] as const) {
+    const actions = appointmentActions({ date: iso("2026-10-03"), startTime: "00:00", status }, "DOCTOR", Date.UTC(2026, 9, 2, 22, 59));
+    assert.deepEqual(actions.complete, { visible: false, enabled: false });
+    assert.ok(actions.note);
+  }
+});

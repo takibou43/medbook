@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
-import { applyHeartbeatResult, isShiftState, shiftQueryKey } from "../src/lib/shiftHeartbeat.ts";
+import { applyHeartbeatResult, createShiftHeartbeatSender, isShiftState, shiftQueryKey } from "../src/lib/shiftHeartbeat.ts";
 
 const state = { active: true, endsAt: "2026-10-30T15:01:30.000Z", suggestedEndTime: "16:00", hasActiveAssistant: false };
 
@@ -21,6 +21,56 @@ async function mountShiftQuery(initial: unknown) {
 }
 
 describe("shift heartbeat", () => {
+  it("stores a current heartbeat without an extra GET and retries after a failed request", async () => {
+    const { qc, gets, unsubscribe } = await mountShiftQuery({ ...state, endsAt: "2026-10-30T15:01:10.000Z" });
+    let calls = 0;
+    const sender = createShiftHeartbeatSender(qc, "u1", async () => {
+      if (++calls === 1) throw new Error("offline");
+      return { data: state };
+    });
+    await sender.send();
+    await sender.send();
+    assert.equal(calls, 2);
+    assert.equal(gets(), 1);
+    assert.deepEqual(qc.getQueryData(shiftQueryKey("u1")), state);
+    sender.stop(); unsubscribe(); qc.clear();
+  });
+
+  it("ignores a delayed heartbeat after a newer shift state was received", async () => {
+    const qc = new QueryClient();
+    qc.setQueryData(shiftQueryKey("u1"), state);
+    let release!: (body: unknown) => void;
+    const sender = createShiftHeartbeatSender(qc, "u1", () => new Promise(resolve => { release = resolve; }));
+    const pending = sender.send();
+    const ended = { active: false, endsAt: null };
+    qc.setQueryData(shiftQueryKey("u1"), ended);
+    release({ data: state });
+    await pending;
+    assert.deepEqual(qc.getQueryData(shiftQueryKey("u1")), ended);
+    sender.stop(); qc.clear();
+  });
+
+  it("aborts on cleanup, never overlaps heartbeats, and cannot recreate cleared account data", async () => {
+    const qc = new QueryClient();
+    qc.setQueryData(shiftQueryKey("u1"), state);
+    let release!: (body: unknown) => void;
+    let calls = 0;
+    let signal!: AbortSignal;
+    const sender = createShiftHeartbeatSender(qc, "u1", requestSignal => {
+      calls++; signal = requestSignal;
+      return new Promise(resolve => { release = resolve; });
+    });
+    const pending = sender.send();
+    await sender.send();
+    assert.equal(calls, 1);
+    sender.stop(); qc.clear();
+    assert.equal(signal.aborted, true);
+    release({ data: state });
+    await pending;
+    await sender.send();
+    assert.equal(calls, 1);
+    assert.equal(qc.getQueryData(shiftQueryKey("u1")), undefined);
+  });
   it("stores the heartbeat's own shift state instead of requesting GET /shifts again", async () => {
     const { qc, gets, unsubscribe } = await mountShiftQuery({ ...state, endsAt: "2026-10-30T15:01:10.000Z" });
     assert.equal(gets(), 1);
@@ -66,7 +116,7 @@ describe("shift heartbeat", () => {
   it("keeps ShiftControl on the same query key and stops the follow-up refetch", () => {
     const src = readFileSync(new URL("../src/components/ShiftControl.tsx", import.meta.url), "utf8");
     assert.match(src, /queryKey: \["shift", user\?\.id\]/);
-    assert.match(src, /applyHeartbeatResult\(qc, user\.id, res\.data\)/);
+    assert.match(src, /createShiftHeartbeatSender\(qc, user\.id/);
     assert.doesNotMatch(src, /heartbeat"\)\.then\(\(\) => qc\.invalidateQueries/);
   });
 });

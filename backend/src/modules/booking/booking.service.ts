@@ -1,5 +1,5 @@
 import { createPatientAppointment } from "../../lib/patientBooking";
-import { AppointmentStatus, Prisma, VerificationStatus } from "@prisma/client";
+import { AppointmentStatus, Prisma, Role, VerificationStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { nearestBookingSlot } from "../../lib/nearestBookingSlot";
 import { applyAppointmentPrice, loadFinancialCreate, patientPriceFor, PUBLIC_TERMS_SELECT, withAppointmentPrice } from "../../lib/clinicFinance";
@@ -19,7 +19,7 @@ import {
 // أقصى انتظار في طابور الحجز لطبيب واحد قبل الرفض بـ503 (أقل من مهلة العميل 45 ثانية).
 const QUEUE_TURN_MAX_WAIT_MS = 30_000;
 import { GuestBookingInput, GuestSlotsQuery, AvailabilityQuery } from "./booking.schema";
-import { estimateSessionMinutes } from "../appointments/appointments.service";
+import { canTransition, estimateSessionMinutes } from "../appointments/appointments.service";
 import { estimateMinutesUntilTurn, locateInQueue, DAY_QUEUE_STATUSES } from "../../lib/doctorQueue";
 import { withNearTurnFlags } from "../../lib/queueNotified";
 import { getDoctorAvailability as getDoctorDaySlots } from "../doctors/doctors.service";
@@ -624,14 +624,27 @@ export async function cancelGuestAppointment(id: string, phone: string) {
   if (appointment.status === AppointmentStatus.COMPLETED) {
     throw ApiError.conflict("لا يمكن إلغاء موعد مكتمل.");
   }
+  // Legacy guests have the same cancellation rights as signed-in patients.
+  // In particular, public cancellation must never erase a recorded absence.
+  if (!canTransition(Role.PATIENT, appointment.status, AppointmentStatus.CANCELLED)) {
+    throw ApiError.conflict("لا يمكن إلغاء الموعد في حالته الحالية.");
+  }
 
-  const updated = await prisma.appointment.update({
-    where: { id },
-    data: { status: AppointmentStatus.CANCELLED, ...RELEASE_SLOT_DATA },
-    select: GUEST_PUBLIC_SELECT,
-  });
-
-  return toGuestPublic(updated);
+  try {
+    const updated = await prisma.appointment.update({
+      // Compare-and-swap: a staff update or identity claim that wins the race
+      // must not be overwritten using the stale public authorization above.
+      where: { id, status: appointment.status, patientId: null, guestPhone: phone },
+      data: { status: AppointmentStatus.CANCELLED, ...RELEASE_SLOT_DATA },
+      select: GUEST_PUBLIC_SELECT,
+    });
+    return toGuestPublic(updated);
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      throw ApiError.conflict("تغيّرت حالة الموعد للتو. حدّث الصفحة وأعد المحاولة.");
+    }
+    throw err;
+  }
 }
 
 /**

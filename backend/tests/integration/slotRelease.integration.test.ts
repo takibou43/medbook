@@ -239,6 +239,28 @@ describe.skipIf(!TEST_URL)("تحرير أوقات المواعيد الملغا�
     expect((await createAt(nextPatient().token, date)).status).toBe(201);
   });
 
+  it.each(["NO_SHOW", "COMPLETED", "IN_PROGRESS", "LATE", "CANCELLED"])(
+    "public guest cancellation preserves a %s record", async status => {
+      const g = await seedExisting(freshDate(), status);
+      const response = await call("PATCH", `/api/booking/${g.id}/cancel`, { phone: "0550000000" });
+      expect(response.status).toBe(409);
+      const after = await db.appointment.findUniqueOrThrow({ where: { id: g.id } });
+      expect(after.status).toBe(status);
+      expect(after.activeSlot).toBe(g.activeSlot);
+    }
+  );
+
+  it.each(["PENDING", "CONFIRMED", "RESCHEDULE_REQUIRED"])(
+    "public guest cancellation still accepts %s and releases its slot", async status => {
+      const g = await seedExisting(freshDate(), status);
+      const response = await call("PATCH", `/api/booking/${g.id}/cancel`, { phone: "0550000000" });
+      expect(response.status).toBe(200);
+      expect(response.data).not.toHaveProperty("guestPhone");
+      expect(await db.appointment.findUniqueOrThrow({ where: { id: g.id } }))
+        .toMatchObject({ status: "CANCELLED", activeSlot: null });
+    }
+  );
+
   it("الحجز الآلي (POST /api/booking) يعيد استخدام أول خانة كانت ملغاة بدل تخطيها", async () => {
     const p = nextPatient();
     const next1 = await call("GET", `/api/booking/next-slot?doctorId=${docNarrow}`);

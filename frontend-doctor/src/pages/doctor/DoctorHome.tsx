@@ -24,7 +24,8 @@ import { appointmentsLink, appointmentsCountAr } from "../../lib/doctorUi";
 import { canScheduleFollowUp, isDentalSpecialty, usesStandaloneFollowUp } from "../../lib/features";
 import { beneficiaryName, padTurn, visibleTurnNumbers } from "../../lib/appointmentPeople";
 import { PrescriptionCard } from "../../components/prescription/PrescriptionCard";
-import { awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft, nextPresentPatient } from "../../lib/doctorWorkflow";
+import { useAttendanceState } from "../../hooks/useAttendanceActions";
+import { callNextMessage, awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft, nextPresentPatient } from "../../lib/doctorWorkflow";
 import { clearPrescriptionDraft, getStoredDraft } from "../../lib/prescription";
 import type { Appointment } from "../../types";
 
@@ -77,7 +78,7 @@ export default function DoctorHome() {
   const finish = useFinishAppointment();
   const callNext = useCallNext();
   const markArrived = useMarkArrived();
-  const canRecordArrival = user?.role === "DOCTOR" && stats.data?.hasActiveAssistant === false;
+  const { hasActiveAssistant, canManageAttendance: canRecordArrival } = useAttendanceState();
 
   const [planSubject, setPlanSubject] = useState<{ patientId: string; memberId: string; name: string } | null>(null);
   const [followUpCtx, setFollowUpCtx] = useState<FollowUpContext | null>(null);
@@ -118,7 +119,7 @@ export default function DoctorHome() {
   const prescriptionCurrent = current?.id === finishedCurrentId ? null : current;
   // الطابور كاملًا بترتيب المناداة الفعلي من الخادم (لا نقتطع منه شيئًا).
   const nextList = queue.data?.ordered ?? [...(queue.data?.waiting ?? []), ...(queue.data?.late ?? [])];
-  const awaitingAssistant = awaitingAssistantAdmission(queue.data, stats.data?.hasActiveAssistant);
+  const awaitingAssistant = awaitingAssistantAdmission(queue.data, hasActiveAssistant);
   const nextPresent = nextPresentPatient(nextList);
   const canCallNext = !current && !awaitingAssistant && Boolean(nextPresent);
   const filteredQueue = filterQueue(nextList, queueSearch);
@@ -148,11 +149,11 @@ export default function DoctorHome() {
     void qc.invalidateQueries({ queryKey: ["doctor-dashboard"] });
   }
 
-  async function run(action: () => Promise<unknown>, okMessage: string, focusId?: string) {
+  async function run(action: () => Promise<unknown>, okMessage: string | ((result: unknown) => string), focusId?: string) {
     if (busy) return;
     try {
-      await action();
-      showToast(okMessage, "success");
+      const result = await action();
+      showToast(typeof okMessage === "function" ? okMessage(result) : okMessage, "success");
     } catch (err) {
       showToast(apiErrorMessage(err), "error");
       // الخطأ غالبًا يعني أن الحالة تغيّرت من جهاز آخر (409): نحدّث فورًا بدل انتظار الاستطلاع الدوري.
@@ -292,7 +293,7 @@ export default function DoctorHome() {
                 loading={callNext.isPending}
                 disabled={busy || queue.isPending || queue.isError || !canCallNext}
                 aria-describedby="call-next-hint"
-                onClick={() => run(async () => { await callNext.mutateAsync(); }, t("تم إرسال طلب النداء."), "current-card")}
+                onClick={() => run(() => callNext.mutateAsync(), result => t(callNextMessage(result)), "current-card")}
               >{t(awaitingAssistant ? "بانتظار إدخال المريض" : "استدعاء التالي")}<ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </Button>
               {current && usesStandaloneFollowUp(user?.doctor?.specialty) && (

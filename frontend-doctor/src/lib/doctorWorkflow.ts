@@ -28,3 +28,15 @@ export function awaitingAssistantAdmission(queue: { awaitingAssistant?: boolean;
 export function nextPresentPatient(queue: Appointment[]): Appointment | undefined {
   return queue.find(a => Boolean(a.arrivedAt) && (a.status === "CONFIRMED" || a.status === "LATE"));
 }
+
+/** A request to reception is not an admission; derive feedback from the actual response. */
+export function callNextMessage(result: unknown): string {
+  return result && typeof result === "object" && "awaitingAssistant" in result && result.awaitingAssistant === true
+    ? "تم إرسال الطلب إلى المساعد. يبدأ الكشف بعد تأكيد إدخال المريض."
+    : "تمت مناداة المريض التالي.";
+}
+
+/** Only the server's first present patient may be admitted; assistants also need a doctor request. */
+export function canConfirmAdmission(queue: { current: Appointment | null; awaitingAssistant?: boolean; ordered: Appointment[] }, id: string, isAssistant: boolean): boolean {
+  return !queue.current && (!isAssistant || queue.awaitingAssistant === true) && nextPresentPatient(queue.ordered)?.id === id;
+}

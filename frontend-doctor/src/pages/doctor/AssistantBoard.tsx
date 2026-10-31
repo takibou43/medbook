@@ -113,7 +113,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
         : api.patch(`/appointments/${appointment.id}`, { status: kind }, config);
     },
     onSuccess: () => { void qc.invalidateQueries({ queryKey: ["assistant-queues"] }); void qc.invalidateQueries({ queryKey: ["assistant-appointments"] }); void qc.invalidateQueries({ queryKey: ["assistant-daily-income"] }); },
-    onError: error => showToast(apiErrorMessage(error), "error"),
+    onError: error => { showToast(apiErrorMessage(error), "error"); void qc.invalidateQueries({ queryKey: ["assistant-queues"] }); void qc.invalidateQueries({ queryKey: ["assistant-appointments"] }); },
   });
   function update(appointment: Appointment, kind: "arrived" | "late" | "call" | "urgency" | AppointmentStatus) {
     if (action.isPending) return;
@@ -131,7 +131,7 @@ export default function AssistantBoard({ appointmentsView = false }: { appointme
     return <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
       {a.status === "PENDING" && <Button variant="outline" disabled={action.isPending} onClick={() => update(a, "CONFIRMED")}>{t("تأكيد")}</Button>}
       {(a.status === "CONFIRMED" || a.status === "LATE") && !a.arrivedAt && a.date.slice(0, 10) === today && <Button variant="outline" disabled={action.isPending || !canManageAttendance} onClick={() => update(a, "arrived")}>{t("وصل المريض")}</Button>}
-      {a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && queues.data?.some(row => row.doctor.id === a.doctorId && row.queue.awaitingAssistant && !row.queue.current) && <Button disabled={action.isPending || !canManageAttendance} onClick={() => update(a, "call")}>{t("إدخال المريض")}</Button>}
+      {a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && queues.data?.some(row => row.doctor.id === a.doctorId && row.queue.awaitingAssistant && !row.queue.current) && <Button title={t("يُستدعى أول مريض حاضر حسب ترتيب الطابور.")} disabled={action.isPending || !canManageAttendance || queues.isError || !queues.data?.some(row => row.doctor.id === a.doctorId && admissionCandidate(row.queue, today)?.id === a.id)} onClick={() => update(a, "call")}>{t("إدخال المريض")}</Button>}
       {a.arrivedAt && (a.status === "CONFIRMED" || a.status === "LATE") && (!a.urgencyStatus || a.urgencyStatus === "NONE") && <Button variant="outline" disabled={!canManageAttendance || action.isPending} onClick={() => update(a, "urgency")}>{t("طلب تقديم حالة مستعجلة")}</Button>}
       {a.urgencyStatus === "REQUESTED" && <span className="text-xs text-amber-700">{t("بانتظار قرار الطبيب")}</span>}
       {a.urgencyStatus === "APPROVED" && <span className="text-xs text-red-700">{t("حالة مستعجلة معتمدة")}</span>}

@@ -1,8 +1,8 @@
-import { nextPresentPatient } from "../../lib/doctorWorkflow";
+import { awaitingAssistantAdmission, callNextMessage, canConfirmAdmission, nextPresentPatient } from "../../lib/doctorWorkflow";
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
 import { canSendAttendanceMessage } from "../../lib/assistantReception";
-import { useAttendanceActions } from "../../hooks/useAttendanceActions";
+import { useAttendanceState } from "../../hooks/useAttendanceActions";
 import { useEffect, useRef, useState } from "react";
 import { Bell, BellOff, CheckCircle2, Clock3, Megaphone, PhoneCall, UserCheck, UserX, Users, X } from "lucide-react";
 import { Card } from "../../components/ui/Card";
@@ -75,7 +75,7 @@ export default function DoctorQueue() {
   const { showToast } = useToast();
   const { user } = useAuth();
   const isAssistant = user?.role === "ASSISTANT";
-  const canManageAttendance = useAttendanceActions();
+  const { canManageAttendance, hasActiveAssistant } = useAttendanceState();
   const { data, isLoading, isFetching, isError, refetch } = useQueue(isAssistant ? ASSISTANT_QUEUE_POLL_MS : QUEUE_POLL_MS);
 
   // شريط «الطبيب نادى على: فلان» الذي يظهر عند المساعد تلقائيًا.
@@ -170,11 +170,11 @@ export default function DoctorQueue() {
     }
   }
 
-  async function run(action: Promise<unknown>, successMessage: string, fallbackError: string) {
+  async function run(action: Promise<unknown>, successMessage: string | ((result: unknown) => string), fallbackError: string) {
     markSelfAction();
     try {
-      await action;
-      showToast(successMessage, "success");
+      const result = await action;
+      showToast(typeof successMessage === "function" ? successMessage(result) : successMessage, "success");
     } catch (err) {
       showToast(apiErrorMessage(err, fallbackError), "error");
     }
@@ -195,7 +195,9 @@ export default function DoctorQueue() {
   // مع خادم قديم بلا هذا الحقل نعود للعرض السابق: المنتظرون ثم قائمة المتأخرين منفصلة.
   const ordered = data?.ordered;
   const queueList: Appointment[] = ordered ?? waiting;
-  const nextPresent = nextPresentPatient(ordered ?? [...waiting, ...late]);
+  const admissionQueue = { current, awaitingAssistant: data?.awaitingAssistant, ordered: ordered ?? [...waiting, ...late] };
+  const nextPresent = nextPresentPatient(admissionQueue.ordered);
+  const awaitingAssistant = awaitingAssistantAdmission(data, hasActiveAssistant);
 
   return (
     <div className="space-y-5">
@@ -291,9 +293,8 @@ export default function DoctorQueue() {
                   showToast(apiErrorMessage(err, t("تعذّر تسجيله كمتأخر.")), "error");
                   return;
                 }
-                // المريض التالي يجب أن يكون شخصًا آخر: منتظر عادي، أو متأخر آخر رصيده أقل من رصيد هذا المريض الآن.
-                const penalty = (res as { lateEvent?: { penalty?: number } | null } | undefined)?.lateEvent?.penalty ?? 2;
-                const hasSomeoneElse = others.some((a) => a.status !== "LATE" || (a.skipCredits ?? 0) < penalty);
+                // لا نطلب التالي تلقائيًا ما لم يبق مريض آخر حاضر بالفعل.
+                const hasSomeoneElse = Boolean(nextPresentPatient(others));
                 if (!hasSomeoneElse) {
                   showToast(lateToast(res), "success");
                   return;
@@ -301,10 +302,10 @@ export default function DoctorQueue() {
                 // الانتقال مباشرة إلى المريض الذي بعده (نفس قاعدة «نادِ المريض التالي» في الخادم).
                 try {
                   markSelfAction();
-                  const next = (await callNext.mutateAsync()) as Appointment | undefined;
+                  const next = await callNext.mutateAsync();
                   setCallBanner(null);
                   showToast(
-                    t("سُجّل متأخرًا — ") + (next ? t("تمت مناداة التالي: ") + patientName(next) : t("تمت مناداة المريض التالي.")),
+                    t("سُجّل متأخرًا — ") + t(callNextMessage(next)),
                     "success"
                   );
                 } catch (err) {
@@ -327,17 +328,17 @@ export default function DoctorQueue() {
         </Card>
       ) : (
         <Card className="text-center">
-          <p className="text-sm text-slate-600">{t(data?.awaitingAssistant ? "في انتظار تأكيد المساعد" : "لا يوجد مريض بالداخل الآن.")}</p>
+          <p className="text-sm text-slate-600">{t(awaitingAssistant ? "في انتظار تأكيد المساعد" : "لا يوجد مريض بالداخل الآن.")}</p>
           <Button
             className="mt-3 w-full"
             loading={callNext.isPending}
-            disabled={busy || !nextPresent}
+            disabled={busy || !nextPresent || awaitingAssistant || isAssistant}
             aria-describedby="queue-call-next-hint"
-            onClick={() => run(callNext.mutateAsync(), t("تمت مناداة المريض التالي."), t("تعذّرت مناداة المريض التالي."))}
+            onClick={() => run(callNext.mutateAsync(), result => t(callNextMessage(result)), t("تعذّرت مناداة المريض التالي."))}
           >
-            <PhoneCall className="me-1.5 h-4 w-4" />{t(" نادِ المريض التالي ")}</Button>
+            <PhoneCall className="me-1.5 h-4 w-4" />{t(awaitingAssistant ? "بانتظار إدخال المريض" : " نادِ المريض التالي ")}</Button>
           <p id="queue-call-next-hint" className="mt-2 text-sm text-slate-600">
-            {t(!nextPresent ? "بانتظار تسجيل حضور المرضى" : "يُستدعى أول مريض حاضر حسب ترتيب الطابور.")}
+            {t(awaitingAssistant ? "تم إرسال الطلب إلى المساعد. يبدأ الكشف بعد تأكيد إدخال المريض." : !nextPresent ? "بانتظار تسجيل حضور المرضى" : "يُستدعى أول مريض حاضر حسب ترتيب الطابور.")}
           </p>
         </Card>
       )}
@@ -405,7 +406,8 @@ export default function DoctorQueue() {
                   )}
                   <button
                     type="button"
-                    disabled={busy || Boolean(current) || !a.arrivedAt || !canManageAttendance || (user?.role === "ASSISTANT" && !data?.awaitingAssistant)}
+                    disabled={busy || !canManageAttendance || !canConfirmAdmission(admissionQueue, a.id, isAssistant)}
+                    title={t("يُستدعى أول مريض حاضر حسب ترتيب الطابور.")}
                     onClick={() => run(callPatient.mutateAsync(a.id), t("تمت مناداته."), t("تعذّرت مناداته."))}
                     className="rounded-lg px-2 py-1 text-xs font-semibold text-primary-600 transition hover:bg-primary-50 disabled:opacity-40"
                   >
@@ -451,7 +453,8 @@ export default function DoctorQueue() {
                   <div className="flex shrink-0 items-center gap-1">
                     <button
                       type="button"
-                      disabled={busy || Boolean(current)}
+                      disabled={busy || !canManageAttendance || !canConfirmAdmission(admissionQueue, a.id, isAssistant)}
+                      title={t("يُستدعى أول مريض حاضر حسب ترتيب الطابور.")}
                       onClick={() => run(callPatient.mutateAsync(a.id), t("تمت مناداته."), t("تعذّرت مناداته."))}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-primary-600 transition hover:bg-white disabled:opacity-40"
                     >{t("نادِه الآن ")}</button>

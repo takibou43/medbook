@@ -143,6 +143,62 @@ describe.skipIf(!TEST_URL)("متأخر في الطابور (PostgreSQL حقيق�
     h.sendNotification.mockResolvedValue({ statusCode: 201 });
   });
 
+  it.each(["none", "off", "on"])("attendance and admission with assistant %s", async mode => {
+    const doctor = mode === "none" ? docB : docA;
+    await db.assistant.updateMany({ where: { doctorId: docA.id }, data: { shiftEndsAt: null } });
+    await db.doctor.update({ where: { id: doctor.id }, data: { dutyEndsAt: new Date(Date.now() + 3600000), queueRequestedAt: null } });
+    try {
+      const m = await seedQueue(doctor.id, ["A", "B", "C"]);
+      await db.appointment.updateMany({ where: { doctorId: doctor.id }, data: { arrivedAt: null } });
+      if (mode === "on") expect((await call("POST", "/api/shifts", assistantToken, { active: true })).status).toBe(200);
+      const state = await call("GET", "/api/shifts", doctor.token);
+      expect(state.data.hasActiveAssistant).toBe(mode === "on");
+      const doctorArrival = await call("POST", `/api/appointments/${m.B}/arrived`, doctor.token);
+      expect(doctorArrival.status).toBe(mode === "on" ? 403 : 200);
+      if (mode !== "none") {
+        const assistantArrival = await call("POST", `/api/appointments/${m.B}/arrived`, assistantToken);
+        expect(assistantArrival.status).toBe(mode === "on" ? 200 : 403);
+      }
+      const result = await call("POST", "/api/appointments/queue/next", doctor.token);
+      expect(result.status).toBe(200);
+      if (mode === "on") {
+        expect(result.data).toEqual({ awaitingAssistant: true });
+        expect((await db.appointment.findUniqueOrThrow({ where: { id: m.B } })).status).toBe("CONFIRMED");
+        expect((await call("POST", `/api/appointments/${m.B}/call`, doctor.token)).status).toBe(403);
+        expect((await call("POST", `/api/appointments/${m.B}/call`, assistantToken)).status).toBe(200);
+      } else expect(result.data.id).toBe(m.B);
+      expect((await call("GET", "/api/appointments/queue", doctor.token)).data.current.id).toBe(m.B);
+      expect((await call("POST", "/api/appointments/queue/next", doctor.token)).status).toBe(409);
+    } finally {
+      await db.assistant.updateMany({ where: { doctorId: docA.id }, data: { shiftEndsAt: null } });
+    }
+  });
+
+  it("doctor takes over a pending request after assistant expiry, and hands back after restart", async () => {
+    await db.doctor.update({ where: { id: docA.id }, data: { dutyEndsAt: new Date(Date.now() + 3600000), queueRequestedAt: null } });
+    try {
+      const m = await seedQueue(docA.id, ["A", "B", "C"]);
+      await db.appointment.update({ where: { id: m.A }, data: { arrivedAt: null } });
+      await call("POST", "/api/shifts", assistantToken, { active: true });
+      expect((await call("POST", "/api/appointments/queue/next", docA.token)).data.awaitingAssistant).toBe(true);
+      // Expiry by time, without a manual stop event or sleeping in the test.
+      await db.assistant.updateMany({ where: { doctorId: docA.id }, data: { shiftEndsAt: new Date(Date.now() - 1000) } });
+      expect((await call("GET", "/api/shifts", docA.token)).data.hasActiveAssistant).toBe(false);
+      expect((await call("POST", `/api/appointments/${m.B}/call`, assistantToken)).status).toBe(403);
+      expect((await call("POST", `/api/appointments/${m.A}/arrived`, docA.token)).status).toBe(200);
+      expect(await next(docA.token)).toBe(m.A);
+      await finish(m.A, docA.token);
+      expect((await call("POST", "/api/shifts", assistantToken, { active: true })).status).toBe(200);
+      expect((await call("GET", "/api/shifts", docA.token)).data.hasActiveAssistant).toBe(true);
+      expect((await call("POST", `/api/appointments/${m.B}/call`, docA.token)).status).toBe(403);
+      expect((await call("POST", "/api/appointments/queue/next", docA.token)).data.awaitingAssistant).toBe(true);
+      expect((await call("POST", `/api/appointments/${m.C}/call`, assistantToken)).status).toBe(409);
+      expect((await call("POST", `/api/appointments/${m.B}/call`, assistantToken)).status).toBe(200);
+    } finally {
+      await db.assistant.updateMany({ where: { doctorId: docA.id }, data: { shiftEndsAt: null } });
+    }
+  });
+
   it("absence clears attendance; return restores scheduled priority", async () => {
     const m = await seedQueue(docA.id, ["A", "B", "C"], true);
     expect(await next(docA.token)).toBe(m.A);

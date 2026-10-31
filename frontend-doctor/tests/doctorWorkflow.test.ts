@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft, nextPresentPatient } from "../src/lib/doctorWorkflow.ts";
+import { callNextMessage, canConfirmAdmission, awaitingAssistantAdmission, filterQueue, hasUnprintedVisitDraft, nextPresentPatient } from "../src/lib/doctorWorkflow.ts";
 import { emptyDraft, prescriptionPatientFrom } from "../src/lib/prescription.ts";
 import type { Appointment } from "../src/types/index.ts";
 
@@ -54,4 +54,28 @@ test("next call skips unarrived patients and preserves server priority after QR 
   assert.equal(nextPresentPatient([arrived, present]), arrived);
   assert.equal(nextPresentPatient([{ ...arrived, status: "COMPLETED" }, present]), present);
   assert.equal(nextPresentPatient([{ ...arrived, status: "CANCELLED" }]), undefined);
+});
+
+
+test("admission controls follow the first present patient and the doctor-assistant handshake", () => {
+  const absent = { ...first, status: "CONFIRMED", arrivedAt: null } as Appointment;
+  const present = { ...second, status: "LATE", arrivedAt: "now" } as Appointment;
+  const later = { ...present, id: "later" };
+  const queue = { current: null, awaitingAssistant: false, ordered: [absent, present, later] };
+  assert.equal(canConfirmAdmission(queue, present.id, false), true);
+  assert.equal(canConfirmAdmission(queue, absent.id, false), false);
+  assert.equal(canConfirmAdmission(queue, later.id, false), false);
+  assert.equal(canConfirmAdmission(queue, present.id, true), false);
+  const requested = { ...queue, awaitingAssistant: true };
+  assert.equal(canConfirmAdmission(requested, present.id, true), true);
+  assert.equal(canConfirmAdmission(requested, later.id, true), false);
+  const earlierArrival = { ...absent, arrivedAt: "now" };
+  assert.equal(canConfirmAdmission({ ...requested, ordered: [earlierArrival, present] }, present.id, true), false);
+  assert.equal(canConfirmAdmission({ ...requested, current: present }, present.id, true), false);
+  assert.equal(canConfirmAdmission({ ...queue, ordered: [] }, present.id, false), false);
+});
+
+test("call feedback distinguishes a reception request from actual admission", () => {
+  assert.equal(callNextMessage({ awaitingAssistant: true }), "تم إرسال الطلب إلى المساعد. يبدأ الكشف بعد تأكيد إدخال المريض.");
+  assert.equal(callNextMessage({ ...first, status: "IN_PROGRESS" }), "تمت مناداة المريض التالي.");
 });

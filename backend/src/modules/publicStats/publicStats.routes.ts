@@ -21,7 +21,7 @@ export const publicStatsLimiter = rateLimit({
 
 const bookingsQuerySchema = z
   .object({ wilayaId: z.string().uuid("ولاية غير صالحة").optional() })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 router.get(
   "/bookings",

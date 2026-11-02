@@ -31,9 +31,9 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     return res.status(400).json({
       success: false,
       message: "بيانات غير صالحة.",
-      errors: err.errors.slice(0, MAX_REPORTED_ISSUES).map((e) => ({
+      errors: err.issues.slice(0, MAX_REPORTED_ISSUES).map((e) => ({
         path: e.path.slice(0, 10).join(".").slice(0, 200),
-        message: e.message.slice(0, 300),
+        message: e.code === "unrecognized_keys" ? "يحتوي الطلب على حقول غير مسموح بها." : e.message.slice(0, 300),
       })),
     });
   }

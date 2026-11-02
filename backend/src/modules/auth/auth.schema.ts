@@ -56,7 +56,7 @@ export const updateAccountSchema = z
     email: z.string().trim().email("بريد إلكتروني غير صالح").max(254).optional(),
     newPassword: z.string().min(8, "كلمة المرور الجديدة يجب أن تكون 8 خانات على الأقل").max(128).optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 // تفعيل ملف مريض لحساب طبيب قائم. كلمة المرور تُطلب من جديد (إثبات حضور) فلا تكفي جلسة مسروقة
 // لإضافة ملف. لا بريد ولا هاتف هنا إطلاقًا: الحساب هو نفسه ببريده وهاتفه.
@@ -67,7 +67,7 @@ export const addPatientProfileSchema = z
     lastName: personName().optional(),
     cityId: z.string().uuid("البلدية غير صالحة").optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 // طلب تسجيل كطبيب من حساب مريض قائم: بيانات الطبيب المهنية فقط + كلمة المرور الحالية.
 // لا بريد ولا هاتف ولا clinicId (الانضمام إلى العيادة بدعوة) ولا أي حقل اعتماد/اشتراك.
@@ -86,7 +86,7 @@ export const applyDoctorProfileSchema = z
     consultationFee: z.coerce.number().int().min(0).optional(),
     referralCode: z.string().trim().max(20, "كود الإحالة غير صحيح").optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const logoutSchema = z.object({ allSessions: z.boolean().optional() }).strict();
 

@@ -4,7 +4,7 @@ import { safePushSubscriptionSchema } from "../../lib/pushEndpoint";
 // البريد يُطبَّع دائمًا (trim + lowercase) قبل أي تحقق أو بحث أو حفظ، فلا يمكن إنشاء حسابين
 // لـ "Ali@Mail.com" و "ali@mail.com".
 const email = z
-  .string({ required_error: "البريد الإلكتروني مطلوب" })
+  .string({ error: "البريد الإلكتروني مطلوب" })
   .trim()
   .toLowerCase()
   .max(254, "البريد الإلكتروني طويل جدًا")
@@ -14,10 +14,10 @@ export const patientRegisterSchema = z.object({
   email,
   // حد أعلى 128؛ utils/password يحمي كامل النص عندما يتجاوز 72 بايتًا في UTF-8.
   password: z
-    .string({ required_error: "كلمة المرور مطلوبة" })
+    .string({ error: "كلمة المرور مطلوبة" })
     .min(8, "كلمة المرور يجب أن تكون 8 خانات على الأقل")
     .max(128, "كلمة المرور طويلة جدًا"),
-  name: z.string({ required_error: "الاسم مطلوب" }).trim().min(2, "الاسم قصير جدًا").max(120, "الاسم طويل جدًا"),
+  name: z.string({ error: "الاسم مطلوب" }).trim().min(2, "الاسم قصير جدًا").max(120, "الاسم طويل جدًا"),
   // نفس قاعدة الحجز (booking.schema.ts): رقم جزائري 05/06/07 + 8 أرقام. اختياري.
   phone: z
     .string()
@@ -32,7 +32,7 @@ export const patientRegisterSchema = z.object({
 
 export const patientLoginSchema = z.object({
   email,
-  password: z.string({ required_error: "كلمة المرور مطلوبة" }).min(1, "كلمة المرور مطلوبة").max(128),
+  password: z.string({ error: "كلمة المرور مطلوبة" }).min(1, "كلمة المرور مطلوبة").max(128),
 });
 
 // اشتراك Push كما يُرجعه PushSubscription.toJSON() في المتصفح. endpoint يجب أن يكون https

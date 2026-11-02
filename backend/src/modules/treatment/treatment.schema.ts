@@ -28,7 +28,7 @@ export const createPlanSchema = z
     estimatedSessions: z.coerce.number().int().min(1).max(100).nullable().optional(),
     estimatedTotalCost: z.coerce.number().int().min(0).max(100_000_000).nullable().optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const updatePlanSchema = z
   .object({
@@ -39,14 +39,14 @@ export const updatePlanSchema = z
     // الانتقالات المسموحة: ACTIVE → COMPLETED | CANCELLED فقط (تُفحص في الخدمة).
     status: z.enum(["COMPLETED", "CANCELLED"]).optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const listPlansQuerySchema = z
   .object({
     status: z.enum(["ACTIVE", "COMPLETED", "CANCELLED"]).optional(),
     patientId: z.string().uuid().optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 // ---------- الجلسات ----------
 
@@ -57,7 +57,7 @@ export const createSessionSchema = z
     plannedDate: dateOnly().nullable().optional(),
     appointmentId: z.string().uuid("موعد غير صالح").nullable().optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const updateSessionSchema = z
   .object({
@@ -68,12 +68,12 @@ export const updateSessionSchema = z
     appointmentId: z.string().uuid("موعد غير صالح").nullable().optional(),
     status: z.enum(["PLANNED", "COMPLETED", "CANCELLED"]).optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 // ترتيب الجلسات: القائمة الكاملة لمعرّفات جلسات الخطة بالترتيب الجديد (عملية ذرّية واحدة).
 export const reorderSessionsSchema = z
   .object({ sessionIds: z.array(z.string().uuid()).min(1).max(100) })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 // ---------- المتابعات ----------
 
@@ -83,7 +83,7 @@ export const createFollowUpSchema = z
     dueDate: dateOnly().optional(),
     afterMonths: z.coerce.number().int().min(1).max(36).optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const updateFollowUpSchema = z
   .object({
@@ -91,7 +91,7 @@ export const updateFollowUpSchema = z
     status: z.enum(["DUE", "COMPLETED", "DISMISSED"]).optional(),
     dueDate: dateOnly().optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 // ---------- موعد العودة ----------
 
@@ -109,14 +109,14 @@ export const followUpAppointmentSchema = z
     // مفتاح منع التكرار (تولّده الواجهة مرة لكل نافذة): إعادة الإرسال تعيد نفس الموعد ولا تنشئ آخر.
     idempotencyKey: z.string().uuid("مفتاح الطلب غير صالح"),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const rescheduleSchema = z
   .object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "صيغة التاريخ يجب أن تكون YYYY-MM-DD"),
     startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "صيغة الوقت يجب أن تكون HH:mm"),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const doctorSlotsQuerySchema = z
   .object({
@@ -124,11 +124,11 @@ export const doctorSlotsQuerySchema = z
     // «موعد المتابعة الطبية» داخل خطط العلاج: يُرجع كل أوقات الدوام مع علامة busy (الطبيب فقط).
     includeBooked: z.enum(["true", "1"]).optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const patientPlansQuerySchema = z
   .object({ familyMemberId: z.union([z.literal("self"), z.string().uuid()]).optional() })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export type CreatePlanInput = z.infer<typeof createPlanSchema>;
 export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;

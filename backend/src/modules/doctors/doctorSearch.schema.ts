@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Require scalar query strings before coercion: arrays/objects must not reach
 // Prisma or expensive geographic searches through TypeScript-only casts.
-const numeric = (min: number, max: number) => z.string().min(1).pipe(z.coerce.number().finite().min(min).max(max));
+const numeric = (min: number, max: number) => z.string().min(1).pipe(z.coerce.number<string>().finite().min(min).max(max));
 const integer = (min: number, max: number) => numeric(min, max).pipe(z.number().int());
 
 export const doctorSearchSchema = z.object({

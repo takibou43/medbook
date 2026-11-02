@@ -32,7 +32,7 @@ router.get(
   })
 );
 
-const validateCodeSchema = z.object({ code: z.string().trim().min(1, "أدخل كود الإحالة").max(20) }).strict("يحتوي الطلب على حقول غير مسموح بها.");
+const validateCodeSchema = z.object({ code: z.string().trim().min(1, "أدخل كود الإحالة").max(20) }).strict();
 
 router.post(
   "/validate-code",

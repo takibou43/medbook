@@ -22,13 +22,13 @@ router.use(/^\/(specialties|wilayas|cities)(\/|$)/, (req, res, next) => {
 // ---- مخططات مسارات التعديل (PATCH) ----
 // كل مخطط .strict(): أي حقل غير متوقَّع يُرفض بـ400 بدل أن يُمرَّر إلى Prisma (mass assignment).
 // middleware الـvalidate يقبل ZodObject فقط (لا .refine)، لذا شرط «حقل واحد على الأقل» يُفحص بـassertNotEmpty.
-const idParams = z.object({ id: z.string().uuid("معرّف غير صالح") }).strict("يحتوي الطلب على حقول غير مسموح بها.");
+const idParams = z.object({ id: z.string().uuid("معرّف غير صالح") }).strict();
 const updateDoctorAdminSchema = z
   .object({
     subscriptionStatus: z.nativeEnum(SubscriptionStatus).optional(),
     subscriptionExpiresAt: z.coerce.date().nullable().optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 const updateSpecialtySchema = z
   .object({
     nameAr: z.string().trim().min(2).max(100).optional(),
@@ -36,16 +36,16 @@ const updateSpecialtySchema = z
     icon: z.string().trim().max(100).nullable().optional(),
     description: z.string().trim().max(1000).nullable().optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 const updateWilayaSchema = z
   .object({
     code: z.string().trim().min(1).max(10).optional(),
     nameAr: z.string().trim().min(2).max(100).optional(),
     nameFr: z.string().trim().max(100).nullable().optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
-const verifyDoctorSchema = z.object({ status: z.nativeEnum(VerificationStatus), reason: z.string().trim().max(500).optional() }).strict("يحتوي الطلب على حقول غير مسموح بها.");
-const emptyBody = z.object({reason:z.string().trim().max(500).optional()}).strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
+const verifyDoctorSchema = z.object({ status: z.nativeEnum(VerificationStatus), reason: z.string().trim().max(500).optional() }).strict();
+const emptyBody = z.object({reason:z.string().trim().max(500).optional()}).strict();
 
 // ---- مخططات معاملات القوائم (GET) — صارمة: قيم محدودة وأي معامل غير متوقَّع يُرفض بـ400 ----
 const pageParam = z.coerce.number().int("رقم الصفحة يجب أن يكون عددًا صحيحًا").min(1).max(1000);
@@ -57,7 +57,7 @@ const searchParam = z
   .transform((v) => (v === "" ? undefined : v));
 const listUsersQuery = z
   .object({ id: z.string().uuid().optional(), role: z.nativeEnum(Role).optional(), q: searchParam.optional(), page: pageParam.optional(), pageSize: pageSizeParam.optional() })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 const listDoctorsQuery = z
   .object({
     id: z.string().uuid().optional(),
@@ -66,7 +66,7 @@ const listDoctorsQuery = z
     page: pageParam.optional(),
     pageSize: pageSizeParam.optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 function assertNotEmpty(body: Record<string, unknown>) {
   if (Object.keys(body).length === 0) throw ApiError.badRequest("لا يوجد أي حقل لتعديله.");
@@ -239,7 +239,7 @@ const referralsQuery = z
     page: z.coerce.number().int().min(1).optional(),
     pageSize: z.coerce.number().int().min(1).max(100).optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 router.get(
   "/referrals",
   validate({ query: referralsQuery }),

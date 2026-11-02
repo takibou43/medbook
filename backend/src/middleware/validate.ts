@@ -1,8 +1,8 @@
 import { NextFunction, Request, Response } from "express";
-import { AnyZodObject } from "zod";
+import { ZodObject } from "zod";
 import { assertBoundedInput } from "../lib/inputShape";
 
-type Schemas = Partial<{ body: AnyZodObject; query: AnyZodObject; params: AnyZodObject }>;
+type Schemas = Partial<{ body: ZodObject; query: ZodObject; params: ZodObject }>;
 
 /** يتحقق من body/query/params باستخدام Zod ويرمي 400 موحّد الشكل عند الفشل (تُعالج في errorHandler). */
 export function validate(schemas: Schemas) {

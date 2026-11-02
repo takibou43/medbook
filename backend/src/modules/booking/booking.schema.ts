@@ -64,7 +64,7 @@ export const lookupQuerySchema = z
       .trim()
       .regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)"),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const cancelBookingSchema = z
   .object({
@@ -73,7 +73,7 @@ export const cancelBookingSchema = z
       .trim()
       .regex(/^0[5-7][0-9]{8}$/, "رقم هاتف جزائري غير صالح (مثال: 0551234567)"),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const bookingIdParamsSchema = z.object({
   id: z.string().uuid("معرّف حجز غير صالح"),

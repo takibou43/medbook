@@ -5,7 +5,7 @@ import { cleanString } from "../../lib/textClean";
 export const MAX_ACTIVE_FAMILY_MEMBERS = 15;
 
 const relationship = z.enum(["CHILD", "SPOUSE", "PARENT", "SIBLING", "OTHER"], {
-  errorMap: () => ({ message: "صلة القرابة غير صالحة" }),
+  error: "صلة القرابة غير صالحة",
 });
 
 // تاريخ الميلاد: YYYY-MM-DD فقط، لا في المستقبل ولا قبل 1900. يُخزَّن كمنتصف ليل UTC لذلك اليوم.
@@ -36,7 +36,7 @@ export const createFamilyMemberSchema = z
     birthDate: birthDate.nullable().optional(),
     gender: z.enum(["MALE", "FEMALE"]).nullable().optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const updateFamilyMemberSchema = z
   .object({
@@ -46,13 +46,13 @@ export const updateFamilyMemberSchema = z
     birthDate: birthDate.nullable().optional(),
     gender: z.enum(["MALE", "FEMALE"]).nullable().optional(),
   })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export const familyMemberParamsSchema = z.object({ id: z.string().uuid("معرّف غير صالح") });
 
 export const listFamilyQuerySchema = z
   .object({ includeArchived: z.enum(["true", "false"]).optional() })
-  .strict("يحتوي الطلب على حقول غير مسموح بها.");
+  .strict();
 
 export type CreateFamilyMemberInput = z.infer<typeof createFamilyMemberSchema>;
 export type UpdateFamilyMemberInput = z.infer<typeof updateFamilyMemberSchema>;

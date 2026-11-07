@@ -1,3 +1,4 @@
+import { MAX_APPOINTMENT_PRICE_DZD } from "../../lib/priceLimits";
 import { z } from "zod";
 import { specialtyNameSchema } from "../../lib/specialtySelection";
 
@@ -5,7 +6,7 @@ export const profileSchema = z.object({
   bio: z.string().max(4000).optional(),
   yearsExperience: z.coerce.number().int().min(0).max(80).optional(),
   languages: z.array(z.string().max(40)).max(10).optional(),
-  consultationFee: z.coerce.number().int().min(0).optional(),
+  consultationFee: z.coerce.number().int().min(0).max(MAX_APPOINTMENT_PRICE_DZD).optional(),
   phone: z.string().max(30).optional(),
   address: z.string().max(300).optional(),
   // https فقط: الصورة تُعرض لكل المرضى، ورابط http يكشف عناوينهم لخادم خارجي بلا تشفير.

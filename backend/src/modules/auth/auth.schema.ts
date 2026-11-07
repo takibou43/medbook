@@ -1,3 +1,4 @@
+import { MAX_APPOINTMENT_PRICE_DZD } from "../../lib/priceLimits";
 import { personName } from "../../lib/personName";
 import { z } from "zod";
 import { specialtyNameSchema } from "../../lib/specialtySelection";
@@ -28,7 +29,7 @@ export const registerDoctorSchema = z.object({
   yearsExperience: z.coerce.number().int().min(0).max(80).optional(),
   languages: z.array(z.string().max(40)).max(10).optional(),
   gender: z.enum(["MALE", "FEMALE"]).optional(),
-  consultationFee: z.coerce.number().int().min(0).optional(),
+  consultationFee: z.coerce.number().int().min(0).max(MAX_APPOINTMENT_PRICE_DZD).optional(),
   // كود إحالة زميل (اختياري). فارغ = بلا إحالة. غير صحيح → 400 مرتبط بالحقل (لا يُنشأ الحساب حتى يُصحَّح أو يُحذف).
   referralCode: z.string().trim().max(20, "كود الإحالة غير صحيح").optional(),
 });
@@ -83,7 +84,7 @@ export const applyDoctorProfileSchema = z
     yearsExperience: z.coerce.number().int().min(0).max(80).optional(),
     languages: z.array(z.string().max(40)).max(10).optional(),
     gender: z.enum(["MALE", "FEMALE"]).optional(),
-    consultationFee: z.coerce.number().int().min(0).optional(),
+    consultationFee: z.coerce.number().int().min(0).max(MAX_APPOINTMENT_PRICE_DZD).optional(),
     referralCode: z.string().trim().max(20, "كود الإحالة غير صحيح").optional(),
   })
   .strict();

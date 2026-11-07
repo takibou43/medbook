@@ -6,55 +6,64 @@ import { validate } from "../../middleware/validate";
 
 /**
  * استقبال أخطاء المتصفح من موقعي المرضى والأطباء، وكتابتها سطرًا واحدًا في سجلات Render.
- * - لا قاعدة بيانات ولا خدمة خارجية ولا حزمة جديدة.
- * - لا بيانات مرضى: تُحذف أجزاء الاستعلام من الروابط، وتُخفى الأرقام الطويلة (هواتف) والبريد.
- * - مسار عام لأن الخطأ قد يقع قبل تسجيل الدخول؛ محمي بالأصل الموثوق وحد معدل صغير.
+ *
+ * الخصوصية: لا يُقبل أي نص حر. كل حقل قيمة من قائمة محددة (فئة الخطأ، رمز تقني، أجزاء مسار معروفة،
+ * اسم ملف حزمة Vite) أو رقم. رسالة الخطأ والمكدّس والاستعلام مرفوضة (المخطط strict)، فلا يمكن أن يصل
+ * إلى السجل اسم مريض أو تشخيص أو توكن. القوائم نفسها في frontend/src/lib/clientErrorPayload.ts وfrontend-doctor/src/lib/clientErrorPayload.ts.
+ *
+ * الحماية (ليست مصادقة): المسار عام لأن الخطأ قد يقع قبل تسجيل الدخول.
+ * - requireTrustedOrigin يرفض أصول المتصفح الأجنبية فقط؛ الطلب بلا Origin (curl) يمرّ.
+ * - لذلك الحد الفعلي هو: 20 تقريرًا/10 دقائق لكل IP، و300/10 دقائق لكل الخادم، وجسم صغير بقيم محددة،
+ *   بلا قاعدة بيانات. أسوأ إساءة ممكنة: أسطر سجل مزيفة من القيم المسموحة، محدودة العدد.
  */
 export const CLIENT_ERROR_LIMIT = 20;
-const clientErrorLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: CLIENT_ERROR_LIMIT,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: "طلبات كثيرة." },
-});
+export const CLIENT_ERROR_GLOBAL_LIMIT = 300;
 
-const schema = z.object({
-  portal: z.enum(["patient", "doctor"]),
-  kind: z.enum(["error", "unhandledrejection", "chunk"]),
-  message: z.string().max(500),
-  source: z.string().max(300).optional(),
-  path: z.string().max(300).optional(),
-  line: z.number().int().min(0).max(10_000_000).optional(),
-  column: z.number().int().min(0).max(10_000_000).optional(),
-  stack: z.string().max(2000).optional(),
-}).strict();
+export const ERROR_CATEGORIES = [
+  "TypeError", "ReferenceError", "SyntaxError", "RangeError", "URIError", "EvalError", "AggregateError",
+  "NetworkError", "ChunkLoadError", "SecurityError", "QuotaExceededError", "AbortError", "NotAllowedError", "Other",
+] as const;
+export const ERROR_CODES = ["ERR_NETWORK", "ECONNABORTED", "ETIMEDOUT", "ERR_CANCELED", "ERR_BAD_RESPONSE", "ERR_BAD_REQUEST", "CHUNK_LOAD"] as const;
+export const ROUTE_SEGMENTS = [
+  "account", "accept", "admin", "apply", "appointments", "arrival", "assistant", "assistants", "clinic", "clinics",
+  "doctor", "doctors", "family", "keyboard-check", "login", "maintenance", "messages", "overview", "patient-blocks",
+  "patients", "profile", "referrals", "register", "reviews", "schedule", "settings", "specialties", "status",
+  "subscription", "treatment-plans", "users", "wilayas",
+] as const;
+const SEGMENTS = new Set<string>([...ROUTE_SEGMENTS, ":param"]);
+const ASSET_PATTERN = /^[A-Za-z0-9_]{1,40}-[A-Za-z0-9_-]{8}\.js$/;
 
-/** يُزيل ما قد يحمل بيانات شخصية: الاستعلام في الروابط، البريد، الأرقام الطويلة، والمعرّفات. */
-export function scrubClientText(value: string | undefined, max: number): string | undefined {
-  if (!value) return undefined;
-  return value
-    .replace(/[?#][^\s)'"]*/g, "")
-    .replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g, "[email]")
-    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "[id]")
-    .replace(/\+?\d[\d\s-]{6,}\d/g, "[num]")
-    .replace(/[\r\n]+/g, " | ")
-    .slice(0, max);
+export function isGeneralizedRoute(route: string): boolean {
+  if (route === "/") return true;
+  if (!route.startsWith("/") || route.length > 120) return false;
+  const parts = route.slice(1).split("/");
+  return parts.length <= 6 && parts.every((p) => SEGMENTS.has(p));
 }
 
+const position = z.number().int().min(0).max(10_000_000).optional();
+export const clientErrorSchema = z.object({
+  portal: z.enum(["patient", "doctor"]),
+  kind: z.enum(["error", "unhandledrejection", "chunk"]),
+  category: z.enum(ERROR_CATEGORIES),
+  code: z.enum(ERROR_CODES).optional(),
+  route: z.string().max(120).refine(isGeneralizedRoute, "route must be generalized"),
+  asset: z.string().max(60).regex(ASSET_PATTERN).optional(),
+  line: position,
+  column: position,
+}).strict();
+
+const limitMessage = { success: false, message: "طلبات كثيرة." };
+const perIpLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: CLIENT_ERROR_LIMIT, standardHeaders: true, legacyHeaders: false, message: limitMessage });
+const globalLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, max: CLIENT_ERROR_GLOBAL_LIMIT, standardHeaders: false, legacyHeaders: false,
+  keyGenerator: () => "all-clients", message: limitMessage,
+});
+
 const router = Router();
-router.post("/", requireTrustedOrigin, clientErrorLimiter, validate({ body: schema }), (req, res) => {
-  const b = req.body as z.infer<typeof schema>;
-  const entry = {
-    portal: b.portal,
-    kind: b.kind,
-    message: scrubClientText(b.message, 300),
-    source: scrubClientText(b.source, 200),
-    path: scrubClientText(b.path, 200),
-    line: b.line,
-    column: b.column,
-    stack: scrubClientText(b.stack, 1200),
-  };
+router.post("/", requireTrustedOrigin, perIpLimiter, globalLimiter, validate({ body: clientErrorSchema }), (req, res) => {
+  const b = req.body as z.infer<typeof clientErrorSchema>;
+  // إعادة بناء صريحة للحقول المسموحة فقط (لا نمرر req.body كما هو).
+  const entry = { portal: b.portal, kind: b.kind, category: b.category, code: b.code, route: b.route, asset: b.asset, line: b.line, column: b.column };
   console.warn("[client-error]", JSON.stringify(entry));
   res.status(204).end();
 });

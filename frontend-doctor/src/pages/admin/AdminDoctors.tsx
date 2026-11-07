@@ -25,6 +25,7 @@ export default function AdminDoctors() {
   const setStatus = (value: string) => update("status", value);
   const { showToast } = useToast();
   const qc = useQueryClient();
+  const [subscriptionMonths, setSubscriptionMonths] = useState<Record<string, number>>({});
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["admin-doctors", search, status, page, id],
@@ -33,7 +34,31 @@ export default function AdminDoctors() {
   });
 
   function setVerification(d:any,status:VerificationStatus){confirmation.ask({title:status==='VERIFIED'?t("توثيق الطبيب"):t("رفض التوثيق"),record:t("د. ")+d.firstName+' '+d.lastName,reasonRequired:status==='REJECTED',impact:status==='VERIFIED'?t("قد يبدأ التوثيق فترة التجربة ومكافأة الإحالة وفق السياسة الحالية مرة واحدة؛ لا يؤكد دفع اشتراك."):t("يرفض التوثيق فقط؛ يبقى الحساب والملفات والمواعيد محفوظة."),action:async reason=>{await api.patch('/admin/doctors/'+d.id+'/verify',{status,reason:reason||undefined});showToast(t("تم تحديث حالة التوثيق."),'success');await qc.invalidateQueries({queryKey:['admin-doctors']});}});}
-  function setSubscription(d:any,status:SubscriptionStatus){confirmation.ask({title:status==='ACTIVE'?t("تفعيل الاشتراك"):t("إيقاف الاشتراك"),record:t("د. ")+d.firstName+' '+d.lastName,impact:t("يغير الاشتراك الفردي فقط. تحقق من الدفع قبل التفعيل؛ تبقى المواعيد والملفات محفوظة."),action:async()=>{await api.patch('/admin/doctors/'+d.id,{subscriptionStatus:status});showToast(t("تم تحديث الاشتراك."),'success');await qc.invalidateQueries({queryKey:['admin-doctors']});}});}
+  function setSubscription(d: any, status: SubscriptionStatus) {
+    const months = subscriptionMonths[d.id] ?? 1;
+    confirmation.ask({
+      title: status === "ACTIVE" ? t("تفعيل أو تجديد الاشتراك") : t("إيقاف الاشتراك"),
+      record: t("د. ") + d.firstName + " " + d.lastName,
+      impact: status === "ACTIVE"
+        ? t("بعد تأكيد الدفع، تُضاف {0} أشهر (30 يومًا لكل شهر) من نهاية الاشتراك الحالي أو من اليوم إذا انتهى.", { "0": months })
+        : t("يوقف الاشتراك الفردي؛ تبقى المواعيد والملفات محفوظة."),
+      action: async () => {
+        try {
+          await api.patch("/admin/doctors/" + d.id, {
+            subscriptionStatus: status,
+            ...(status === "ACTIVE" ? {
+              subscriptionMonths: months,
+              expectedSubscriptionExpiresAt: d.subscriptionExpiresAt ?? null,
+            } : {}),
+          });
+          showToast(t("تم تحديث الاشتراك."), "success");
+        } finally {
+          // Also refresh a rejected stale snapshot so the next attempt uses current data.
+          await qc.invalidateQueries({ queryKey: ["admin-doctors"] });
+        }
+      },
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -80,10 +105,21 @@ export default function AdminDoctors() {
                   {d.verificationStatus !== "REJECTED" && (
                     <Button variant="danger" onClick={() => setVerification(d, "REJECTED")}>{t("رفض ")}</Button>
                   )}
+                  {!d.clinic?.ownerId && (
+                    <label className="text-sm text-slate-700">
+                      {t("عدد الأشهر المدفوعة")}
+                      <input type="number" min={1} max={120} step={1} className="input w-20"
+                        value={subscriptionMonths[d.id] ?? 1}
+                        onChange={e => { const months = Number(e.target.value); if (Number.isInteger(months) && months >= 1 && months <= 120) setSubscriptionMonths(previous => ({ ...previous, [d.id]: months })); }} />
+                    </label>
+                  )}
                   {d.clinic?.ownerId ? null : d.subscriptionStatus !== "ACTIVE" ? (
                     <Button variant="outline" onClick={() => setSubscription(d, "ACTIVE")}>{t("تفعيل الاشتراك ")}</Button>
                   ) : (
+                    <>
+                    <Button variant="outline" onClick={() => setSubscription(d, "ACTIVE")}>{t("تجديد الاشتراك")}</Button>
                     <Button variant="outline" onClick={() => setSubscription(d, "UNPAID")}>{t("إيقاف الاشتراك ")}</Button>
+                    </>
                   )}
                   </AdminActions>
                 </div>

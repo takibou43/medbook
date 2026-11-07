@@ -11,6 +11,7 @@ import { queueNewDoctorAreaNotifications, pushNewDoctorAreaNotification } from "
 import { applyReferralOnVerificationTx, notifyReferrerRewarded } from "../referrals/referrals.service";
 import { approvalTrialData } from "../../lib/doctorApprovalTrial";
 import { isDoctorProfilePublic } from "../../lib/doctorVisibility";
+import { paidSubscriptionData, type DoctorSubscriptionEdit } from "../../lib/doctorPaidSubscription";
 
 // ---------------- Dashboard stats ----------------
 
@@ -177,9 +178,10 @@ export async function setDoctorVerification(doctorId: string, status: Verificati
 // الحقول المسموح بها فقط (مخطط Zod الصارم في admin.routes) — لا علاقات متداخلة ولا userId.
 export async function updateDoctorAdmin(
     doctorId: string,
-    data: { subscriptionStatus?: SubscriptionStatus; subscriptionExpiresAt?: Date | null }
+    data: DoctorSubscriptionEdit
 ) {
   const result = await prisma.$transaction(async (tx) => {
+    await lockDoctorRow(tx, doctorId);
     const before = await tx.doctor.findUnique({
       where: { id: doctorId },
       select: { verificationStatus: true, subscriptionStatus: true, subscriptionExpiresAt: true, user: { select: { isActive: true } }, clinic: { include: { owner: { select: { isActive: true } } } } },
@@ -188,7 +190,7 @@ export async function updateDoctorAdmin(
     if (before.clinic?.ownerId) throw ApiError.badRequest("اشتراك هذا الطبيب يُدار من صفحة العيادات ضمن اشتراك واحد.");
     const doctor = await tx.doctor.update({
       where: { id: doctorId },
-      data,
+      data: paidSubscriptionData(before, data),
       include: { user: { select: { isActive: true } }, clinic: { include: { owner: { select: { isActive: true } } } }, city: { select: { nameAr: true } }, specialty: { select: { nameAr: true } } },
     });
     const now = new Date();

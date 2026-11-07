@@ -38,10 +38,15 @@ export async function issueTokens(userId: string, role: Role, sessionStartedAt: 
  */
 export const REVOKED_TOKEN_RETENTION_MS = 2 * 24 * 60 * 60 * 1000;
 export async function purgeStaleRefreshTokens(now = new Date()): Promise<number> {
-  const revokedBefore = new Date(now.getTime() - REVOKED_TOKEN_RETENTION_MS);
-  // المُدوَّرة (revoked + expiresAt = وقت التدوير) تبقى يومين لكشف إعادة الاستعمال، ثم تُحذف.
+  const retainedSince = new Date(now.getTime() - REVOKED_TOKEN_RETENTION_MS);
+  // الاحتفاظ يُحسب من expiresAt لا من createdAt:
+  // - المُدوَّر: expiresAt = لحظة التدوير، فيبقى يومين كاملين بعد التدوير لكشف إعادة الاستعمال
+  //   (توكن صدر قبل خمسة أيام ودُوّر الآن لا يُحذف في التنظيف التالي).
+  // - الملغى بالخروج/تغيير كلمة المرور/قبل هذا الإصدار: expiresAt الأصلي، فيبقى حتى يومين بعد انتهائه الطبيعي
+  //   (توقيعه يكون قد انتهى قبل ذلك، فلا يصل إلى فحص إعادة الاستعمال أصلًا).
+  // - غير الملغى: يُحذف بمجرد انتهائه.
   const result = await prisma.refreshToken.deleteMany({
-    where: { OR: [{ revoked: false, expiresAt: { lt: now } }, { revoked: true, createdAt: { lt: revokedBefore } }] },
+    where: { OR: [{ revoked: false, expiresAt: { lt: now } }, { revoked: true, expiresAt: { lt: retainedSince } }] },
   });
   return result.count;
 }

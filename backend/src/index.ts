@@ -1,5 +1,3 @@
-import { isKeepAwakeWindow } from "./lib/awakeWindow";
-import { createHealthPing } from "./lib/healthPing";
 import { safeErrorCode } from "./lib/safeError";
 import { createApp } from "./app";
 import { env } from "./config/env";
@@ -72,29 +70,7 @@ async function bootstrapAdminUser() {
   }
 }
 
-// إبقاء الخادم مستيقظًا: خطة الاستضافة المجانية تُنيم الخدمة بعد نحو 15 دقيقة بلا طلبات،
-// فيصير أول فتح للموقع بعدها بطيئًا (قيسنا 24 ثانية). المهمة المجدولة في GitHub Actions
-// لم تكفِ وحدها لأن GitHub يؤخّر الجداول القصيرة كثيرًا (قست الفواصل الفعلية: ساعتان إلى خمس).
-// لذلك يطرق الخادم نفسه عبر عنوانه العام كل 10 دقائق فيبقى مستيقظًا، وتبقى مهمة GitHub
-// احتياطيًا لإيقاظه إن نام فعلًا (فالنائم لا يستطيع طرق نفسه). RENDER_EXTERNAL_URL تضبطها منصة الاستضافة تلقائيًا.
-const SELF_PING_INTERVAL_MS = 10 * 60 * 1000;
-
-// يتوقف الإبقاء التلقائي مستيقظًا عند 16:00 بتوقيت الجزائر.
-// زيارة المستخدم بعد ذلك تظل قادرة على إيقاظ الخادم.
-function startSelfPing() {
-  const baseUrl = process.env.RENDER_EXTERNAL_URL;
-  if (!baseUrl) return;
-  const ping = createHealthPing(baseUrl);
-
-  setInterval(() => {
-    if (!isKeepAwakeWindow(new Date())) return;
-    void ping();
-  }, SELF_PING_INTERVAL_MS);
-
-  console.log(
-    "⏰ الطرق الذاتي مفعّل: 08:00–16:00 يوميًا (توقيت الجزائر)."
-  );
-}
+// لا إبقاء مستيقظًا: بقرار المالك (2026-10-30) ينام الخادم المجاني عند الخمول ويوقظه أول طلب حقيقي.
 
 Promise.all([
   grandfatherExistingDoctors(),
@@ -134,7 +110,6 @@ Promise.all([
     liveUpdates.subscribe(() => reminderJob.wake());
   }
 
-  startSelfPing();
 
   app.listen(env.port, () => {
     console.log(`🩺 MedBook API listening on http://localhost:${env.port} (${env.nodeEnv})`);

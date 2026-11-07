@@ -2203,5 +2203,10 @@
   "على آيفون، لن يصلك أي تذكير قبل تثبيت MedBook:": "Sur iPhone, vous ne recevrez aucun rappel avant d’installer MedBook :",
   "افتح الموقع في سفاري واضغط زر المشاركة.": "Ouvrez le site dans Safari et appuyez sur le bouton Partager.",
   "اختر «إضافة إلى الشاشة الرئيسية».": "Choisissez « Sur l’écran d’accueil ».",
-  "افتح MedBook من الأيقونة الجديدة ثم اضغط «تفعيل الإشعارات».": "Ouvrez MedBook depuis la nouvelle icône, puis appuyez sur « Activer les notifications »."
+  "افتح MedBook من الأيقونة الجديدة ثم اضغط «تفعيل الإشعارات».": "Ouvrez MedBook depuis la nouvelle icône, puis appuyez sur « Activer les notifications ».",
+  "تفعيل أو تجديد الاشتراك": "Activer ou renouveler l’abonnement",
+  "بعد تأكيد الدفع، تُضاف {0} أشهر (30 يومًا لكل شهر) من نهاية الاشتراك الحالي أو من اليوم إذا انتهى.": "Après confirmation du paiement, {0} mois (30 jours par mois) sont ajoutés à partir de l’échéance actuelle, ou d’aujourd’hui si l’abonnement a expiré.",
+  "يوقف الاشتراك الفردي؛ تبقى المواعيد والملفات محفوظة.": "Suspend l’abonnement individuel ; les rendez-vous et les dossiers sont conservés.",
+  "عدد الأشهر المدفوعة": "Nombre de mois payés",
+  "تجديد الاشتراك": "Renouveler l’abonnement"
 }

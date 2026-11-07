@@ -2199,5 +2199,9 @@
   "يستبدل فترات الأيام المختارة في المسودة. لا يتغير الجدول حتى تحفظه.": "Remplace les plages des jours sélectionnés dans le brouillon. Les horaires changent uniquement après l’enregistrement.",
   "نسخ إلى المسودة": "Copier dans le brouillon",
   "نهاية الفترة يجب أن تكون بعد بدايتها في اليوم نفسه.": "La fin de la plage doit suivre son début le même jour.",
-  "توجد فترات متداخلة في اليوم نفسه.": "Certaines plages se chevauchent le même jour."
+  "توجد فترات متداخلة في اليوم نفسه.": "Certaines plages se chevauchent le même jour.",
+  "على آيفون، لن يصلك أي تذكير قبل تثبيت MedBook:": "Sur iPhone, vous ne recevrez aucun rappel avant d’installer MedBook :",
+  "افتح الموقع في سفاري واضغط زر المشاركة.": "Ouvrez le site dans Safari et appuyez sur le bouton Partager.",
+  "اختر «إضافة إلى الشاشة الرئيسية».": "Choisissez « Sur l’écran d’accueil ».",
+  "افتح MedBook من الأيقونة الجديدة ثم اضغط «تفعيل الإشعارات».": "Ouvrez MedBook depuis la nouvelle icône, puis appuyez sur « Activer les notifications »."
 }

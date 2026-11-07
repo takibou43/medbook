@@ -1,3 +1,4 @@
+import { MAX_APPOINTMENT_PRICE_DZD } from "../../lib/priceLimits";
 import { personName } from "../../lib/personName";
 import { z } from "zod";
 import { inviteTermsFields } from "../../lib/clinicFinance";
@@ -15,7 +16,7 @@ export const clinicDoctorProfileSchema = z.object({
   specialtyId: z.string().uuid().optional(), specialtyName: specialtyNameSchema.optional(), gender: z.enum(["MALE", "FEMALE"]).optional(),
   yearsExperience: z.coerce.number().int().min(0).max(80).optional(),
   bio: z.string().trim().max(2000).optional(),
-  consultationFee: z.coerce.number().int().min(0).optional(),
+  consultationFee: z.coerce.number().int().min(0).max(MAX_APPOINTMENT_PRICE_DZD).optional(),
 }).strict();
 export const registerClinicSchema = z.object({
   email: z.string().trim().email().max(254).transform(v => v.toLowerCase()),

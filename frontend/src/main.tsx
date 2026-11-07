@@ -11,8 +11,12 @@ import App from "./App";
 import "./index.css";
 import { LanguageRoot } from "./i18n/LanguageRoot";
 import { languageReady } from "./i18n/locale";
+import { installClientErrorReporter } from "./lib/clientErrorReporter";
 
 preserveNativeKeyboardFocus();
+
+// تبليغ الخادم بأخطاء المتصفح في النسخة المنشورة فقط (لا أثناء التطوير).
+if (import.meta.env.PROD) installClientErrorReporter();
 
 // من اختار الفرنسية سابقًا ينتظر قاموسها (ملف منفصل) قبل أول رسم؛ للعربية يكتمل فورًا.
 void languageReady.then(() => ReactDOM.createRoot(document.getElementById("root")!).render(

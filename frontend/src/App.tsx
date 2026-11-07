@@ -1,18 +1,20 @@
 import { useLanguage } from "./i18n/LanguageRoot";
 import { t } from "./i18n/locale.ts";
-import { useEffect } from "react";
+import { lazy, useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useToast } from "./components/ui/Toast";
 import { installAppointmentAlarm } from "./lib/appointmentAlarm";
 import { PublicLayout } from "./components/layout/Layout";
 import BookAppointment from "./pages/BookAppointment";
-import AppointmentStatus from "./pages/AppointmentStatus";
-import AccountAuth from "./pages/account/AccountAuth";
-import ArrivalScanner from "./pages/account/ArrivalScanner";
-import MyAccount from "./pages/account/MyAccount";
-import Clinics from "./pages/Clinics";
-import FamilyMembers from "./pages/account/FamilyMembers";
-import TreatmentPlans from "./pages/account/TreatmentPlans";
+
+// الصفحة الرئيسية (الحجز) تُحمَّل فورًا؛ بقية الصفحات تُحمَّل عند فتحها فقط لتخفيف أول تحميل على شبكة الهاتف.
+const AppointmentStatus = lazy(() => import("./pages/AppointmentStatus"));
+const AccountAuth = lazy(() => import("./pages/account/AccountAuth"));
+const ArrivalScanner = lazy(() => import("./pages/account/ArrivalScanner"));
+const MyAccount = lazy(() => import("./pages/account/MyAccount"));
+const Clinics = lazy(() => import("./pages/Clinics"));
+const FamilyMembers = lazy(() => import("./pages/account/FamilyMembers"));
+const TreatmentPlans = lazy(() => import("./pages/account/TreatmentPlans"));
 
 export default function App() {
   useLanguage();

@@ -3,6 +3,7 @@ import { t } from "../i18n/locale.ts";
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { api, setAccessToken, getAccessToken, classifyApiError, ApiErrorKind } from "../lib/api";
 import { User } from "../types";
+import { clearAllPatientLatinNames } from "../lib/prescriptionPatientNames";
 import { logoutBody, wantsSessionBootstrap, withoutSwitchParam } from "../lib/portalSwitch";
 import { useQueryClient } from "@tanstack/react-query";
 import { clearPrescriptionDraft } from "../lib/prescription";
@@ -150,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       // لا تبقى مسودة وصفة (بيانات طبية) في ذاكرة الصفحة بعد الخروج.
       clearPrescriptionDraft();
+      clearAllPatientLatinNames();
       setAccessToken(null);
       setUser(null);
       setLoggingOut(false);

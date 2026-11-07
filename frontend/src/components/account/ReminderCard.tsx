@@ -7,6 +7,11 @@ import { useToast } from "../ui/Toast";
 import { apiErrorMessage } from "../../lib/api";
 import { PushState, disablePatientPush, enablePatientPush, getPushState } from "../../lib/patientPush";
 
+function isIphone(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 // بطاقة «ذكّرني بموعدي»: لا تطلب الإذن من تلقاء نفسها أبدًا — فقط عند ضغط الزر، وإن رفض المريض
 // لا نلحّ عليه بنوافذ متكررة؛ نعرض الحالة مع إمكانية المحاولة مجددًا متى شاء.
 export function ReminderCard({ compact = false }: { compact?: boolean }) {
@@ -76,7 +81,18 @@ export function ReminderCard({ compact = false }: { compact?: boolean }) {
         <Bell className="h-5 w-5 text-primary-600" aria-hidden="true" />{t(" 🔔 ذكّرني بموعدي ")}</p>
       <p className="mt-1 text-sm text-slate-600">{t("فعّل الإشعارات ليصلك تذكير قبل موعدك بساعة وقبل 5 دقائق.")}</p>
 
-      {state === "unsupported" ? (
+      {state === "unsupported" && isIphone() ? (
+        // آيفون لا يرسل إشعارات الموقع إلا بعد تثبيته على الشاشة الرئيسية وفتحه من أيقونته.
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-slate-700">
+          <p className="flex items-start gap-2 font-semibold text-amber-800">
+            <BellOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{t("على آيفون، لن يصلك أي تذكير قبل تثبيت MedBook:")}</p>
+          <ol className="mt-2 list-decimal space-y-1 ps-6">
+            <li>{t("افتح الموقع في سفاري واضغط زر المشاركة.")}</li>
+            <li>{t("اختر «إضافة إلى الشاشة الرئيسية».")}</li>
+            <li>{t("افتح MedBook من الأيقونة الجديدة ثم اضغط «تفعيل الإشعارات».")}</li>
+          </ol>
+        </div>
+      ) : state === "unsupported" ? (
         <p className="mt-3 flex items-start gap-2 text-sm text-slate-500">
           <BellOff className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />{t("متصفحك لا يدعم الإشعارات. على آيفون: أضِف الموقع إلى الشاشة الرئيسية ثم افتحه منها. ")}</p>
       ) : (

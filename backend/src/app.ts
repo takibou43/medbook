@@ -34,6 +34,7 @@ import { patientAuthRouter, patientAccountRouter, patientNotificationsRouter } f
 import { guestIdentityRouter, guestClaimReviewRouter } from "./modules/patientAuth/guestIdentity.routes";
 import internalRemindersRoutes from "./modules/reminders/reminders.routes";
 import familyRoutes from "./modules/family/family.routes";
+import clientErrorsRoutes from "./modules/clientErrors/clientErrors.routes";
 import { doctorTreatmentRouter, patientTreatmentRouter } from "./modules/treatment/treatment.routes";
 import referralsRoutes from "./modules/referrals/referrals.routes";
 import publicStatsRoutes from "./modules/publicStats/publicStats.routes";
@@ -114,6 +115,7 @@ export function createApp() {
   app.use("/api/admin", adminRoutes);
   app.use("/api/booking", bookingRoutes);
   app.use("/api/push", pushRoutes);
+  app.use("/api/client-errors", clientErrorsRoutes);
   // إحصائيات عامة مجمّعة بلا أي بيانات شخصية (عدّاد الحجوزات الشهري).
   app.use("/api/public/stats", publicStatsRoutes);
   // مسار عام للتحقق من رمز دعوة مساعد قبل التسجيل — بدون مصادقة.

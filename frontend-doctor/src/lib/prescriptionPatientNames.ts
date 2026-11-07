@@ -1,8 +1,10 @@
 import type { PrescriptionPatient } from "./prescription.ts";
-const storageKey = (owner: string) => `medbook-prescription-latin-names-v1:${owner}`;
+const STORAGE_PREFIX = "medbook-prescription-latin-names-v1:";
+const storageKey = (owner: string) => `${STORAGE_PREFIX}${owner}`;
 const patientKey = (patient: PrescriptionPatient) => patient.familyMemberId ? `family:${patient.familyMemberId}` : patient.patientId ? `patient:${patient.patientId}` : `visit:${patient.appointmentId}`;
 type Entry = { original: string; name: string; savedAt: number };
-const MAX_AGE = 90 * 24 * 60 * 60 * 1000;
+// حواسيب العيادات مشتركة غالبًا: الأسماء اللاتينية للمرضى لا تبقى أكثر من أسبوع، وتُمسح كلها عند الخروج.
+const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 export function validLatinPatientName(value: string): boolean {
   return value.trim().length > 0 && value.trim().length <= 160 && /\p{Script=Latin}/u.test(value) && /^[\p{Script=Latin}\p{M} .'’\-]+$/u.test(value.trim());
 }
@@ -30,4 +32,14 @@ export function rememberPatientLatinName(owner: string, patient: PrescriptionPat
 export function forgetPatientLatinName(owner: string, patient: PrescriptionPatient): boolean {
   const entries = read(owner); delete entries[patientKey(patient)];
   try { localStorage.setItem(storageKey(owner), JSON.stringify(entries)); return true; } catch { return false; }
+}
+
+/** يمسح كل الأسماء المحفوظة لكل الحسابات على هذا المتصفح (يُستدعى عند تسجيل الخروج). */
+export function clearAllPatientLatinNames(): void {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i -= 1) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(STORAGE_PREFIX)) localStorage.removeItem(key);
+    }
+  } catch { /* التخزين قد يكون ممنوعًا في التصفح الخاص */ }
 }

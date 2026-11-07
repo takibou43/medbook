@@ -12,7 +12,8 @@ import { prisma } from "./prisma";
  * - لا دفع ولا تحويل هنا: حساب وعرض فقط.
  */
 
-export const MAX_APPOINTMENT_PRICE_DZD = 10_000_000;
+export { MAX_APPOINTMENT_PRICE_DZD } from "./priceLimits";
+import { MAX_APPOINTMENT_PRICE_DZD } from "./priceLimits";
 
 /** يقبل تعديل السعر أو النسبة أو كليهما؛ نسبة العيادة مرفوضة لأنها تُحسب تلقائيًا (strict). */
 export const clinicDoctorTermsSchema = z

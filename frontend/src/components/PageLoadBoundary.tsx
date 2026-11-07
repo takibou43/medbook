@@ -2,12 +2,22 @@ import { t } from "../i18n/locale.ts";
 import { Component, type ReactNode } from "react";
 import { Button } from "./ui/Button";
 
-/** A lost connection while loading a page must leave a usable recovery action. */
-export class PageLoadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+type Props = { children: ReactNode; resetKey?: string };
+
+/**
+ * انقطاع الاتصال أثناء تحميل صفحة يترك زر إعادة تحميل بدل شاشة فارغة.
+ * resetKey (المسار): يُلغى الخطأ عند الانتقال إلى صفحة أخرى دون إعادة تركيب الصفحات السليمة،
+ * فتبقى حالتها (البحث، رقم الصفحة) كما هي عند التنقل بين /clinics و/clinics/:id.
+ */
+export class PageLoadBoundary extends Component<Props, { failed: boolean }> {
   state = { failed: false };
 
   static getDerivedStateFromError() {
     return { failed: true };
+  }
+
+  componentDidUpdate(prev: Props) {
+    if (this.state.failed && prev.resetKey !== this.props.resetKey) this.setState({ failed: false });
   }
 
   render() {

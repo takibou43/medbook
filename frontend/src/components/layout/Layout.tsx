@@ -15,8 +15,8 @@ export function PublicLayout() {
       <a href="#main-content" className="skip-link">{t("الانتقال إلى المحتوى")}</a>
       <Header />
       <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 outline-none">
-        {/* key: خطأ تحميل صفحة لا يبقى عالقًا بعد الانتقال إلى صفحة أخرى */}
-        <PageLoadBoundary key={pathname}>
+        {/* resetKey: خطأ تحميل صفحة لا يبقى عالقًا بعد الانتقال، دون إعادة تركيب الصفحات السليمة */}
+        <PageLoadBoundary resetKey={pathname}>
           <Suspense fallback={<Spinner />}>
             <Outlet />
           </Suspense>

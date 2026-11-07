@@ -106,4 +106,5 @@ const checks = [...guards.matchAll(/ALTER TABLE "([^"]+)" ADD CONSTRAINT "([^"]+
 assert.equal(psql("SELECT t.relname||'.'||c.conname FROM pg_constraint c JOIN pg_class t ON t.oid=c.conrelid WHERE t.relnamespace='public'::regnamespace AND c.contype='c' ORDER BY 1").trim(), checks);
 assert.equal(psql("SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid WHERE c.relnamespace='public'::regnamespace AND NOT t.tgisinternal").trim(), String([...guards.matchAll(/CREATE TRIGGER/g)].length));
 assert.equal(contentHash(), before, 'cutover changed data');
+console.log(`PostgreSQL ${psql('SHOW server_version').trim()}`);
 console.log('Cutover rehearsal passed: fix x2, resolve, deploy x2 (no pending), diff clean, guards complete, data unchanged.');

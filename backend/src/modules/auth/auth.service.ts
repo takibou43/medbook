@@ -5,7 +5,7 @@ import { hashPassword, comparePassword, getDummyPasswordHash } from "../../utils
 import { verifyRefreshToken } from "../../utils/jwt";
 import { ApiError } from "../../utils/ApiError";
 import { RegisterDoctorInput, RegisterPatientInput, RegisterAssistantInput } from "./auth.schema";
-import { hashToken, issueTokens } from "../../lib/tokens";
+import { hashToken, issueTokens, markRefreshRotating, revokeAllOnRefreshReuse, sessionStartOf, sessionTooOld } from "../../lib/tokens";
 import { acceptInvite } from "../assistants/assistants.service";
 import { ASSISTANT_SAFE_SELECT } from "../../lib/assistantView";
 import { assistantDoctorContext } from "../../lib/assistantDoctorContext";
@@ -187,9 +187,16 @@ export async function refresh(refreshToken: string) {
     throw ApiError.unauthorized("جلسة منتهية. الرجاء تسجيل الدخول من جديد.");
   }
 
+  if (sessionTooOld(decoded)) throw ApiError.unauthorized("جلسة منتهية. الرجاء تسجيل الدخول من جديد.");
+  const tokenHash = hashToken(refreshToken);
   const stored = await prisma.refreshToken.findFirst({
-    where: { userId: decoded.sub, tokenHash: hashToken(refreshToken), revoked: false },
+    where: { userId: decoded.sub, tokenHash, revoked: false },
   });
+  if (!stored) {
+    // توكن موقَّع صحيح لكنه ملغى: سباق تبويبين (يُتجاهل) أو إعادة استعمال توكن مسروق (تُبطَل كل الجلسات).
+    await revokeAllOnRefreshReuse(decoded.sub, tokenHash);
+    throw ApiError.unauthorized("جلسة منتهية. الرجاء تسجيل الدخول من جديد.");
+  }
   if (!stored || stored.expiresAt < new Date()) {
     throw ApiError.unauthorized("جلسة منتهية. الرجاء تسجيل الدخول من جديد.");
   }
@@ -198,13 +205,14 @@ export async function refresh(refreshToken: string) {
   if (!user || !user.isActive) throw ApiError.unauthorized();
 
   // rotate: revoke old, issue new
+  markRefreshRotating(tokenHash);
   const consumed = await prisma.refreshToken.updateMany({
     where: { id: stored.id, revoked: false, expiresAt: { gt: new Date() } },
     data: { revoked: true },
   });
   if (consumed.count !== 1) throw ApiError.unauthorized("جلسة منتهية. الرجاء تسجيل الدخول من جديد.");
   const context = doctorPortalRole(user);
-  const tokens = await issueTokens(user.id, context);
+  const tokens = await issueTokens(user.id, context, sessionStartOf(decoded));
   const { patient: _p, doctor: _d, ...rest } = user;
   void _p; void _d;
   return { user: { ...rest, role: context, profiles: summarizeProfiles(user) }, ...tokens };

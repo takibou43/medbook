@@ -4,7 +4,7 @@ import { beneficiaryOf, FAMILY_MEMBER_PUBLIC_SELECT } from "../../lib/beneficiar
 import { hashPassword, comparePassword } from "../../utils/password";
 import { verifyRefreshToken } from "../../utils/jwt";
 import { ApiError } from "../../utils/ApiError";
-import { hashToken, issueTokens } from "../../lib/tokens";
+import { hashToken, issueTokens, markRefreshRotating, revokeAllOnRefreshReuse, sessionStartOf, sessionTooOld } from "../../lib/tokens";
 import { sendPushToUser, isPushEnabled } from "../../lib/push";
 import { PatientRegisterInput, PushSubscriptionInput } from "./patientAuth.schema";
 import { isPatientBlocked } from "../patientBlocks/patientBlocks.service";
@@ -107,21 +107,29 @@ export async function refreshPatientSession(refreshToken: string | undefined) {
     throw expired();
   }
 
+  if (sessionTooOld(decoded)) throw expired();
+  const tokenHash = hashToken(refreshToken);
   const stored = await prisma.refreshToken.findFirst({
-    where: { userId: decoded.sub, tokenHash: hashToken(refreshToken), revoked: false },
+    where: { userId: decoded.sub, tokenHash, revoked: false },
   });
+  if (!stored) {
+    // توكن موقَّع صحيح لكنه ملغى: سباق تبويبين (يُتجاهل) أو إعادة استعمال توكن مسروق (تُبطَل كل الجلسات).
+    await revokeAllOnRefreshReuse(decoded.sub, tokenHash);
+    throw expired();
+  }
   if (!stored || stored.expiresAt < new Date()) throw expired();
 
   const user = await prisma.user.findUnique({ where: { id: decoded.sub }, select: { id: true, role: true, isActive: true, patient: { select: { id: true } } } });
   if (!user || !user.isActive || !patientPortalRole(user)) throw expired();
 
   // تدوير: إبطال القديم وإصدار جديد (نفس سلوك /api/auth/refresh).
+  markRefreshRotating(tokenHash);
   const consumed = await prisma.refreshToken.updateMany({
     where: { id: stored.id, revoked: false, expiresAt: { gt: new Date() } },
     data: { revoked: true },
   });
   if (consumed.count !== 1) throw expired();
-  const tokens = await issueTokens(user.id, Role.PATIENT);
+  const tokens = await issueTokens(user.id, Role.PATIENT, sessionStartOf(decoded));
   const me = await getPatientMe(user.id);
   return { user: me, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
 }

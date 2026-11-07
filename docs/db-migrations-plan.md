@@ -40,3 +40,10 @@
 ويُعد تغيير مستقل يشمل `backend/package.json` و`backend/docker-entrypoint.sh`، مع
 خطوة ترحيل مضبوطة وتوقف عند الخطأ، دون fallback إلى db push ودون `--accept-data-loss`.
 النشر يقوم به المستخدم بعد اكتمال التحقق، ولا يكفي نجاح بناء قاعدة فارغة وحده لاعتماده.
+
+## تحديث 2026-11-07: إخراج `db push` من الإقلاع
+
+- `backend/package.json`: أمر `start` صار `node dist/index.js` فقط، وأُضيف `npm run db:sync` (نفس `db push` بلا `--accept-data-loss`) لتطبيق تغيير المخطط **يدويًا وبقصد**.
+- أمر الإقلاع الفعلي في Render مضبوط من لوحة Render وليس من `package.json`. يجب تغييره هناك إلى `node dist/index.js`.
+- من الآن: أي PR يغيّر `prisma/schema.prisma` يُطبَّق مخططه على Neon قبل دمجه أو مباشرة بعده (القاعدة 1 أعلاه)، بـ`npm run db:sync` مع `DATABASE_URL` الإنتاج، بعد نسخة احتياطية.
+- `docker-entrypoint.sh` (التشغيل المحلي فقط) لم يتغيّر.

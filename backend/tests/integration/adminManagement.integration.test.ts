@@ -61,4 +61,33 @@ describe.skipIf(!url)('Admin management on isolated PostgreSQL',()=>{
   process.env.MEDBOOK_DEMO_USER_IDS=a.id;const preview=await request(app).get('/api/admin/maintenance/demo-preview').set(auth(a));expect(preview.body.data.records[0].eligible).toBe(false);expect((await request(app).post('/api/admin/maintenance/purge-demo-data').set(auth(a)).send({records:preview.body.data.records.map((r:any)=>({id:r.id,version:r.version}))})).status).toBe(409);
   expect((await request(app).post('/api/admin/maintenance/purge-demo-data').set(auth(a)).send({})).status).toBe(400);process.env.MEDBOOK_DEMO_USER_IDS='';
  });
+ it('manual paid subscriptions require admin access and reject duplicate concurrent renewals', async () => {
+  const saved = await db.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
+  const endpoint = '/api/admin/doctors/' + doctor.id;
+  try {
+   await db.doctor.update({ where: { id: doctor.id }, data: { clinicId: null, subscriptionStatus: 'EXPIRED', subscriptionExpiresAt: new Date('2020-01-01'), newDoctorTrial: true } });
+   const payload = { subscriptionStatus: 'ACTIVE', subscriptionMonths: 3, expectedSubscriptionExpiresAt: '2020-01-01T00:00:00.000Z' };
+   expect((await request(app).patch(endpoint).send(payload)).status).toBe(401);
+   expect((await request(app).patch(endpoint).set(auth(patientUser)).send(payload)).status).toBe(403);
+   expect((await request(app).patch(endpoint).set(auth(doctorUser)).send(payload)).status).toBe(403);
+   for (const months of [0, -1, 1.5, 121]) {
+    expect((await request(app).patch(endpoint).set(auth(a)).send({ ...payload, subscriptionMonths: months })).status).toBe(400);
+   }
+   const started = Date.now();
+   const responses = await Promise.all([request(app).patch(endpoint).set(auth(a)).send(payload), request(app).patch(endpoint).set(auth(b)).send(payload)]);
+   expect(responses.map(r => r.status).sort()).toEqual([200, 409]);
+   const paid = await db.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
+   expect(paid.subscriptionStatus).toBe('ACTIVE');
+   expect(paid.newDoctorTrial).toBe(false);
+   expect(paid.subscriptionExpiresAt!.getTime()).toBeGreaterThanOrEqual(started + 90 * 86400000);
+   expect(paid.subscriptionExpiresAt!.getTime()).toBeLessThanOrEqual(Date.now() + 90 * 86400000);
+   const renewal = await request(app).patch(endpoint).set(auth(a)).send({ subscriptionStatus: 'ACTIVE', subscriptionMonths: 2, expectedSubscriptionExpiresAt: paid.subscriptionExpiresAt!.toISOString() });
+   expect(renewal.status).toBe(200);
+   const extended = await db.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
+   expect(extended.subscriptionExpiresAt!.getTime()).toBe(paid.subscriptionExpiresAt!.getTime() + 60 * 86400000);
+  } finally {
+   await db.doctor.update({ where: { id: doctor.id }, data: { clinicId: saved.clinicId, subscriptionStatus: saved.subscriptionStatus, subscriptionExpiresAt: saved.subscriptionExpiresAt, newDoctorTrial: saved.newDoctorTrial } });
+  }
+ });
+
 });

@@ -27,6 +27,8 @@ const updateDoctorAdminSchema = z
   .object({
     subscriptionStatus: z.nativeEnum(SubscriptionStatus).optional(),
     subscriptionExpiresAt: z.coerce.date().nullable().optional(),
+    subscriptionMonths: z.number().int().min(1).max(120).optional(),
+    expectedSubscriptionExpiresAt: z.coerce.date().nullable().optional(),
   })
   .strict();
 const updateSpecialtySchema = z

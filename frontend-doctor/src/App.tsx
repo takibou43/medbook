@@ -1,6 +1,6 @@
 import { useLanguage } from "./i18n/LanguageRoot";
 import { t } from "./i18n/locale.ts";
-import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { Routes, Route, Navigate, NavLink, Outlet } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
 import { Spinner } from "./components/ui/States";
 import { PageLoadBoundary } from "./components/PageLoadBoundary";
@@ -135,14 +135,27 @@ const adminNav = [
   { to: "/admin/patient-blocks", label: "المرضى المحظورون", icon: UserX, group: "التشغيل والمتابعة" },
   { to: "/admin/reviews", label: "التقييمات", icon: Star, group: "التشغيل والمتابعة" },
   { to: "/admin/users", label: "المستخدمون", icon: UsersIcon, group: "الحسابات والأطباء والعيادات" },
-  { to: "/admin/subscriptions", label: "اشتراكات الأطباء", icon: Stethoscope, group: "الحسابات والأطباء والعيادات" },
-  { to: "/admin/doctors", label: "الأطباء", icon: Stethoscope, group: "الحسابات والأطباء والعيادات" },
-  { to: "/admin/clinics", label: "العيادات", icon: Building2, group: "الحسابات والأطباء والعيادات" },
+  { to: "/admin/doctors", label: "الأطباء والعيادات", icon: Stethoscope, group: "الحسابات والأطباء والعيادات", activeFor: ["/admin/subscriptions", "/admin/clinics"] },
   { to: "/admin/referrals", label: "إحالات الأطباء", icon: Gift, group: "الحسابات والأطباء والعيادات" },
   { to: "/admin/specialties", label: "التخصصات", icon: ShieldCheck, group: "الكتالوج والإعدادات" },
   { to: "/admin/wilayas", label: "الولايات والبلديات", icon: Building2, group: "الكتالوج والإعدادات" },
   { to: "/admin/account", label: "إعدادات الحساب", icon: KeyRound, footer: true },
 ];
+
+/** مدخل واحد في القائمة، مع إبقاء الروابط الحالية وفلاتر كل صفحة مستقلة. */
+function AdminDirectoryLayout() {
+  useLanguage();
+  return <section className="space-y-5">
+    <nav aria-label={t("إدارة الأطباء والعيادات")} className="flex flex-wrap gap-2">
+      {[
+        { to: "/admin/doctors", label: "الأطباء" },
+        { to: "/admin/subscriptions", label: "اشتراكات الأطباء" },
+        { to: "/admin/clinics", label: "العيادات" },
+      ].map(item=><NavLink key={item.to} to={item.to} end className={({isActive})=>isActive?"btn-primary":"btn-outline"}>{t(item.label)}</NavLink>)}
+    </nav>
+    <Outlet />
+  </section>;
+}
 
 function AdminAreaLayout() {
   useLanguage();
@@ -210,14 +223,16 @@ export default function App() {
       <Route element={<ProtectedRoute allow={["ADMIN"]} />}>
         <Route element={<AdminAreaLayout />}>
           <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/clinics" element={<AdminClinics />} />
           <Route path="/admin/appointments" element={<AdminAppointments />} />
           <Route path="/admin/messages" element={<AdminMessages />} />
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/patient-blocks" element={<AdminPatientBlocks />} />
           <Route path="/admin/referrals" element={<AdminReferrals />} />
-          <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />
-          <Route path="/admin/doctors" element={<AdminDoctors />} />
+          <Route element={<AdminDirectoryLayout />}>
+            <Route path="/admin/doctors" element={<AdminDoctors />} />
+            <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />
+            <Route path="/admin/clinics" element={<AdminClinics />} />
+          </Route>
           <Route path="/admin/specialties" element={<AdminSpecialties />} />
           <Route path="/admin/wilayas" element={<AdminWilayas />} />
           <Route path="/admin/reviews" element={<AdminReviews />} />

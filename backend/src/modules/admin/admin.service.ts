@@ -1,3 +1,5 @@
+import { readBillingSchedule, MONTHLY_PRICE_DZD } from '../../lib/subscriptionCalendar';
+import { subscriptionWhere, subscriptionFilters, type SubscriptionFilter, type ManualReceipt } from "../../lib/subscriptionAdmin";
 import { changeUserAccess, saveCatalog, removeCatalog } from "./adminSafety.service";
 import { Prisma, Role, VerificationStatus, SubscriptionStatus } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
@@ -11,7 +13,7 @@ import { queueNewDoctorAreaNotifications, pushNewDoctorAreaNotification } from "
 import { applyReferralOnVerificationTx, notifyReferrerRewarded } from "../referrals/referrals.service";
 import { approvalTrialData } from "../../lib/doctorApprovalTrial";
 import { isDoctorProfilePublic } from "../../lib/doctorVisibility";
-import { paidSubscriptionData, type DoctorSubscriptionEdit } from "../../lib/doctorPaidSubscription";
+import { paidSubscriptionChange, type DoctorSubscriptionEdit } from "../../lib/doctorPaidSubscription";
 
 // ---------------- Dashboard stats ----------------
 
@@ -178,22 +180,44 @@ export async function setDoctorVerification(doctorId: string, status: Verificati
 // الحقول المسموح بها فقط (مخطط Zod الصارم في admin.routes) — لا علاقات متداخلة ولا userId.
 export async function updateDoctorAdmin(
     doctorId: string,
-    data: DoctorSubscriptionEdit
+    data: DoctorSubscriptionEdit,
+    actorUserId?: string,
+    expectedVersion?: Date,
+    operation?: "RENEW" | "STOP" | "RESUME",
+    receipt?: ManualReceipt,
+    reason?: string
 ) {
   const result = await prisma.$transaction(async (tx) => {
     await lockDoctorRow(tx, doctorId);
     const before = await tx.doctor.findUnique({
       where: { id: doctorId },
-      select: { verificationStatus: true, subscriptionStatus: true, subscriptionExpiresAt: true, user: { select: { isActive: true } }, clinic: { include: { owner: { select: { isActive: true } } } } },
+      select: { updatedAt: true, newDoctorTrial: true, verificationStatus: true, subscriptionStatus: true, subscriptionExpiresAt: true, user: { select: { isActive: true } }, clinic: { include: { owner: { select: { isActive: true } } } } },
     });
     if (!before) throw ApiError.notFound("الطبيب غير موجود.");
     if (before.clinic?.ownerId) throw ApiError.badRequest("اشتراك هذا الطبيب يُدار من صفحة العيادات ضمن اشتراك واحد.");
+    if (expectedVersion && before.updatedAt.getTime() !== expectedVersion.getTime()) throw ApiError.conflict("تغير الاشتراك. حدّث القائمة قبل إعادة المحاولة.");
+    if (operation === "RESUME" && (before.subscriptionStatus === "ACTIVE" || !before.subscriptionExpiresAt || before.subscriptionExpiresAt <= new Date())) throw ApiError.badRequest("إعادة التفعيل تتطلب اشتراكًا موقوفًا له مدة متبقية. جدّد الاشتراك المنتهي.");
+    if (operation === "STOP" && before.subscriptionStatus !== "ACTIVE") throw ApiError.badRequest("الاشتراك غير مفعّل.");
+    const now = new Date();
+    if (data.subscriptionAmountDzd !== undefined && (!receipt || receipt.amountDzd !== data.subscriptionAmountDzd)) throw ApiError.badRequest("سجّل تفاصيل الدفعة قبل التجديد.");
+    const latest = await tx.auditLog.findFirst({where:{entity:"Doctor",entityId:doctorId,action:"DOCTOR_SUBSCRIPTION"},select:{meta:true},orderBy:[{createdAt:"desc"},{id:"desc"}]});
+    const previousSchedule = readBillingSchedule(latest?.meta);
+    const change = operation === "RESUME" ? {data:{subscriptionStatus:SubscriptionStatus.ACTIVE},quote:null} : paidSubscriptionChange(before,data,now,previousSchedule);
+    const version = new Date(Math.max(now.getTime(), before.updatedAt.getTime()+1));
     const doctor = await tx.doctor.update({
       where: { id: doctorId },
-      data: paidSubscriptionData(before, data),
+      data: {...change.data, updatedAt:version},
       include: { user: { select: { isActive: true } }, clinic: { include: { owner: { select: { isActive: true } } } }, city: { select: { nameAr: true } }, specialty: { select: { nameAr: true } } },
     });
-    const now = new Date();
+    if (actorUserId) await tx.auditLog.create({ data: {
+      userId: actorUserId, action: "DOCTOR_SUBSCRIPTION", entity: "Doctor", entityId: doctorId, createdAt:version,
+      meta: { operation: operation ?? (change.quote ? "RENEW" : "EDIT"), months: data.subscriptionMonths ?? 0,
+        pricingBasis:"CALENDAR_MONTH", monthlyPriceDzd:MONTHLY_PRICE_DZD, durationMs:change.quote?.durationMs??0,
+        billingSchedule:change.quote?.schedule??(data.subscriptionExpiresAt!==undefined?null:previousSchedule),
+        receipt: receipt ? {...receipt, channel:"MANUAL", status:"RECORDED"} : null, reason: reason ?? null,
+        beforeStatus: before.subscriptionStatus, afterStatus: doctor.subscriptionStatus,
+        beforeEnd: before.subscriptionExpiresAt?.toISOString() ?? null, afterEnd: doctor.subscriptionExpiresAt?.toISOString() ?? null }
+    } });
     const becamePublic = !isDoctorProfilePublic(before, now) && isDoctorProfilePublic(doctor, now);
     const recipients = becamePublic ? await queueNewDoctorAreaNotifications(tx, doctor) : [];
     return { doctor, recipients };
@@ -571,3 +595,24 @@ export async function globalSearch(qRaw: string) {
 
 
 export async function doctorReviewHistory(id:string){const rows=await prisma.auditLog.findMany({where:{entity:"Doctor",entityId:id,action:"SET_DOCTOR_VERIFICATION"},select:{id:true,createdAt:true,meta:true},orderBy:{createdAt:"desc"},take:10});return rows.map(r=>({id:r.id,at:r.createdAt,status:(r.meta as any)?.status,reason:(r.meta as any)?.reason??null}));}
+
+export async function subscriptionLedger(doctorId: string) {
+  return prisma.auditLog.findMany({ where: { entity: "Doctor", entityId: doctorId, action: "DOCTOR_SUBSCRIPTION" },
+    select: { id: true, createdAt: true, meta: true, user: { select: { email: true } } }, orderBy: { createdAt: "desc" } });
+}
+
+export async function listSubscriptions(params: {q?:string;filter?:SubscriptionFilter;page?:number;pageSize?:number}) {
+ const now=new Date(),page=params.page??1,pageSize=params.pageSize??20;
+ const where:Prisma.DoctorWhereInput={AND:[subscriptionWhere(params.filter??"ALL",now),...(params.q?[{OR:[
+ {firstName:{contains:params.q,mode:"insensitive" as const}},{lastName:{contains:params.q,mode:"insensitive" as const}},
+ {phone:{contains:params.q}},{user:{phone:{contains:params.q}}}
+ ]}]:[])]};
+ const [items,total,counts]=await Promise.all([
+ prisma.doctor.findMany({where,include:{specialty:true,city:true,clinic:true},orderBy:[{subscriptionExpiresAt:{sort:"asc",nulls:"last"}},{id:"asc"}],skip:(page-1)*pageSize,take:pageSize}),
+ prisma.doctor.count({where}),
+ Promise.all(subscriptionFilters.map(async key=>[key,await prisma.doctor.count({where:subscriptionWhere(key,now)})] as const))
+ ]);
+ const latest = items.length ? await prisma.auditLog.findMany({where:{entity:"Doctor",action:"DOCTOR_SUBSCRIPTION",entityId:{in:items.map(d=>d.id)}},orderBy:[{createdAt:"desc"},{id:"desc"}],distinct:["entityId"],select:{entityId:true,meta:true}}) : [];
+ const schedules=new Map(latest.map(row=>[row.entityId,readBillingSchedule(row.meta)]));
+ return {items:items.map(d=>({...d,billingSchedule:schedules.get(d.id)??null})),total,page,totalPages:Math.max(1,Math.ceil(total/pageSize)),counts:Object.fromEntries(counts)};
+}

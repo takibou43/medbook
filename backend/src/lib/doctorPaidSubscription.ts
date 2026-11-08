@@ -1,47 +1,49 @@
-import { SubscriptionStatus } from "@prisma/client";
-import { ApiError } from "../utils/ApiError";
+import { SubscriptionStatus } from '@prisma/client';
+import { ApiError } from '../utils/ApiError';
+import { renewalQuote, MONTHLY_PRICE_DZD, MAX_PAYMENT_DZD, type BillingSchedule } from './subscriptionCalendar';
 
 export type DoctorSubscriptionEdit = {
   subscriptionStatus?: SubscriptionStatus;
   subscriptionExpiresAt?: Date | null;
   subscriptionMonths?: number;
+  subscriptionAmountDzd?: number;
   expectedSubscriptionExpiresAt?: Date | null;
 };
 
-export function paidSubscriptionData(
+export function paidSubscriptionChange(
   before: { subscriptionStatus: SubscriptionStatus; subscriptionExpiresAt: Date | null },
   input: DoctorSubscriptionEdit,
   now = new Date(),
+  schedule?: BillingSchedule | null,
 ) {
-  const { subscriptionMonths, expectedSubscriptionExpiresAt, ...data } = input;
-  const renewal = subscriptionMonths !== undefined;
+  const { subscriptionMonths, subscriptionAmountDzd, expectedSubscriptionExpiresAt, ...data } = input;
+  const renewal = subscriptionMonths !== undefined || subscriptionAmountDzd !== undefined;
   if (renewal) {
-    if (!Number.isInteger(subscriptionMonths) || subscriptionMonths < 1 || subscriptionMonths > 120) {
-      throw ApiError.badRequest("عدد الأشهر يجب أن يكون بين 1 و120.");
+    if (subscriptionMonths !== undefined && (!Number.isInteger(subscriptionMonths) || subscriptionMonths < 1 || subscriptionMonths > 120)) {
+      throw ApiError.badRequest('عدد الأشهر يجب أن يكون بين 1 و120.');
     }
-    if (data.subscriptionStatus !== SubscriptionStatus.ACTIVE ||
-        expectedSubscriptionExpiresAt === undefined || data.subscriptionExpiresAt !== undefined) {
-      throw ApiError.badRequest("طلب تجديد الاشتراك غير صالح.");
+    if (subscriptionAmountDzd !== undefined && (!Number.isSafeInteger(subscriptionAmountDzd) || subscriptionAmountDzd < 1 || subscriptionAmountDzd > MAX_PAYMENT_DZD)) {
+      throw ApiError.badRequest('أدخل مبلغًا صحيحًا من 1 إلى 600000 دج.');
+    }
+    if ((subscriptionMonths !== undefined && subscriptionAmountDzd !== undefined) || data.subscriptionStatus !== SubscriptionStatus.ACTIVE ||
+      expectedSubscriptionExpiresAt === undefined || data.subscriptionExpiresAt !== undefined) {
+      throw ApiError.badRequest('طلب تجديد الاشتراك غير صالح.');
     }
     if ((before.subscriptionExpiresAt?.getTime() ?? null) !== (expectedSubscriptionExpiresAt?.getTime() ?? null)) {
-      throw ApiError.conflict("تغير الاشتراك. حدّث الصفحة قبل إعادة المحاولة.");
+      throw ApiError.conflict('تغير الاشتراك. حدّث الصفحة قبل إعادة المحاولة.');
     }
   }
-  if (data.subscriptionStatus !== SubscriptionStatus.ACTIVE) return data;
-  // An explicit renewal adds the paid months without losing any remaining paid/trial time.
-  // Older activation clients also recover expired or undated subscriptions.
+  if (data.subscriptionStatus !== SubscriptionStatus.ACTIVE) return { data, quote: null };
   const expiresAt = data.subscriptionExpiresAt;
   if (expiresAt !== undefined && (!expiresAt || expiresAt <= now)) {
-    throw ApiError.badRequest("يجب تحديد تاريخ انتهاء مستقبلي للاشتراك المفعّل.");
+    throw ApiError.badRequest('يجب تحديد تاريخ انتهاء مستقبلي للاشتراك المفعّل.');
   }
-  const shouldExtend = renewal || (!expiresAt &&
-    (!before.subscriptionExpiresAt || before.subscriptionExpiresAt <= now));
-  return {
-    ...data,
-    ...(shouldExtend ? {
-      subscriptionExpiresAt: new Date(Math.max(now.getTime(), before.subscriptionExpiresAt?.getTime() ?? 0) + (subscriptionMonths ?? 1) * 30 * 86400000),
-    } : {}),
-    // Paid activation consumes free-trial eligibility, including before first approval.
-    newDoctorTrial: false,
-  };
+  const shouldExtend = renewal || (!expiresAt && (!before.subscriptionExpiresAt || before.subscriptionExpiresAt <= now));
+  const quote = shouldExtend ? renewalQuote(subscriptionAmountDzd ?? (subscriptionMonths ?? 1) * MONTHLY_PRICE_DZD,
+    before.subscriptionExpiresAt?.getTime() ?? 0, now.getTime(), schedule) : null;
+  return { data: { ...data, ...(quote ? {subscriptionExpiresAt: new Date(quote.after)} : {}), newDoctorTrial: false }, quote };
+}
+
+export function paidSubscriptionData(...args: Parameters<typeof paidSubscriptionChange>) {
+  return paidSubscriptionChange(...args).data;
 }

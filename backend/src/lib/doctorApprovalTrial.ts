@@ -1,3 +1,4 @@
+import { addCalendarMonths } from './subscriptionCalendar';
 import { SubscriptionStatus, VerificationStatus } from "@prisma/client";
 
 type TrialDoctor = {
@@ -17,6 +18,6 @@ export function approvalTrialData(doctor: TrialDoctor, status: VerificationStatu
   return {
     trialStartedAt: now,
     subscriptionStatus: SubscriptionStatus.ACTIVE,
-    subscriptionExpiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+    subscriptionExpiresAt: new Date(addCalendarMonths(now.getTime(), 1)),
   };
 }

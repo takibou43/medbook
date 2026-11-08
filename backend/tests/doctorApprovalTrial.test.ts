@@ -5,10 +5,10 @@ import { approvalTrialData } from "../src/lib/doctorApprovalTrial";
 const now = new Date("2026-10-01T14:30:00Z");
 const doctor = { newDoctorTrial: true, trialStartedAt: null, subscriptionStatus: SubscriptionStatus.UNPAID, subscriptionExpiresAt: null };
 describe("new doctor trial starts at approval", () => {
-  it("grants exactly 30 days from approval", () => {
+  it("grants one calendar month from approval", () => {
     expect(approvalTrialData(doctor, VerificationStatus.VERIFIED, now)).toEqual({
       trialStartedAt: now, subscriptionStatus: SubscriptionStatus.ACTIVE,
-      subscriptionExpiresAt: new Date("2026-10-31T14:30:00Z"),
+      subscriptionExpiresAt: new Date("2026-11-01T14:30:00Z"),
     });
   });
   it.each([VerificationStatus.PENDING, VerificationStatus.REJECTED])("does not start on %s", status => {

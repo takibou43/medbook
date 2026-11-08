@@ -1,3 +1,4 @@
+import { addCalendarMonths } from '../../src/lib/subscriptionCalendar';
 import { beforeAll,afterAll,beforeEach,describe,it,expect } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
@@ -79,14 +80,64 @@ describe.skipIf(!url)('Admin management on isolated PostgreSQL',()=>{
    const paid = await db.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
    expect(paid.subscriptionStatus).toBe('ACTIVE');
    expect(paid.newDoctorTrial).toBe(false);
-   expect(paid.subscriptionExpiresAt!.getTime()).toBeGreaterThanOrEqual(started + 90 * 86400000);
-   expect(paid.subscriptionExpiresAt!.getTime()).toBeLessThanOrEqual(Date.now() + 90 * 86400000);
+   expect(paid.subscriptionExpiresAt!.getTime()).toBeGreaterThanOrEqual(addCalendarMonths(started,3));
+   expect(paid.subscriptionExpiresAt!.getTime()).toBeLessThanOrEqual(addCalendarMonths(Date.now(),3));
    const renewal = await request(app).patch(endpoint).set(auth(a)).send({ subscriptionStatus: 'ACTIVE', subscriptionMonths: 2, expectedSubscriptionExpiresAt: paid.subscriptionExpiresAt!.toISOString() });
    expect(renewal.status).toBe(200);
    const extended = await db.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
-   expect(extended.subscriptionExpiresAt!.getTime()).toBe(paid.subscriptionExpiresAt!.getTime() + 60 * 86400000);
+   expect(extended.subscriptionExpiresAt!.getTime()).toBe(addCalendarMonths(paid.subscriptionExpiresAt!.getTime(),2));
   } finally {
    await db.doctor.update({ where: { id: doctor.id }, data: { clinicId: saved.clinicId, subscriptionStatus: saved.subscriptionStatus, subscriptionExpiresAt: saved.subscriptionExpiresAt, newDoctorTrial: saved.newDoctorTrial } });
+  }
+ });
+
+ it('amount renewal, calendar ledger, stop/resume and rollback are atomic and admin-only', async()=>{
+  const saved=await db.doctor.findUniqueOrThrow({where:{id:doctor.id}});
+  const endpoint='/api/admin/doctors/'+doctor.id+'/subscription';
+  const auditWhere={entity:'Doctor',entityId:doctor.id,action:'DOCTOR_SUBSCRIPTION'};
+  const receipt={amountDzd:8000,method:'CASH',paidAt:'2026-01-01T00:00:00Z'};
+  try {
+   const initial=await db.doctor.update({where:{id:doctor.id},data:{clinicId:null,subscriptionStatus:'ACTIVE',subscriptionExpiresAt:new Date('2031-01-31T00:00:00+01:00')}});
+   const body={operation:'RENEW',expectedVersion:initial.updatedAt.toISOString(),expectedEnd:initial.subscriptionExpiresAt!.toISOString(),receipt};
+   const count=await db.auditLog.count({where:auditWhere});
+   expect((await request(app).post(endpoint).send(body)).status).toBe(401);
+   for(const user of [patientUser,doctorUser]) {
+    expect((await request(app).post(endpoint).set(auth(user)).send(body)).status).toBe(403);
+    expect((await request(app).get('/api/admin/subscriptions').set(auth(user))).status).toBe(403);
+    expect((await request(app).get(endpoint+'-history').set(auth(user))).status).toBe(403);
+   }
+   for(const invalid of [{...body,months:12},{...body,durationMs:365*86400000},{...body,receipt:{...receipt,amountDzd:0}},{...body,receipt:{...receipt,method:'BANK_TRANSFER',reference:''}},{...body,receipt:{...receipt,method:'EDAHABIA'}}]) {
+    expect((await request(app).post(endpoint).set(auth(a)).send(invalid)).status).toBe(400);
+   }
+   const results=await Promise.all([request(app).post(endpoint).set(auth(a)).send(body),request(app).post(endpoint).set(auth(b)).send(body)]);
+   expect(results.map(r=>r.status).sort()).toEqual([200,409]);
+   let current=await db.doctor.findUniqueOrThrow({where:{id:doctor.id}});
+   expect(current.subscriptionExpiresAt!.toISOString()).toBe(new Date('2031-03-18T14:24:00+01:00').toISOString());
+   expect(await db.auditLog.count({where:auditWhere})).toBe(count+1);
+   const listing=await request(app).get('/api/admin/subscriptions').query({q:tag}).set(auth(a));
+   expect(listing.status).toBe(200);
+   expect(listing.body.data.items.find((d:any)=>d.id===doctor.id).billingSchedule.paidDzd).toBe(8000);
+   const paidEnd=current.subscriptionExpiresAt!.toISOString();
+   for(const operation of ['STOP','RESUME']) {
+    const action={operation,expectedVersion:current.updatedAt.toISOString(),expectedEnd:paidEnd,...(operation==='STOP'?{reason:'اختبار إيقاف الاشتراك'}:{})};
+    expect((await request(app).post(endpoint).set(auth(a)).send(action)).status).toBe(200);
+    current=await db.doctor.findUniqueOrThrow({where:{id:doctor.id}});
+    expect(current.subscriptionExpiresAt!.toISOString()).toBe(paidEnd);
+   }
+   const tail={...body,expectedVersion:current.updatedAt.toISOString(),expectedEnd:paidEnd,receipt:{...receipt,amountDzd:52000}};
+   expect((await request(app).post(endpoint).set(auth(a)).send(tail)).status).toBe(200);
+   current=await db.doctor.findUniqueOrThrow({where:{id:doctor.id}});
+   expect(current.subscriptionExpiresAt!.toISOString()).toBe(new Date('2032-01-31T00:00:00+01:00').toISOString());
+   const history=await request(app).get(endpoint+'-history').set(auth(a));
+   expect(history.status).toBe(200);
+   expect(history.body.data[0].meta).toMatchObject({pricingBasis:'CALENDAR_MONTH',billingSchedule:{paidDzd:60000},receipt:{amountDzd:52000}});
+   const beforeFailure=await db.auditLog.count({where:auditWhere});
+   const {updateDoctorAdmin}=await import('../../src/modules/admin/admin.service');
+   await expect(updateDoctorAdmin(doctor.id,{subscriptionStatus:'ACTIVE',subscriptionAmountDzd:8000,expectedSubscriptionExpiresAt:current.subscriptionExpiresAt},'00000000-0000-4000-8000-000000000099',current.updatedAt,'RENEW',receipt as any)).rejects.toThrow();
+   expect((await db.doctor.findUniqueOrThrow({where:{id:doctor.id}})).subscriptionExpiresAt).toEqual(current.subscriptionExpiresAt);
+   expect(await db.auditLog.count({where:auditWhere})).toBe(beforeFailure);
+  } finally {
+   await db.doctor.update({where:{id:doctor.id},data:{clinicId:saved.clinicId,subscriptionStatus:saved.subscriptionStatus,subscriptionExpiresAt:saved.subscriptionExpiresAt,newDoctorTrial:saved.newDoctorTrial}});
   }
  });
 

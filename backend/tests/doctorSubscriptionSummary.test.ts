@@ -16,6 +16,6 @@ describe("paid versus free subscription display", () => {
     const data = paidSubscriptionData(doctor, { subscriptionStatus: S.ACTIVE, subscriptionMonths: 3, expectedSubscriptionExpiresAt: doctor.subscriptionExpiresAt }, now);
     const summary = summarizeSubscription({ ...context, ...doctor, ...data });
     expect(summary.kind).toBe("ACTIVE");
-    expect(summary.expiresAt).toBe("2027-02-18T12:00:00.000Z");
+    expect(summary.expiresAt).toBe("2027-02-20T12:00:00.000Z");
   });
 });

@@ -5,6 +5,7 @@ import { useAdminConfirm } from '../../components/admin/AdminConfirm';
 import { Spinner, ErrorState } from '../../components/ui/States';
 import { Pagination } from '../../components/ui/Pagination';
 import { DAY_MS, renewalQuote, formatDuration, formatExpiry, MAX_PAYMENT_DZD } from '../../lib/subscriptionCalendar';
+import { normalizeSubscriptionDigits, parseSubscriptionAmount } from '../../lib/subscriptionAmount';
 
 const date = (s?: string | null) => s ? new Date(s).toLocaleDateString('ar-DZ', {timeZone:'Africa/Algiers'}) : 'غير مسجل';
 const filters: Record<string,string> = {ALL:'الكل',TRIAL:'شهر مجاني',PAID:'مفعّل • غير تجريبي',SOON:'ينتهي خلال 7 أيام',EXPIRED:'منتهٍ',STOPPED:'موقوف',NONE:'بانتظار التفعيل',CLINIC:'اشتراك عيادة'};
@@ -36,13 +37,14 @@ function DoctorSubscription({doctor:d}:{doctor:any}){
  const end=d.subscriptionExpiresAt?new Date(d.subscriptionExpiresAt).getTime():0;
  const days=Math.max(0,Math.ceil((end-Date.now())/86400000));const active=d.subscriptionStatus==='ACTIVE';const clinic=!!d.clinic?.ownerId;
  const status=clinic?'اشتراك عيادة':active?(end&&days===0?'منتهٍ':d.newDoctorTrial?'الشهر المجاني':'مفعّل'):end&&days>0?'موقوف':end?'منتهٍ':'بانتظار التفعيل';
- const receiptValid=Number.isInteger(Number(amount))&&Number(amount)>0&&Number(amount)<=MAX_PAYMENT_DZD&&!!paidAt&&Date.parse(paidAt+'T00:00:00+01:00')<=Date.now()&&(method==='CASH'||!!reference.trim());
- const valid=Number.isSafeInteger(Number(amount))&&Number(amount)>0&&Number(amount)<=MAX_PAYMENT_DZD;
- const quote=valid?renewalQuote(Number(amount),end,Date.now(),d.billingSchedule):null;
+ const parsedAmount=parseSubscriptionAmount(amount,MAX_PAYMENT_DZD);
+ const valid=parsedAmount!==null;
+ const receiptValid=valid&&!!paidAt&&Date.parse(paidAt+'T00:00:00+01:00')<=Date.now()&&(method==='CASH'||!!reference.trim());
+ const quote=valid?renewalQuote(parsedAmount,end,Date.now(),d.billingSchedule):null;
  function act(operation:'RENEW'|'STOP'|'RESUME'){
   if(operation==='RENEW'&&(!valid||!receiptValid))return;
-  confirmation.ask({reasonRequired:operation==='STOP',title:labels[operation],record:'د. '+d.firstName+' '+d.lastName,confirmText:'تأكيد '+labels[operation],impact:operation==='RENEW'?`تسجيل ${amount} دج (${methods[method]}). بعد التحقق من الدفع: إضافة ${formatDuration(quote!.durationMs)} بسعر 5000 دج للشهر التقويمي. تاريخ الانتهاء المتوقع ${formatExpiry(quote!.after)}.`:operation==='STOP'?'يتوقف الاشتراك مع بقاء تاريخ الانتهاء والملفات والمواعيد. تستمر الأيام في الانقضاء.':'تعود المدة المتبقية للعمل دون إضافة أشهر أو احتساب دفعة جديدة.',action:async reason=>{
-   try{await api.post('/admin/doctors/'+d.id+'/subscription',{operation,reason:reason||undefined,...(operation==='RENEW'?{receipt:{amountDzd:Number(amount),method,paidAt:new Date(paidAt+'T00:00:00+01:00').toISOString(),reference:reference.trim()||undefined,note:note.trim()||undefined}}:{}),expectedVersion:d.updatedAt,expectedEnd:d.subscriptionExpiresAt??null});setAmount('');setReference('');setNote('');}
+  confirmation.ask({reasonRequired:operation==='STOP',title:labels[operation],record:'د. '+d.firstName+' '+d.lastName,confirmText:'تأكيد '+labels[operation],impact:operation==='RENEW'?`تسجيل ${parsedAmount} دج (${methods[method]}). بعد التحقق من الدفع: إضافة ${formatDuration(quote!.durationMs)} بسعر 5000 دج للشهر التقويمي. تاريخ الانتهاء المتوقع ${formatExpiry(quote!.after)}.`:operation==='STOP'?'يتوقف الاشتراك مع بقاء تاريخ الانتهاء والملفات والمواعيد. تستمر الأيام في الانقضاء.':'تعود المدة المتبقية للعمل دون إضافة أشهر أو احتساب دفعة جديدة.',action:async reason=>{
+   try{await api.post('/admin/doctors/'+d.id+'/subscription',{operation,reason:reason||undefined,...(operation==='RENEW'?{receipt:{amountDzd:parsedAmount!,method,paidAt:new Date(paidAt+'T00:00:00+01:00').toISOString(),reference:reference.trim()||undefined,note:note.trim()||undefined}}:{}),expectedVersion:d.updatedAt,expectedEnd:d.subscriptionExpiresAt??null});setAmount('');setReference('');setNote('');}
    finally{await Promise.all([qc.invalidateQueries({queryKey:['admin-doctors']}),qc.invalidateQueries({queryKey:['subscription-history',d.id]})]);}
   }});
  }
@@ -51,7 +53,7 @@ function DoctorSubscription({doctor:d}:{doctor:any}){
  {clinic?<p className="mt-4 text-sm">تُدار الفوترة من <a className="text-teal-700 underline" href={'/admin/clinics?id='+d.clinic.id}>{d.clinic.nameAr}</a>.</p>:<>
  <dl className="my-5 grid grid-cols-2 gap-4 lg:grid-cols-4">{[['بداية الشهر المجاني',date(d.trialStartedAt)],['انتهاء الاشتراك',date(d.subscriptionExpiresAt)],['الأيام المتبقية',end?`${days} يوم`:'غير محددة'],['الشهر المجاني الأول',d.trialStartedAt?'بدأ مرة واحدة':d.newDoctorTrial?'بانتظار أول توثيق':'غير متاح / سجل قديم']].map(([k,v])=><div key={k}><dt className="text-xs text-slate-500">{k}</dt><dd className="mt-1 font-semibold">{v}</dd></div>)}</dl>
  <details className="mb-4 rounded-xl border border-slate-200 p-4"><summary className="cursor-pointer font-bold text-teal-800">تسجيل دفعة للتفعيل أو التجديد</summary><div className="mt-4 grid gap-3 sm:grid-cols-2">
- <label className="text-sm">المبلغ المستلم (دج)<input className="input mt-1" type="number" min="1" max={MAX_PAYMENT_DZD} step="1" placeholder="مثال: 8000" value={amount} onChange={e=>setAmount(e.target.value)}/></label>
+ <label className="text-sm">المبلغ المستلم (دج)<input className="input mt-1" type="text" inputMode="numeric" dir="ltr" autoComplete="off" placeholder="مثال: 8000 أو ٨٠٠٠" value={amount} onChange={e=>setAmount(normalizeSubscriptionDigits(e.target.value))}/></label>
  <label className="text-sm">تاريخ الدفع<input className="input mt-1" type="date" max={new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Algiers'})} value={paidAt} onChange={e=>setPaidAt(e.target.value)}/></label>
  <label className="text-sm">طريقة الدفع<select className="input mt-1" value={method} onChange={e=>setMethod(e.target.value)}>{Object.entries(methods).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
  <label className="text-sm">مرجع العملية {method!=='CASH'?'(مطلوب)':'(اختياري)'}<input className="input mt-1" maxLength={100} value={reference} onChange={e=>setReference(e.target.value)}/></label>

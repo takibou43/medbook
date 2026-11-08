@@ -48,7 +48,7 @@ export default function AdminClinics(){
  <details className="rounded-xl border border-slate-200 p-3"><summary className="cursor-pointer text-sm font-bold">{t("توثيق العيادة")}: {t(verification[c.verificationStatus])}</summary><div className="mt-3"><Select name="verificationStatus" label={t("قرار التوثيق")} defaultValue={c.verificationStatus}>{Object.entries(verification).map(([k,v])=><option key={k} value={k}>{t(v)}</option>)}</Select></div></details>
  <p className="text-sm text-slate-600">{t("فعّل الاشتراك بعد التحقق من الدفع.")}</p>
  {formError?.id===c.id&&<p role="alert" className="text-sm text-red-700">{formError.message}</p>}
- <div className="flex justify-end gap-2"><Button variant="outline" onClick={()=>setSelected(null)}>{t("إلغاء")}</Button><Button type="submit">{t("مراجعة وحفظ")}</Button></div>
+ <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={()=>setSelected(null)}>{t("إلغاء")}</Button><Button type="submit">{t("مراجعة وحفظ")}</Button></div>
  </form>:<div className="space-y-4 text-sm">
  <p>{c.address}</p><p><bdi dir="ltr">{c.owner.email}</bdi></p>
  <dl className="grid grid-cols-2 gap-4">

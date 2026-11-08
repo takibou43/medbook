@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, apiErrorMessage } from '../../lib/api';
 import { useAdminConfirm } from '../../components/admin/AdminConfirm';
@@ -12,23 +13,25 @@ const filters: Record<string,string> = {ALL:'الكل',TRIAL:'شهر مجاني'
 const methods: Record<string,string>={CASH:'نقدًا',CCP_TRANSFER:'تحويل بريدي',BANK_TRANSFER:'تحويل بنكي'};
 const labels: Record<string,string> = { RENEW:'تفعيل / تجديد مدفوع', STOP:'إيقاف الاشتراك', RESUME:'إعادة التفعيل', EDIT:'تعديل إداري' };
 export default function AdminSubscriptions(){
+ const [searchParams,setSearchParams]=useSearchParams();
+ const doctorId=searchParams.get('doctorId')??undefined;
  const [q,setQ]=useState(''),[page,setPage]=useState(1),[filter,setFilter]=useState('ALL');
- const query=useQuery({queryKey:['admin-doctors','subscriptions',q,page,filter],queryFn:async({signal})=>(await api.get('/admin/subscriptions',{signal,params:{q:q||undefined,page,pageSize:20,filter}})).data.data});
+ const query=useQuery({queryKey:['admin-doctors','subscriptions',doctorId,q,page,filter],queryFn:async({signal})=>(await api.get('/admin/subscriptions',{signal,params:{doctorId,q:q||undefined,page,pageSize:20,filter}})).data.data});
  const doctors=query.data?.items??[];
  const soon=query.data?.counts?.SOON??0;
  return <main dir="rtl" className="space-y-6">
-  <header className="rounded-2xl bg-slate-900 p-6 text-white"><p className="text-sm text-teal-300">MedBook / إدارة الاشتراكات</p><h1 className="mt-2 text-3xl font-extrabold">اشتراك واضح. متابعة أسهل.</h1><p className="mt-3 text-slate-300">تفعيل يدوي بعد الدفع، وتجديد يحافظ على المدة المتبقية.</p></header>
+  <header className="rounded-2xl bg-slate-900 p-6 text-white"><p className="text-sm text-teal-300">MedBook / إدارة الاشتراكات</p><h1 className="mt-2 text-3xl font-extrabold">اشتراكات الأطباء</h1></header>
   <div className="grid gap-3 sm:grid-cols-3">{[['كل الأطباء',query.data?.counts?.ALL??'—'],['تنتهي خلال 7 أيام',soon],['الشهر المجاني',query.data?.counts?.TRIAL??'—'],['منتهية',query.data?.counts?.EXPIRED??'—'],['موقوفة',query.data?.counts?.STOPPED??'—'],['أساس الاشتراك','شهر تقويمي']].map(([l,v])=><div key={l} className="card p-5"><p className="text-sm text-slate-500">{l}</p><p className="mt-2 text-2xl font-bold text-teal-700">{v}</p></div>)}</div>
   {!!soon&&<p role="status" className="rounded-xl bg-amber-50 p-4 text-amber-900">تنبيه: {soon} اشتراكًا يقترب من الانتهاء.</p>}
+  {doctorId?<button className="btn-outline" onClick={()=>{setSearchParams({});setQ('');setFilter('ALL');setPage(1);}}>عرض جميع اشتراكات الأطباء</button>:<>
   <div className="card p-4"><label className="block text-sm font-bold" htmlFor="subscription-search">البحث باسم الطبيب أو الهاتف</label><input id="subscription-search" className="input mt-2 max-w-md" placeholder="اكتب اسم الطبيب…" value={q} onChange={e=>{setQ(e.target.value);setPage(1);}}/></div>
-  <nav aria-label="تصفية الاشتراكات" className="flex flex-wrap gap-2">{Object.entries(filters).map(([key,label])=><button key={key} aria-pressed={filter===key} onClick={()=>{setFilter(key);setPage(1);}} className={filter===key?'btn-primary':'btn-outline'}>{label} <span className="text-xs">{query.data?.counts?.[key]??'—'}</span></button>)}</nav>
-  <p className="text-xs text-slate-500">الإحصائيات تشمل جميع الأطباء. القائمة مرتبة حسب أقرب انتهاء. «مفعّل غير تجريبي» لا يثبت وجود دفعة مسجلة.</p>
+  <nav aria-label="تصفية الاشتراكات" className="flex flex-wrap gap-2">{Object.entries(filters).map(([key,label])=><button key={key} aria-pressed={filter===key} onClick={()=>{setFilter(key);setPage(1);}} className={filter===key?'btn-primary':'btn-outline'}>{label} <span className="text-xs">{query.data?.counts?.[key]??'—'}</span></button>)}</nav></>}
   {query.isLoading?<Spinner/>:query.isError?<ErrorState message={apiErrorMessage(query.error)} onRetry={()=>void query.refetch()}/>:<>
    {!doctors.length&&<p className="card p-8 text-center">لا يوجد أطباء مطابقون للبحث.</p>}
    <div className="space-y-4">{doctors.map((d:any)=><DoctorSubscription key={d.id} doctor={d}/>)}</div>
    <Pagination page={page} totalPages={query.data?.totalPages??1} onChange={setPage}/>
   </>}
-  <p className="text-xs text-slate-500">السجل المالي التفصيلي يبدأ من اعتماد هذه اللوحة؛ الأشهر السابقة غير المسجلة لا تُخمّن. إيقاف الاشتراك لا يجمّد مرور الأيام.</p>
+  <p className="text-xs text-slate-500">السجل يبدأ من تاريخ اعتماد اللوحة.</p>
  </main>;
 }
 function DoctorSubscription({doctor:d}:{doctor:any}){
@@ -43,7 +46,7 @@ function DoctorSubscription({doctor:d}:{doctor:any}){
  const quote=valid?renewalQuote(parsedAmount,end,Date.now(),d.billingSchedule):null;
  function act(operation:'RENEW'|'STOP'|'RESUME'){
   if(operation==='RENEW'&&(!valid||!receiptValid))return;
-  confirmation.ask({reasonRequired:operation==='STOP',title:labels[operation],record:'د. '+d.firstName+' '+d.lastName,confirmText:'تأكيد '+labels[operation],impact:operation==='RENEW'?`تسجيل ${parsedAmount} دج (${methods[method]}). بعد التحقق من الدفع: إضافة ${formatDuration(quote!.durationMs)} بسعر 5000 دج للشهر التقويمي. تاريخ الانتهاء المتوقع ${formatExpiry(quote!.after)}.`:operation==='STOP'?'يتوقف الاشتراك مع بقاء تاريخ الانتهاء والملفات والمواعيد. تستمر الأيام في الانقضاء.':'تعود المدة المتبقية للعمل دون إضافة أشهر أو احتساب دفعة جديدة.',action:async reason=>{
+  confirmation.ask({reasonRequired:operation==='STOP',title:labels[operation],record:'د. '+d.firstName+' '+d.lastName,confirmText:'تأكيد '+labels[operation],impact:operation==='RENEW'?`المبلغ: ${parsedAmount} دج (${methods[method]}). الانتهاء: ${formatExpiry(quote!.after)}.`:operation==='STOP'?'يتوقف الاشتراك وتبقى مدة الانتهاء كما هي.':'إعادة التفعيل للمدة المتبقية دون دفع جديد.',action:async reason=>{
    try{await api.post('/admin/doctors/'+d.id+'/subscription',{operation,reason:reason||undefined,...(operation==='RENEW'?{receipt:{amountDzd:parsedAmount!,method,paidAt:new Date(paidAt+'T00:00:00+01:00').toISOString(),reference:reference.trim()||undefined,note:note.trim()||undefined}}:{}),expectedVersion:d.updatedAt,expectedEnd:d.subscriptionExpiresAt??null});setAmount('');setReference('');setNote('');}
    finally{await Promise.all([qc.invalidateQueries({queryKey:['admin-doctors']}),qc.invalidateQueries({queryKey:['subscription-history',d.id]})]);}
   }});
@@ -57,8 +60,8 @@ function DoctorSubscription({doctor:d}:{doctor:any}){
  <label className="text-sm">تاريخ الدفع<input className="input mt-1" type="date" max={new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Algiers'})} value={paidAt} onChange={e=>setPaidAt(e.target.value)}/></label>
  <label className="text-sm">طريقة الدفع<select className="input mt-1" value={method} onChange={e=>setMethod(e.target.value)}>{Object.entries(methods).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
  <label className="text-sm">مرجع العملية {method!=='CASH'?'(مطلوب)':'(اختياري)'}<input className="input mt-1" maxLength={100} value={reference} onChange={e=>setReference(e.target.value)}/></label>
- <label className="text-sm sm:col-span-2">ملاحظة اختيارية<input className="input mt-1" maxLength={500} value={note} onChange={e=>setNote(e.target.value)}/></label></div><p className="mt-3 text-xs text-slate-500">الذهبية: دفع إلكتروني مخطط له مستقبلًا، غير مفعّل حاليًا. لا تُدخل رقم البطاقة أو رمزها.</p></details>
- <div className="mb-4 rounded-xl bg-teal-50 p-4 text-sm text-teal-900" role="status"><p className="font-bold">5000 دج = شهر تقويمي · 60000 دج = سنة تقويمية</p>{quote?<><p className="mt-2">المدة المضافة: <b>{formatDuration(quote.durationMs)}</b></p><p>الأيام المتبقية الحالية: {days} يوم</p><p>الانتهاء المتوقع: <b>{formatExpiry(quote.after)}</b></p></>:<p className="mt-2">أدخل المبلغ لعرض المدة وتاريخ الانتهاء قبل التأكيد. 8000 دج تغطي شهرًا و60٪ من الشهر التالي حسب مدته الفعلية.</p>}<p className="mt-2 text-xs">تُراعى الأشهر ذات 28 و29 و30 و31 يومًا والسنة الكبيسة. تُحفظ المدة المتبقية وكسور اليوم. يبدأ التجديد من انتهاء الاشتراك الساري أو من وقت التفعيل إذا انتهى.</p></div>
+ <label className="text-sm sm:col-span-2">ملاحظة اختيارية<input className="input mt-1" maxLength={500} value={note} onChange={e=>setNote(e.target.value)}/></label></div><p className="mt-3 text-xs text-slate-500">الدفع بالذهبية غير متاح حاليًا.</p></details>
+ <div className="mb-4 rounded-xl bg-teal-50 p-4 text-sm text-teal-900" role="status"><p className="font-bold">5000 دج / شهر تقويمي</p>{quote?<><p className="mt-2">المدة المضافة: <b>{formatDuration(quote.durationMs)}</b></p><p>الانتهاء المتوقع: <b>{formatExpiry(quote.after)}</b></p></>:<p className="mt-2">أدخل المبلغ لعرض تاريخ الانتهاء.</p>}</div>
  <div className="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-4"><button className="btn-primary" disabled={!valid||!receiptValid} onClick={()=>act('RENEW')}>{active?'تجديد الاشتراك':'تفعيل بعد الدفع'}</button>{active?<button className="btn-outline" onClick={()=>act('STOP')}>إيقاف الاشتراك</button>:days>0&&<button className="btn-outline" onClick={()=>act('RESUME')}>إعادة التفعيل دون دفع</button>}</div>
  {!receiptValid&&<p className="mt-2 text-xs text-slate-500">افتح «تسجيل دفعة» وأكمل المبلغ والتاريخ ومرجع التحويل لتفعيل زر التجديد.</p>}
  {amount!==''&&!valid&&<p className="mt-2 text-sm text-red-700">أدخل مبلغًا صحيحًا من 1 إلى 600000 دج.</p>}

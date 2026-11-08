@@ -601,9 +601,9 @@ export async function subscriptionLedger(doctorId: string) {
     select: { id: true, createdAt: true, meta: true, user: { select: { email: true } } }, orderBy: { createdAt: "desc" } });
 }
 
-export async function listSubscriptions(params: {q?:string;filter?:SubscriptionFilter;page?:number;pageSize?:number}) {
+export async function listSubscriptions(params: {q?:string;doctorId?:string;filter?:SubscriptionFilter;page?:number;pageSize?:number}) {
  const now=new Date(),page=params.page??1,pageSize=params.pageSize??20;
- const where:Prisma.DoctorWhereInput={AND:[subscriptionWhere(params.filter??"ALL",now),...(params.q?[{OR:[
+ const where:Prisma.DoctorWhereInput={AND:[subscriptionWhere(params.filter??"ALL",now),...(params.doctorId?[{id:params.doctorId}]:[]),...(params.q?[{OR:[
  {firstName:{contains:params.q,mode:"insensitive" as const}},{lastName:{contains:params.q,mode:"insensitive" as const}},
  {phone:{contains:params.q}},{user:{phone:{contains:params.q}}}
  ]}]:[])]};

@@ -10,7 +10,7 @@ import { DAY_MS, renewalQuote, formatDuration, formatExpiry, MAX_PAYMENT_DZD } f
 import { normalizeSubscriptionDigits, parseSubscriptionAmount } from '../../lib/subscriptionAmount';
 
 const date = (s?: string | null) => s ? new Date(s).toLocaleDateString('ar-DZ', {timeZone:'Africa/Algiers'}) : 'غير مسجل';
-const filters: Record<string,string> = {ALL:'الكل',TRIAL:'شهر مجاني',PAID:'مفعّل',SOON:'ينتهي خلال 7 أيام',EXPIRED:'منتهٍ',STOPPED:'موقوف',NONE:'بانتظار التفعيل',CLINIC:'اشتراك عيادة'};
+const filters: Record<string,string> = {ALL:'الكل',TRIAL:'شهر مجاني',PAID:'مفعّل',SOON:'ينتهي خلال 7 أيام',EXPIRED:'منتهٍ',STOPPED:'موقوف',NONE:'بانتظار التفعيل'};
 const methods: Record<string,string>={CASH:'نقدًا',CCP_TRANSFER:'تحويل بريدي',BANK_TRANSFER:'تحويل بنكي'};
 const labels: Record<string,string> = { RENEW:'تفعيل / تجديد مدفوع', STOP:'إيقاف الاشتراك', RESUME:'إعادة التفعيل', EDIT:'تعديل إداري' };
 export default function AdminSubscriptions(){
@@ -22,7 +22,7 @@ export default function AdminSubscriptions(){
  const soon=query.data?.counts?.SOON??0;
  return <main dir="rtl" className="space-y-6">
   <header><h1 className="text-2xl font-extrabold">اشتراكات الأطباء</h1></header>
-  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600"><span>الأطباء: <b>{query.data?.counts?.ALL??'—'}</b></span><span className={soon?'font-bold text-amber-800':''}>تنتهي قريبًا: <b>{soon}</b></span><span>منتهية: <b>{query.data?.counts?.EXPIRED??'—'}</b></span></div>
+  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600"><span>الأطباء المستقلون: <b>{query.data?.counts?.ALL??'—'}</b></span><span className={soon?'font-bold text-amber-800':''}>تنتهي قريبًا: <b>{soon}</b></span><span>منتهية: <b>{query.data?.counts?.EXPIRED??'—'}</b></span></div>
   {doctorId?<button className="btn-outline" onClick={()=>{setSearchParams({});setQ('');setFilter('ALL');setPage(1);}}>عرض جميع اشتراكات الأطباء</button>:<>
   <div className="flex flex-wrap items-end gap-3">
    <label className="min-w-0 flex-1 text-sm font-bold" htmlFor="subscription-search">البحث<input id="subscription-search" className="input mt-1" placeholder="اسم الطبيب أو الهاتف" value={q} onChange={e=>{setQ(e.target.value);setPage(1);}}/></label>

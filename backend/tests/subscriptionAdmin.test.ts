@@ -12,6 +12,7 @@ describe('manual subscription receipts',()=>{
 });
 describe('subscription filters',()=>{
  const now=new Date('2026-11-08T00:00:00Z');
+ it('limits the complete subscription list to individually billed doctors',()=>expect(subscriptionWhere('ALL',now)).toEqual({OR:[{clinicId:null},{clinic:{ownerId:null}}]}));
  it('uses one precise seven-day range',()=>expect(subscriptionWhere('SOON',now)).toMatchObject({AND:[expect.anything(),{subscriptionStatus:'ACTIVE',subscriptionExpiresAt:{gt:now,lte:new Date('2026-11-15T00:00:00Z')}}]}));
  it('keeps clinic billing separate',()=>expect(subscriptionWhere('CLINIC',now)).toEqual({clinic:{ownerId:{not:null}}}));
  it('uses expiration boundary inclusively',()=>expect(subscriptionWhere('EXPIRED',now)).toMatchObject({AND:[expect.anything(),{subscriptionExpiresAt:{lte:now}}]}));

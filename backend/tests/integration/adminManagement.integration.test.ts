@@ -117,6 +117,10 @@ describe.skipIf(!url)('Admin management on isolated PostgreSQL',()=>{
    const listing=await request(app).get('/api/admin/subscriptions').query({q:tag}).set(auth(a));
    expect(listing.status).toBe(200);
    expect(listing.body.data.items.find((d:any)=>d.id===doctor.id).billingSchedule.paidDzd).toBe(8000);
+   const selected=await request(app).get('/api/admin/subscriptions').query({doctorId:doctor.id}).set(auth(a));
+   expect(selected.status).toBe(200);
+   expect(selected.body.data.items.map((d:any)=>d.id)).toEqual([doctor.id]);
+   expect((await request(app).get('/api/admin/subscriptions').query({doctorId:'invalid'}).set(auth(a))).status).toBe(400);
    const paidEnd=current.subscriptionExpiresAt!.toISOString();
    for(const operation of ['STOP','RESUME']) {
     const action={operation,expectedVersion:current.updatedAt.toISOString(),expectedEnd:paidEnd,...(operation==='STOP'?{reason:'اختبار إيقاف الاشتراك'}:{})};

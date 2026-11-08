@@ -235,7 +235,7 @@ router.patch(
 );
 
 router.get("/doctors/:id/history",validate({params:idParams}),asyncHandler(async(req,res)=>res.json({success:true,data:await service.doctorReviewHistory(req.params.id)})));
-router.get("/subscriptions",validate({query:z.object({q:searchParam.optional(),filter:z.enum(subscriptionFilters).optional(),page:pageParam.optional(),pageSize:pageSizeParam.optional()}).strict()}),asyncHandler(async(req,res)=>res.json({success:true,data:await service.listSubscriptions(req.query as any)})));
+router.get("/subscriptions",validate({query:z.object({q:searchParam.optional(),doctorId:z.string().uuid().optional(),filter:z.enum(subscriptionFilters).optional(),page:pageParam.optional(),pageSize:pageSizeParam.optional()}).strict()}),asyncHandler(async(req,res)=>res.json({success:true,data:await service.listSubscriptions(req.query as any)})));
 // Versioned subscription actions: the row lock and ledger share one transaction.
 router.get("/doctors/:id/subscription-history", validate({ params: idParams }), asyncHandler(async (req,res) => {
   res.json({success:true,data:await service.subscriptionLedger(req.params.id)});

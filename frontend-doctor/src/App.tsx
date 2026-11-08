@@ -43,6 +43,7 @@ const AdminMaintenance = lazy(()=>import("./pages/admin/AdminMaintenance"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminPatientBlocks = lazy(() => import("./pages/admin/AdminPatientBlocks"));
+const AdminSubscriptions = lazy(() => import("./pages/admin/AdminSubscriptions"));
 const AdminDoctors = lazy(() => import("./pages/admin/AdminDoctors"));
 const AdminSpecialties = lazy(() => import("./pages/admin/AdminSpecialties"));
 const AdminWilayas = lazy(() => import("./pages/admin/AdminWilayas"));
@@ -134,6 +135,7 @@ const adminNav = [
   { to: "/admin/patient-blocks", label: "المرضى المحظورون", icon: UserX, group: "التشغيل والمتابعة" },
   { to: "/admin/reviews", label: "التقييمات", icon: Star, group: "التشغيل والمتابعة" },
   { to: "/admin/users", label: "المستخدمون", icon: UsersIcon, group: "الحسابات والأطباء والعيادات" },
+  { to: "/admin/subscriptions", label: "اشتراكات الأطباء", icon: Stethoscope, group: "الحسابات والأطباء والعيادات" },
   { to: "/admin/doctors", label: "الأطباء", icon: Stethoscope, group: "الحسابات والأطباء والعيادات" },
   { to: "/admin/clinics", label: "العيادات", icon: Building2, group: "الحسابات والأطباء والعيادات" },
   { to: "/admin/referrals", label: "إحالات الأطباء", icon: Gift, group: "الحسابات والأطباء والعيادات" },
@@ -214,6 +216,7 @@ export default function App() {
           <Route path="/admin/users" element={<AdminUsers />} />
           <Route path="/admin/patient-blocks" element={<AdminPatientBlocks />} />
           <Route path="/admin/referrals" element={<AdminReferrals />} />
+          <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />
           <Route path="/admin/doctors" element={<AdminDoctors />} />
           <Route path="/admin/specialties" element={<AdminSpecialties />} />
           <Route path="/admin/wilayas" element={<AdminWilayas />} />

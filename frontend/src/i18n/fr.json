@@ -2205,7 +2205,7 @@
   "اختر «إضافة إلى الشاشة الرئيسية».": "Choisissez « Sur l’écran d’accueil ».",
   "افتح MedBook من الأيقونة الجديدة ثم اضغط «تفعيل الإشعارات».": "Ouvrez MedBook depuis la nouvelle icône, puis appuyez sur « Activer les notifications ».",
   "تفعيل أو تجديد الاشتراك": "Activer ou renouveler l’abonnement",
-  "بعد تأكيد الدفع، تُضاف {0} أشهر (30 يومًا لكل شهر) من نهاية الاشتراك الحالي أو من اليوم إذا انتهى.": "Après confirmation du paiement, {0} mois (30 jours par mois) sont ajoutés à partir de l’échéance actuelle, ou d’aujourd’hui si l’abonnement a expiré.",
+  "بعد تأكيد الدفع، تُضاف {0} أشهر تقويمية من نهاية الاشتراك الحالي أو من اليوم إذا انتهى، مع مراعاة فبراير والسنة الكبيسة.": "Après confirmation du paiement, {0} mois calendaires sont ajoutés à partir de l’échéance actuelle ou d’aujourd’hui si l’abonnement a expiré, en tenant compte de février et des années bissextiles.",
   "يوقف الاشتراك الفردي؛ تبقى المواعيد والملفات محفوظة.": "Suspend l’abonnement individuel ; les rendez-vous et les dossiers sont conservés.",
   "عدد الأشهر المدفوعة": "Nombre de mois payés",
   "تجديد الاشتراك": "Renouveler l’abonnement"

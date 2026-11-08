@@ -114,7 +114,7 @@ const h = vi.hoisted(() => {
         return { count: hit.length };
       }),
     },
-    auditLog: { create: vi.fn(async ({ data }: any) => (s.audit.push(data), data)) },
+    auditLog: { findFirst: vi.fn(async () => null), create: vi.fn(async ({ data }: any) => (s.audit.push(data), data)) },
   };
   db.$queryRaw=vi.fn(async()=>[]);
   db.$executeRaw=vi.fn(async()=>1);
@@ -291,7 +291,7 @@ describe("مسارات PATCH للإدارة — تحقق المدخلات", () =
     expect(r.status).toBe(200);
     expect(h.db.doctor.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: DOC_ID },
-      data: { subscriptionStatus: "EXPIRED" },
+      data: { subscriptionStatus: "EXPIRED", updatedAt: expect.any(Date) },
     }));
   });
 

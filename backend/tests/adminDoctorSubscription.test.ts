@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({
-  before: {} as any, events: [] as string[], update: vi.fn(), notify: vi.fn(), push: vi.fn(),
+  before: {} as any, events: [] as string[], update: vi.fn(), notify: vi.fn(), push: vi.fn(), audit: vi.fn(),
 }));
 vi.mock("../src/lib/prisma", () => ({
   prisma: { $transaction: async (work: any) => work({
+    auditLog: { create: h.audit, findFirst: async()=>null },
     doctor: {
       findUnique: async () => { h.events.push("read"); return h.before; },
       update: h.update,
@@ -22,7 +23,7 @@ import { updateDoctorAdmin } from "../src/modules/admin/admin.service";
 describe("admin subscription transaction", () => {
   beforeEach(() => {
     vi.clearAllMocks(); h.events = [];
-    h.before = { verificationStatus: "VERIFIED", subscriptionStatus: "EXPIRED", subscriptionExpiresAt: new Date("2020-01-01"), clinic: null, user: { isActive: true } };
+    h.before = { updatedAt: new Date("2026-11-01"), newDoctorTrial: true, verificationStatus: "VERIFIED", subscriptionStatus: "EXPIRED", subscriptionExpiresAt: new Date("2020-01-01"), clinic: null, user: { isActive: true } };
     h.update.mockImplementation(async ({ data }) => ({ ...h.before, ...data }));
     h.notify.mockResolvedValue([]);
   });
@@ -38,6 +39,30 @@ describe("admin subscription transaction", () => {
   it("refuses stale renewal before writing", async () => {
     await expect(updateDoctorAdmin("doctor", { subscriptionStatus: "ACTIVE", subscriptionMonths: 1, expectedSubscriptionExpiresAt: null })).rejects.toMatchObject({ statusCode: 409 });
     expect(h.update).not.toHaveBeenCalled();
+  });
+  it("records the paid duration and actor in the same transaction", async () => {
+    await updateDoctorAdmin("doctor", { subscriptionStatus: "ACTIVE", subscriptionMonths: 3, expectedSubscriptionExpiresAt: h.before.subscriptionExpiresAt }, "admin");
+    expect(h.audit).toHaveBeenCalledWith(expect.objectContaining({data:expect.objectContaining({userId:"admin",meta:expect.objectContaining({months:3,operation:"RENEW"})})}));
+  });
+  it("rejects a stale stop without a write", async () => {
+    await expect(updateDoctorAdmin("doctor", {subscriptionStatus:"UNPAID"}, "admin", new Date("2026-10-01"), "STOP")).rejects.toMatchObject({statusCode:409});
+    expect(h.update).not.toHaveBeenCalled(); expect(h.audit).not.toHaveBeenCalled();
+  });
+  it("resumes remaining trial without consuming trial or adding time", async () => {
+    h.before.subscriptionStatus="UNPAID"; h.before.subscriptionExpiresAt=new Date("2099-01-01");
+    const result=await updateDoctorAdmin("doctor",{subscriptionStatus:"ACTIVE"},"admin",h.before.updatedAt,"RESUME");
+    expect(result.subscriptionExpiresAt).toEqual(h.before.subscriptionExpiresAt);
+    expect(result.newDoctorTrial).toBe(true);
+    expect(h.update.mock.calls[0][0].data).toMatchObject({subscriptionStatus:"ACTIVE",updatedAt:expect.any(Date)});
+  });
+  it("rejects resuming an expired subscription",async()=>{
+    await expect(updateDoctorAdmin("doctor",{subscriptionStatus:"ACTIVE"},"admin",h.before.updatedAt,"RESUME")).rejects.toMatchObject({statusCode:400});
+    expect(h.update).not.toHaveBeenCalled();
+  });
+  it("aborts when the ledger cannot be written",async()=>{
+    h.audit.mockRejectedValueOnce(new Error("ledger failure"));
+    await expect(updateDoctorAdmin("doctor",{subscriptionStatus:"ACTIVE",subscriptionMonths:1,expectedSubscriptionExpiresAt:h.before.subscriptionExpiresAt},"admin")).rejects.toThrow("ledger failure");
+    expect(h.push).not.toHaveBeenCalled();
   });
   it("keeps owned clinic billing on the clinic path", async () => {
     h.before.clinic = { ownerId: "owner" };

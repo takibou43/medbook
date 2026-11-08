@@ -1,3 +1,4 @@
+import {manualReceiptSchema, subscriptionFilters} from "../../lib/subscriptionAdmin";
 import { previewDemoData, purgeReviewedDemoData } from "./adminMaintenance.service";
 import { Router } from "express";
 import { z } from "zod";
@@ -227,13 +228,30 @@ router.patch(
   validate({ params: idParams, body: updateDoctorAdminSchema }),
   asyncHandler(async (req, res) => {
     assertNotEmpty(req.body);
-    const doctor = await service.updateDoctorAdmin(req.params.id, req.body);
+    const doctor = await service.updateDoctorAdmin(req.params.id, req.body, req.user!.id);
     await service.logAction(req.user!.id, "UPDATE_DOCTOR", "Doctor", req.params.id, { fields: Object.keys(req.body) });
     res.json({ success: true, data: doctor });
   })
 );
 
 router.get("/doctors/:id/history",validate({params:idParams}),asyncHandler(async(req,res)=>res.json({success:true,data:await service.doctorReviewHistory(req.params.id)})));
+router.get("/subscriptions",validate({query:z.object({q:searchParam.optional(),filter:z.enum(subscriptionFilters).optional(),page:pageParam.optional(),pageSize:pageSizeParam.optional()}).strict()}),asyncHandler(async(req,res)=>res.json({success:true,data:await service.listSubscriptions(req.query as any)})));
+// Versioned subscription actions: the row lock and ledger share one transaction.
+router.get("/doctors/:id/subscription-history", validate({ params: idParams }), asyncHandler(async (req,res) => {
+  res.json({success:true,data:await service.subscriptionLedger(req.params.id)});
+}));
+router.post("/doctors/:id/subscription", validate({ params: idParams, body: z.object({
+  operation: z.enum(["RENEW", "STOP", "RESUME"]),
+  expectedVersion: z.coerce.date(), expectedEnd: z.coerce.date().nullable(), receipt:manualReceiptSchema.optional(), reason:z.string().trim().min(3).max(500).optional()
+}).strict() }), asyncHandler(async(req,res)=>{
+  const {operation,expectedVersion,expectedEnd,receipt,reason}=req.body;
+  if(operation === "RENEW" && !receipt) throw ApiError.badRequest("سجّل تفاصيل الدفعة قبل التجديد.");
+  if(operation !== "RENEW" && receipt) throw ApiError.badRequest("هذا الإجراء لا يسجل دفعة.");
+  if(operation === "STOP" && !reason) throw ApiError.badRequest("سبب الإيقاف مطلوب.");
+  const data = operation === "RENEW" ? {subscriptionStatus:SubscriptionStatus.ACTIVE,subscriptionAmountDzd:receipt.amountDzd,expectedSubscriptionExpiresAt:expectedEnd}
+    : {subscriptionStatus:operation === "STOP" ? SubscriptionStatus.UNPAID : SubscriptionStatus.ACTIVE};
+  res.json({success:true,data:await service.updateDoctorAdmin(req.params.id,data,req.user!.id,expectedVersion,operation,receipt,reason)});
+}));
 // ---- إحالات الأطباء (عرض فقط — المكافأة تُمنح تلقائيًا عند التوثيق، ولا زر مكافأة يدوي) ----
 const referralsQuery = z
   .object({

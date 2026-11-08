@@ -7,7 +7,7 @@ export function subscriptionWhere(filter: SubscriptionFilter, now = new Date()):
  const individual: Prisma.DoctorWhereInput = { OR: [{clinicId:null},{clinic:{ownerId:null}}] };
  const live: Prisma.DoctorWhereInput = { subscriptionStatus:'ACTIVE', OR:[{subscriptionExpiresAt:null},{subscriptionExpiresAt:{gt:now}}] };
  const conditions: Record<SubscriptionFilter,Prisma.DoctorWhereInput> = {
- ALL:{}, CLINIC:{clinic:{ownerId:{not:null}}},
+ ALL:individual, CLINIC:{clinic:{ownerId:{not:null}}},
  TRIAL:{AND:[individual,live,{newDoctorTrial:true}]}, PAID:{AND:[individual,live,{newDoctorTrial:false}]},
  SOON:{AND:[individual,{subscriptionStatus:'ACTIVE',subscriptionExpiresAt:{gt:now,lte:new Date(now.getTime()+7*86400000)}}]},
  EXPIRED:{AND:[individual,{subscriptionExpiresAt:{lte:now}}]},

@@ -3,12 +3,12 @@ import { t, getLanguage } from "../i18n/locale.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/Toast";
 import { Spinner } from "../components/ui/States";
 import { Doctor, FamilyMember, Paginated } from "../types";
-import { bookingError, doctorAddress, splitFullName } from "../lib/booking";
+import { bookingError, splitFullName } from "../lib/booking";
 import { BookingSteps, StepId } from "../components/booking/BookingSteps";
 import { SpecialtyOption, SpecialtyStep } from "../components/booking/SpecialtyStep";
 import { useNextSlot } from "../hooks/useNextSlot";
@@ -17,10 +17,8 @@ import { SlotStep } from "../components/booking/SlotStep";
 import { DayTimePicker, DayTimeChoice } from "../components/booking/DayTimePicker";
 import { PatientForm, PatientStep } from "../components/booking/PatientStep";
 import { ConfirmStep } from "../components/booking/ConfirmStep";
-import { ConfirmedBooking, SuccessModal } from "../components/booking/SuccessModal";
 import { InlineError } from "../components/booking/StepParts";
 import { useAuth } from "../context/AuthContext";
-import { ReminderCard } from "../components/account/ReminderCard";
 import { BeneficiaryPicker } from "../components/booking/BeneficiaryPicker";
 import { UpcomingAppointmentCard } from "../components/booking/UpcomingAppointmentCard";
 import { BookingCounterCard } from "../components/booking/BookingCounterCard";
@@ -49,7 +47,6 @@ export default function BookAppointment() {
   const [step, setStep] = useState<StepId>("specialty");
   const [specialtyId, setSpecialtyId] = useState<string | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
-  const [confirmed, setConfirmed] = useState<ConfirmedBooking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // اختيار اختياري لليوم/الوقت. null = السلوك الحالي تمامًا (أول دور متاح يعيّنه الخادم).
   const [choice, setChoice] = useState<DayTimeChoice | null>(null);
@@ -61,9 +58,9 @@ export default function BookAppointment() {
   // ولاية اختارها المريض في فلتر الأطباء — لعدّاد الحجوزات فقط.
   const [counterWilayaId, setCounterWilayaId] = useState<string>("");
 
-  // أثناء الحجز (أي اختيار أو خطوة متقدمة أو شاشة التأكيد) لا يجوز أن يُعيد التحديث التلقائي للـPWA تحميل الصفحة:
+  // أثناء الحجز لا يجوز أن يُعيد التحديث التلقائي للـPWA تحميل الصفحة:
   // حالة المعالج محفوظة في الذاكرة فقط. register-sw.js يقرأ هذه العلامة ويؤجّل التحديث لنقطة آمنة.
-  const midBooking = step !== "specialty" || specialtyId !== null || selectedDoctor !== null || confirmed !== null;
+  const midBooking = step !== "specialty" || specialtyId !== null || selectedDoctor !== null;
   useEffect(() => {
     const root = document.documentElement;
     if (midBooking) root.setAttribute("data-mb-busy", "1");
@@ -171,11 +168,13 @@ export default function BookAppointment() {
   });
 
   useEffect(() => {
-    if (qrDoctor && !qrApplied.current) {
+    if (!qrDoctorId) {
+      qrApplied.current = false;
+    } else if (qrDoctor && !qrApplied.current) {
       qrApplied.current = true;
       chooseDoctorDirectly(qrDoctor);
     }
-  }, [qrDoctor]);
+  }, [qrDoctor, qrDoctorId]);
 
   // الدور الذي سيمنحه النظام تلقائيًا للطبيب المختار. يُحدَّث كل نصف دقيقة أثناء عرضه فقط
   // تحسبًا لحجز مريض آخر قبله؛ الخادم هو المرجع النهائي لحظة الحجز.
@@ -191,29 +190,27 @@ export default function BookAppointment() {
   const bookMutation = useMutation({
     // بلا اختيار: لا نرسل التاريخ ولا الوقت — الخادم يعيّن الدور التالي لحظة الحجز ويمنع التكرار (كما كان).
     // مع اختيار: اليوم فقط (أول وقت شاغر فيه) أو اليوم + الوقت بالضبط (exactTime) — والخادم يعيد التحقق.
-    mutationFn: async (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor; choice: DayTimeChoice | null; familyMemberId: string | null; expectedSlot?: { date: string; startTime: string } }) =>
-      (
-        await api.post("/booking", {
-          firstName: payload.firstName,
-          lastName: payload.lastName,
-          phone: payload.phone,
-          wilayaId: payload.doctor.wilaya.id,
-          specialtyId: payload.doctor.specialtyId,
-          doctorId: payload.doctor.id,
-          ...(payload.expectedSlot ? { expectedSlot: payload.expectedSlot } : {}),
-          // الخادم يتحقق من ملكية فرد العائلة ويأخذ اسمه من قاعدة البيانات.
-          ...(payload.familyMemberId ? { familyMemberId: payload.familyMemberId } : {}),
-          ...(payload.choice
-            ? payload.choice.startTime
-              ? { date: payload.choice.date, startTime: payload.choice.startTime, exactTime: true }
-              : { date: payload.choice.date }
-            : {}),
-        })
-      ).data.data,
+    mutationFn: (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor; choice: DayTimeChoice | null; familyMemberId: string | null; expectedSlot?: { date: string; startTime: string } }) =>
+      api.post("/booking", {
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        phone: payload.phone,
+        wilayaId: payload.doctor.wilaya.id,
+        specialtyId: payload.doctor.specialtyId,
+        doctorId: payload.doctor.id,
+        ...(payload.expectedSlot ? { expectedSlot: payload.expectedSlot } : {}),
+        // الخادم يتحقق من ملكية فرد العائلة ويأخذ اسمه من قاعدة البيانات.
+        ...(payload.familyMemberId ? { familyMemberId: payload.familyMemberId } : {}),
+        ...(payload.choice
+          ? payload.choice.startTime
+            ? { date: payload.choice.date, startTime: payload.choice.startTime, exactTime: true }
+            : { date: payload.choice.date }
+          : {}),
+      }),
   });
 
   async function confirmBooking() {
-    if (confirmed || bookMutation.isPending) return;
+    if (bookMutation.isPending) return;
     if (!selectedDoctor) return;
     if (!user) return goToAuth(selectedDoctor.id);
     const values = form.getValues();
@@ -228,20 +225,20 @@ export default function BookAppointment() {
     }
     setSubmitError(null);
     try {
-      const appointment = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice, expectedSlot: !choice && nextSlot ? { date: nextSlot.date, startTime: nextSlot.startTime } : undefined, familyMemberId: selectedMember?.id ?? null });
-      setConfirmed({
-        date: appointment.date,
-        startTime: appointment.startTime,
-        doctorName: `${selectedDoctor.firstName} ${selectedDoctor.lastName}`,
-        address: doctorAddress(selectedDoctor),
-      });
-      showToast(t("تم إرسال طلب الحجز بنجاح!"), "success");
-      // نفرّغ بيانات المريض فور نجاح الحجز حتى لا يُكرَّر الحجز بالخطأ بضغطة ثانية.
-      form.reset({ fullName: "", phone: "" });
+      await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice, expectedSlot: !choice && nextSlot ? { date: nextSlot.date, startTime: nextSlot.startTime } : undefined, familyMemberId: selectedMember?.id ?? null });
       queryClient.invalidateQueries({ queryKey: ["my-appointments", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["next-slot"] });
       queryClient.invalidateQueries({ queryKey: ["availability"] });
+      form.reset();
+      setSpecialtyId(null);
+      setSelectedDoctor(null);
       setChoice(null);
+      setFamilyMode(false);
+      setFamilyMemberId(null);
+      setCounterWilayaId("");
+      setStep("specialty");
+      if (searchParams.size) navigate("/", { replace: true });
+      showToast(t("تم حجز موعدك بنجاح ✅"), "success");
     } catch (err) {
       if ((err as any)?.response?.status === 401) {
         // الجلسة انتهت ولم يمكن تجديدها: نعيده لتسجيل الدخول ثم لنفس الطبيب.
@@ -281,16 +278,6 @@ export default function BookAppointment() {
         setSubmitError(message);
       }
     }
-  }
-
-  function closeConfirmation() {
-    setConfirmed(null);
-    setSelectedDoctor(null);
-    setChoice(null);
-    setFamilyMode(false);
-    setFamilyMemberId(null);
-    setSubmitError(null);
-    setStep(specialtyId ? "doctor" : "specialty");
   }
 
   // ===== التنقل بين الخطوات + التمرير التلقائي السلس =====
@@ -422,7 +409,7 @@ export default function BookAppointment() {
               />
             )}
 
-            {step === "confirm" && !confirmed && selectedDoctor && (nextSlot || choice) && user && (
+            {step === "confirm" && selectedDoctor && (nextSlot || choice) && user && (
               <ConfirmStep
                 ref={headingRef}
                 doctor={selectedDoctor}
@@ -446,23 +433,6 @@ export default function BookAppointment() {
           </>
         )}
       </div>
-
-      {confirmed && (
-        <SuccessModal
-          booking={confirmed}
-          onClose={closeConfirmation}
-          extra={
-            user ? (
-              <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-start">
-                <ReminderCard compact />
-                <Link to="/account" className="flex min-h-[48px] items-center justify-center text-sm font-semibold text-primary-700 hover:underline">{t("عرض مواعيدي ")}</Link>
-              </div>
-            ) : null
-          }
-        />
-      )}
-
-
     </div>
   );
 }

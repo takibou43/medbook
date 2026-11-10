@@ -252,6 +252,8 @@
   "إنشاء حساب": "Créer un compte",
   "البريد الإلكتروني": "Adresse e-mail",
   "كلمة المرور": "Mot de passe",
+  "إظهار كلمة المرور": "Afficher le mot de passe",
+  "إخفاء كلمة المرور": "Masquer le mot de passe",
   "كلمة المرور مطلوبة": "Le mot de passe est obligatoire",
   "الاسم مطلوب": "Le nom est obligatoire",
   "كلمة المرور (8 خانات على الأقل)": "Mot de passe (8 caractères minimum)",

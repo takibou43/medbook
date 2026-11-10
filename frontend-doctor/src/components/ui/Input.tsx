@@ -1,7 +1,8 @@
 import { useLanguage } from "../../i18n/LanguageRoot";
 import { t } from "../../i18n/locale.ts";
-import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, forwardRef, ReactNode, useId } from "react";
+import { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes, forwardRef, ReactNode, useId, useState } from "react";
 import clsx from "clsx";
+import { Eye, EyeOff } from "lucide-react";
 
 interface FieldWrapperProps {
   label?: string;
@@ -55,19 +56,47 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   hint?: ReactNode;
 }
 
-export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, hint, className, id, ...rest }, ref) => {
-  useLanguage();
+export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, hint, className, id, type, ...rest }, ref) => {
+  const language = useLanguage();
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const isPassword = type === "password";
   const ids = useFieldIds(id, error, hint);
+  const input = (
+    <input
+      ref={ref}
+      type={isPassword && passwordVisible ? "text" : type}
+      autoCapitalize={isPassword ? "none" : undefined}
+      autoCorrect={isPassword ? "off" : undefined}
+      spellCheck={isPassword ? false : undefined}
+      id={ids.fieldId}
+      aria-invalid={error ? true : undefined}
+      aria-describedby={ids.describedBy}
+      className={clsx("input", error && "border-red-400", isPassword && "[&::-ms-reveal]:hidden", className)}
+      {...rest}
+    />
+  );
+  const toggleLabel = t(passwordVisible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور");
+  const VisibilityIcon = passwordVisible ? EyeOff : Eye;
+
   return (
     <FieldWrapper label={t(label ?? "")} error={t(error ?? "")} hint={t(hint ?? "")} htmlFor={ids.fieldId} errorId={ids.errorId} hintId={ids.hintId}>
-      <input
-        ref={ref}
-        id={ids.fieldId}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={ids.describedBy}
-        className={clsx("input", error && "border-red-400", className)}
-        {...rest}
-      />
+      {isPassword ? (
+        <div className={clsx("relative", language === "ar" ? "[&>input]:pl-12" : "[&>input]:pr-12")}>
+          {input}
+          <button
+            type="button"
+            aria-label={toggleLabel}
+            aria-controls={ids.fieldId}
+            title={toggleLabel}
+            disabled={rest.disabled}
+            className="absolute inset-y-0 end-0 flex w-12 items-center justify-center rounded-xl text-slate-600 hover:text-primary-700 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary-600 disabled:opacity-50"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => setPasswordVisible((visible) => !visible)}
+          >
+            <VisibilityIcon className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+      ) : input}
     </FieldWrapper>
   );
 });

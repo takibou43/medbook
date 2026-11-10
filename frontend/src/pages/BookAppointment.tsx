@@ -3,12 +3,12 @@ import { t, getLanguage } from "../i18n/locale.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { api, apiErrorMessage } from "../lib/api";
 import { useToast } from "../components/ui/Toast";
 import { Spinner } from "../components/ui/States";
-import { Doctor, FamilyMember, Paginated } from "../types";
-import { bookingError, splitFullName } from "../lib/booking";
+import { Appointment, Doctor, FamilyMember, Paginated } from "../types";
+import { bookingError, doctorAddress, splitFullName } from "../lib/booking";
 import { BookingSteps, StepId } from "../components/booking/BookingSteps";
 import { SpecialtyOption, SpecialtyStep } from "../components/booking/SpecialtyStep";
 import { useNextSlot } from "../hooks/useNextSlot";
@@ -17,8 +17,10 @@ import { SlotStep } from "../components/booking/SlotStep";
 import { DayTimePicker, DayTimeChoice } from "../components/booking/DayTimePicker";
 import { PatientForm, PatientStep } from "../components/booking/PatientStep";
 import { ConfirmStep } from "../components/booking/ConfirmStep";
+import { ConfirmedBooking, SuccessModal } from "../components/booking/SuccessModal";
 import { InlineError } from "../components/booking/StepParts";
 import { useAuth } from "../context/AuthContext";
+import { ReminderCard } from "../components/account/ReminderCard";
 import { BeneficiaryPicker } from "../components/booking/BeneficiaryPicker";
 import { UpcomingAppointmentCard } from "../components/booking/UpcomingAppointmentCard";
 import { BookingCounterCard } from "../components/booking/BookingCounterCard";
@@ -47,6 +49,7 @@ export default function BookAppointment() {
   const [step, setStep] = useState<StepId>("specialty");
   const [specialtyId, setSpecialtyId] = useState<string | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [confirmed, setConfirmed] = useState<ConfirmedBooking | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // اختيار اختياري لليوم/الوقت. null = السلوك الحالي تمامًا (أول دور متاح يعيّنه الخادم).
   const [choice, setChoice] = useState<DayTimeChoice | null>(null);
@@ -91,8 +94,8 @@ export default function BookAppointment() {
   }
   // إن انتهت الجلسة أثناء الحجز (تسجيل خروج من تبويب آخر مثلًا) لا نترك المريض في خطوات لا تكتمل.
   useEffect(() => {
-    if (!authLoading && !user && (step === "patient" || step === "confirm")) goToAuth(selectedDoctor?.id);
-  }, [authLoading, user, step]);
+    if (!confirmed && !authLoading && !user && (step === "patient" || step === "confirm")) goToAuth(selectedDoctor?.id);
+  }, [authLoading, user, step, confirmed]);
 
   useEffect(() => {
     if (step !== "patient" || !user?.patient) return;
@@ -191,7 +194,7 @@ export default function BookAppointment() {
     // بلا اختيار: لا نرسل التاريخ ولا الوقت — الخادم يعيّن الدور التالي لحظة الحجز ويمنع التكرار (كما كان).
     // مع اختيار: اليوم فقط (أول وقت شاغر فيه) أو اليوم + الوقت بالضبط (exactTime) — والخادم يعيد التحقق.
     mutationFn: (payload: { firstName: string; lastName: string; phone: string; doctor: Doctor; choice: DayTimeChoice | null; familyMemberId: string | null; expectedSlot?: { date: string; startTime: string } }) =>
-      api.post("/booking", {
+      api.post<{ data: Pick<Appointment, "date" | "startTime"> }>("/booking", {
         firstName: payload.firstName,
         lastName: payload.lastName,
         phone: payload.phone,
@@ -210,7 +213,7 @@ export default function BookAppointment() {
   });
 
   async function confirmBooking() {
-    if (bookMutation.isPending) return;
+    if (confirmed || bookMutation.isPending) return;
     if (!selectedDoctor) return;
     if (!user) return goToAuth(selectedDoctor.id);
     const values = form.getValues();
@@ -225,20 +228,16 @@ export default function BookAppointment() {
     }
     setSubmitError(null);
     try {
-      await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice, expectedSlot: !choice && nextSlot ? { date: nextSlot.date, startTime: nextSlot.startTime } : undefined, familyMemberId: selectedMember?.id ?? null });
+      const { data: { data: appointment } } = await bookMutation.mutateAsync({ ...name, phone: values.phone.trim(), doctor: selectedDoctor, choice, expectedSlot: !choice && nextSlot ? { date: nextSlot.date, startTime: nextSlot.startTime } : undefined, familyMemberId: selectedMember?.id ?? null });
+      setConfirmed({
+        date: appointment.date,
+        startTime: appointment.startTime,
+        doctorName: `${selectedDoctor.firstName} ${selectedDoctor.lastName}`,
+        address: doctorAddress(selectedDoctor),
+      });
       queryClient.invalidateQueries({ queryKey: ["my-appointments", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["next-slot"] });
       queryClient.invalidateQueries({ queryKey: ["availability"] });
-      form.reset();
-      setSpecialtyId(null);
-      setSelectedDoctor(null);
-      setChoice(null);
-      setFamilyMode(false);
-      setFamilyMemberId(null);
-      setCounterWilayaId("");
-      setStep("specialty");
-      if (searchParams.size) navigate("/", { replace: true });
-      showToast(t("تم حجز موعدك بنجاح ✅"), "success");
     } catch (err) {
       if ((err as any)?.response?.status === 401) {
         // الجلسة انتهت ولم يمكن تجديدها: نعيده لتسجيل الدخول ثم لنفس الطبيب.
@@ -280,6 +279,19 @@ export default function BookAppointment() {
     }
   }
 
+  function returnHome() {
+    setConfirmed(null);
+    form.reset();
+    setSpecialtyId(null);
+    setSelectedDoctor(null);
+    setChoice(null);
+    setFamilyMode(false);
+    setFamilyMemberId(null);
+    setCounterWilayaId("");
+    setStep("specialty");
+    if (searchParams.size) navigate("/", { replace: true });
+  }
+
   // ===== التنقل بين الخطوات + التمرير التلقائي السلس =====
   // عند كل انتقال نمرّر إلى عنوان الخطوة الجديدة (بحركة سلسة إلا لمن فعّل "تقليل الحركة")
   // ونقل التركيز إليه ليعلنه قارئ الشاشة — فلا يبحث المريض عن مكان الحقل التالي على الهاتف.
@@ -299,7 +311,7 @@ export default function BookAppointment() {
 
   const openingDirectLink = Boolean(qrDoctorId) && loadingQr && !qrApplied.current;
 
-  if (qrDoctorId && !authLoading && !user) return <Navigate to={"/account/login?mode=register&redirect=" + encodeURIComponent('/?doctor=' + qrDoctorId + '&intent=booking')} replace />;
+  if (!confirmed && qrDoctorId && !authLoading && !user) return <Navigate to={"/account/login?mode=register&redirect=" + encodeURIComponent('/?doctor=' + qrDoctorId + '&intent=booking')} replace />;
 
   return (
     <div className="container-app py-4 sm:py-6">
@@ -409,7 +421,7 @@ export default function BookAppointment() {
               />
             )}
 
-            {step === "confirm" && selectedDoctor && (nextSlot || choice) && user && (
+            {step === "confirm" && !confirmed && selectedDoctor && (nextSlot || choice) && user && (
               <ConfirmStep
                 ref={headingRef}
                 doctor={selectedDoctor}
@@ -433,6 +445,18 @@ export default function BookAppointment() {
           </>
         )}
       </div>
+      {confirmed && (
+        <SuccessModal
+          booking={confirmed}
+          onClose={returnHome}
+          extra={user && (
+            <div className="mt-4 space-y-2 border-t border-slate-100 pt-4 text-start">
+              <ReminderCard compact />
+              <Link to="/account" className="flex min-h-[48px] items-center justify-center text-sm font-semibold text-primary-700 hover:underline">{t("عرض مواعيدي ")}</Link>
+            </div>
+          )}
+        />
+      )}
     </div>
   );
 }

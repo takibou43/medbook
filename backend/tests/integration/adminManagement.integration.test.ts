@@ -1,4 +1,3 @@
-import { addCalendarMonths } from '../../src/lib/subscriptionCalendar';
 import { beforeAll,afterAll,beforeEach,describe,it,expect } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
@@ -23,6 +22,30 @@ describe.skipIf(!url)('Admin management on isolated PostgreSQL',()=>{
   if(!db)return;for(const row of baseline)await db.user.update({where:{id:row.id},data:{isActive:row.isActive}});
   process.env.MEDBOOK_DEMO_USER_IDS='';
   await db.auditLog.deleteMany({where:{userId:{in:[a.id,b.id]}}});await db.doctor.update({where:{id:doctor.id},data:{clinicId:null}});await db.clinic.delete({where:{id:clinic.id}});await db.user.deleteMany({where:{id:{in:[a.id,b.id,patientUser.id,doctorUser.id]}}});await db.specialty.delete({where:{id:sp.id}});await db.city.delete({where:{id:c.id}});await db.wilaya.delete({where:{id:w.id}});await db.specialty.deleteMany({where:{nameAr:{contains:tag}}});await db.city.deleteMany({where:{nameAr:{contains:tag}}});await db.$disconnect();await (await import('../../src/lib/prisma')).prisma.$disconnect();
+ });
+ it('admin creation rejects weak input and case-insensitive duplicates, including concurrent requests',async()=>{
+  const email='created-admin.'+tag+'@example.test';
+  const body={email,password:'StrongAdminPassword2026!',phone:'0551234567'};
+  try {
+   expect((await request(app).post('/api/admin/users').set(auth(patientUser)).send(body)).status).toBe(403);
+   for(const invalid of [{...body,password:'12345678'},{...body,role:'ADMIN'},{...body,phone:'invalid'}]) {
+    expect((await request(app).post('/api/admin/users').set(auth(a)).send(invalid)).status).toBe(400);
+   }
+   expect(await db.user.count({where:{email}})).toBe(0);
+   const responses=await Promise.all([
+    request(app).post('/api/admin/users').set(auth(a)).send(body),
+    request(app).post('/api/admin/users').set(auth(b)).send({...body,email:email.toUpperCase()}),
+   ]);
+   expect(responses.map(r=>r.status).sort()).toEqual([201,409]);
+   const created=await db.user.findUniqueOrThrow({where:{email}});
+   expect(created.passwordHash).not.toBe(body.password);
+   expect(created.role).toBe('ADMIN');
+   expect(responses.find(r=>r.status===201)!.body.data).not.toHaveProperty('passwordHash');
+   await db.user.update({where:{id:created.id},data:{email:email.toUpperCase()}});
+   expect((await request(app).post('/api/admin/users').set(auth(a)).send(body)).status).toBe(409);
+  } finally {
+   await db.user.deleteMany({where:{email:{equals:email,mode:'insensitive'}}});
+  }
  });
  it('HTTP self-deactivation and patient access are rejected; roles and profiles survive ordinary deactivation',async()=>{
   expect((await request(app).patch('/api/admin/users/'+a.id+'/deactivate').set(auth(a)).send({reason:'اختبار'})).status).toBe(400);
@@ -62,30 +85,24 @@ describe.skipIf(!url)('Admin management on isolated PostgreSQL',()=>{
   process.env.MEDBOOK_DEMO_USER_IDS=a.id;const preview=await request(app).get('/api/admin/maintenance/demo-preview').set(auth(a));expect(preview.body.data.records[0].eligible).toBe(false);expect((await request(app).post('/api/admin/maintenance/purge-demo-data').set(auth(a)).send({records:preview.body.data.records.map((r:any)=>({id:r.id,version:r.version}))})).status).toBe(409);
   expect((await request(app).post('/api/admin/maintenance/purge-demo-data').set(auth(a)).send({})).status).toBe(400);process.env.MEDBOOK_DEMO_USER_IDS='';
  });
- it('manual paid subscriptions require admin access and reject duplicate concurrent renewals', async () => {
+ it('legacy PATCH cannot extend or create paid time without a receipt', async () => {
   const saved = await db.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
   const endpoint = '/api/admin/doctors/' + doctor.id;
   try {
    await db.doctor.update({ where: { id: doctor.id }, data: { clinicId: null, subscriptionStatus: 'EXPIRED', subscriptionExpiresAt: new Date('2020-01-01'), newDoctorTrial: true } });
-   const payload = { subscriptionStatus: 'ACTIVE', subscriptionMonths: 3, expectedSubscriptionExpiresAt: '2020-01-01T00:00:00.000Z' };
-   expect((await request(app).patch(endpoint).send(payload)).status).toBe(401);
-   expect((await request(app).patch(endpoint).set(auth(patientUser)).send(payload)).status).toBe(403);
-   expect((await request(app).patch(endpoint).set(auth(doctorUser)).send(payload)).status).toBe(403);
-   for (const months of [0, -1, 1.5, 121]) {
-    expect((await request(app).patch(endpoint).set(auth(a)).send({ ...payload, subscriptionMonths: months })).status).toBe(400);
+   const before = await db.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
+   const auditWhere = { entity: 'Doctor', entityId: doctor.id, action: 'DOCTOR_SUBSCRIPTION' };
+   const count = await db.auditLog.count({ where: auditWhere });
+   const payloads = [
+    { subscriptionStatus: 'ACTIVE', subscriptionMonths: 3, expectedSubscriptionExpiresAt: '2020-01-01T00:00:00.000Z' },
+    { subscriptionStatus: 'ACTIVE', subscriptionExpiresAt: '2099-01-01T00:00:00Z' },
+    { subscriptionStatus: 'ACTIVE' },
+   ];
+   for (const payload of payloads) {
+    expect((await request(app).patch(endpoint).set(auth(a)).send(payload)).status).toBe(400);
    }
-   const started = Date.now();
-   const responses = await Promise.all([request(app).patch(endpoint).set(auth(a)).send(payload), request(app).patch(endpoint).set(auth(b)).send(payload)]);
-   expect(responses.map(r => r.status).sort()).toEqual([200, 409]);
-   const paid = await db.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
-   expect(paid.subscriptionStatus).toBe('ACTIVE');
-   expect(paid.newDoctorTrial).toBe(false);
-   expect(paid.subscriptionExpiresAt!.getTime()).toBeGreaterThanOrEqual(addCalendarMonths(started,3));
-   expect(paid.subscriptionExpiresAt!.getTime()).toBeLessThanOrEqual(addCalendarMonths(Date.now(),3));
-   const renewal = await request(app).patch(endpoint).set(auth(a)).send({ subscriptionStatus: 'ACTIVE', subscriptionMonths: 2, expectedSubscriptionExpiresAt: paid.subscriptionExpiresAt!.toISOString() });
-   expect(renewal.status).toBe(200);
-   const extended = await db.doctor.findUniqueOrThrow({ where: { id: doctor.id } });
-   expect(extended.subscriptionExpiresAt!.getTime()).toBe(addCalendarMonths(paid.subscriptionExpiresAt!.getTime(),2));
+   expect(await db.doctor.findUniqueOrThrow({ where: { id: doctor.id } })).toEqual(before);
+   expect(await db.auditLog.count({ where: auditWhere })).toBe(count);
   } finally {
    await db.doctor.update({ where: { id: doctor.id }, data: { clinicId: saved.clinicId, subscriptionStatus: saved.subscriptionStatus, subscriptionExpiresAt: saved.subscriptionExpiresAt, newDoctorTrial: saved.newDoctorTrial } });
   }

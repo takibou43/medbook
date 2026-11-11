@@ -196,6 +196,8 @@ jobs:
           '
       - name: Start a fresh isolated stack and verify HTTP boundaries
         run: |
+          docker compose up -d postgres
+          docker compose run --rm backend npm run db:bootstrap:local
           docker compose up -d
           for attempt in $(seq 1 90); do
             if curl -fsS http://localhost:4000/health >/dev/null; then break; fi

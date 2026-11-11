@@ -1,9 +1,12 @@
 # Migration replay candidate — not the production history
 
-This directory is an isolated candidate for a future baseline cutover. The active
-`prisma/migrations` directory, `prisma:deploy`, native startup and Docker startup are
-unchanged. **Do not point production at this candidate or mark its migrations as
-applied based solely on a green CI run.**
+This directory remains a candidate for a future production baseline cutover.
+The active `prisma/migrations` directory and `prisma:deploy` remain unchanged.
+Native and Docker startup now run the application without schema writes. This
+separation does not adopt a production migration history. The candidate is also
+used by explicit local bootstrap, restricted to an empty local `medbook` database.
+**Do not point production at this candidate or mark its migrations as applied
+based solely on a green CI run.**
 
 - `00000000000000_baseline`: Prisma 5.22.0 SQL generated from `prisma/schema.prisma`
   at main `1f8ceeb42da3f696cfbdf065a6a5e2d548c57697`.
@@ -17,7 +20,8 @@ CI copies the current schema and these migrations to a temporary directory, uses
 SQL guard/function/trigger installation before running the existing integration
 and concurrent workload suites. It never resets or drops a database. Only an empty
 local `medbook_security_test` or `medbook_load_test` database is accepted. The
-existing container-security job still tests the legacy Docker startup separately.
+container-security job now explicitly provisions its empty local database before
+testing the application-only Docker startup.
 
 Run from `backend` with Node 22 and dependencies installed from the lockfile:
 
@@ -49,9 +53,9 @@ PostgreSQL 16 CI, especially for concurrent booking/admission.
 5. Approve an explicit mapping of old history to the candidate before archiving
    old migrations or using `migrate resolve`. Both history changes and resolve are
    outside this candidate's test setup; resolve is a write, not verification.
-6. Only then replace BOTH `backend/package.json` startup and
-   `backend/docker-entrypoint.sh`. Keep generate in build, fail closed on migration
-   errors and remove manual guard replay. Never fall back to db push on failure.
+6. Only then enable a production deployment step using the candidate. Native and
+   Docker startup must remain application-only, with generate in build. Fail
+   closed on migration errors; never fall back to db push or manual guard replay.
 7. Rollback is a reviewed application/schema compatibility plan, not restoration
    of the old db-push startup command. Do not merge or deploy the cutover while any
    verification remains pending. The user performs publication after success.

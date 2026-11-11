@@ -27,7 +27,11 @@ cp .env.example .env
 # عدّل POSTGRES_PASSWORD و JWT_SECRET و JWT_REFRESH_SECRET داخل .env
 # بثلاث قيم عشوائية طويلة ومختلفة (مثل ناتج openssl rand -hex 32).
 
-docker compose up --build
+docker compose build
+docker compose up -d postgres
+# مرة واحدة فقط، لقاعدة Docker محلية فارغة:
+docker compose run --rm backend npm run db:bootstrap:local
+docker compose up -d
 ```
 
 بعد اكتمال التشغيل:
@@ -35,7 +39,7 @@ docker compose up --build
 - Frontend: http://localhost:5173
 - PostgreSQL: متاح للحاوية الخلفية فقط داخل شبكة Docker؛ لا يُنشر منفذه على المضيف.
 
-الحاوية الخلفية تزامن المخطط دون قبول فقد البيانات، وتطبّق حراسات SQL ثم تبدأ الخادم بمستخدم محدود. لا تُنشأ حسابات أو بيانات مرضى تجريبية تلقائيًا. الواجهة تُبنى ثم تُخدّم عبر Nginx بمستخدم محدود، وليس خادم Vite التطويري. ملفات البيئة والمفاتيح مستبعدة من صور Docker، والكود لا يُستبدل بربط مجلدات المضيف.
+الإقلاع اليومي يبدأ الخادم بمستخدم محدود دون مزامنة المخطط أو تنفيذ SQL. أمر التهيئة المنفصل يرفض القواعد البعيدة والقواعد غير الفارغة، ويهيّئ قاعدة Docker المحلية فقط بالمخطط وحراسات SQL المختبرة. لا تُنشأ حسابات أو بيانات مرضى تجريبية تلقائيًا. الواجهة تُبنى ثم تُخدّم عبر Nginx بمستخدم محدود، وليس خادم Vite التطويري. ملفات البيئة والمفاتيح مستبعدة من صور Docker، والكود لا يُستبدل بربط مجلدات المضيف. تفاصيل الإنتاج والترحيلات في [دليل الإقلاع](docs/runtime-startup.md).
 
 إذا كان لديك مجلد بيانات PostgreSQL سابق، فاستعمل كلمة مرور الدور الحالية في `POSTGRES_PASSWORD`؛ تغيير المتغير وحده لا يغيّر كلمة المرور داخل قاعدة قائمة. لا تحذف مجلد البيانات لتغيير كلمة المرور.
 
@@ -62,7 +66,7 @@ cd backend
 cp ../.env.example ../.env   # إن لم يكن موجودًا مسبقًا
 npm install
 npm run prisma:generate
-npm run prisma:migrate       # ينشئ الجداول (سيطلب اسم migration، اكتب مثلاً init)
+node --env-file=../.env scripts/bootstrap-local-db.mjs # لقاعدة medbook محلية فارغة فقط
 npm run db:seed              # يعبّئ بيانات تجريبية جزائرية واقعية
 npm run dev                  # يشغّل الخادم على http://localhost:4000
 ```

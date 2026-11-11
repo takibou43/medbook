@@ -14,6 +14,7 @@ import { applyReferralOnVerificationTx, notifyReferrerRewarded } from "../referr
 import { approvalTrialData } from "../../lib/doctorApprovalTrial";
 import { isDoctorProfilePublic } from "../../lib/doctorVisibility";
 import { paidSubscriptionChange, type DoctorSubscriptionEdit } from "../../lib/doctorPaidSubscription";
+import { adminAccountInput } from "../../lib/adminAccountInput";
 
 // ---------------- Dashboard stats ----------------
 
@@ -79,10 +80,11 @@ export const setUserActive=(id:string,active:boolean,actor?:string,reason?:strin
 export const deleteUser=(id:string,actor?:string,reason?:string)=>changeUserAccess(id,null,actor,reason);
 
 export async function createAdminUser(email: string, password: string, phone?: string) {
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const input = adminAccountInput.parse({ email, password, phone });
+    const existing = await prisma.user.findFirst({ where: { email: { equals: input.email, mode: "insensitive" } } });
     if (existing) throw ApiError.conflict("البريد الإلكتروني مستخدم مسبقًا.");
-    const passwordHash = await hashPassword(password);
-    const { passwordHash: _omit, ...user } = await prisma.user.create({ data: { email, phone, passwordHash, role: Role.ADMIN } });
+    const passwordHash = await hashPassword(input.password);
+    const { passwordHash: _omit, ...user } = await prisma.user.create({ data: { email: input.email, phone: input.phone, passwordHash, role: Role.ADMIN } });
     return user;
 }
 
@@ -202,7 +204,19 @@ export async function updateDoctorAdmin(
     if (data.subscriptionAmountDzd !== undefined && (!receipt || receipt.amountDzd !== data.subscriptionAmountDzd)) throw ApiError.badRequest("سجّل تفاصيل الدفعة قبل التجديد.");
     const latest = await tx.auditLog.findFirst({where:{entity:"Doctor",entityId:doctorId,action:"DOCTOR_SUBSCRIPTION"},select:{meta:true},orderBy:[{createdAt:"desc"},{id:"desc"}]});
     const previousSchedule = readBillingSchedule(latest?.meta);
-    const change = operation === "RESUME" ? {data:{subscriptionStatus:SubscriptionStatus.ACTIVE},quote:null} : paidSubscriptionChange(before,data,now,previousSchedule);
+    // Re-enabling remaining time must preserve trial status and never add time.
+    const resume = data.subscriptionStatus === SubscriptionStatus.ACTIVE &&
+      data.subscriptionMonths === undefined && data.subscriptionAmountDzd === undefined && data.subscriptionExpiresAt === undefined &&
+      before.subscriptionExpiresAt && before.subscriptionExpiresAt > now;
+    const change = operation === "RESUME" || resume ? {data:{subscriptionStatus:SubscriptionStatus.ACTIVE},quote:null} : paidSubscriptionChange(before,data,now,previousSchedule);
+    // Protect the service too: legacy PATCH/status-only activation must not mint
+    // a paid period. All renewals use the versioned action and recorded receipt.
+    if (change.quote || data.subscriptionExpiresAt !== undefined || data.subscriptionMonths !== undefined) {
+      if (operation !== "RENEW" || !receipt || !actorUserId || !expectedVersion ||
+          data.subscriptionAmountDzd !== receipt.amountDzd || data.subscriptionMonths !== undefined || data.subscriptionExpiresAt !== undefined) {
+        throw ApiError.badRequest("سجّل تفاصيل الدفعة من صفحة الاشتراكات قبل التجديد.");
+      }
+    }
     const version = new Date(Math.max(now.getTime(), before.updatedAt.getTime()+1));
     const doctor = await tx.doctor.update({
       where: { id: doctorId },

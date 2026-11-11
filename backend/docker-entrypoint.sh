@@ -11,24 +11,7 @@ if [ -z "${DATABASE_URL:-}" ]; then
   ')
 fi
 
-# Historical migrations have no initial baseline. Match the native startup's
-# non-destructive schema sync, then install the same idempotent guards used in CI.
-# Never use --accept-data-loss or seed real/example patient accounts here.
-npx prisma db push --schema ../prisma/schema.prisma --skip-generate
-psql_url=$(node -e '
-  const url = new URL(process.env.DATABASE_URL);
-  url.searchParams.delete("schema");
-  process.stdout.write(url.toString());
-')
-for guard in \
-  20260923140000_release_cancelled_slots \
-  20260924170000_add_review_guards \
-  20260930120000_family_treatment_referrals_stats \
-  20261001193000_clinic_referral_discount \
-  20261003180000_clinic_doctor_terms \
-  20261011200000_follow_up_shared_minute
-do
-  psql "$psql_url" -v ON_ERROR_STOP=1 -q -f "../prisma/migrations/$guard/migration.sql"
-done
-
-exec node dist/index.js
+# Startup never synchronizes the schema or replays SQL. Provisioning/migrations
+# are explicit operations; restarting must not alter existing medical records.
+if [ "$#" -eq 0 ]; then set -- node dist/index.js; fi
+exec "$@"

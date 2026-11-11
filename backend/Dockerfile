@@ -17,4 +17,5 @@ ENV NODE_ENV=production
 USER node
 EXPOSE 4000
 
-CMD ["sh", "docker-entrypoint.sh"]
+ENTRYPOINT ["sh", "docker-entrypoint.sh"]
+CMD ["node", "dist/index.js"]

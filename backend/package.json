@@ -14,13 +14,14 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "prisma db push --schema ../prisma/schema.prisma --skip-generate && node dist/index.js",
+    "start": "node dist/index.js",
     "prisma:generate": "prisma generate --schema ../prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema ../prisma/schema.prisma",
     "prisma:deploy": "prisma migrate deploy --schema ../prisma/schema.prisma",
     "db:seed": "tsx ../prisma/seed.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:bootstrap:local": "node scripts/bootstrap-local-db.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
@@ -52,6 +53,7 @@
   "devDependencies": {
     "@types/supertest": "^6.0.2",
     "supertest": "^7.0.0",
-    "vitest": "^2.1.1"
+    "vite": "^6.4.6",
+    "vitest": "^4.1.12"
   }
 }

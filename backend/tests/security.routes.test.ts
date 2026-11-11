@@ -97,6 +97,11 @@ const h = vi.hoisted(() => {
     specialty: { findUnique:vi.fn(async({where}:any)=>({id:where.id,nameAr:'طب عام'})),findFirst:vi.fn(async()=>null),update: vi.fn(async ({ where, data }: any) => ({ id: where.id, ...data })) },
     wilaya: { findUnique:vi.fn(async({where}:any)=>({id:where.id,nameAr:'ميلة',code:'43'})),findFirst:vi.fn(async()=>null),update: vi.fn(async ({ where, data }: any) => ({ id: where.id, ...data })) },
     user: {
+      create: vi.fn(async ({ data }: any) => {
+        const user = { id: "new-admin", isActive: true, ...data };
+        s.users.push(user);
+        return user;
+      }),
       findMany: vi.fn(async () => s.users.map(({ passwordHash: _p, ...u }) => u)),
       count: vi.fn(async () => s.users.length),
       findUnique: vi.fn(async ({ where }: any) => s.users.find((u) => u.id === where.id) ??
@@ -274,8 +279,8 @@ describe("مسارات PATCH للإدارة — صلاحيات", () => {
     expect(h.db.doctor.update).not.toHaveBeenCalled();
   });
 
-  it("الإدارة ⇒ 200", async () => {
-    const r = await request(app).patch(`/api/admin/doctors/${DOC_ID}`).set("Authorization", ADMIN).send({ subscriptionStatus: "ACTIVE" });
+  it("الإدارة ⇒ 200 عند إيقاف الاشتراك", async () => {
+    const r = await request(app).patch(`/api/admin/doctors/${DOC_ID}`).set("Authorization", ADMIN).send({ subscriptionStatus: "UNPAID" });
     expect(r.status).toBe(200);
   });
 });
@@ -480,5 +485,51 @@ describe("GET /api/admin/users و /api/admin/doctors — معاملات صارم
   it("غير الإدارة ⇒ 403 حتى بمعاملات صحيحة", async () => {
     const r = await request(app).get("/api/admin/users").set("Authorization", DOCTOR);
     expect(r.status).toBe(403);
+  });
+});
+
+
+describe("admin account creation security", () => {
+  const valid = { email: "new-admin@example.test", password: "StrongAdminPass2026!", phone: "0551234567" };
+  const post = (body: any, token = ADMIN) => request(app).post("/api/admin/users").set("Authorization", token).send(body);
+  it.each([
+    { ...valid, password: "12345678" },
+    { ...valid, password: "x".repeat(129) },
+    { ...valid, phone: "invalid" },
+    { ...valid, role: "ADMIN" },
+    { ...valid, email: "a".repeat(250) + "@example.test" },
+  ])("rejects malformed or excess fields before creating an account", async body => {
+    expect((await post(body)).status).toBe(400);
+    expect(h.db.user.create).not.toHaveBeenCalled();
+  });
+  it("normalizes email, hashes the password and never returns its hash", async () => {
+    const r = await post({ ...valid, email: "  New-Admin@Example.Test  " });
+    expect(r.status).toBe(201);
+    expect(r.body.data.email).toBe(valid.email);
+    expect(r.body.data).not.toHaveProperty("passwordHash");
+    expect(h.db.user.create).toHaveBeenCalledWith({ data: { email: valid.email, phone: valid.phone, passwordHash: "hashed:" + valid.password, role: "ADMIN" } });
+  });
+  it("rejects an existing email regardless of case", async () => {
+    expect((await post({ ...valid, email: "ADMIN@MADBOOK.DZ" })).status).toBe(409);
+    expect(h.db.user.create).not.toHaveBeenCalled();
+  });
+  it("keeps admin creation restricted to administrators", async () => {
+    expect((await request(app).post("/api/admin/users").send(valid)).status).toBe(401);
+    expect((await post(valid, DOCTOR)).status).toBe(403);
+    expect(h.db.user.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("legacy subscription route cannot bypass payment receipts", () => {
+  const endpoint = "/api/admin/doctors/11111111-1111-4111-8111-111111111111";
+  it.each([
+    { subscriptionStatus: "ACTIVE", subscriptionMonths: 3, expectedSubscriptionExpiresAt: null },
+    { subscriptionStatus: "ACTIVE", subscriptionExpiresAt: "2099-01-01T00:00:00Z" },
+    { subscriptionStatus: "ACTIVE" },
+  ])("rejects a free renewal without changing the doctor or ledger", async body => {
+    const r = await request(app).patch(endpoint).set("Authorization", ADMIN).send(body);
+    expect(r.status).toBe(400);
+    expect(h.db.doctor.update).not.toHaveBeenCalled();
+    expect(h.s.audit).toHaveLength(0);
   });
 });

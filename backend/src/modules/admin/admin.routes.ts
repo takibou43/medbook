@@ -1,4 +1,5 @@
 import {manualReceiptSchema, subscriptionFilters} from "../../lib/subscriptionAdmin";
+import { adminAccountInput } from "../../lib/adminAccountInput";
 import { previewDemoData, purgeReviewedDemoData } from "./adminMaintenance.service";
 import { Router } from "express";
 import { z } from "zod";
@@ -27,9 +28,6 @@ const idParams = z.object({ id: z.string().uuid("معرّف غير صالح") })
 const updateDoctorAdminSchema = z
   .object({
     subscriptionStatus: z.nativeEnum(SubscriptionStatus).optional(),
-    subscriptionExpiresAt: z.coerce.date().nullable().optional(),
-    subscriptionMonths: z.number().int().min(1).max(120).optional(),
-    expectedSubscriptionExpiresAt: z.coerce.date().nullable().optional(),
   })
   .strict();
 const updateSpecialtySchema = z
@@ -132,7 +130,7 @@ router.get(
 
 router.post(
   "/users",
-  validate({ body: z.object({ email: z.string().email(), password: z.string().min(8), phone: z.string().optional() }) }),
+  validate({ body: adminAccountInput }),
   asyncHandler(async (req, res) => {
     const { email, password, phone } = req.body;
     const user = await service.createAdminUser(email, password, phone);

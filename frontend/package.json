@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host",
+    "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host",
+    "preview": "vite preview",
     "lint": "tsc --noEmit",
     "test": "node --experimental-strip-types --test --experimental-test-isolation=none tests/*.test.ts"
   },

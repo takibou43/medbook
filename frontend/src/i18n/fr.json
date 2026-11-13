@@ -2210,5 +2210,8 @@
   "بعد تأكيد الدفع، تُضاف {0} أشهر تقويمية من نهاية الاشتراك الحالي أو من اليوم إذا انتهى، مع مراعاة فبراير والسنة الكبيسة.": "Après confirmation du paiement, {0} mois calendaires sont ajoutés à partir de l’échéance actuelle ou d’aujourd’hui si l’abonnement a expiré, en tenant compte de février et des années bissextiles.",
   "يوقف الاشتراك الفردي؛ تبقى المواعيد والملفات محفوظة.": "Suspend l’abonnement individuel ; les rendez-vous et les dossiers sont conservés.",
   "عدد الأشهر المدفوعة": "Nombre de mois payés",
-  "تجديد الاشتراك": "Renouveler l’abonnement"
+  "تجديد الاشتراك": "Renouveler l’abonnement",
+  "إشعارات التطبيق ستُفعَّل في تحديث قادم. التنبيهات تظهر حاليًا داخل التطبيق.": "Les notifications de l'application seront activées dans une prochaine mise à jour. Les alertes s'affichent pour l'instant dans l'application.",
+  "لم تُمنح صلاحية الإشعارات. يمكنك السماح بها من إعدادات التطبيق ثم المحاولة مجددًا.": "L'autorisation des notifications n'a pas été accordée. Vous pouvez l'activer dans les paramètres de l'application puis réessayer.",
+  "تعذّر تفعيل الإشعارات. حاول مجددًا بعد قليل.": "Impossible d'activer les notifications. Réessayez dans un instant."
 }

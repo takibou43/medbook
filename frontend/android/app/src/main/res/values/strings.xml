@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">مادبوك</string>
+    <string name="title_activity_main">مادبوك</string>
+    <string name="package_name">com.madbook.patient</string>
+    <string name="custom_url_scheme">com.madbook.patient</string>
+</resources>

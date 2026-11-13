@@ -12,6 +12,8 @@
 //   2) أو عند ذهاب التطبيق إلى الخلفية (hidden) بشرط أن تتحقق شروط الأمان.
 (function () {
   if (!("serviceWorker" in navigator)) return;
+  // داخل تطبيق أندرويد (Capacitor) الملفات محزّمة في التطبيق نفسه: لا service worker ولا فحص تحديثات.
+  if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
 
   var rawFetch = window.fetch ? window.fetch.bind(window) : null;
 

@@ -11,6 +11,11 @@
     "test": "node --experimental-strip-types --test --experimental-test-isolation=none tests/*.test.ts"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/status-bar": "^8.0.4",
     "@tanstack/react-query": "^5.55.4",
     "@zxing/browser": "^0.2.1",
     "axios": "^1.7.7",
@@ -22,6 +27,7 @@
     "react-router-dom": "7.18.4"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.2",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

@@ -12,8 +12,12 @@ import "./index.css";
 import { LanguageRoot } from "./i18n/LanguageRoot";
 import { languageReady } from "./i18n/locale";
 import { installClientErrorReporter } from "./lib/clientErrorReporter";
+import { initNativeShell, isNativeApp } from "./lib/native";
 
 preserveNativeKeyboardFocus();
+
+// داخل تطبيق أندرويد: زر الرجوع وشريط الحالة (لا شيء في المتصفح العادي).
+void initNativeShell((delta) => window.history.go(delta));
 
 // تبليغ الخادم بأخطاء المتصفح في النسخة المنشورة فقط (لا أثناء التطوير).
 if (import.meta.env.PROD) installClientErrorReporter();
@@ -27,7 +31,8 @@ void languageReady.then(() => ReactDOM.createRoot(document.getElementById("root"
         <ToastProvider>
           <AuthProvider>
             <App />
-            <InstallPrompt />
+            {/* نافذة «ثبّت التطبيق» لا معنى لها داخل التطبيق نفسه */}
+            {!isNativeApp() && <InstallPrompt />}
           </AuthProvider>
         </ToastProvider>
       </QueryClientProvider>

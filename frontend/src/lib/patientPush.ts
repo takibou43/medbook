@@ -1,5 +1,6 @@
 import { t } from "../i18n/locale.ts";
 import { api } from "./api";
+import { enableNativePush, isNativeApp, nativePushAvailable, nativePushState } from "./native";
 
 // إشعارات المتصفح لحساب المريض (تذكير قبل الموعد بساعة وقبل 5 دقائق).
 // نفس آلية موقع الأطباء (Web Push + VAPID عبر الـService Worker الموجود) — بلا Firebase ولا أي خدمة مدفوعة.
@@ -18,6 +19,8 @@ function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
 }
 
 export function pushSupported(): boolean {
+  // داخل تطبيق أندرويد لا يعمل Web Push (WebView)؛ نستعمل الإشعارات الأصلية إن بُني التطبيق بها.
+  if (isNativeApp()) return nativePushAvailable();
   return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 }
 
@@ -30,6 +33,7 @@ async function currentSubscription(): Promise<PushSubscription | null> {
 /** حالة الإشعارات على هذا الجهاز — لا تطلب أي إذن (آمنة للاستدعاء عند فتح الصفحة). */
 export async function getPushState(): Promise<PushState> {
   if (!pushSupported()) return "unsupported";
+  if (isNativeApp()) return nativePushState().catch(() => "disabled" as const);
   if (Notification.permission === "denied") return "denied";
   try {
     const sub = await currentSubscription();
@@ -44,8 +48,23 @@ export async function getPushState(): Promise<PushState> {
  * لا تُظهر أي نافذة إذن من تلقاء نفسها — المريض هو من يضغط «تفعيل الإشعارات».
  */
 export async function enablePatientPush(): Promise<{ ok: boolean; reason?: string }> {
+  if (isNativeApp() && !nativePushAvailable()) {
+    return { ok: false, reason: t("إشعارات التطبيق ستُفعَّل في تحديث قادم. التنبيهات تظهر حاليًا داخل التطبيق.") };
+  }
   if (!pushSupported()) {
     return { ok: false, reason: t("متصفحك لا يدعم الإشعارات. على آيفون: أضِف الموقع إلى الشاشة الرئيسية ثم افتحه منها.") };
+  }
+  if (isNativeApp()) {
+    try {
+      const r = await enableNativePush(async (token) => {
+        await api.post("/patient/notifications/native-token", { token, platform: "android" });
+      });
+      if (!r.ok) return { ok: false, reason: t("لم تُمنح صلاحية الإشعارات. يمكنك السماح بها من إعدادات التطبيق ثم المحاولة مجددًا.") };
+      localStorage.setItem("medbook_native_push", "1");
+      return { ok: true };
+    } catch {
+      return { ok: false, reason: t("تعذّر تفعيل الإشعارات. حاول مجددًا بعد قليل.") };
+    }
   }
 
   const res = await api.get<{ data: { publicKey: string; enabled: boolean } }>("/push/public-key");
@@ -76,6 +95,11 @@ export async function enablePatientPush(): Promise<{ ok: boolean; reason?: strin
 
 /** إيقاف الإشعارات على هذا الجهاز فقط (تبقى على أجهزة المريض الأخرى). */
 export async function disablePatientPush(): Promise<void> {
+  if (isNativeApp()) {
+    localStorage.removeItem("medbook_native_push");
+    await api.delete("/patient/notifications/native-token").catch(() => undefined);
+    return;
+  }
   const sub = await currentSubscription().catch(() => null);
   if (!sub) return;
   await api.delete("/patient/notifications/subscribe", { data: { endpoint: sub.endpoint } }).catch(() => undefined);

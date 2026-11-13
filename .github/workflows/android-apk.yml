@@ -1,0 +1,93 @@
+# بناء تطبيق أندرويد للمرضى (APK) مجانًا على GitHub Actions — لا يمسّ Vercel ولا Render ولا Neon.
+# النتيجة: ملف APK يُحمَّل من صفحة التشغيل (Artifacts) ويُوزَّع مباشرة دون Google Play.
+#
+# الأسرار (Settings → Secrets and variables → Actions) — كلها اختيارية:
+#   MEDBOOK_KEYSTORE_BASE64  ملف مفتاح التوقيع .jks بصيغة base64  ┐ بدونها يُبنى APK تجريبي (debug)
+#   MEDBOOK_KEYSTORE_PASSWORD / MEDBOOK_KEY_ALIAS / MEDBOOK_KEY_PASSWORD ┘ يصلح للتجربة فقط
+#   GOOGLE_SERVICES_JSON     محتوى google-services.json من Firebase — بدونه لا إشعارات أصلية
+name: Android APK (patient app)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/android-app]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/android-apk.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      VITE_API_URL: https://medbook-xg66.onrender.com/api
+      MEDBOOK_VERSION_CODE: ${{ github.run_number }}
+      MEDBOOK_VERSION_NAME: 1.0.${{ github.run_number }}
+      HAS_KEYSTORE: ${{ secrets.MEDBOOK_KEYSTORE_BASE64 != '' }}
+      HAS_FCM: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - run: npm ci
+      - run: npm test
+
+      - name: Build web bundle for the app
+        run: VITE_NATIVE_PUSH=${{ env.HAS_FCM }} npm run build
+
+      - name: Firebase config (native push)
+        if: env.HAS_FCM == 'true'
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+
+      - run: npx cap sync android
+
+      - name: Build signed release APK
+        if: env.HAS_KEYSTORE == 'true'
+        working-directory: frontend/android
+        env:
+          MEDBOOK_KEYSTORE_PASSWORD: ${{ secrets.MEDBOOK_KEYSTORE_PASSWORD }}
+          MEDBOOK_KEY_ALIAS: ${{ secrets.MEDBOOK_KEY_ALIAS }}
+          MEDBOOK_KEY_PASSWORD: ${{ secrets.MEDBOOK_KEY_PASSWORD }}
+          KEYSTORE_B64: ${{ secrets.MEDBOOK_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/medbook.jks"
+          export MEDBOOK_KEYSTORE_PATH="$RUNNER_TEMP/medbook.jks"
+          ./gradlew --no-daemon assembleRelease
+          mkdir -p ../../apk-out
+          cp app/build/outputs/apk/release/app-release.apk "../../apk-out/madbook-${MEDBOOK_VERSION_NAME}.apk"
+          rm -f "$RUNNER_TEMP/medbook.jks"
+
+      - name: Build debug APK (testing only — no keystore secret)
+        if: env.HAS_KEYSTORE != 'true'
+        working-directory: frontend/android
+        run: |
+          ./gradlew --no-daemon assembleDebug
+          mkdir -p ../../apk-out
+          cp app/build/outputs/apk/debug/app-debug.apk "../../apk-out/madbook-${MEDBOOK_VERSION_NAME}-debug.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: madbook-android-${{ env.MEDBOOK_VERSION_NAME }}
+          path: apk-out/*.apk
+          retention-days: 30

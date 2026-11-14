@@ -1,0 +1,34 @@
+# نسخة احتياطية أسبوعية كفرع Neon خاص (لا تغادر البيانات حساب Neon، ولا يُرفع شيء إلى GitHub).
+# فرع Neon ليس نسخة مستقلة خارج المزود: يحمي من الحذف الخاطئ أو ترحيل سيئ، لا من فقدان حساب Neon.
+# بلا السر NEON_API_KEY تفشل المهمة برسالة «النسخ الآلي غير مفعّل» (لا تُعرض كنجاح).
+# الاحتفاظ: آخر نسختين تلقائيتين (≈ أسبوعان)، بسبب حد 10 فروع في خطة Neon المجانية.
+name: Weekly Neon branch backup
+
+on:
+  schedule:
+    - cron: "23 2 * * 5" # الجمعة 03:23 بتوقيت الجزائر
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-branch-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Create backup branch and apply retention
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: calm-lake-84943874
+          NEON_PARENT_BRANCH_ID: br-bitter-mouse-a5fk66jy
+          KEEP: "2"
+        run: node scripts/neon-branch-backup.mjs

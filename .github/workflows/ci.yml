@@ -128,6 +128,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --include=dev
       - run: npm test
+      - name: Cloudflare Pages headers match vercel.json
+        run: node ../scripts/cloudflare-pages-headers.mjs --check
       - run: npm run build
 
   frontend-doctor:
